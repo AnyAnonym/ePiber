@@ -48,9 +48,13 @@ const modal = createModal("loginModal", `
     <input type="email" id="email" required>
 
     <label for="password">Passwort:</label>
-    <input type="password" id="password" required>
+    <div style="position: relative; margin-bottom: 16px;">
+      <input type="password" id="password" required style="width: 100%; padding-right: 40px;">
+      <span class="toggle-password" data-target="password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none;">👁️</span>
+    </div>
 
     <button type="submit" class="btn-login">Anmelden</button>
+    <button type="button" id="forgotPasswordBtn" class="btn-forgot-password">Passwort vergessen</button>
   </form>
 `);
 
@@ -68,9 +72,35 @@ const signupModal = createModal("signupModal", `
     <input type="email" id="signupEmail" required>
 
     <label for="signupPassword">Passwort:</label>
-    <input type="password" id="signupPassword" required>
+    <div style="position: relative; margin-bottom: 16px;">
+      <input type="password" id="signupPassword" required style="width: 100%; padding-right: 40px;">
+      <span class="toggle-password" data-target="signupPassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none;">👁️</span>
+    </div>
 
     <button type="submit" class="btn-login">Registrieren</button>
+  </form>
+`);
+
+// --- Passwort Vergessen Modal ---
+const forgotPasswordModal = createModal("forgotPasswordModal", `
+  <h2>Passwort zurücksetzen</h2>
+  <form id="forgotPasswordForm">
+    <label for="forgotEmail">E-Mail:</label>
+    <input type="email" id="forgotEmail" required>
+
+    <label for="newPassword">Neues Passwort:</label>
+    <div style="position: relative; margin-bottom: 16px;">
+      <input type="password" id="newPassword" required style="width: 100%; padding-right: 40px;">
+      <span class="toggle-password" data-target="newPassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none;">👁️</span>
+    </div>
+
+    <label for="confirmPassword">Passwort bestätigen:</label>
+    <div style="position: relative; margin-bottom: 16px;">
+      <input type="password" id="confirmPassword" required style="width: 100%; padding-right: 40px;">
+      <span class="toggle-password" data-target="confirmPassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none;">👁️</span>
+    </div>
+
+    <button type="submit" class="btn-login">Speichern</button>
   </form>
 `);
 
@@ -216,6 +246,77 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
     alert("Fehler beim Speichern: " + error);
     submitBtn.disabled = false;
     submitBtn.textContent = "Registrieren";
+  }
+});
+
+//-------------------------------------------------------
+// Passwort Vergessen Modal Logik
+//-------------------------------------------------------
+const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
+
+forgotPasswordBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  modal.classList.add("hidden");
+  forgotPasswordModal.classList.remove("hidden");
+});
+
+document.getElementById("forgotPasswordForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const email = e.target.forgotEmail.value.trim();
+  const newPassword = e.target.newPassword.value;
+  const confirmPassword = e.target.confirmPassword.value;
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+
+  // Validierung: Passwörter stimmen überein
+  if (newPassword !== confirmPassword) {
+    alert("Die Passwörter stimmen nicht überein!");
+    return;
+  }
+
+  // Validierung: Passwort nicht leer
+  if (newPassword.length < 6) {
+    alert("Passwort muss mindestens 6 Zeichen lang sein!");
+    return;
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  
+  console.log("Passwort-Reset gestartet für:", email);
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Wird gespeichert...";
+
+  const resetPasswordFn = httpsCallable(functions, "resetPassword");
+  try {
+    const result = await resetPasswordFn({ email, passwordHash });
+    const res = result.data;
+
+    if (res.success) {
+      submitBtn.textContent = "Erfolgreich!";
+      alert("Passwort wurde erfolgreich zurückgesetzt!");
+      
+      // Modal zurücksetzen und schließen
+      e.target.reset();
+      forgotPasswordModal.classList.add("hidden");
+      
+      // Login Modal öffnen
+      setTimeout(() => {
+        modal.classList.remove("hidden");
+      }, 1000);
+      
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Speichern";
+    } else {
+      alert("Fehler: " + (res.error || "Unbekannter Fehler"));
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Speichern";
+    }
+  } catch (err) {
+    console.error("Fehler beim Passwort-Reset:", err);
+    alert("Fehler: " + err.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Speichern";
   }
 });
 
@@ -592,3 +693,22 @@ if (hamburgerBtn && mobileNavModal) {
     });
   }
 }
+
+//-------------------------------------------------------
+// Passwort-Sichtbarkeit toggle (Auge-Symbol)
+//-------------------------------------------------------
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("toggle-password")) {
+    const targetId = e.target.dataset.target;
+    const passwordInput = document.getElementById(targetId);
+    if (passwordInput) {
+      if (passwordInput.type === "password") {
+        passwordInput.type = "text";
+        e.target.textContent = "🙈";
+      } else {
+        passwordInput.type = "password";
+        e.target.textContent = "👁️";
+      }
+    }
+  }
+});

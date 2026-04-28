@@ -1032,3 +1032,100 @@ export const setPreMatchResult = onCall(async (request) => {
     return {success: false, error: err.message};
   }
 });
+
+/**
+ * Setzt das Passwort eines Benutzers zurück, wenn kennwortVergessen=x
+ * Erwartet:
+ * {
+ *   email: "user@example.com",
+ *   passwordHash: "abc123..."
+ * }
+ */
+export const resetPassword = onCall(async (request) => {
+  try {
+    const {email, passwordHash} = request.data;
+
+    if (!email || !passwordHash) {
+      throw new Error("E-Mail oder Passwort-Hash fehlt.");
+    }
+
+    console.log("🔑 Passwort-Reset gestartet für:", email);
+
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+    const sheets = google.sheets({version: "v4", auth});
+
+    // Daten aus "players" Tabelle
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "players",
+    });
+
+    const rows = res.data.values || [];
+    if (rows.length < 2) {
+      throw new Error("❌ Tabelle enthält keine Benutzerdaten.");
+    }
+
+    // Header analysieren
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
+    const emailIndex = headers.indexOf("email");
+    const hashIndex = headers.indexOf("passwdhash");
+    const kennwortVergessenIndex = headers.indexOf("kennwortvergessen");
+
+    if (emailIndex === -1 || hashIndex === -1) {
+      return {
+        success: false,
+        error: "Spalten 'email' oder 'passwdHash' fehlen.",
+      };
+    }
+
+    // Benutzerzeile suchen
+    let userRowIndex = -1;
+    let userRow = null;
+
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][emailIndex] &&
+          rows[i][emailIndex].trim().toLowerCase() === email.trim().toLowerCase()) {
+        userRowIndex = i;
+        userRow = rows[i];
+        break;
+      }
+    }
+
+    if (!userRow) {
+      console.warn("⚠️ Keine E-Mail gefunden:", email);
+      return {success: false, error: "E-Mail nicht gefunden."};
+    }
+
+    // Prüfe ob kennwortVergessen = "x"
+    if (kennwortVergessenIndex !== -1) {
+      const kennwortVergessen = userRow[kennwortVergessenIndex] ? userRow[kennwortVergessenIndex].trim() : "";
+      if (kennwortVergessen !== "x") {
+        console.warn("⚠️ Passwort-Reset nicht erlaubt für:", email);
+        return {success: false, error: "Passwort-Reset nicht autorisiert. Kontaktiere den Administrator."};
+      }
+    } else {
+      console.warn("⚠️ Spalte 'kennwortVergessen' nicht gefunden!");
+      return {success: false, error: "System-Konfiguration fehler. kennwortVergessen Spalte nicht vorhanden."};
+    }
+
+    // Passwort-Hash aktualisieren
+    const newRow = [...userRow];
+    newRow[hashIndex] = passwordHash;
+
+    // Update in Google Sheets - nur die betroffene Zeile
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `players!A${userRowIndex + 1}:G${userRowIndex + 1}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {values: [newRow.slice(0, 7)]},
+    });
+
+    console.log(`✅ Passwort-Hash aktualisiert für: ${email}`);
+    return {success: true, message: "Passwort erfolgreich zurückgesetzt."};
+  } catch (err) {
+    console.error("❌ Fehler in resetPassword:", err);
+    return {success: false, error: err.message};
+  }
+});

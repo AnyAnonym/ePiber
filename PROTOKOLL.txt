@@ -65,13 +65,15 @@ WebApp-with-GoogleSheet_comunication/
 
 3.1 players
 -----------
-| Spalte | Name       | Beschreibung                    |
-|--------|------------|---------------------------------|
-| A      | ID         | Fortlaufende Nummer            |
-| B      | FirstName  | Vorname                        |
-| C      | LastName   | Nachname                       |
-| D      | Email      | E-Mail                         |
-| E      | PasswdHash | SHA-256 Passwort-Hash          |
+| Spalte | Name            | Beschreibung                    |
+|--------|-----------------|--------------------------------|
+| A      | ID              | Fortlaufende Nummer            |
+| B      | FirstName       | Vorname                        |
+| C      | LastName        | Nachname                       |
+| D      | Email           | E-Mail                         |
+| E      | PasswdHash      | SHA-256 Passwort-Hash          |
+| F      | GeburtsDatum    | Geburtsdatum                   |
+| G      | kennwortVergessen| x = Passwort-Reset erlaubt     |
 
 3.2 rankedPlayers
 -----------------
@@ -176,6 +178,14 @@ Nur der Geforderte (Spieler ID 1) bekommt Notification.
 Trägt Datum und Platz in preMatches-Zeile ein.
 Setzt Status auf "bestaetigt".
 
+4.13 resetPassword
+------------------
+Setzt das Passwort eines Benutzers zurück.
+Empfängt Email und neuen SHA-256 Passwort-Hash.
+Prüft ob kennwortVergessen="x" (Admin-Autorisierung).
+Aktualisiert den PasswdHash in players-Tabelle.
+Verhindert unautorisierten Passwort-Reset.
+
 
 ================================================================================
 5. FRONTEND-SEITEN
@@ -259,6 +269,29 @@ Kurzfassung:
 3. Geforderter setzt Datum/Platz
 4. Beide können Ergebnis eintragen
 5. Nach Eintragung → preMatches wird geleert, Match in matches geschrieben
+
+7.5 Passwort Vergessen Funktionalität (27.04.2026)
+---------------------------------------------------
+- Button "Passwort vergessen" im Login Modal
+- Modal mit 3 Eingabefeldern:
+  * E-Mail (eindeutige Identifikation)
+  * Neues Passwort
+  * Passwort bestätigen
+- Validierungen:
+  * Passwörter müssen übereinstimmen
+  * Minimum 6 Zeichen lang
+- Backend-Sicherheit:
+  * Spalte G (kennwortVergessen) muss "x" sein
+  * Nur autorisierte User können Passwort ändern
+  * Admin muss "x" in Spalte G setzen für Erlaubnis
+- Workflow:
+  1. User klickt "Passwort vergessen"
+  2. Neues Modal öffnet sich
+  3. User gibt Email und neues Passwort ein
+  4. Backend überprüft kennwortVergessen="x"
+  5. SHA-256 Hash wird erstellt
+  6. PasswdHash wird aktualisiert
+  7. User kann sich mit neuem Passwort anmelden
 
 
 ================================================================================
@@ -364,6 +397,111 @@ firebase deploy
 - [ ] Build-Prozess mit Minifizierung
 - [ ] Tests für Cloud Functions
 
+================================================================================
+12. VERBESSERUNGSVORSCHLÄGE - PASSWORT VERGESSEN FUNKTION
+================================================================================
+
+IMPLEMENTIERTE VERBESSERUNGEN (27.04.2026):
+
+12.1 E-Mail Validierung & Sicherheit
+--------------------------------------
+✅ Admin-Autorisierung: Spalte G muss "x" sein (kennwortVergessen)
+✅ Verhindert unautorisierten Passwort-Reset
+✅ Nur registrierte E-Mails akzeptieren
+✅ Fehlerhafte E-Mail wird nicht verraten (gleiche Fehlermeldung)
+
+12.2 Frontend Validierung
+---------------------------
+✅ Passwörter müssen übereinstimmen (Bestätigungsfeld)
+✅ Minimum 6 Zeichen Passwort-Länge
+✅ Klare Fehlermeldungen für User
+✅ Button deaktiviert während Verarbeitung
+✅ Modal schließt sich erst nach erfolgreichem Reset
+
+12.3 Backend Sicherheit
+------------------------
+✅ SHA-256 Hashing (wie bei Registrierung)
+✅ Nur autorisierte Resets (kennwortVergessen="x")
+✅ Cloud Function nutzt Schreib-Scope für Sheets
+✅ Error-Handling mit aussagekräftigen Fehlermeldungen
+
+MÖGLICHE WEITERE VERBESSERUNGEN:
+
+12.4 E-Mail Verification
+--------------------------
+[] Einmalige Reset-Links per E-Mail
+[] Link hat Gültigkeitsdauer (z.B. 1 Stunde)
+[] Backend validation der Links
+[] Verhindert Passwort-Reset ohne E-Mail-Zugang
+
+12.5 Logging & Audit Trail
+----------------------------
+[] Protokollierung aller Passwort-Resets
+[] Wer hat Passwort wann zurückgesetzt?
+[] Verdächtige Aktivitäten erkennen
+[] Admin-Dashboard für Sicherheit
+
+12.6 Rate Limiting
+-------------------
+[] Maximal 3 Reset-Versuche pro E-Mail/Tag
+[] Cooldown-Zeit zwischen Versuchen
+[] Verhindert Brute-Force Attacken
+[] IP-basiertes Tracking optional
+
+12.7 UX Verbesserungen
+-----------------------
+[] Passwort-Stärke-Anzeige im Modal
+[] Passwort sichtbar/unsichtbar Toggle
+[] Erfolgreiche Meldung länger anzeigen
+[] Auto-Redirect zum Login nach Reset
+[] "Zurück zum Login" Link im Modal
+
+12.8 Two-Factor Authentication (2FA)
+-------------------------------------
+[] Zusätzliche Sicherheit
+[] SMS/Authenticator App
+[] Besonders wichtig wenn E-Mail kompromittiert
+
+12.9 Datenbank Verbesserungen
+------------------------------
+[] Spalte für letzten Passwort-Reset (Datum)
+[] Spalte für reset_attempts (Zähler)
+[] Spalte für last_reset_ip (optional)
+[] Automatisches Löschen von kennwortVergessen="x" nach Reset
+
+12.10 Fehler-Handling
+----------------------
+[] Spezifische Error-Codes zurückgeben
+[] User-freundliche Meldungen
+[] Admin-Benachrichtigung bei Fehlern
+[] Logging für Debugging
+
+
+================================================================================
+13. IMPLEMENTATION NOTES (27.04.2026)
+================================================================================
+
+Cloud Function resetPassword Details:
+- Empfängt: email, passwordHash
+- Validiert: kennwortVergessen Spalte = "x"
+- Aktion: Updated PasswdHash in Spalte E
+- Response: {success: true/false, message/error}
+- Fehlerbehandlung: Gibt aussagekräftige Fehlermeldungen
+- Google Sheets Range: players!A{row}:G{row} (7 Spalten)
+
+Frontend Modal Details:
+- ID: forgotPasswordModal
+- 3 Input-Felder: email, newPassword, confirmPassword
+- Validierung: Passwörter übereinstimmen, Min. 6 Zeichen
+- Button-States: normal → wird gespeichert → erfolgreich
+- Form wird nach erfolgreichem Reset geleert
+- User wird zum Login Modal zurück geleitet
+
+Spalte G Update in Sheet:
+- Ist erforderlich damit Funktion funktioniert
+- Admin setzen "x" um Passwort-Reset zu erlauben
+- "x" wird nicht automatisch gelöscht (für zukünftige Resets)
+- Ermöglicht Kontrolle über wer Passwort zurücksetzen darf
 
 ================================================================================
 12. CHANGELOG
@@ -485,6 +623,25 @@ firebase deploy
 - Test-Buttons und indexTest.js aus index.html entfernt
 - Dropdown-Fix für matches.html
 - Typen-Mismatch-Fix (String-Konvertierung bei IDs)
+- Responsive Design implementiert (27.04.2026):
+  * Hamburger-Menü (☰) erscheint bei Breite < 900px
+  * Mobile-Menü öffnet sich als Modal mit X-Button zum Schließen
+  * Auth-Buttons (Sign In/Sign Up/Profil/Sign Out) im oberen Bereich des Mobile-Menüs
+  * Navigation-Links (Dashboard, Spieler, Matches, Pre-Matches, Rangliste) darunter
+  * Benachrichtigungs-Glocke im Mobile-Menü integriert
+  * Match-Cards auf Mobile: Horizontal als "lang gezogenes Rechteck" (nicht quadratisch)
+  * Sätze auf Mobile: Untereinander (1, 2, 3) statt nebeneinander
+  * Action-Buttons (Datum setzen, Ergebnis eintragen) bleiben nebeneinander
+  * "Ändern" Button bei Pre-Matches entfernt
+  * Pyramid-Vorschlag: Auf Mobile (>768px) werden Boxen kleiner (100px breit)
+  * Auf sehr kleinen Screens (480px) werden Boxen noch kleiner (85px breit)
+  * Pyramide wächst nach unten, Reihen wrappen bei Platzmangel
+- Fehler in preMatchesList.js behoben: createResultModal() Funktionsdeklaration fehlte
+- Beide Spieler (Team 1 und Team 2) können Datum und Platz festlegen
+- Passwort-Sichtbarkeit (27.04.2026):
+  * Augen-Symbol (👁️) neben allen Passwort-Feldern
+  * Klick auf Auge zeigt/versteckt Passwort
+  * Funktioniert in: Login, Sign Up, Passwort vergessen (neues Passwort + bestätigen)
 
 ================================================================================
 ENDE DES PROTOKOLLS

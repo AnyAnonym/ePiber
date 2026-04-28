@@ -137,6 +137,21 @@ header {
   flex-wrap: wrap;
 }
 
+/* Header Logo (links) */
+.header-logo {
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  order: 0;
+  display: none;
+}
+
+.header-logo:hover {
+  opacity: 0.9;
+}
+
 /* Desktop: 3-spaltig Layout */
 .desktop-nav {
   display: flex;
@@ -222,6 +237,12 @@ nav a.active {
     padding: 12px 16px;
   }
 
+  .header-logo {
+    order: 0;
+    display: block;
+    font-size: 1.3rem;
+  }
+
   .header-center {
     flex: 1;
     order: 1;
@@ -234,6 +255,8 @@ nav a.active {
   header .logo {
     margin: 0;
     font-size: 1.3rem;
+    color: #d32f2f;
+    font-weight: 700;
   }
 
   .desktop-nav,
@@ -247,7 +270,7 @@ nav a.active {
   }
 }
 
-/* Modal für mobile Navigation */
+/* Mobile Navigation Content */
 .mobile-nav-content {
   width: 90%;
   max-width: 320px;
@@ -589,19 +612,47 @@ input[type="date"] {
 }
 
 @media (max-width: 700px) {
-  .match-content {
-    flex-direction: column;
-    align-items: center;
+  .match-card {
+    padding: 12px 16px;
   }
 
-  .teams,
-  .sets {
+  .match-content {
+    flex-direction: row;
     align-items: center;
+    justify-content: space-between;
+    margin-top: 20px;
+    gap: 8px;
+  }
+
+  .team {
+    flex: 1;
+    min-width: auto;
+    align-items: flex-start;
+  }
+
+  .player {
+    font-size: 0.95rem;
+  }
+
+  .vs {
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    margin: 0 4px;
+  }
+
+  .sets {
+    min-width: 50px;
+    gap: 2px;
+  }
+
+  .set {
+    font-size: 0.95rem;
   }
 
   .match-date {
     position: static;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
   }
 }
 
@@ -823,8 +874,11 @@ input[type="date"] {
 /* -------------------------------------------------- */
 
 .action-area {
-  min-width: 140px;
-  text-align: right;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .btn-action {
@@ -837,6 +891,7 @@ input[type="date"] {
   font-weight: 500;
   font-size: 0.9rem;
   transition: opacity 0.2s;
+  white-space: nowrap;
 }
 
 .btn-action:hover {
@@ -919,5 +974,164 @@ input[type="date"] {
   .dropdown-content {
     left: auto;
     right: 0;
+  }
+}
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE HEADER (Hamburger Menu)                */
+/* -------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .hamburger-btn {
+    display: block;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.8rem;
+    cursor: pointer;
+    padding: 5px 10px;
+  }
+
+  .main-nav, .auth-buttons, .logo {
+    display: none !important;
+  }
+
+  header {
+    padding: 10px 16px;
+  }
+
+  .header-bar {
+    justify-content: center !important;
+  }
+}
+
+@media (min-width: 901px) {
+  .hamburger-btn {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE LAYOUT                                  */
+/* -------------------------------------------------- */
+
+@media (max-width: 768px) {
+  main {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sidebar {
+    order: 2;
+  }
+}
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE MATCH CARDS                             */
+/* -------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .match-card {
+    padding: 10px 12px;
+  }
+
+  .match-date {
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+  }
+
+  /* Horizontal layout - lang gezogenes Rechteck */
+  .match-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .team {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 0.9rem;
+  }
+
+  .vs {
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  .action-area {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+  }
+
+  .sets {
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .set {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    min-width: 35px;
+    text-align: center;
+  }
+}
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE TABLE                                   */
+/* -------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .table {
+    font-size: 0.85rem;
+  }
+
+  .table th, .table td {
+    padding: 8px 6px;
+  }
+}
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE PYRAMID                                 */
+/* -------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .pyramid {
+    gap: 15px;
+    padding: 4px;
+  }
+
+  .row {
+    gap: 10px;
+  }
+
+  .box {
+    width: 100px;
+    height: 50px;
+    font-size: 0.9rem;
+    border-width: 2px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pyramid {
+    gap: 10px;
+  }
+
+  .row {
+    gap: 8px;
+  }
+
+  .box {
+    width: 85px;
+    height: 45px;
+    font-size: 0.8rem;
+    border-radius: 10px;
   }
 }

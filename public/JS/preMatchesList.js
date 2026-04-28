@@ -3,7 +3,109 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebas
 
 const readPreMatches = httpsCallable(functions, "readPreMatches");
 const setPreMatchResultFn = httpsCallable(functions, "setPreMatchResult");
+const setMatchDateFn = httpsCallable(functions, "setMatchDate");
 
+//-------------------------------------------------------
+// Modal: Datum und Platz setzen
+//-------------------------------------------------------
+function createDateModal() {
+  const modal = document.createElement("div");
+  modal.id = "dateModal";
+  modal.className = "modal hidden";
+  modal.innerHTML = `
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Datum & Platz festlegen</h2>
+      <p>Match: <span id="dateMatchInfo" class="name-display"></span></p>
+      <form id="dateForm">
+        <label for="matchDate">Datum:</label>
+        <input type="date" id="matchDate" required>
+fi
+        <label for="matchPlatz">Platz:</label>
+        <input type="text" id="matchPlatz" placeholder="z.B. 1" required>
+
+        <button type="submit" class="btn-login">Speichern</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector(".close").addEventListener("click", () => {
+    modal.classList.add("hidden");
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.classList.add("hidden");
+    }
+  });
+
+  return modal;
+}
+
+const dateModal = createDateModal();
+let currentDateRow = null;
+let currentDateMatch = null;
+
+window.openDateModal = (row, match) => {
+  currentDateRow = row;
+  currentDateMatch = match;
+  const team1 = [match.player1, match.player2].filter(Boolean).join(" / ") || "---";
+  const team2 = [match.player3, match.player4].filter(Boolean).join(" / ") || "---";
+  document.getElementById("dateMatchInfo").textContent = `${team1} vs ${team2}`;
+  document.getElementById("matchDate").value = match.datum ? match.datum.split("T")[0] : "";
+  document.getElementById("matchPlatz").value = match.platz || "";
+  dateModal.classList.remove("hidden");
+};
+
+window.closeDateModal = () => {
+  dateModal.classList.add("hidden");
+  currentDateRow = null;
+  currentDateMatch = null;
+};
+
+document.getElementById("dateForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const datum = document.getElementById("matchDate").value.trim();
+  const platz = document.getElementById("matchPlatz").value.trim();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+
+  if (!datum || !platz) {
+    alert("Bitte Datum und Platz ausfüllen!");
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Speichern...";
+
+  try {
+    const result = await setMatchDateFn({
+      row: currentDateRow,
+      datum,
+      platz,
+    });
+
+    if (result.data?.success) {
+      submitBtn.textContent = "Gespeichert!";
+      setTimeout(() => {
+        window.closeDateModal();
+        loadPreMatches();
+      }, 500);
+    } else {
+      throw new Error(result.data?.error || "Fehler");
+    }
+  } catch (err) {
+    console.error("Fehler beim Setzen des Datums:", err);
+    alert("Fehler: " + err.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Speichern";
+  }
+});
+
+//-------------------------------------------------------
+// Modal: Ergebnis eintragen
+//-------------------------------------------------------
 function createResultModal() {
   const modal = document.createElement("div");
   modal.id = "resultModal";
@@ -162,6 +264,14 @@ async function loadPreMatches() {
       });
     });
 
+    document.querySelectorAll(".date-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = parseInt(btn.dataset.row);
+        const match = preMatches.find((m) => m.row === row);
+        window.openDateModal(row, match);
+      });
+    });
+
   } catch (err) {
     console.error("Fehler beim Laden:", err);
     container.innerHTML = `<p>Fehler beim Laden der Forderungen: ${err.message}</p>`;
@@ -188,11 +298,32 @@ function getStatusBadge(status, ergebnis) {
 
 function getActionButton(match, userId) {
   if (!userId) {
-    return `<span class="waiting-text">Anmelden zum Eintragen</span>`;
+    return `<span class="waiting-text">Anmelden</span>`;
   }
-  if (match.isForMe && !match.ergebnis) {
-    return `<button class="result-btn btn-action" data-row="${match.row}">Ergebnis eintragen</button>`;
+
+  // Prüfe ob User Teil des Matches ist
+  const userIsInvolved =
+    match.player1Id === userId ||
+    match.player2Id === userId ||
+    match.player3Id === userId ||
+    match.player4Id === userId;
+
+  if (!userIsInvolved) {
+    return `<span class="waiting-text">---</span>`;
   }
+
+  // Wenn Datum nicht gesetzt: "Datum setzen" Button für beide
+  if (!match.datum) {
+    return `<button class="date-btn btn-action" data-row="${match.row}">Datum setzen</button>`;
+  }
+
+  // Wenn Datum gesetzt und noch kein Ergebnis: "Ergebnis eintragen" Button
+  if (match.datum && !match.ergebnis) {
+    return `
+      <button class="result-btn btn-action" data-row="${match.row}">Ergebnis</button>
+    `;
+  }
+
   return `<span class="waiting-text">---</span>`;
 }
 
