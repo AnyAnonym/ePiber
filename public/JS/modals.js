@@ -58,29 +58,6 @@ const modal = createModal("loginModal", `
   </form>
 `);
 
-// --- Sign Up Modal ---
-const signupModal = createModal("signupModal", `
-  <h2>Registrieren</h2>
-  <form id="signupForm">
-    <label for="signupFirstName">Vorname:</label>
-    <input type="text" id="signupFirstName" required>
-
-    <label for="signupLastName">Nachname:</label>
-    <input type="text" id="signupLastName" required>
-
-    <label for="signupEmail">E-Mail:</label>
-    <input type="email" id="signupEmail" required>
-
-    <label for="signupPassword">Passwort:</label>
-    <div style="position: relative; margin-bottom: 16px;">
-      <input type="password" id="signupPassword" required style="width: 100%; padding-right: 40px;">
-      <span class="toggle-password" data-target="signupPassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none;">👁️</span>
-    </div>
-
-    <button type="submit" class="btn-login">Registrieren</button>
-  </form>
-`);
-
 // --- Passwort Vergessen Modal ---
 const forgotPasswordModal = createModal("forgotPasswordModal", `
   <h2>Passwort zurücksetzen</h2>
@@ -201,51 +178,6 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     alert("Fehler: " + (res.error ?? res.message));
     submitBtn.disabled = false;
     submitBtn.textContent = "Anmelden";
-  }
-});
-
-//-------------------------------------------------------
-// Sign Up Modal Logik
-//-------------------------------------------------------
-const openSignup = document.getElementById("openSignup");
-
-openSignup.addEventListener("click", (e) => {
-  e.preventDefault();
-  signupModal.classList.remove("hidden");
-});
-
-document.getElementById("signupForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const firstName = e.target.signupFirstName.value.trim();
-  const lastName = e.target.signupLastName.value.trim();
-  const email = e.target.signupEmail.value.trim();
-  const password = e.target.signupPassword.value;
-  const hash = await hashPassword(password);
-  const submitBtn = e.target.querySelector('button[type="submit"]');
-
-  console.log("Sign-Up-Attempt:", { firstName, lastName, email, hash });
-
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Registrieren...";
-
-  const upsertFn = httpsCallable(functions, "upsertData");
-  const result = await upsertFn({ firstName, lastName, email, hash });
-  const { success, error } = result.data;
-
-  if (success) {
-    submitBtn.textContent = "Erfolgreich!";
-
-    localStorage.setItem("loggedInEmail", email);
-    localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("currentUserEmail", email);
-
-    setTimeout(() => window.location.reload(), 500);
-
-  } else {
-    alert("Fehler beim Speichern: " + error);
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Registrieren";
   }
 });
 
@@ -537,8 +469,6 @@ window.openNotificationModal = async () => {
         <p><strong>${i + 1}.</strong> <span class="challenger-name">${c.player3}</span> fordert dich heraus!</p>
         <label for="date-${c.row}">Datum:</label>
         <input type="date" id="date-${c.row}" required>
-        <label for="platz-${c.row}">Platz:</label>
-        <input type="text" id="platz-${c.row}" placeholder="Platz">
         <button class="btn-login set-date-btn" data-row="${c.row}">Datum setzen</button>
       </div>
     `
@@ -549,7 +479,6 @@ window.openNotificationModal = async () => {
       btn.addEventListener("click", async () => {
         const row = btn.dataset.row;
         const dateInput = document.getElementById(`date-${row}`);
-        const platzInput = document.getElementById(`platz-${row}`);
 
         if (!dateInput.value) {
           alert("Bitte ein Datum auswählen!");
@@ -563,13 +492,11 @@ window.openNotificationModal = async () => {
           const result = await setMatchDateFn({
             row: parseInt(row),
             datum: dateInput.value,
-            platz: platzInput.value.trim(),
           });
 
           if (result.data?.success) {
             btn.textContent = "Gespeichert!";
             dateInput.disabled = true;
-            platzInput.disabled = true;
             loadChallenges();
           } else {
             throw new Error(result.data?.error || "Fehler");
@@ -658,16 +585,6 @@ if (hamburgerBtn && mobileNavModal) {
       e.preventDefault();
       mobileNavModal.classList.add("hidden");
       modal.classList.remove("hidden");
-    });
-  }
-
-  // Mobile Sign Up button
-  const openSignupMobile = document.getElementById("openSignupMobile");
-  if (openSignupMobile) {
-    openSignupMobile.addEventListener("click", (e) => {
-      e.preventDefault();
-      mobileNavModal.classList.add("hidden");
-      signupModal.classList.remove("hidden");
     });
   }
 

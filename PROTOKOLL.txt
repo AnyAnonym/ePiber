@@ -2,7 +2,7 @@
 PROTOKOLL - ASKÖ Piberbach Tennis Ranglisten-WebApp
 ================================================================================
 Erstellt: 16.04.2026
-Letzte Änderung: 16.04.2026
+Letzte Änderung: 01.05.2026
 
 ================================================================================
 1. PROJEKTÜBERSICHT
@@ -51,6 +51,9 @@ WebApp-with-GoogleSheet_comunication/
 ├── OneNote_Notizen/               # Projektnotizen
 │   └── Rangliste-Regeln.png        # Bild der Projektnotizen
 │
+├── additional Files/              # Excel-Exporte der Google Sheets
+│   └── web-with-googlesheet_260501-1015.xlsx  # Neue Struktur (01.05.2026)
+│
 ├── firebase.json                   # Firebase Konfiguration
 ├── firestore.rules                 # Firestore Security Rules
 ├── firestore.indexes.json          # Firestore Indexes
@@ -60,57 +63,111 @@ WebApp-with-GoogleSheet_comunication/
 
 
 ================================================================================
-3. GOOGLE SHEETS TABELLENSTRUKTUR
+3. GOOGLE SHEETS TABELLENSTRUKTUR (neu ab 01.05.2026)
 ================================================================================
 
-3.1 players
------------
-| Spalte | Name            | Beschreibung                    |
-|--------|-----------------|--------------------------------|
-| A      | ID              | Fortlaufende Nummer            |
-| B      | FirstName       | Vorname                        |
-| C      | LastName        | Nachname                       |
-| D      | Email           | E-Mail                         |
-| E      | PasswdHash      | SHA-256 Passwort-Hash          |
-| F      | GeburtsDatum    | Geburtsdatum                   |
-| G      | kennwortVergessen| x = Passwort-Reset erlaubt     |
+3.1 Personen
+------------
+| Spalte | Name             | Beschreibung                    |
+|--------|------------------|--------------------------------|
+| A      | ID               | Fortlaufende Nummer            |
+| B      | Nachname         | Nachname                       |
+| C      | Vorname          | Vorname                        |
+| D      | Telefon Mobil    | Telefonnummer                  |
+| E      | E-Mail           | E-Mail                         |
+| F      | Ort              | Wohnort                        |
+| G      | Adresse          | Straße/Hausnummer              |
+| H      | PLZ              | Postleitzahl                   |
+| I      | GeburtsDatum     | Geburtsdatum                   |
+| J      | passwdHash       | SHA-256 Passwort-Hash          |
+| K      | kennwortVergessen| x = Passwort-Reset erlaubt     |
+| L      | PTN              | PTN-Nummer                     |
+| M      | Avatar           | Avatar-Bild                    |
+| N      | Geschlecht       | m/w/d                          |
 
-3.2 rankedPlayers
------------------
-| Spalte | Name     | Beschreibung            |
-|--------|----------|-------------------------|
-| A      | Rang     | Ranglistenposition       |
-| B      | PlayerID | Verweis auf Spieler-ID  |
+3.2 RL-Platzierung
+------------------
+| Spalte | Name      | Beschreibung                  |
+|--------|-----------|-------------------------------|
+| A      | BewerbID  | Verweis auf Bewerb            |
+| B      | Rang      | Ranglistenposition            |
+| C      | PersonID  | Verweis auf Personen-ID       |
+| D      | Bemerkung | Optionale Notiz               |
 
 3.3 preMatches
--------------
-| Spalte | Name           | Beschreibung                         |
-|--------|----------------|--------------------------------------|
-| A      | Spieler ID 1   | Geforderter                          |
-| B      | Spieler ID 2   | Team Geforderter (optional)          |
-| C      | Spieler ID 3   | Herausforderer                       |
-| D      | Spieler ID 4   | Team Herausforderer (optional)       |
-| E      | Datum          | Spieltermin                          |
-| F      | Platz          | Spielort                             |
-| G      | Status         | offen, bestaetigt, gespielt         |
-| H      | ForderungAm    | Datum der Forderung                  |
-| I      | Ergebnis       | Satz1,Satz2,Satz3 Format            |
-| J      | BestaetigtVon  | Wer bestätigt hat                    |
+--------------
+| Spalte | Name             | Beschreibung                         |
+|--------|------------------|--------------------------------------|
+| A      | ID               | Fortlaufende Nummer                  |
+| B      | ZeitpunktMatch   | Geplantes Match-Datum                |
+| C      | ZeitpunktForderung | Datum der Forderung                |
+| D      | BewerbID         | Verweis auf Bewerb                   |
+| E      | MatchtypID       | Verweis auf MatchTyp                 |
+| F      | SpielerID1       | Geforderter                          |
+| G      | SpielerID2       | Team Geforderter (optional)          |
+| H      | SpielerID3       | Herausforderer                       |
+| I      | SpielerID4       | Team Herausforderer (optional)       |
+| J      | status           | offen, bestaetigt, gespielt         |
 
 3.4 matches
+-----------
+| Spalte | Name             | Beschreibung                    |
+|--------|------------------|---------------------------------|
+| A      | ID               | Fortlaufende Nummer             |
+| B      | Zeitpunkt        | Match-Datum                     |
+| C      | Dauer            | Dauer des Matches               |
+| D      | BewerbID         | Verweis auf Bewerb              |
+| E      | MatchtypID       | Verweis auf MatchTyp            |
+| F      | SpielerID1       | Spieler 1                       |
+| G      | SpielerID2       | Spieler 2 (optional)            |
+| H      | SpielerID3       | Spieler 3 (optional)            |
+| I      | SpielerID4       | Spieler 4 (optional)            |
+| J      | Ergebnis         | Satz1/Satz2/Satz3 Format       |
+| K      | Bemerkung        | Optionale Notiz                 |
+| L      | PTN-Wertung      | PTN-Punkte                      |
+| M      | Gewinner         | ID des Gewinners                |
+
+3.5 MatchTyp
+------------
+| Spalte | Name               | Beschreibung                    |
+|--------|--------------------|--------------------------------|
+| A      | ID                 | Fortlaufende Nummer            |
+| B      | Bezeichnung        | z.B. "Einzel normal"           |
+| C      | EinzelDoppel       | E = Einzel, D = Doppel         |
+| D      | Gewinnsaetze       | Anzahl der Gewinnsätze         |
+| E      | EntscheidenderSatz | Art des entscheidenden Satzes  |
+| F      | NoAd               | No-Ad-Regelung (J/N)           |
+
+3.6 Bewerbsart
+--------------
+| Spalte | Name               | Beschreibung                    |
+|--------|--------------------|--------------------------------|
+| A      | ID                 | Fortlaufende Nummer            |
+| B      | Bezeichnung        | z.B. "Rangliste"               |
+| C      | MatchtypID Standard| Standard-Matchtyp              |
+| D      | Rasterfunktion     | Rasterkonfiguration            |
+| E      | EntryListAvailable | Eintragungsliste verfügbar     |
+| F      | Bemerkung          | Optionale Notiz                |
+
+3.7 Bewerb
 ----------
-| Spalte | Name           | Beschreibung              |
-|--------|----------------|---------------------------|
-| A      | Spieler ID 1   | Geforderter               |
-| B      | Spieler ID 2   | Team Geforderter          |
-| C      | Spieler ID 3   | Herausforderer            |
-| D      | Spieler ID 4   | Team Herausforderer       |
-| E      | Satz 1         | z.B. "6:4"               |
-| F      | Satz 2         | z.B. "3:6"               |
-| G      | Satz 3         | z.B. "7:5"               |
-| H      | Datum          | Spieltermin               |
-| I      | Platz          | Spielort                  |
-| J      | Gewinner       | ID des Gewinners          |
+| Spalte | Name             | Beschreibung                    |
+|--------|------------------|--------------------------------|
+| A      | ID               | Fortlaufende Nummer            |
+| B      | BewerbsartID     | Verweis auf Bewerbsart         |
+| C      | Bezeichnung      | z.B. "Vereinsmeisterschaft"    |
+| D      | Entrystart       | Beginn der Eintragung          |
+| E      | Entrydeadline    | Deadline der Eintragung        |
+| F      | Bewerbsbeginn    | Start des Bewerbs              |
+| G      | Bewerbsende      | Ende des Bewerbs               |
+
+3.8 EntryList
+-------------
+| Spalte | Name       | Beschreibung                    |
+|--------|------------|--------------------------------|
+| A      | BewerbID   | Verweis auf Bewerb             |
+| B      | PersonID   | Verweis auf Person             |
+| C      | Entrydate  | Datum der Eintragung           |
 
 
 ================================================================================
@@ -642,6 +699,39 @@ Spalte G Update in Sheet:
   * Augen-Symbol (👁️) neben allen Passwort-Feldern
   * Klick auf Auge zeigt/versteckt Passwort
   * Funktioniert in: Login, Sign Up, Passwort vergessen (neues Passwort + bestätigen)
+- Mobile-Menü Logo (01.05.2026):
+  * "ASKÖ Piberbach" Text-Logo oben links im Mobile-Menü
+  * Auf allen 5 HTML-Seiten hinzugefügt
+- Google Sheets Struktur aktualisiert (01.05.2026):
+  * Alte Struktur (players, rankedPlayers) durch neue Struktur ersetzt
+  * Neue Tabellen: Personen, RL-Platzierung, preMatches, matches, MatchTyp, Bewerbsart, Bewerb, EntryList
+  * Personen: Erweiterte Spalten (Telefon, Ort, Adresse, PLZ, PTN, Avatar, Geschlecht)
+  * RL-Platzierung: BewerbID, Rang, PersonID, Bemerkung
+  * preMatches: Erweitert mit ZeitpunktMatch, ZeitpunktForderung, BewerbID, MatchtypID
+  * matches: Erweitert mit Zeitpunkt, Dauer, BewerbID, MatchtypID, Bemerkung, PTN-Wertung
+- Registrierungsfunktion entfernt (01.05.2026):
+  * "Registrieren" Button aus allen 5 HTML-Seiten entfernt (Desktop + Mobile)
+  * Sign Up Modal aus modals.js entfernt
+  * Sign Up Event Listener aus modals.js entfernt
+  * Mobile Sign Up Button Event Listener entfernt
+  * User können sich jetzt nicht mehr selbst registrieren
+- Google Sheets Struktur in allen Funktionen angepasst (01.05.2026):
+  * functions/index.js: Alle Sheet-Namen und Spaltennamen aktualisiert
+    - "players" → "Personen"
+    - "rankedPlayers" → "RL-Platzierung"
+    - "firstname/lastname" → "vorname/nachname"
+    - "email" → "e-mail"
+    - "playerid" → "personid"
+    - "spieler id 1-4" → "spielerid1-4"
+    - "datum" → "zeitpunktmatch"
+    - "satz 1-3" → "ergebnis" (Format: "6:4/3:6/7:5")
+    - "platz" entfernt (nicht mehr in neuer Struktur)
+    - "bestaetigtvon" entfernt
+  * matches Tabelle: Neue Struktur mit ID, Zeitpunkt, Dauer, BewerbID, MatchtypID, SpielerID1-4, Ergebnis, Bemerkung, PTN-Wertung, Gewinner
+  * preMatches Tabelle: Neue Struktur mit ID, ZeitpunktMatch, ZeitpunktForderung, BewerbID, MatchtypID, SpielerID1-4, status
+  * Ranglisten-Update: "RL-Platzierung" Spalte B (Rang) wird aktualisiert
+  * Frontend: preMatchesList.js, modals.js, rangliste.js angepasst
+  * Platz-Feld aus allen Formularen entfernt
 
 ================================================================================
 ENDE DES PROTOKOLLS

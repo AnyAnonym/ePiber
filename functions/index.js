@@ -1,3 +1,5 @@
+/* eslint-disable valid-jsdoc */
+/* eslint-disable no-unused-vars */
 /* eslint-disable require-jsdoc */
 /* eslint-disable max-len */
 // 🔹 index.js (ES Module Syntax)
@@ -10,13 +12,46 @@ import {google} from "googleapis";
 
 const SHEET_ID = "1E1CYezDcScIBvH9ebjN0hOkvttTdA6PFIgYKDMaeE04";
 
+/**
+ * Konvertiert JJMMDD-hhmm zu DD.MM.JJJJ - hh:mm
+ */
+function formatSheetDate(raw) {
+  if (!raw) return "";
+  const rawStr = String(raw).trim();
+  const match = rawStr.match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (!match) return rawStr;
+  const [, yy, mm, dd, hh, mi] = match;
+  const yyyy = parseInt(yy, 10) >= 50 ? "19" + yy : "20" + yy;
+  return `${dd}.${mm}.${yyyy} - ${hh}:${mi}`;
+}
+
+/**
+ * Konvertiert Satz-Ergebnis: 7(13) → 7¹³, 6:4 bleibt 6:4
+ */
+function formatSetScore(raw) {
+  if (!raw) return "";
+  return String(raw).replace(/\((\d+)\)/g, (_, tiebreak) => {
+    const superscripts = {"0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"};
+    const sup = tiebreak.split("").map((d) => superscripts[d] || d).join("");
+    return sup;
+  });
+}
+
+/**
+ * Formatiert ein ganzes Ergebnis (6:4/7(13)/6:2 → 6:4/7¹³/6:2)
+ */
+function formatErgebnis(raw) {
+  if (!raw) return "";
+  return String(raw).split("/").map((s) => formatSetScore(s)).join("/");
+}
+
 // 🔹 Testfunktion
 export const sayHello = onCall(() => {
   return "Hello World!";
 });
 
 /**
- * Liest die komplette "players"-Tabelle aus Google Sheets.
+ * Liest die komplette "Personen"-Tabelle aus Google Sheets.
  */
 export const readPlayersList = onCall(async () => {
   try {
@@ -28,7 +63,7 @@ export const readPlayersList = onCall(async () => {
 
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "players",
+      range: "Personen",
     });
 
     return {success: true, values: res.data.values || []};
@@ -81,14 +116,14 @@ export const readFullMatches = onCall(async () => {
       }),
       sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range: "players",
+        range: "Personen",
       }),
     ]);
 
     const matchesValues = matchesRes.data.values || [];
     const playersValues = playersRes.data.values || [];
     if (matchesValues.length < 2 || playersValues.length < 2) {
-      throw new Error("Leere Tabellen (matches oder players).");
+      throw new Error("Leere Tabellen (matches oder Personen).");
     }
 
     // --- Header finden ---
@@ -96,8 +131,8 @@ export const readFullMatches = onCall(async () => {
     const playerHeader = playersValues[0].map((h) => h.trim().toLowerCase());
 
     const idIndex = playerHeader.indexOf("id");
-    const fnIndex = playerHeader.indexOf("firstname");
-    const lnIndex = playerHeader.indexOf("lastname");
+    const fnIndex = playerHeader.indexOf("vorname");
+    const lnIndex = playerHeader.indexOf("nachname");
 
     // --- ID → Name Map ---
     const playerMap = new Map();
@@ -110,23 +145,21 @@ export const readFullMatches = onCall(async () => {
     // --- Spaltenindizes dynamisch ermitteln ---
     const idx = (label) => header.findIndex((v) => v.includes(label));
 
-    const i1 = idx("spieler id 1");
-    const i2 = idx("spieler id 2");
-    const i3 = idx("spieler id 3");
-    const i4 = idx("spieler id 4");
-    const s1 = idx("satz 1");
-    const s2 = idx("satz 2");
-    const s3 = idx("satz 3");
-    const d = idx("datum");
-    const p = idx("platz");
+    const i1 = idx("spielerid1");
+    const i2 = idx("spielerid2");
+    const i3 = idx("spielerid3");
+    const i4 = idx("spielerid4");
+    const ergebnisIdx = idx("ergebnis");
+    const d = idx("zeitpunkt");
 
     // --- Matches mappen ---
     const startRow = header[0].toLowerCase().includes("spieler") ? 1 : 0;
     const allMatches = matchesValues.slice(startRow).map((row) => {
-      const sets = [row[s1], row[s2], row[s3]].filter(Boolean);
+      const ergebnisRaw = row[ergebnisIdx] || "";
+      const sets = ergebnisRaw ? ergebnisRaw.split("/").map((s) => formatSetScore(s)) : [];
 
       return {
-        date: row[d] || "---",
+        date: formatSheetDate(row[d]),
         players: [
           playerMap.get(row[i1]) || "---",
           playerMap.get(row[i2]) || "---",
@@ -134,7 +167,7 @@ export const readFullMatches = onCall(async () => {
           playerMap.get(row[i4]) || "---",
         ],
         sets,
-        platz: row[p] || "",
+        ergebnis: formatErgebnis(ergebnisRaw),
       };
     });
 
@@ -170,21 +203,21 @@ export const addMatch = onCall(async (request) => {
     });
     const sheets = google.sheets({version: "v4", auth});
 
-    // optional: IDs existieren in players
+    // optional: IDs existieren in Personen
     const playersRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "players",
+      range: "Personen",
     });
 
     const players = playersRes.data.values || [];
     if (players.length < 2) {
-      return {success: false, error: "Keine Spieler in players-Tabelle gefunden."};
+      return {success: false, error: "Keine Spieler in Personen-Tabelle gefunden."};
     }
 
     const header = players[0].map((h) => (h || "").trim().toLowerCase());
     const idIdx = header.indexOf("id");
     if (idIdx === -1) {
-      return {success: false, error: "players-Tabelle muss Spalte id enthalten."};
+      return {success: false, error: "Personen-Tabelle muss Spalte ID enthalten."};
     }
 
     const validIds = new Set(players.slice(1).map((r) => (r[idIdx] || "").toString().trim()));
@@ -222,15 +255,15 @@ export const addMatch = onCall(async (request) => {
     // --- Prüfe offene Forderungen ---
     if (preRows.length > 1) {
       const preHeader = preRows[0].map((h) => h.trim().toLowerCase());
-      const i1 = preHeader.indexOf("spieler id 1");
-      const i2 = preHeader.indexOf("spieler id 2");
-      const i3 = preHeader.indexOf("spieler id 3");
-      const i4 = preHeader.indexOf("spieler id 4");
-      const d = preHeader.indexOf("datum");
+      const i1 = preHeader.indexOf("spielerid1");
+      const i2 = preHeader.indexOf("spielerid2");
+      const i3 = preHeader.indexOf("spielerid3");
+      const i4 = preHeader.indexOf("spielerid4");
+      const d = preHeader.indexOf("zeitpunktmatch");
 
       for (let i = 1; i < preRows.length; i++) {
         const row = preRows[i];
-        // Nur offene (kein Datum) berücksichtigen
+        // Nur offene (kein ZeitpunktMatch) berücksichtigen
         if (!row[d] || row[d] === "") {
           const existing1 = String(row[i1] || "").trim();
           const existing2 = String(row[i2] || "").trim();
@@ -253,11 +286,10 @@ export const addMatch = onCall(async (request) => {
 
     if (matchesRows.length > 1) {
       const matchesHeader = matchesRows[0].map((h) => h.trim().toLowerCase());
-      const mi1 = matchesHeader.indexOf("spieler id 1");
-      const mi3 = matchesHeader.indexOf("spieler id 3");
-      const md = matchesHeader.indexOf("datum");
-      const ms1 = matchesHeader.indexOf("satz 1");
-      const ms2 = matchesHeader.indexOf("satz 2");
+      const mi1 = matchesHeader.indexOf("spielerid1");
+      const mi3 = matchesHeader.indexOf("spielerid3");
+      const md = matchesHeader.indexOf("zeitpunkt");
+      const mergebnis = matchesHeader.indexOf("ergebnis");
 
       for (let i = 1; i < matchesRows.length; i++) {
         const row = matchesRows[i];
@@ -266,11 +298,10 @@ export const addMatch = onCall(async (request) => {
         if (matchDate && matchDate >= sevenDaysAgo) {
           const m1 = String(row[mi1] || "").trim();
           const m3 = String(row[mi3] || "").trim();
-          const satz1 = String(row[ms1] || "").trim();
-          const satz2 = String(row[ms2] || "").trim();
+          const ergebnis = String(row[mergebnis] || "").trim();
 
           // Prüfe ob es ein abgeschlossenes Match ist
-          if (satz1 && satz2) { // Minimum 2 Sätze
+          if (ergebnis && ergebnis.includes("/")) { // Minimum 2 Sätze (getrennt durch /)
             // --- Schutzzeit: p3id (Geforderte) nach Sieg ---
             if (m3 === p3id) {
               return {success: false, error: "Geforderte(r) steht unter Schutzzeit (7 Tage nach Sieg)"};
@@ -285,14 +316,26 @@ export const addMatch = onCall(async (request) => {
       }
     }
 
-    // Daten in preMatches schreiben (alle 10 Spalten!)
-    // Spalten: A-J = SpielerID1, SpielerID2, SpielerID3, SpielerID4, Datum, Platz, Status, ForderungAm, Ergebnis, BestaetigtVon
+    // Daten in preMatches schreiben (neue Struktur!)
+    // Spalten: A=ID, B=ZeitpunktMatch, C=ZeitpunktForderung, D=BewerbID, E=MatchtypID, F=SpielerID1, G=SpielerID2, H=SpielerID3, I=SpielerID4, J=status
+    const preHeader = preRows[0].map((h) => h.trim().toLowerCase());
+    const idIdxPre = preHeader.indexOf("id");
+
+    // Neue ID berechnen
+    const numericIdsPre = preRows.slice(1)
+        .map((r) => parseFloat(r[idIdxPre]))
+        .filter((n) => !isNaN(n) && n > 0);
+    const lastIdPre = numericIdsPre.length > 0 ? Math.max(...numericIdsPre) : 0;
+    const newIdPre = lastIdPre + 1;
+
+    const now = new Date().toISOString();
+
     const res = await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
       range: "preMatches",
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [[p1id, p2id, p3id, p4id, "", "", "offen", "", "", ""]],
+        values: [[newIdPre, "", now, "", "", p1id, p2id, p3id, p4id, "offen"]],
       },
     });
 
@@ -305,7 +348,7 @@ export const addMatch = onCall(async (request) => {
 });
 
 /**
- * Fügt einen neuen Spieler in die "players"-Tabelle ein,
+ * Fügt einen neuen Spieler in die "Personen"-Tabelle ein,
  * verhindert doppelte Registrierung anhand der E-Mail.
  * Erwartet in req.data:
  * {
@@ -332,10 +375,10 @@ export const upsertData = onCall(async (req) => {
     const authClient = await auth.getClient();
     const sheets = google.sheets({version: "v4", auth: authClient});
 
-    // 1️⃣ Alle Spieler holen (für E-Mail‑Prüfung)
+    // 1️⃣ Alle Spieler holen (für E‑Mail‑Prüfung)
     const getRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "players!A:E",
+      range: "Personen!A:J",
     });
 
     const rows = getRes.data.values || [];
@@ -345,11 +388,11 @@ export const upsertData = onCall(async (req) => {
 
     // Header finden
     const header = rows[0].map((h) => h.trim().toLowerCase());
-    const emailIndex = header.indexOf("email");
+    const emailIndex = header.indexOf("e-mail");
     const idIndex = header.indexOf("id");
 
     if (emailIndex === -1 || idIndex === -1) {
-      throw new Error("❌ Spalten 'id' oder 'email' fehlen im Sheet‑Header");
+      throw new Error("❌ Spalten 'id' oder 'e-mail' fehlen im Sheet‑Header");
     }
 
     // 2️⃣ Prüfen, ob E‑Mail schon existiert
@@ -377,13 +420,14 @@ export const upsertData = onCall(async (req) => {
     const lastId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
     const newId = lastId + 1;
 
-    // 4️⃣ Neue Zeile erstellen
-    const newRow = [newId, firstName, lastName, email, hash];
+    // 4️⃣ Neue Zeile erstellen (neue Personen-Struktur)
+    // ID, Nachname, Vorname, Telefon Mobil, E-Mail, Ort, Adresse, PLZ, GeburtsDatum, passwdHash, ...
+    const newRow = [newId, lastName, firstName, "", email, "", "", "", "", hash];
 
     // 5️⃣ Anhängen
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: "players!A1:E",
+      range: "Personen!A:J",
       valueInputOption: "USER_ENTERED",
       requestBody: {values: [newRow]},
     });
@@ -397,9 +441,9 @@ export const upsertData = onCall(async (req) => {
 });
 
 /**
- * Baut die Rangliste aus den Tabs "rankedPlayers" und "players" zusammen.
- * - "rankedPlayers" enthält Spalten: Rang | PlayerID
- * - "players" enthält Spalten: id | firstName | lastName
+ * Baut die Rangliste aus den Tabs "RL-Platzierung" und "Personen" zusammen.
+ * - "RL-Platzierung" enthält Spalten: BewerbID | Rang | PersonID | Bemerkung
+ * - "Personen" enthält Spalten: ID | Nachname | Vorname | ...
  */
 export const readRankedPlayers = onCall(async () => {
   console.log("✅ readRankedPlayers gestartet...");
@@ -413,11 +457,11 @@ export const readRankedPlayers = onCall(async () => {
     // --- Tabellen abrufen ---
     const rankedRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "rankedPlayers",
+      range: "RL-Platzierung",
     });
     const playersRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "players",
+      range: "Personen",
     });
 
     const rankedValues = rankedRes.data.values || [];
@@ -433,10 +477,10 @@ export const readRankedPlayers = onCall(async () => {
     const playersHeader = playersValues[0].map((h) => h.trim().toLowerCase());
 
     const rankIndex = rankedHeader.indexOf("rang");
-    const playerIdIndex = rankedHeader.indexOf("playerid");
+    const playerIdIndex = rankedHeader.indexOf("personid");
     const idIndex = playersHeader.indexOf("id");
-    const firstNameIndex = playersHeader.indexOf("firstname");
-    const lastNameIndex = playersHeader.indexOf("lastname");
+    const firstNameIndex = playersHeader.indexOf("vorname");
+    const lastNameIndex = playersHeader.indexOf("nachname");
 
     if (
       rankIndex === -1 ||
@@ -498,10 +542,10 @@ export const verifyUserLogin = onCall(async (request) => {
     });
     const sheets = google.sheets({version: "v4", auth});
 
-    // Daten aus TAB "users" oder alternativ "players"
+    // Daten aus TAB "Personen"
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "players", // ⚠️ ändere ggf. auf "players", wenn du dort E-Mail & Hash speicherst
+      range: "Personen",
     });
 
     const rows = res.data.values || [];
@@ -511,8 +555,8 @@ export const verifyUserLogin = onCall(async (request) => {
 
     // Header analysieren
     const headers = rows[0].map((h) => h.trim().toLowerCase());
-    const emailIndex = headers.indexOf("email");
-    const hashIndex = headers.indexOf("passwdhash"); // ← angepasst
+    const emailIndex = headers.indexOf("e-mail");
+    const hashIndex = headers.indexOf("passwdhash");
 
     if (emailIndex === -1 || hashIndex === -1) {
       return res.status(500).json({
@@ -547,7 +591,7 @@ export const verifyUserLogin = onCall(async (request) => {
 });
 
 /**
- * Liest aus der "players"-Tabelle: Voller Name, E-Mail, Geburtsdatum
+ * Liest aus der "Personen"-Tabelle: Voller Name, E-Mail, Geburtsdatum
  * Liest offene Herausforderungen für einen Spieler aus preMatches.
  * Nur der GEFORDERTE (Spieler 1) bekommt die Notification.
  */
@@ -572,7 +616,7 @@ export const getMyChallenges = onCall(async (request) => {
       }),
       sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range: "players",
+        range: "Personen",
       }),
     ]);
 
@@ -585,8 +629,8 @@ export const getMyChallenges = onCall(async (request) => {
 
     const playerHeader = playerRows[0].map((h) => h.trim().toLowerCase());
     const pIdIdx = playerHeader.indexOf("id");
-    const pFnIdx = playerHeader.indexOf("firstname");
-    const pLnIdx = playerHeader.indexOf("lastname");
+    const pFnIdx = playerHeader.indexOf("vorname");
+    const pLnIdx = playerHeader.indexOf("nachname");
 
     const playerMap = new Map();
     playerRows.slice(1).forEach((r) => {
@@ -596,10 +640,10 @@ export const getMyChallenges = onCall(async (request) => {
     });
 
     const preHeader = preRows[0].map((h) => h.trim().toLowerCase());
-    const i1 = preHeader.indexOf("spieler id 1");
-    const i2 = preHeader.indexOf("spieler id 2");
-    const i3 = preHeader.indexOf("spieler id 3");
-    const d = preHeader.indexOf("datum");
+    const i1 = preHeader.indexOf("spielerid1");
+    const i2 = preHeader.indexOf("spielerid2");
+    const i3 = preHeader.indexOf("spielerid3");
+    const d = preHeader.indexOf("zeitpunktmatch");
 
     const challenges = [];
     preRows.slice(1).forEach((row, rowIndex) => {
@@ -607,10 +651,10 @@ export const getMyChallenges = onCall(async (request) => {
       const p1 = String(row[i1] || "");
       const p2 = String(row[i2] || "");
       const p3 = String(row[i3] || "");
-      const datum = row[d] || "";
+      const rawDatum = row[d] || "";
 
       const isForMe = p1 === userId;
-      const isOpen = !datum;
+      const isOpen = !rawDatum;
 
       if (isForMe && isOpen) {
         challenges.push({
@@ -631,7 +675,7 @@ export const getMyChallenges = onCall(async (request) => {
 });
 
 /**
- * Trägt Datum (und optional Platz) in eine preMatches-Zeile ein.
+ * Trägt Datum (ZeitpunktMatch) in eine preMatches-Zeile ein.
  */
 export const setMatchDate = onCall(async (request) => {
   try {
@@ -640,50 +684,25 @@ export const setMatchDate = onCall(async (request) => {
       return {success: false, error: "row und datum sind erforderlich"};
     }
 
-    console.log("📅 Setze Datum in preMatches Zeile", row, ":", datum);
+    console.log("📅 Setze ZeitpunktMatch in preMatches Zeile", row, ":", datum);
 
     const auth = new google.auth.GoogleAuth({
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
     const sheets = google.sheets({version: "v4", auth});
 
-    const preRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: "preMatches",
-    });
-    const preRows = preRes.data.values || [];
-    if (preRows.length < 2) {
-      return {success: false, error: "preMatches ist leer"};
-    }
-
-    const header = preRows[0].map((h) => h.trim().toLowerCase());
-    // const dIdx = header.indexOf("datum");
-    const pIdx = header.indexOf("platz");
-
     const rowInSheet = row;
-    const cellE = `preMatches!E${rowInSheet}`;
-    const updates = [];
+    // Neue Struktur: Spalte B = ZeitpunktMatch
+    const cellB = `preMatches!B${rowInSheet}`;
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
-      range: cellE,
+      range: cellB,
       valueInputOption: "USER_ENTERED",
       requestBody: {values: [[datum]]},
     });
-    updates.push(`datum=${datum}`);
 
-    if (platz && pIdx !== -1) {
-      const cellF = `preMatches!F${rowInSheet}`;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: cellF,
-        valueInputOption: "USER_ENTERED",
-        requestBody: {values: [[platz]]},
-      });
-      updates.push(`platz=${platz}`);
-    }
-
-    console.log("✅ Datum gesetzt:", updates.join(", "));
+    console.log("✅ ZeitpunktMatch gesetzt:", datum);
     return {success: true};
   } catch (err) {
     console.error("❌ Fehler in setMatchDate:", err);
@@ -703,7 +722,7 @@ export const readPlayerDetails = onCall(async () => {
     // Google Sheet abrufen
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "players",
+      range: "Personen",
     });
 
     const values = res.data.values || [];
@@ -713,9 +732,9 @@ export const readPlayerDetails = onCall(async () => {
 
     // --- Header verarbeiten ---
     const header = values[0].map((h) => h.trim().toLowerCase());
-    const firstNameIndex = header.indexOf("firstname");
-    const lastNameIndex = header.indexOf("lastname");
-    const emailIndex = header.indexOf("email");
+    const firstNameIndex = header.indexOf("vorname");
+    const lastNameIndex = header.indexOf("nachname");
+    const emailIndex = header.indexOf("e-mail");
     const birthIndex = header.indexOf("geburtsdatum");
 
     if (
@@ -725,7 +744,7 @@ export const readPlayerDetails = onCall(async () => {
       birthIndex === -1
     ) {
       throw new Error(
-          "❌ Eine oder mehrere Spalten fehlen (firstname, lastname, email, GeburtsDatum)",
+          "❌ Eine oder mehrere Spalten fehlen (vorname, nachname, e-mail, GeburtsDatum)",
       );
     }
 
@@ -767,7 +786,7 @@ export const readPreMatches = onCall(async (request) => {
       }),
       sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range: "players",
+        range: "Personen",
       }),
     ]);
 
@@ -780,8 +799,8 @@ export const readPreMatches = onCall(async (request) => {
 
     const playerHeader = playerValues[0].map((h) => h.trim().toLowerCase());
     const pIdIdx = playerHeader.indexOf("id");
-    const pFnIdx = playerHeader.indexOf("firstname");
-    const pLnIdx = playerHeader.indexOf("lastname");
+    const pFnIdx = playerHeader.indexOf("vorname");
+    const pLnIdx = playerHeader.indexOf("nachname");
 
     const playerMap = new Map();
     playerValues.slice(1).forEach((r) => {
@@ -791,15 +810,13 @@ export const readPreMatches = onCall(async (request) => {
     });
 
     const preHeader = preValues[0].map((h) => h.trim().toLowerCase());
-    const i1 = preHeader.indexOf("spieler id 1");
-    const i2 = preHeader.indexOf("spieler id 2");
-    const i3 = preHeader.indexOf("spieler id 3");
-    const i4 = preHeader.indexOf("spieler id 4");
-    const d = preHeader.indexOf("datum");
-    const p = preHeader.indexOf("platz");
+    const i1 = preHeader.indexOf("spielerid1");
+    const i2 = preHeader.indexOf("spielerid2");
+    const i3 = preHeader.indexOf("spielerid3");
+    const i4 = preHeader.indexOf("spielerid4");
+    const d = preHeader.indexOf("zeitpunktmatch");
     const st = preHeader.indexOf("status");
     const er = preHeader.indexOf("ergebnis");
-    const be = preHeader.indexOf("bestaetigtvon");
 
     const preMatches = [];
     preValues.slice(1).forEach((row, rowIndex) => {
@@ -808,11 +825,9 @@ export const readPreMatches = onCall(async (request) => {
       const p2 = String(row[i2] || "");
       const p3 = String(row[i3] || "");
       const p4 = String(row[i4] || "");
-      const datum = d !== -1 ? (row[d] || "") : "";
-      const platz = p !== -1 ? (row[p] || "") : "";
-      const status = st !== -1 ? (row[st] || "") : "offen";
-      const ergebnis = er !== -1 ? (row[er] || "") : "";
-      const bestaetigtVon = be !== -1 ? (row[be] || "") : "";
+      const datum = d !== -1 ? formatSheetDate(row[d] || "") : "";
+      const status = st !== -1 ? (row[st] || "offen") : "offen";
+      const ergebnis = er !== -1 ? formatErgebnis(row[er] || "") : "";
 
       if (!p1 && !p2 && !p3 && !p4) {
         return;
@@ -831,13 +846,10 @@ export const readPreMatches = onCall(async (request) => {
         player3Id: p3,
         player4Id: p4,
         datum,
-        platz,
         status,
         ergebnis,
-        bestaetigtVon,
         isForMe: isForMe,
         canEnterResult: !ergebnis && isForMe,
-        canConfirm: !!ergebnis && isForMe,
       };
 
       preMatches.push(match);
@@ -877,27 +889,20 @@ export const setPreMatchResult = onCall(async (request) => {
     }
 
     const preHeader = preValues[0].map((h) => h.trim().toLowerCase());
-    const i1 = preHeader.indexOf("spieler id 1");
-    const i2 = preHeader.indexOf("spieler id 2");
-    const i3 = preHeader.indexOf("spieler id 3");
-    const i4 = preHeader.indexOf("spieler id 4");
-    const d = preHeader.indexOf("datum");
-    const p = preHeader.indexOf("platz");
+    const i1 = preHeader.indexOf("spielerid1");
+    const i2 = preHeader.indexOf("spielerid2");
+    const i3 = preHeader.indexOf("spielerid3");
+    const i4 = preHeader.indexOf("spielerid4");
+    const d = preHeader.indexOf("zeitpunktmatch");
     const er = preHeader.indexOf("ergebnis");
-    const be = preHeader.indexOf("bestaetigtvon");
 
     const matchRow = preValues[row - 1];
     const existingErgebnis = matchRow[er] || "";
-    const existingBestaetigt = matchRow[be] || "";
 
-    const ergebnisWert = satz1 + "," + satz2 + "," + satz3;
+    const ergebnisWert = satz1 + "/" + satz2 + (satz3 ? "/" + satz3 : "");
 
     if (existingErgebnis && existingErgebnis !== ergebnisWert) {
       return {success: false, error: "Anderes Ergebnis bereits eingetragen"};
-    }
-
-    if (existingBestaetigt.includes(userId)) {
-      return {success: false, error: "Ergebnis bereits bestatigt"};
     }
 
     const p1 = String(matchRow[i1] || "");
@@ -905,10 +910,9 @@ export const setPreMatchResult = onCall(async (request) => {
     const p3 = String(matchRow[i3] || "");
     const p4 = String(matchRow[i4] || "");
     const datum = matchRow[d] || "";
-    const platz = matchRow[p] || "";
 
     // Gewinner berechnen
-    const saetze = [satz1, satz2, satz3];
+    const saetze = satz3 ? [satz1, satz2, satz3] : [satz1, satz2];
     let siegeP1 = 0;
     let siegeP3 = 0;
     saetze.forEach((s) => {
@@ -928,16 +932,37 @@ export const setPreMatchResult = onCall(async (request) => {
     const fordererGewonnen = siegeP3 > siegeP1;
     const gewinner = fordererGewonnen ? p3 : p1;
 
-    // Match in matches schreiben
-    const newRow = [p1, p2, p3, p4, satz1, satz2, satz3, datum, platz, gewinner];
+    // Match in matches schreiben (neue Struktur!)
+    // ID, Zeitpunkt, Dauer, BewerbID, MatchtypID, SpielerID1-4, Ergebnis, Bemerkung, PTN-Wertung, Gewinner
+    const matchesRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "matches",
+    });
+    const matchesValues = matchesRes.data.values || [];
+
+    let newMatchId = 1;
+    if (matchesValues.length > 1) {
+      const matchesHeader = matchesValues[0].map((h) => h.trim().toLowerCase());
+      const matchIdIdx = matchesHeader.indexOf("id");
+      if (matchIdIdx !== -1) {
+        const numericIds = matchesValues.slice(1)
+            .map((r) => parseFloat(r[matchIdIdx]))
+            .filter((n) => !isNaN(n) && n > 0);
+        if (numericIds.length > 0) {
+          newMatchId = Math.max(...numericIds) + 1;
+        }
+      }
+    }
+
+    const newMatchRow = [newMatchId, datum, "", "", "", p1, p2, p3, p4, ergebnisWert, "", "", gewinner];
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: "matches!A:J",
+      range: "matches",
       valueInputOption: "USER_ENTERED",
-      requestBody: {values: [newRow]},
+      requestBody: {values: [newMatchRow]},
     });
 
-    // preMatches Zeile leeren
+    // preMatches Zeile leeren (neue Struktur: 10 Spalten A-J)
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
       range: "preMatches!A" + row + ":J" + row,
@@ -949,7 +974,7 @@ export const setPreMatchResult = onCall(async (request) => {
     if (fordererGewonnen) {
       const rankRes = await sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
-        range: "rankedPlayers",
+        range: "RL-Platzierung",
       });
       const rankValues = rankRes.data.values || [];
       if (rankValues.length < 2) {
@@ -958,7 +983,7 @@ export const setPreMatchResult = onCall(async (request) => {
 
       const rankHeader = rankValues[0].map((h) => h.trim().toLowerCase());
       const rangIdx = rankHeader.indexOf("rang");
-      const pidIdx = rankHeader.indexOf("playerid");
+      const pidIdx = rankHeader.indexOf("personid");
 
       if (rangIdx === -1 || pidIdx === -1) {
         return {success: true, rankingUpdated: false};
@@ -993,7 +1018,7 @@ export const setPreMatchResult = onCall(async (request) => {
             // Rang um 1 erhoehen (nach hinten schieben)
             await sheets.spreadsheets.values.update({
               spreadsheetId: SHEET_ID,
-              range: "rankedPlayers!A" + (i + 1),
+              range: "RL-Platzierung!B" + (i + 1),
               valueInputOption: "USER_ENTERED",
               requestBody: {values: [[aktRang + 1]]},
             });
@@ -1005,7 +1030,7 @@ export const setPreMatchResult = onCall(async (request) => {
         if (fordererRowIdx > 0) {
           await sheets.spreadsheets.values.update({
             spreadsheetId: SHEET_ID,
-            range: "rankedPlayers!A" + (fordererRowIdx + 1),
+            range: "RL-Platzierung!B" + (fordererRowIdx + 1),
             valueInputOption: "USER_ENTERED",
             requestBody: {values: [[rangP1]]},
           });
@@ -1016,7 +1041,7 @@ export const setPreMatchResult = onCall(async (request) => {
         if (geforderterRowIdx > 0) {
           await sheets.spreadsheets.values.update({
             spreadsheetId: SHEET_ID,
-            range: "rankedPlayers!A" + (geforderterRowIdx + 1),
+            range: "RL-Platzierung!B" + (geforderterRowIdx + 1),
             valueInputOption: "USER_ENTERED",
             requestBody: {values: [[rangP3]]},
           });
@@ -1056,10 +1081,10 @@ export const resetPassword = onCall(async (request) => {
     });
     const sheets = google.sheets({version: "v4", auth});
 
-    // Daten aus "players" Tabelle
+    // Daten aus "Personen" Tabelle
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: "players",
+      range: "Personen",
     });
 
     const rows = res.data.values || [];
@@ -1069,14 +1094,14 @@ export const resetPassword = onCall(async (request) => {
 
     // Header analysieren
     const headers = rows[0].map((h) => h.trim().toLowerCase());
-    const emailIndex = headers.indexOf("email");
+    const emailIndex = headers.indexOf("e-mail");
     const hashIndex = headers.indexOf("passwdhash");
     const kennwortVergessenIndex = headers.indexOf("kennwortvergessen");
 
     if (emailIndex === -1 || hashIndex === -1) {
       return {
         success: false,
-        error: "Spalten 'email' oder 'passwdHash' fehlen.",
+        error: "Spalten 'e-mail' oder 'passwdHash' fehlen.",
       };
     }
 
@@ -1120,9 +1145,9 @@ export const resetPassword = onCall(async (request) => {
     // Update in Google Sheets - nur die betroffene Zeile
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
-      range: `players!A${userRowIndex + 1}:G${userRowIndex + 1}`,
+      range: `Personen!A${userRowIndex + 1}:N${userRowIndex + 1}`,
       valueInputOption: "USER_ENTERED",
-      requestBody: {values: [newRow.slice(0, 7)]},
+      requestBody: {values: [newRow.slice(0, 14)]},
     });
 
     console.log(`✅ Passwort-Hash aktualisiert für: ${email}`);

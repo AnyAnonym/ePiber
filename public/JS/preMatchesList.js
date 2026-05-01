@@ -15,14 +15,11 @@ function createDateModal() {
   modal.innerHTML = `
     <div class="modal-content">
       <span class="close">&times;</span>
-      <h2>Datum & Platz festlegen</h2>
+      <h2>Datum festlegen</h2>
       <p>Match: <span id="dateMatchInfo" class="name-display"></span></p>
       <form id="dateForm">
         <label for="matchDate">Datum:</label>
         <input type="date" id="matchDate" required>
-fi
-        <label for="matchPlatz">Platz:</label>
-        <input type="text" id="matchPlatz" placeholder="z.B. 1" required>
 
         <button type="submit" class="btn-login">Speichern</button>
       </form>
@@ -54,7 +51,6 @@ window.openDateModal = (row, match) => {
   const team2 = [match.player3, match.player4].filter(Boolean).join(" / ") || "---";
   document.getElementById("dateMatchInfo").textContent = `${team1} vs ${team2}`;
   document.getElementById("matchDate").value = match.datum ? match.datum.split("T")[0] : "";
-  document.getElementById("matchPlatz").value = match.platz || "";
   dateModal.classList.remove("hidden");
 };
 
@@ -68,11 +64,10 @@ document.getElementById("dateForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const datum = document.getElementById("matchDate").value.trim();
-  const platz = document.getElementById("matchPlatz").value.trim();
   const submitBtn = e.target.querySelector('button[type="submit"]');
 
-  if (!datum || !platz) {
-    alert("Bitte Datum und Platz ausfüllen!");
+  if (!datum) {
+    alert("Bitte Datum ausfüllen!");
     return;
   }
 
@@ -83,7 +78,6 @@ document.getElementById("dateForm")?.addEventListener("submit", async (e) => {
     const result = await setMatchDateFn({
       row: currentDateRow,
       datum,
-      platz,
     });
 
     if (result.data?.success) {
@@ -238,7 +232,7 @@ async function loadPreMatches() {
       return `
         <div class="match-card ${match.status === 'offen' ? 'status-offen' : match.status === 'bestaetigt' ? 'status-bestaetigt' : ''}">
           <div class="match-status">${statusBadge}</div>
-          <div class="match-date">${match.datum || "Datum nicht festgelegt"} - ${match.platz || "Platz nicht festgelegt"}</div>
+          <div class="match-date">${match.datum || "Datum nicht festgelegt"}</div>
           <div class="match-content">
             <div class="team">
               <div class="player main">${team1}</div>

@@ -1,0 +1,12 @@
+~players -> Personen
+	+weitere Spalten
+~rankedPlayers -> RL-Platzierung
+	+weitere Spalten
+~matches -> MatchGewertet
+	+weitere Spalten
+	+anderes Ergebniss design Satz1/Satz2/Satz3 wenn Zahl1(Zahl2) soll dargestellt werden wie Zahl1^Zahl2
+	+anderes Datum design JJMMDD-hhmm
++MatchTyp
++Bewerbsart
++Bewerbsart
++EntryList

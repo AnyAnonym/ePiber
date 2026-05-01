@@ -78,7 +78,6 @@ export async function renderRanking() {
           player3: localStorage.getItem("currentUserName") || "",
           player3Id: localStorage.getItem("currentUserId") || "",
           datum: "",
-          platz: "",
         });
       });
 
