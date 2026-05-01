@@ -1114,6 +1114,9 @@ export const resetPassword = onCall(async (request) => {
     const newRow = [...userRow];
     newRow[hashIndex] = passwordHash;
 
+    // Admin-Bestätigung (kennwortVergessen) löschen nach erfolgreicher Änderung
+    newRow[kennwortVergessenIndex] = "";
+
     // Update in Google Sheets - nur die betroffene Zeile
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
@@ -1123,6 +1126,7 @@ export const resetPassword = onCall(async (request) => {
     });
 
     console.log(`✅ Passwort-Hash aktualisiert für: ${email}`);
+    console.log(`✅ Admin-Bestätigung (kennwortVergessen) gelöscht für: ${email}`);
     return {success: true, message: "Passwort erfolgreich zurückgesetzt."};
   } catch (err) {
     console.error("❌ Fehler in resetPassword:", err);

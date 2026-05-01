@@ -1105,10 +1105,16 @@ input[type="date"] {
   .pyramid {
     gap: 15px;
     padding: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-width: 0;
+    padding-bottom: 15px;
   }
 
   .row {
     gap: 10px;
+    flex-wrap: nowrap;
+    min-width: max-content;
   }
 
   .box {
@@ -1116,16 +1122,23 @@ input[type="date"] {
     height: 50px;
     font-size: 0.9rem;
     border-width: 2px;
+    flex-shrink: 0;
   }
 }
 
 @media (max-width: 480px) {
   .pyramid {
     gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-width: 0;
+    padding-bottom: 15px;
   }
 
   .row {
     gap: 8px;
+    flex-wrap: nowrap;
+    min-width: max-content;
   }
 
   .box {
@@ -1133,5 +1146,6 @@ input[type="date"] {
     height: 45px;
     font-size: 0.8rem;
     border-radius: 10px;
+    flex-shrink: 0;
   }
 }
