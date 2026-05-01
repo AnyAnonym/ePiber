@@ -41,11 +41,13 @@ function createCard(b) {
   const card = document.createElement("div");
   card.className = "bewerb-card";
 
-  const isClickable = String(b.id).trim() === "2";
-  if (isClickable) {
+  const bewerbId = String(b.id).trim();
+  const targetPage = bewerbId === "2" ? "rangliste.html" : bewerbId === "3" ? "rangliste_damen.html" : null;
+
+  if (targetPage) {
     card.classList.add("clickable");
     card.addEventListener("click", () => {
-      window.location.href = "rangliste.html";
+      window.location.href = targetPage;
     });
   }
 

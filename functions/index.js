@@ -444,9 +444,12 @@ export const upsertData = onCall(async (req) => {
  * Baut die Rangliste aus den Tabs "RL-Platzierung" und "Personen" zusammen.
  * - "RL-Platzierung" enthält Spalten: BewerbID | Rang | PersonID | Bemerkung
  * - "Personen" enthält Spalten: ID | Nachname | Vorname | ...
+ * Optionaler Parameter: bewerbId (z.B. 2 = Herren, 3 = Damen)
  */
-export const readRankedPlayers = onCall(async () => {
-  console.log("✅ readRankedPlayers gestartet...");
+export const readRankedPlayers = onCall(async (request) => {
+  const filterBewerbId = (request && request.data && request.data.bewerbId) ? String(request.data.bewerbId).trim() : null;
+
+  console.log("✅ readRankedPlayers gestartet...", filterBewerbId ? `Filter: BewerbID ${filterBewerbId}` : "(alle)");
 
   try {
     const auth = new google.auth.GoogleAuth({
@@ -476,6 +479,7 @@ export const readRankedPlayers = onCall(async () => {
     const rankedHeader = rankedValues[0].map((h) => h.trim().toLowerCase());
     const playersHeader = playersValues[0].map((h) => h.trim().toLowerCase());
 
+    const bewerbIdIndex = rankedHeader.indexOf("bewerbid");
     const rankIndex = rankedHeader.indexOf("rang");
     const playerIdIndex = rankedHeader.indexOf("personid");
     const idIndex = playersHeader.indexOf("id");
@@ -483,6 +487,7 @@ export const readRankedPlayers = onCall(async () => {
     const lastNameIndex = playersHeader.indexOf("nachname");
 
     if (
+      bewerbIdIndex === -1 ||
       rankIndex === -1 ||
       playerIdIndex === -1 ||
       idIndex === -1 ||
@@ -505,18 +510,26 @@ export const readRankedPlayers = onCall(async () => {
 
     // --- Rangliste kombinieren ---
     const rankedList = rankedValues.slice(1).map((row) => {
+      const bewerbId = row[bewerbIdIndex] || "";
       const rank = Number(row[rankIndex]);
       const playerId = row[playerIdIndex];
       const name = playerMap.get(playerId) || "Unbekannt";
-      return {rank, playerId, name};
+      return {bewerbId, rank, playerId, name};
     });
 
+    // Filter nach BewerbID falls angegeben
+    let filteredList = rankedList;
+    if (filterBewerbId) {
+      filteredList = rankedList.filter((p) => String(p.bewerbId).trim() === filterBewerbId);
+      console.log(`🔍 Filter: ${filteredList.length} von ${rankedList.length} Spielern für BewerbID ${filterBewerbId}`);
+    }
+
     // optional: nach Rang sortieren
-    rankedList.sort((a, b) => a.rank - b.rank);
+    filteredList.sort((a, b) => a.rank - b.rank);
 
-    console.log("🏁 Fertige Liste:", rankedList);
+    console.log("🏁 Fertige Liste:", filteredList);
 
-    return {success: true, rankedList};
+    return {success: true, rankedList: filteredList};
   } catch (err) {
     console.error("❌ Fehler in readRankedPlayers:", err);
     return {success: false, error: err.message};

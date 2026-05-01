@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ASKÖ Piberbach – Dashboard</title>
-  <link rel="stylesheet" href="./CSS/styles.css" />
+  <title>ASKÖ Piberbach – Rangliste Damen</title>
+  <link rel="stylesheet" href="CSS/styles.css">
 </head>
 
 <body>
@@ -17,8 +17,8 @@
 
     <!-- Desktop Navigation (links) -->
     <nav id="mainNav" class="main-nav desktop-nav">
-      <a href="index.html" class="active">Dashboard</a>
-      <a href="players.html">Spieler</a>
+      <a href="index.html">Dashboard</a>
+      <a href="players.html" data-auth="required">Spieler</a>
       <div class="dropdown">
         <a href="matches.html" class="dropbtn">Matches ▾</a>
         <div class="dropdown-content">
@@ -34,22 +34,12 @@
       <span class="logo">ASKÖ Piberbach</span>
       <button class="hamburger" id="hamburgerBtn">☰</button>
     </div>
-      </div>
-    </nav>
-
-    <!-- Logo (center) -->
-    <div class="header-center">
-      <span class="logo">ASKÖ Piberbach</span>
-      <button class="hamburger" id="hamburgerBtn">☰</button>
-    </div>
 
     <!-- Desktop Auth Nav (rechts) -->
     <nav class="auth-nav desktop-auth">
-      <a href="#" id="notificationBell" class="loggedIn notification-bell"
-        style="position: relative; text-decoration: none;">
+      <a href="#" id="notificationBell" class="loggedIn notification-bell" style="position: relative; text-decoration: none;">
         🔔
-        <span id="notificationBadge"
-          style="display: none; position: absolute; top: -5px; right: -5px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center;"></span>
+        <span id="notificationBadge" style="display: none; position: absolute; top: -5px; right: -5px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center;"></span>
       </a>
       <a href="#" id="openLogin" class="loggedOut">Anmelden</a>
       <a href="#" id="profileButton" class="loggedIn">Profil</a>
@@ -85,11 +75,17 @@
     </div>
   </div>
 
+  <!-- Hauptlayout -->
   <main>
-    <section>
-      <h2>Willkommen!</h2>
+    <!-- Hauptbereich -->
+    <section id="rankingSection">
+      <h2>Rangliste Damen</h2>
+
+      <!-- 🔹 Dynamisch erzeugte Pyramide -->
+      <div id="rankingContainer" class="pyramid" data-bewerb-id="3"></div>
     </section>
 
+    <!-- Rechte Sidebar -->
     <div class="sidebar">
       <h2>Top 10 Rangliste</h2>
 
@@ -118,8 +114,13 @@
   <!-- SKRIPT -->
   <script type="module" src="JS/SDK.js"></script>
   <script type="module" src="JS/modals.js"></script>
-  <script type="module" src="JS/rankingSidebar.js"></script>
+  <script type="module" src="./JS/rangliste.js"></script>
   <script src="JS/clock.js"></script>
+  <script type="module">
+    import { renderRanking } from "./JS/rangliste.js";
+    renderRanking();
+  </script>
+  <script type="module" src="JS/rankingSidebar.js"></script>
 
 </body>
 

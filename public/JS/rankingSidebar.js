@@ -1,16 +1,19 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
-// 🔹 Die gleiche Cloud Function wie in rangliste.js
+// 🔹 Die gleiche cloud Function wie in rangliste.js
 const readRankedPlayers = httpsCallable(functions, "readRankedPlayers");
+
+// 🔹 BewerbID aus dem rankingContainer lesen (2 = Herren, 3 = Damen)
+const BEWERB_ID = document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
 
 /**
  * Lädt die Rangliste vom Backend
  */
 async function loadRanking() {
   try {
-    console.log("⏳ Rangliste (Sidebar) wird geladen...");
-    const response = await readRankedPlayers();
+    console.log("⏳ Rangliste (Sidebar) wird geladen...", `(BewerbID: ${BEWERB_ID})`);
+    const response = await readRankedPlayers({ bewerbId: BEWERB_ID });
     const { data } = response || {};
 
     if (!data?.success || !Array.isArray(data.rankedList)) {

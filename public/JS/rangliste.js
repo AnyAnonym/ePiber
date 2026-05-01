@@ -5,12 +5,15 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebas
 const readRankedPlayers = httpsCallable(functions, "readRankedPlayers");
 const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
 
+// 🔹 BewerbID für diese Rangliste (2 = Herren, 3 = Damen)
+const BEWERB_ID = document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
+
 /**
  * Lädt die Rangliste aus dem Backend
  */
 export async function loadRanking() {
   try {
-    const response = await readRankedPlayers();
+    const response = await readRankedPlayers({ bewerbId: BEWERB_ID });
     const { data } = response || {};
 
     if (!data?.success || !Array.isArray(data.rankedList)) {
@@ -18,7 +21,7 @@ export async function loadRanking() {
       return [];
     }
 
-    console.log(`🏆 ${data.rankedList.length} Spieler geladen`);
+    console.log(`🏆 ${data.rankedList.length} Spieler geladen (BewerbID: ${BEWERB_ID})`);
     return data.rankedList;
   } catch (err) {
     console.error("❌ Fehler beim Laden der Rangliste:", err);
