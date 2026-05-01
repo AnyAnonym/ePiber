@@ -532,6 +532,9 @@ window.addEventListener("load", () => {
   if (isLoggedIn) {
     loadChallenges();
   }
+  document.querySelectorAll("[data-auth='required']").forEach((el) => {
+    el.style.display = isLoggedIn ? "" : "none";
+  });
 });
 
 //-------------------------------------------------------

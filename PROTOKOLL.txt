@@ -32,16 +32,19 @@ WebApp-with-GoogleSheet_comunication/
 │   ├── matches.html                # Abgeschlossene Matches
 │   ├── preMatches.html             # Offene Forderungen
 │   ├── rangliste.html              # Interaktive Ranglisten-Pyramide
+│   ├── Bewerbe.html                # Bewerbe-Übersicht
 │   ├── CSS/
 │   │   └── styles.css             # Globale Styles
 │   └── JS/
 │       ├── SDK.js                  # Firebase Initialisierung
+│       ├── clock.js                # Systemzeit im Footer
 │       ├── modals.js               # Login/Signup/Profile Modals
 │       ├── playerList.js           # Spieler-Liste Rendering
 │       ├── matchesList.js          # Match-Cards Rendering
 │       ├── preMatchesList.js        # PreMatch-Liste Rendering
 │       ├── rankingSidebar.js       # Sidebar Top-10
-│       └── rangliste.js            # Ranglisten-Pyramide Logik
+│       ├── rangliste.js            # Ranglisten-Pyramide Logik
+│       └── bewerbeList.js          # Bewerbe-Karten Rendering
 │
 ├── functions/                       # Firebase Cloud Functions (Backend)
 │   ├── index.js                    # Alle Cloud Functions
@@ -303,7 +306,6 @@ Kurzfassung:
 7.1 Authentifizierung
 ----------------------
 - Login mit E-Mail + Passwort
-- Registration mit Vorname, Nachname, E-Mail, Passwort
 - Passwort wird als SHA-256 Hash gespeichert
 - Session in localStorage (isLoggedIn, currentUserEmail, currentUserId, currentUserName)
 
@@ -363,7 +365,12 @@ Lösung: Alle IDs werden in Cloud Functions mit String() konvertiert.
 8.2 ESLint Object-Curly-Spacing
 --------------------------------
 Problem: ESLint erwartet keine Leerzeichen in {variable}.
-Lösung: Optional chaining (?.) vermieden, String() verwendet.
+Lösung: Optional chaining (?.) vermieden, String() verwendet. 
+	Oder folgende Kommentare schreiben um fast alle ESLint Probleme zu lösen: 
+		/* eslint-disable valid-jsdoc */
+		/* eslint-disable no-unused-vars */
+		/* eslint-disable require-jsdoc */
+		/* eslint-disable max-len */
 
 8.3 Dropdown funktioniert nicht auf matches.html
 -------------------------------------------------
@@ -732,6 +739,49 @@ Spalte G Update in Sheet:
   * Ranglisten-Update: "RL-Platzierung" Spalte B (Rang) wird aktualisiert
   * Frontend: preMatchesList.js, modals.js, rangliste.js angepasst
   * Platz-Feld aus allen Formularen entfernt
+
+================================================================================
+13. CHANGELOG (01.05.2026 - Bewerbe Seite)
+================================================================================
+
+2026-05-01:
+-----------
+- FEATURE: Bewerbe Seite erstellt (Bewerbe.html, bewerbeList.js)
+  * Überschrift "Bewerbe" mit drei Kategorien:
+    - "Aktive Bewerbe": Begonnen, noch nicht beendet
+    - "Bevorstehende Bewerbe": Noch nicht begonnen, noch nicht beendet
+    - "Beendete Bewerbe": Bereits beendet
+  * Leere Kategorien werden automatisch ausgeblendet
+  * ID 1 wird aus der Liste gefiltert
+  * ID 2 ist klickbar und leitet zu rangliste.html weiter
+  * Grid-Layout für Bewerbe-Karten
+  * Datumsanzeige: DD.MM.YYYY (ohne Uhrzeit)
+
+- FEATURE: readBewerbe Cloud Function hinzugefügt
+  * Liest alle Bewerbe aus der "Bewerb"-Tabelle
+  * Rückgabe: {success: true, bewerbe: [...]}
+  * Felder: id, bewerbsartId, bezeichnung, bewerbsbeginn, bewerbsende
+
+- FEATURE: Systemzeit im Footer aller HTML-Seiten
+  * Neue Datei: JS/clock.js
+  * Format: JJJJ.MM.DD – hh:mm
+  * Aktualisiert sich automatisch jede Minute
+  * Auf allen 6 HTML-Seiten integriert:
+    - index.html, matches.html, preMatches.html, players.html, rangliste.html, Bewerbe.html
+  * CSS: Footer als Flexbox mit Uhrzeit rechts neben dem Copyright-Text
+
+- BUGFIX: Datums-Parsing für Bewerb-Karten korrigiert
+  * Ursprünglich nur 6-stelliges Format (JJMMDD) unterstützt
+  * Jetzt unterstützt: 8-stelliges Format (YYYYMMDD) + Legacy 6-stelliges (JJMMDD)
+  * Beispiele: 20260701 → 01.07.2026, 19990701 → 01.07.1999, 260501 → 01.05.2026
+  * parseSheetDate() erkennt automatisch das Format anhand der Länge
+
+- FEATURE: "Spieler"-Link nur für eingeloggte User sichtbar
+  * Alle Spieler-Links in der Navigation mit data-auth="required" markiert
+  * modals.js prüft beim Laden: localStorage.getItem("isLoggedIn") === "true"
+  * Nicht eingeloggt → Link wird ausgeblendet (display: none)
+  * Eingeloggt → Link ist sichtbar
+  * Auf allen 6 HTML-Seiten umgesetzt
 
 ================================================================================
 ENDE DES PROTOKOLLS

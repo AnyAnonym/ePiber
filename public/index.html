@@ -69,10 +69,10 @@
       <!-- Mobile Navigation Links -->
       <nav class="mobile-nav-links">
         <a href="index.html">Dashboard</a>
-        <a href="players.html">Spieler</a>
+      <a href="players.html" data-auth="required">Spieler</a>
         <a href="matches.html">Matches</a>
         <a href="preMatches.html">Forderungen</a>
-        <a href="rangliste.html">Rangliste</a>
+      <a href="Bewerbe.html">Bewerbe</a>
       </nav>
     </div>
   </div>
@@ -104,12 +104,14 @@
   <!-- FOOTER -->
   <footer class="footer">
     © ASKÖ Piberbach – Tennis
+    <div id="clock" class="footer-clock"></div>
   </footer>
 
   <!-- SKRIPT -->
   <script type="module" src="JS/SDK.js"></script>
   <script type="module" src="JS/modals.js"></script>
   <script type="module" src="JS/rankingSidebar.js"></script>
+  <script src="JS/clock.js"></script>
 
 </body>
 

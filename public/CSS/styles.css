@@ -354,6 +354,67 @@ nav a.active {
 }
 
 /* -------------------------------------------------- */
+/*  BEWERBE GRID                                      */
+/* -------------------------------------------------- */
+
+.bewerbe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 12px;
+}
+
+.bewerb-card {
+  background: #f7f7f7;
+  border: 2px solid var(--table-border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bewerb-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.1rem;
+  color: var(--fg);
+}
+
+.bewerb-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.bewerb-card.clickable {
+  cursor: pointer;
+  border-color: var(--accent);
+}
+
+.bewerb-card.clickable:hover {
+  background: #eaf1fb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(11, 87, 208, 0.15);
+}
+
+/* -------------------------------------------------- */
+/*  BEWERBE SECTIONS                                  */
+/* -------------------------------------------------- */
+
+.bewerb-section {
+  margin-bottom: 32px;
+}
+
+.bewerb-section-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0 0 8px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+}
+
+/* -------------------------------------------------- */
 /*  HAUPTLAYOUT (Content + Sidebar)                     */
 /* -------------------------------------------------- */
 
@@ -460,6 +521,17 @@ footer {
   color: var(--muted);
   border-top: 1px solid #eee;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.footer-clock {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
 select,

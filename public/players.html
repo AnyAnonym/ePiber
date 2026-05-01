@@ -16,7 +16,7 @@
     <!-- Desktop Navigation (links) -->
     <nav id="mainNav" class="main-nav desktop-nav">
       <a href="index.html">Dashboard</a>
-      <a href="players.html" class="active">Spieler</a>
+      <a href="players.html" data-auth="required" class="active">Spieler</a>
       <div class="dropdown">
         <a href="matches.html" class="dropbtn">Matches ▾</a>
         <div class="dropdown-content">
@@ -24,7 +24,7 @@
           <a href="preMatches.html" onclick="event.stopPropagation()">Forderungen</a>
         </div>
       </div>
-      <a href="rangliste.html">Rangliste</a>
+      <a href="Bewerbe.html">Bewerbe</a>
     </nav>
 
     <!-- Logo (center) -->
@@ -65,10 +65,10 @@
       <!-- Mobile Navigation Links -->
       <nav class="mobile-nav-links">
         <a href="index.html">Dashboard</a>
-        <a href="players.html" class="active">Spieler</a>
+        <a href="players.html" data-auth="required" class="active">Spieler</a>
         <a href="matches.html">Matches</a>
         <a href="preMatches.html">Forderungen</a>
-        <a href="rangliste.html">Rangliste</a>
+      <a href="Bewerbe.html">Bewerbe</a>
       </nav>
     </div>
   </div>
@@ -116,6 +116,7 @@
   <!-- Fußbereich -->
   <footer class="footer">
     © ASKÖ Piberbach – Tennis
+    <div id="clock" class="footer-clock"></div>
   </footer>
 
   <!-- SKRIPT -->
@@ -123,6 +124,7 @@
   <script type="module" src="JS/modals.js"></script>
   <script type="module" src="JS/playerList.js"></script>
   <script type="module" src="JS/rankingSidebar.js"></script>
+  <script src="JS/clock.js"></script>
 
 </body>
 </html>

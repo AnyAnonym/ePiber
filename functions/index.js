@@ -1158,3 +1158,45 @@ export const resetPassword = onCall(async (request) => {
     return {success: false, error: err.message};
   }
 });
+
+/**
+ * Liest alle Bewerbe aus der "Bewerb"-Tabelle.
+ */
+export const readBewerbe = onCall(async () => {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    });
+    const sheets = google.sheets({version: "v4", auth});
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "Bewerb",
+    });
+
+    const values = res.data.values || [];
+    if (values.length < 2) {
+      return {success: true, bewerbe: []};
+    }
+
+    const header = values[0].map((h) => h.trim().toLowerCase());
+    const idIdx = header.indexOf("id");
+    const bewerbIdx = header.indexOf("bewerbsartid");
+    const bezIdx = header.indexOf("bezeichnung");
+    const startIdx = header.indexOf("bewerbsbeginn");
+    const endIdx = header.indexOf("bewerbsende");
+
+    const bewerbe = values.slice(1).map((row) => ({
+      id: row[idIdx] || "",
+      bewerbsartId: row[bewerbIdx] || "",
+      bezeichnung: row[bezIdx] || "",
+      bewerbsbeginn: row[startIdx] || "",
+      bewerbsende: row[endIdx] || "",
+    }));
+
+    return {success: true, bewerbe};
+  } catch (err) {
+    console.error("❌ Fehler in readBewerbe:", err);
+    return {success: false, error: err.message};
+  }
+});
