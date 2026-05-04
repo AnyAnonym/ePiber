@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ASKÖ Piberbach – Rangliste Herren</title>
+  <title>ASKÖ Piberbach – Rangliste</title>
   <link rel="stylesheet" href="./CSS/styles.css" />
 </head>
 
@@ -14,12 +14,10 @@
   <div id="mobile-nav-container"></div>
 
   <main>
-    <section id="rankingSection">
-      <h2>Rangliste Herren</h2>
-      <div id="rankingContainer" class="pyramid" data-bewerb-id="2"></div>
+    <section id="rankingSection" class="full-width-section">
+      <h2>Rangliste</h2>
+      <div id="rankingContainer" class="pyramid"></div>
     </section>
-
-    <div id="sidebar-container"></div>
   </main>
 
   <div id="footer-container"></div>
@@ -32,7 +30,6 @@
     import { renderRanking } from "./JS/rangliste.js";
     renderRanking();
   </script>
-  <script type="module" src="JS/rankingSidebar.js"></script>
   <script src="JS/clock.js"></script>
 
 </body>

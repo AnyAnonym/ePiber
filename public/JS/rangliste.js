@@ -1,12 +1,11 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
-// 🔹 Cloud Functions
 const readRankedPlayers = httpsCallable(functions, "readRankedPlayers");
 const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
 
-// 🔹 BewerbID für diese Rangliste (2 = Herren, 3 = Damen)
-const BEWERB_ID = document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
+const params = new URLSearchParams(window.location.search);
+const BEWERB_ID = params.get("id") || document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
 
 /**
  * Lädt die Rangliste aus dem Backend
@@ -36,11 +35,19 @@ export async function renderRanking() {
   const container = document.getElementById("rankingContainer");
   if (!container) return;
 
+  // Titel aktualisieren
+  const h2 = document.querySelector("#rankingSection h2");
+  if (h2) {
+    if (BEWERB_ID === "2") h2.textContent = "Rangliste Herren";
+    else if (BEWERB_ID === "3") h2.textContent = "Rangliste Damen";
+    else h2.textContent = "Rangliste";
+  }
+
   const rankedList = await loadRanking();
   container.innerHTML = "";
 
   if (!rankedList.length) {
-    container.innerHTML = "<p>Keine Spieler gefunden.</p>";
+    container.innerHTML = "<p>Es gibt noch keine Spieler für diese Rangliste.</p>";
     return;
   }
 
@@ -114,24 +121,16 @@ export async function renderRanking() {
   // Hilfsfunktionen
   // ---------------------------------------------------
   const clearHighlights = async () => {
-    // 🔹 Markiert dich (blau) und deine forderbaren Spieler (grün)
-    // Regel:
-    // - Alle links in derselben Zeile
-    // - Alle rechts (und inklusive gleicher Spalte) in der Zeile darüber
-    // - Ausnahme: Rang 3 darf zusätzlich Rang 2 und 1 fordern
     const markChallengeables = (myRowIndex, myIndex) => {
-      // 1️⃣ alte Hervorhebungen entfernen
       container.querySelectorAll(".box").forEach(b =>
         b.classList.remove("selected", "challengeable")
       );
 
-      // 2️⃣ eigene Box blau
       const me = pyramid[myRowIndex]?.[myIndex];
       if (!me) return;
       me.box.classList.add("selected");
       const myRank = me.rank;
 
-      // 3️⃣ gleiche Zeile – alle links grün
       if (Array.isArray(pyramid[myRowIndex])) {
         for (let i = 0; i < myIndex; i++) {
           const leftBox = pyramid[myRowIndex][i];
@@ -141,7 +140,6 @@ export async function renderRanking() {
         }
       }
 
-      // 4️⃣ Reihe darüber – alle rechts über mir (einschließlich gleicher Spalte)
       const rowAbove = pyramid[myRowIndex - 1];
       if (Array.isArray(rowAbove)) {
         for (let j = myIndex; j < rowAbove.length; j++) {
@@ -152,7 +150,6 @@ export async function renderRanking() {
         }
       }
 
-      // 5️⃣ Sonderregel: Rang 3 darf Rang 2 und 1 fordern
       if (myRank === 3) {
         const flat = pyramid.flat();
         const rank2 = flat.find(p => p.rank === 2);
@@ -160,15 +157,8 @@ export async function renderRanking() {
         if (rank2?.box) rank2.box.classList.add("challengeable");
         if (rank1?.box) rank1.box.classList.add("challengeable");
       }
-
-      console.log(`✅ Markierungen gesetzt für Rang ${myRank}`);
     };
 
-
-
-    // ---------------------------------------------------
-    // Aktuellen Benutzer finden
-    // ---------------------------------------------------
     try {
       const currentUserEmail =
         localStorage.getItem("currentUserEmail") ||
@@ -179,7 +169,6 @@ export async function renderRanking() {
         return;
       }
 
-      console.log("🔍 Suche deinen Rang anhand deiner E-Mail:", currentUserEmail);
       const response = await readPlayerDetails();
       const { success, players } = response.data || {};
 
@@ -207,14 +196,12 @@ export async function renderRanking() {
         return;
       }
 
-      // Speichere eigene User-ID zur Verwendung im Matchmodal
       if (myEntry.playerId) {
         localStorage.setItem("currentUserId", myEntry.playerId);
       }
 
       const myRank = myEntry.rank;
 
-      // Finde meine Position (Zeile und Spalte)
       let foundRow = -1;
       let foundIndex = -1;
 
@@ -228,16 +215,12 @@ export async function renderRanking() {
       }
 
       if (foundRow !== -1) {
-        console.log(`🙋 Du bist Rang ${myRank}: ${myEntry.name}`);
         markChallengeables(foundRow, foundIndex);
-      } else {
-        console.warn("⚠ Deine Position in der Pyramide wurde nicht gefunden.");
       }
     } catch (err) {
       console.error("❌ Fehler bei der automatischen Markierung:", err);
     }
   };
 
-  // Call the clearHighlights function
   clearHighlights();
 }

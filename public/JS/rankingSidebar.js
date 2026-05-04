@@ -3,7 +3,8 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebas
 
 const readRankedPlayers = httpsCallable(functions, "readRankedPlayers");
 
-const BEWERB_ID = document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
+const params = new URLSearchParams(window.location.search);
+const BEWERB_ID = params.get("id") || document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
 
 function createSidebarHTML() {
   const container = document.getElementById("sidebar-container");

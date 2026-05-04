@@ -26,7 +26,7 @@ function renderHeader() {
           <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}" onclick="event.stopPropagation()">Forderungen</a>
         </div>
       </div>
-      <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
+        <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
     </nav>
 
     <div class="header-center">
@@ -95,6 +95,7 @@ function initNavigation() {
 
   if (hamburgerBtn && mobileNavModal) {
     hamburgerBtn.addEventListener("click", () => {
+      window.scrollTo(0, 0);
       mobileNavModal.classList.remove("hidden");
     });
 

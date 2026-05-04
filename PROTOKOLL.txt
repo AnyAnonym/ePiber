@@ -784,5 +784,42 @@ Spalte G Update in Sheet:
   * Auf allen 6 HTML-Seiten umgesetzt
 
 ================================================================================
+14. CHANGELOG (04.05.2026 - Rangliste Integration)
+================================================================================
+
+2026-05-04:
+-----------
+- FEATURE: Rangliste über Bewerbe-Seite anstatt Navbar
+  * "Rangliste" Link aus Desktop- und Mobile-Navigation entfernt
+  * Zugang zu Ranglisten erfolgt ausschließlich über die Bewerbe-Seite
+  * Bewerbe mit BewerbsartID == "2" werden als Ranglisten erkannt
+  * Klick auf solche Karten leitet zu rangliste.html?id=<BewerbID> weiter
+  * Karten behalten den gleichen grauen Stil wie andere Bewerbe
+  * Klickbare Karten haben den bestehenden blauen Hover-Effekt
+  * "Rangliste"-Badge und grüner Sonderstil entfernt
+
+- FEATURE: Dynamische Ranglisten-Seite (rangliste.html)
+  * Liest BewerbID aus URL-Parameter (?id=X)
+  * Titel wird automatisch angepasst (Herren/Damen/allgemein)
+  * Leere Ranglisten zeigen: "Es gibt noch keine Spieler für diese Rangliste."
+  * Navbar-Link "Rangliste" zeigt standardmäßig auf Herren (?id=2)
+
+- BUGFIX: Pyramide-Layout für breite Bildschirme optimiert
+  * .pyramid width auf fit-content gesetzt
+  * Verhindert ungewolltes Wrappen der Reihen bei vielen Spielern
+
+- FEATURE: Zeit-Zone Fix für Match-Forderungen
+  * Client generiert lokalen Zeitstempel (YYMMDD-hhmm)
+  * Backend übernimmt client-seitige Zeit wenn vorhanden
+  * Verhindert UTC-Offset-Probleme bei Server in anderer Zeitzone
+
+- BUGFIX: Mobile Modal Zentrierung bei breiter Pyramide
+  * Problem: Bei sehr vielen Spielern (Pyramide breiter als Bildschirm) 
+    verschiebt sich der Fokus und das Hamburger-Menü erscheint nicht mittig.
+  * Lösung 1 (CSS): Modal-Overlay explizit auf `100vw` x `100vh` gesetzt.
+    Dadurch orientiert sich das Flexbox-Centering am Viewport und nicht am Dokument.
+  * Lösung 2 (JS): Vor dem Öffnen des Menüs wird `scrollTo(0, 0)` ausgeführt.
+
+================================================================================
 ENDE DES PROTOKOLLS
 ================================================================================

@@ -8,14 +8,12 @@ function parseSheetDate(raw) {
   const rawStr = String(raw).trim();
   if (!rawStr) return null;
 
-  // YYYYMMDD oder YYYYMMDD-HHmm
   const match8 = rawStr.match(/^(\d{4})(\d{2})(\d{2})(?:-(\d{2})(\d{2}))?$/);
   if (match8) {
     const [, yyyy, mm, dd] = match8;
     return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
   }
 
-  // JJMMDD oder JJMMDD-HHmm (Legacy)
   const match6 = rawStr.match(/^(\d{2})(\d{2})(\d{2})(?:-(\d{2})(\d{2}))?$/);
   if (match6) {
     const [, yy, mm, dd] = match6;
@@ -39,15 +37,14 @@ function formatSheetDate(raw) {
 
 function createCard(b) {
   const card = document.createElement("div");
+  const isRangliste = String(b.bewerbsartId).trim() === "2";
+  
   card.className = "bewerb-card";
 
-  const bewerbId = String(b.id).trim();
-  const targetPage = bewerbId === "2" ? "rangliste.html" : bewerbId === "3" ? "rangliste_damen.html" : null;
-
-  if (targetPage) {
+  if (isRangliste) {
     card.classList.add("clickable");
     card.addEventListener("click", () => {
-      window.location.href = targetPage;
+      window.location.href = `rangliste.html?id=${b.id}`;
     });
   }
 
