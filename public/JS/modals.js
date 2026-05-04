@@ -125,11 +125,12 @@ const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
 // Login Modal Logik
 //-------------------------------------------------------
 const openBtn = document.getElementById("openLogin");
-
-openBtn.addEventListener("click", (e) => {
-  e.preventDefault();
-  modal.classList.remove("hidden");
-});
+if (openBtn) {
+  openBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    modal.classList.remove("hidden");
+  });
+}
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -185,12 +186,13 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
 // Passwort Vergessen Modal Logik
 //-------------------------------------------------------
 const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
-
-forgotPasswordBtn.addEventListener("click", (e) => {
-  e.preventDefault();
-  modal.classList.add("hidden");
-  forgotPasswordModal.classList.remove("hidden");
-});
+if (forgotPasswordBtn) {
+  forgotPasswordBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    modal.classList.add("hidden");
+    forgotPasswordModal.classList.remove("hidden");
+  });
+}
 
 document.getElementById("forgotPasswordForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -255,72 +257,77 @@ document.getElementById("forgotPasswordForm").addEventListener("submit", async (
 //-------------------------------------------------------
 // Sign Out Button Logik
 //-------------------------------------------------------
-document.getElementById("signOutButton").addEventListener("click", (e) => {
-  e.preventDefault();
+const signOutButton = document.getElementById("signOutButton");
+if (signOutButton) {
+  signOutButton.addEventListener("click", (e) => {
+    e.preventDefault();
 
-  localStorage.removeItem("loggedInEmail");
-  localStorage.removeItem("currentUserEmail");
-  localStorage.removeItem("currentUserId");
-  localStorage.removeItem("currentUserName");
-  localStorage.removeItem("isLoggedIn");
+    localStorage.removeItem("loggedInEmail");
+    localStorage.removeItem("currentUserEmail");
+    localStorage.removeItem("currentUserId");
+    localStorage.removeItem("currentUserName");
+    localStorage.removeItem("isLoggedIn");
 
-  updateNotificationBadge(0);
+    updateNotificationBadge(0);
 
-  window.location.reload();
-});
+    window.location.reload();
+  });
+}
 
 //-------------------------------------------------------
 // Profil Modal Logik
 //-------------------------------------------------------
 const openProfile = document.getElementById("profileButton");
-const profileName = document.getElementById("profileName");
-const profileText = document.getElementById("profileText");
+if (openProfile) {
+  openProfile.addEventListener("click", async (e) => {
+    e.preventDefault();
 
-openProfile.addEventListener("click", async (e) => {
-  e.preventDefault();
+    const profileName = document.getElementById("profileName");
+    const profileText = document.getElementById("profileText");
 
-  const email = localStorage.getItem("loggedInEmail");
-  if (!email) {
-    alert("Kein Benutzer eingeloggt!");
-    return;
-  }
-
-  profileName.textContent = "Lade Profil...";
-  profileText.textContent = "";
-  profileModal.classList.remove("hidden");
-
-  try {
-    const result = await readPlayerDetails();
-    const { success, players } = result.data;
-
-    if (!success || !Array.isArray(players)) {
-      throw new Error("Spieler-Liste konnte nicht geladen werden.");
-    }
-
-    const player = players.find(
-      (p) => p.email.trim().toLowerCase() === email.trim().toLowerCase()
-    );
-
-    if (!player) {
-      profileName.textContent = "Unbekanntes Profil";
-      profileText.textContent = "Keine Daten gefunden.";
-      localStorage.removeItem("currentUserName");
+    const email = localStorage.getItem("loggedInEmail");
+    if (!email) {
+      alert("Kein Benutzer eingeloggt!");
       return;
     }
 
-    profileName.textContent = player.fullName || "Unbekannter Spieler";
-    profileText.innerHTML = `
-      <strong>E-Mail:</strong> ${player.email || "-"}<br>
-      <strong>Geburtsdatum:</strong> ${player.birthDate || "-"}
-    `;
+    profileName.textContent = "Lade Profil...";
+    profileText.textContent = "";
+    profileModal.classList.remove("hidden");
 
-    localStorage.setItem("currentUserName", player.fullName || "");
-  } catch (err) {
-    console.error("Fehler beim Laden des Profils:", err);
-    profileName.textContent = "Fehler beim Laden!";
-    profileText.textContent = err.message;
-  }
-});
+    try {
+      const result = await readPlayerDetails();
+      const { success, players } = result.data;
+
+      if (!success || !Array.isArray(players)) {
+        throw new Error("Spieler-Liste konnte nicht geladen werden.");
+      }
+
+      const player = players.find(
+        (p) => p.email.trim().toLowerCase() === email.trim().toLowerCase()
+      );
+
+      if (!player) {
+        profileName.textContent = "Unbekanntes Profil";
+        profileText.textContent = "Keine Daten gefunden.";
+        localStorage.removeItem("currentUserName");
+        return;
+      }
+
+      profileName.textContent = player.fullName || "Unbekannter Spieler";
+      profileText.innerHTML = `
+        <strong>E-Mail:</strong> ${player.email || "-"}<br>
+        <strong>Geburtsdatum:</strong> ${player.birthDate || "-"}
+      `;
+
+      localStorage.setItem("currentUserName", player.fullName || "");
+    } catch (err) {
+      console.error("Fehler beim Laden des Profils:", err);
+      profileName.textContent = "Fehler beim Laden!";
+      profileText.textContent = err.message;
+    }
+  });
+}
 
 //-------------------------------------------------------
 // Beim Laden: Auth-Status wiederherstellen
@@ -351,11 +358,21 @@ if (isRanglistePage && matchModal) {
   document.getElementById("matchForm").addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    // Lokale Zeit generieren (damit die Zeitzone stimmt)
+    const jetzt = new Date();
+    const yy = String(jetzt.getFullYear()).slice(2);
+    const mm = String(jetzt.getMonth() + 1).padStart(2, "0");
+    const dd = String(jetzt.getDate()).padStart(2, "0");
+    const hh = String(jetzt.getHours()).padStart(2, "0");
+    const mi = String(jetzt.getMinutes()).padStart(2, "0");
+    const zeitpunkt = `${yy}${mm}${dd}-${hh}${mi}`;
+
     const matchData = {
       player1: player1Input.value.trim(),
       player1Id: player1IdInput.value.trim(),
       player3: player3Input.value.trim(),
       player3Id: player3IdInput.value.trim(),
+      zeitpunktForderung: zeitpunkt,
     };
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -536,83 +553,6 @@ window.addEventListener("load", () => {
     el.style.display = isLoggedIn ? "" : "none";
   });
 });
-
-//-------------------------------------------------------
-// Mobile Navigation - Hamburger Menu
-//-------------------------------------------------------
-const hamburgerBtn = document.getElementById("hamburgerBtn");
-const mobileNavModal = document.getElementById("mobileNavModal");
-
-if (hamburgerBtn && mobileNavModal) {
-  // Open menu when hamburger button clicked
-  hamburgerBtn.addEventListener("click", () => {
-    mobileNavModal.classList.remove("hidden");
-  });
-
-  // Close menu when X button clicked
-  mobileNavModal.querySelector(".close").addEventListener("click", () => {
-    mobileNavModal.classList.add("hidden");
-  });
-
-  // Close menu when clicked outside modal content
-  mobileNavModal.addEventListener("click", (e) => {
-    if (e.target === mobileNavModal) {
-      mobileNavModal.classList.add("hidden");
-    }
-  });
-
-  // Close menu when a navigation link is clicked
-  mobileNavModal.querySelectorAll(".mobile-nav-links a").forEach((link) => {
-    link.addEventListener("click", (e) => {
-      // Don't close if it's a modal trigger (like Sign In, Profil, etc.)
-      if (!e.target.id || !e.target.id.includes("Modal")) {
-        mobileNavModal.classList.add("hidden");
-      }
-    });
-  });
-
-  // Mobile notification bell should trigger the notification modal
-  const notificationBellMobile = document.getElementById("notificationBellMobile");
-  if (notificationBellMobile) {
-    notificationBellMobile.addEventListener("click", (e) => {
-      e.preventDefault();
-      mobileNavModal.classList.add("hidden");
-      window.openNotificationModal();
-    });
-  }
-
-  // Mobile Sign In button
-  const openLoginMobile = document.getElementById("openLoginMobile");
-  if (openLoginMobile) {
-    openLoginMobile.addEventListener("click", (e) => {
-      e.preventDefault();
-      mobileNavModal.classList.add("hidden");
-      modal.classList.remove("hidden");
-    });
-  }
-
-  // Mobile Profile button
-  const profileButtonMobile = document.getElementById("profileButtonMobile");
-  if (profileButtonMobile) {
-    profileButtonMobile.addEventListener("click", (e) => {
-      e.preventDefault();
-      mobileNavModal.classList.add("hidden");
-      // Trigger the profile button logic from the main nav
-      openProfile.click();
-    });
-  }
-
-  // Mobile Sign Out button
-  const signOutButtonMobile = document.getElementById("signOutButtonMobile");
-  if (signOutButtonMobile) {
-    signOutButtonMobile.addEventListener("click", (e) => {
-      e.preventDefault();
-      mobileNavModal.classList.add("hidden");
-      // Trigger the sign out button logic from the main nav
-      document.getElementById("signOutButton").click();
-    });
-  }
-}
 
 //-------------------------------------------------------
 // Passwort-Sichtbarkeit toggle (Auge-Symbol)

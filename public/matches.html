@@ -4,141 +4,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Matches – ASKÖ Piberbach</title>
+  <title>ASKÖ Piberbach – Matches</title>
   <link rel="stylesheet" href="./CSS/styles.css" />
 </head>
 
 <body>
 
-  <!-- HEADER -->
-  <header>
-    <!-- Logo (links) -->
-    <a href="index.html" class="header-logo">ASKÖ Piberbach</a>
+  <div id="header-container"></div>
+  <div id="mobile-nav-container"></div>
 
-    <!-- Desktop Navigation (links) -->
-    <nav id="mainNav" class="main-nav desktop-nav">
-      <a href="index.html">Dashboard</a>
-      <a href="players.html" data-auth="required">Spieler</a>
-      <div class="dropdown">
-        <a href="matches.html" class="dropbtn">Matches ▾</a>
-        <div class="dropdown-content">
-          <a href="matches.html" class="active" onclick="event.stopPropagation()">Matches</a>
-          <a href="preMatches.html" onclick="event.stopPropagation()">Forderungen</a>
-        </div>
-      </div>
-      <a href="Bewerbe.html">Bewerbe</a>
-    </nav>
-
-    <!-- Logo (center) -->
-    <div class="header-center">
-      <span class="logo">ASKÖ Piberbach</span>
-      <button class="hamburger" id="hamburgerBtn">☰</button>
-    </div>
-
-    <!-- Desktop Auth Nav (rechts) -->
-    <nav class="auth-nav desktop-auth">
-      <a href="#" id="notificationBell" class="loggedIn notification-bell" style="position: relative; text-decoration: none;">
-        🔔
-        <span id="notificationBadge" style="display: none; position: absolute; top: -5px; right: -5px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center;"></span>
-      </a>
-      <a href="#" id="openLogin" class="loggedOut">Anmelden</a>
-      <a href="#" id="profileButton" class="loggedIn">Profil</a>
-      <a href="#" id="signOutButton" class="loggedIn">Abmelden</a>
-    </nav>
-  </header>
-
-  <!-- MOBILE NAV MODAL -->
-  <div id="mobileNavModal" class="modal hidden">
-    <div class="modal-content mobile-nav-content">
-
-      <!-- Close Button -->
-      <span class="close">&times;</span>
-
-      <!-- Mobile Notification Bell -->
-      <a href="#" id="notificationBellMobile" class="loggedIn notification-bell mobile-bell">🔔</a>
-
-      <!-- Mobile Auth Nav -->
-      <nav class="mobile-auth-section">
-        <a href="#" id="openLoginMobile" class="loggedOut">Anmelden</a>
-        <a href="#" id="profileButtonMobile" class="loggedIn">Profil</a>
-        <a href="#" id="signOutButtonMobile" class="loggedIn">Abmelden</a>
-      </nav>
-
-      <!-- Mobile Navigation Links -->
-      <nav class="mobile-nav-links">
-        <a href="index.html">Dashboard</a>
-        <a href="players.html" data-auth="required">Spieler</a>
-        <a href="matches.html">Matches</a>
-        <a href="preMatches.html">Forderungen</a>
-        <a href="Bewerbe.html">Bewerbe</a>
-      </nav>
-    </div>
-  </div>
-
-  <!-- Hauptbereich -->
   <main>
-    <!-- Hauptinhalt -->
     <section>
-      <h2>Matchübersicht</h2>
-
-      <!-- Matches Tabelle -->
-      <!-- Container für alle Matches -->
-      <div id="matches-container" class="matches-container">
-        <!-- Beispielhafte statische Struktur -->
-        <div class="match-card">
-          <div class="match-date">12.04.2026</div>
-
-          <div class="match-content">
-            <div class="team">
-              <div class="player main">Spieler 1</div>
-              <div class="player sub">Spieler 2</div>
-            </div>
-
-            <div class="vs">vs.</div>
-
-            <div class="team">
-              <div class="player main">Spieler 3</div>
-              <div class="player sub">---</div>
-            </div>
-
-            <div class="sets">
-              <div class="set">6 : 4</div>
-              <div class="set">5 : 7</div>
-              <div class="set">6 : 1</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <h2>Matches</h2>
+      <div id="matches-container"></div>
     </section>
 
-    <!-- Rechte Sidebar -->
-    <div class="sidebar">
-      <h2>Top 10 Rangliste</h2>
-
-      <!-- Zugriffspunkt fürs JS -->
-      <ol id="ranking-list" class="ranking-list">
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-        <li><span class="player-name">–</span></li>
-      </ol>
-    </div>
+    <div id="sidebar-container"></div>
   </main>
 
-  <!-- FOOTER -->
-  <footer class="footer">
-    © ASKÖ Piberbach – Tennis
-    <div id="clock" class="footer-clock"></div>
-  </footer>
+  <div id="footer-container"></div>
 
-  <!-- SCRIPT -->
   <script type="module" src="JS/SDK.js"></script>
+  <script type="module" src="JS/navbar.js"></script>
   <script type="module" src="JS/modals.js"></script>
   <script type="module" src="JS/matchesList.js"></script>
   <script type="module" src="JS/rankingSidebar.js"></script>

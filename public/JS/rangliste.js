@@ -68,7 +68,14 @@ export async function renderRanking() {
       const player = rankedList[current];
       const box = document.createElement("div");
       box.className = "box";
-      box.textContent = `${player.rank} – ${player.name}`;
+
+      const [firstName, lastName] = player.name.split(" ");
+
+      box.innerHTML = `
+        <span class="box-rank-bg">${player.rank}</span>
+        <span class="box-name">${firstName || ""}<br>${lastName || ""}</span>
+      `;
+
       row.appendChild(box);
 
       // Klick auf grüne Challengeable-Box öffnet das Match-Modal

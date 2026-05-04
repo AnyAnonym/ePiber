@@ -328,14 +328,25 @@ export const addMatch = onCall(async (request) => {
     const lastIdPre = numericIdsPre.length > 0 ? Math.max(...numericIdsPre) : 0;
     const newIdPre = lastIdPre + 1;
 
-    const now = new Date().toISOString();
+    // ZeitpunktForderung vom Client übernehmen oder serverseitig (UTC) generieren
+    let zeitpunktForderung = request.data.zeitpunktForderung;
+
+    if (!zeitpunktForderung) {
+      const jetzt = new Date();
+      const yy = String(jetzt.getFullYear()).slice(2);
+      const mm = String(jetzt.getMonth() + 1).padStart(2, "0");
+      const dd = String(jetzt.getDate()).padStart(2, "0");
+      const hh = String(jetzt.getHours()).padStart(2, "0");
+      const mi = String(jetzt.getMinutes()).padStart(2, "0");
+      zeitpunktForderung = `${yy}${mm}${dd}-${hh}${mi}`;
+    }
 
     const res = await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
       range: "preMatches",
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [[newIdPre, "", now, "", "", p1id, p2id, p3id, p4id, "offen"]],
+        values: [[newIdPre, "", zeitpunktForderung, "", "", p1id, p2id, p3id, p4id, "offen"]],
       },
     });
 

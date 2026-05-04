@@ -21,6 +21,9 @@ function createDateModal() {
         <label for="matchDate">Datum:</label>
         <input type="date" id="matchDate" required>
 
+        <label for="matchTime">Uhrzeit:</label>
+        <input type="time" id="matchTime" required>
+
         <button type="submit" class="btn-login">Speichern</button>
       </form>
     </div>
@@ -44,13 +47,25 @@ const dateModal = createDateModal();
 let currentDateRow = null;
 let currentDateMatch = null;
 
+function formatDateToSheet(dateStr, timeStr) {
+  const d = new Date(`${dateStr}T${timeStr || "00:00:00"}`);
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yy}${mm}${dd}-${hh}${mi}`;
+}
+
 window.openDateModal = (row, match) => {
   currentDateRow = row;
   currentDateMatch = match;
   const team1 = [match.player1, match.player2].filter(Boolean).join(" / ") || "---";
   const team2 = [match.player3, match.player4].filter(Boolean).join(" / ") || "---";
   document.getElementById("dateMatchInfo").textContent = `${team1} vs ${team2}`;
-  document.getElementById("matchDate").value = match.datum ? match.datum.split("T")[0] : "";
+
+  document.getElementById("matchDate").value = "";
+  document.getElementById("matchTime").value = "";
   dateModal.classList.remove("hidden");
 };
 
@@ -63,13 +78,16 @@ window.closeDateModal = () => {
 document.getElementById("dateForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const datum = document.getElementById("matchDate").value.trim();
+  const dateVal = document.getElementById("matchDate").value.trim();
+  const timeVal = document.getElementById("matchTime").value.trim();
   const submitBtn = e.target.querySelector('button[type="submit"]');
 
-  if (!datum) {
-    alert("Bitte Datum ausfüllen!");
+  if (!dateVal || !timeVal) {
+    alert("Bitte Datum und Uhrzeit ausfüllen!");
     return;
   }
+
+  const datum = formatDateToSheet(dateVal, timeVal);
 
   submitBtn.disabled = true;
   submitBtn.textContent = "Speichern...";
