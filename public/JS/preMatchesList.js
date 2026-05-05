@@ -83,7 +83,7 @@ document.getElementById("dateForm")?.addEventListener("submit", async (e) => {
   const submitBtn = e.target.querySelector('button[type="submit"]');
 
   if (!dateVal || !timeVal) {
-    alert("Bitte Datum und Uhrzeit ausfüllen!");
+    showToast("Bitte Datum und Uhrzeit ausfüllen!", "error");
     return;
   }
 
@@ -107,12 +107,12 @@ document.getElementById("dateForm")?.addEventListener("submit", async (e) => {
     } else {
       throw new Error(result.data?.error || "Fehler");
     }
-  } catch (err) {
-    console.error("Fehler beim Setzen des Datums:", err);
-    alert("Fehler: " + err.message);
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Speichern";
-  }
+    } catch (err) {
+      console.error("Fehler beim Setzen des Datums:", err);
+      showToast("Fehler: " + err.message, "error");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Speichern";
+    }
 });
 
 //-------------------------------------------------------
@@ -182,7 +182,7 @@ document.getElementById("resultForm")?.addEventListener("submit", async (e) => {
 
   const userId = localStorage.getItem("currentUserId");
   if (!userId) {
-    alert("Bitte einloggen um das Ergebnis einzutragen.");
+    showToast("Bitte einloggen um das Ergebnis einzutragen.", "error");
     return;
   }
 
@@ -212,12 +212,12 @@ document.getElementById("resultForm")?.addEventListener("submit", async (e) => {
     } else {
       throw new Error(result.data?.error || "Fehler");
     }
-  } catch (err) {
-    console.error("Fehler:", err);
-    alert("Fehler: " + err.message);
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Ergebnis senden";
-  }
+    } catch (err) {
+      console.error("Fehler:", err);
+      showToast("Fehler: " + err.message, "error");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Ergebnis senden";
+    }
 });
 
 async function loadPreMatches() {

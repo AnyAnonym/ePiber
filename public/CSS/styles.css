@@ -540,6 +540,49 @@ footer {
   font-size: 0.85rem;
 }
 
+/* -------------------------------------------------- */
+/*  TOAST NOTIFICATIONS (Replaces Alerts)             */
+/* -------------------------------------------------- */
+
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast {
+  background: #333;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  font-size: 0.95rem;
+  animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+  max-width: 300px;
+}
+
+.toast.error {
+  background: #e74c3c;
+}
+
+.toast.success {
+  background: #2ecc71;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; display: none; }
+}
+
 select,
 input[type="date"] {
   padding: 8px 10px;
@@ -654,6 +697,12 @@ input[type="date"] {
 .box.challengeable {
   border-color: #2ecc71;
   background: #e6f9e8;
+}
+
+.box.challenged {
+  border-color: #e74c3c;
+  background: #fdecea;
+  cursor: not-allowed;
 }
 
 /* -------------------------------------------------- */

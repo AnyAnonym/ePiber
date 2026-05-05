@@ -3,6 +3,7 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebas
 
 const readRankedPlayers = httpsCallable(functions, "readRankedPlayers");
 const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
+const readPreMatches = httpsCallable(functions, "readPreMatches");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id") || document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
@@ -121,9 +122,30 @@ export async function renderRanking() {
   // Hilfsfunktionen
   // ---------------------------------------------------
   const clearHighlights = async () => {
+    // 1. Lade offene Forderungen (PreMatches)
+    let busyPlayerIds = new Set(); 
+    try {
+      const preMatchesRes = await readPreMatches(); 
+      const { success, preMatches } = preMatchesRes.data || {};
+      
+      if (success && Array.isArray(preMatches)) {
+        preMatches.forEach(pm => {
+          // Nur relevante Status berücksichtigen
+          if (pm.status === "offen" || pm.status === "bestaetigt") {
+            // RICHTIGE KEYS (camelCase) verwenden: player1Id statt spielerid1
+            [pm.player1Id, pm.player2Id, pm.player3Id, pm.player4Id].forEach(id => {
+              if (id) busyPlayerIds.add(String(id));
+            });
+          }
+        });
+      }
+    } catch (err) {
+      console.warn("⚠️ Konnte Forderungen nicht laden:", err);
+    }
+
     const markChallengeables = (myRowIndex, myIndex) => {
       container.querySelectorAll(".box").forEach(b =>
-        b.classList.remove("selected", "challengeable")
+        b.classList.remove("selected", "challengeable", "challenged")
       );
 
       const me = pyramid[myRowIndex]?.[myIndex];
@@ -131,31 +153,43 @@ export async function renderRanking() {
       me.box.classList.add("selected");
       const myRank = me.rank;
 
+      // Hilfsfunktion: Markiert Grün (frei) oder Rot (busy)
+      const markBox = (boxData) => {
+        if (!boxData?.box) return;
+        const boxElement = boxData.box;
+        
+        // Ist dieser Spieler in einer offenen Forderung?
+        if (busyPlayerIds.has(String(boxData.playerId))) {
+          boxElement.classList.add("challenged"); // Rot
+          boxElement.style.cursor = "not-allowed";
+        } else {
+          boxElement.classList.add("challengeable"); // Grün
+          boxElement.style.cursor = "grab";
+        }
+      };
+
+      // Links von mir in der gleichen Reihe
       if (Array.isArray(pyramid[myRowIndex])) {
         for (let i = 0; i < myIndex; i++) {
-          const leftBox = pyramid[myRowIndex][i];
-          if (leftBox?.box) {
-            leftBox.box.classList.add("challengeable");
-          }
+          markBox(pyramid[myRowIndex][i]);
         }
       }
 
+      // Rechts über mir (Reihe darüber)
       const rowAbove = pyramid[myRowIndex - 1];
       if (Array.isArray(rowAbove)) {
         for (let j = myIndex; j < rowAbove.length; j++) {
-          const rightBox = rowAbove[j];
-          if (rightBox?.box) {
-            rightBox.box.classList.add("challengeable");
-          }
+          markBox(rowAbove[j]);
         }
       }
 
+      // Sonderregel Rang 3
       if (myRank === 3) {
         const flat = pyramid.flat();
         const rank2 = flat.find(p => p.rank === 2);
         const rank1 = flat.find(p => p.rank === 1);
-        if (rank2?.box) rank2.box.classList.add("challengeable");
-        if (rank1?.box) rank1.box.classList.add("challengeable");
+        markBox(rank2);
+        markBox(rank1);
       }
     };
 

@@ -2,6 +2,29 @@ import { functions } from "./SDK.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
 //-------------------------------------------------------
+// Toast Notification (Replaces Alert)
+//-------------------------------------------------------
+window.showToast = function(message, type = "info") {
+  let container = document.getElementById("toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    container.className = "toast-container";
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // Remove after animation
+  setTimeout(() => {
+    if (toast.parentNode) toast.remove();
+  }, 3000);
+}
+
+//-------------------------------------------------------
 // Passwort-Hash-Funktion
 //-------------------------------------------------------
 async function hashPassword(password) {
@@ -124,11 +147,16 @@ const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
 //-------------------------------------------------------
 // Login Modal Logik
 //-------------------------------------------------------
+window.openLoginModal = () => {
+  const modal = document.getElementById("loginModal");
+  if (modal) modal.classList.remove("hidden");
+};
+
 const openBtn = document.getElementById("openLogin");
 if (openBtn) {
   openBtn.addEventListener("click", (e) => {
     e.preventDefault();
-    modal.classList.remove("hidden");
+    window.openLoginModal();
   });
 }
 
@@ -172,11 +200,11 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     setTimeout(() => window.location.reload(), 500);
 
   } else if (res.success && !res.valid) {
-    alert("Falsches Passwort!");
+    showToast("Falsches Passwort!", "error");
     submitBtn.disabled = false;
     submitBtn.textContent = "Anmelden";
   } else {
-    alert("Fehler: " + (res.error ?? res.message));
+    showToast("Fehler: " + (res.error ?? res.message), "error");
     submitBtn.disabled = false;
     submitBtn.textContent = "Anmelden";
   }
@@ -204,13 +232,13 @@ document.getElementById("forgotPasswordForm").addEventListener("submit", async (
 
   // Validierung: Passwörter stimmen überein
   if (newPassword !== confirmPassword) {
-    alert("Die Passwörter stimmen nicht überein!");
+    showToast("Die Passwörter stimmen nicht überein!", "error");
     return;
   }
 
   // Validierung: Passwort nicht leer
   if (newPassword.length < 6) {
-    alert("Passwort muss mindestens 6 Zeichen lang sein!");
+    showToast("Passwort muss mindestens 6 Zeichen lang sein!", "error");
     return;
   }
 
@@ -226,29 +254,29 @@ document.getElementById("forgotPasswordForm").addEventListener("submit", async (
     const result = await resetPasswordFn({ email, passwordHash });
     const res = result.data;
 
-    if (res.success) {
-      submitBtn.textContent = "Erfolgreich!";
-      alert("Passwort wurde erfolgreich zurückgesetzt!");
-      
-      // Modal zurücksetzen und schließen
-      e.target.reset();
-      forgotPasswordModal.classList.add("hidden");
-      
-      // Login Modal öffnen
-      setTimeout(() => {
-        modal.classList.remove("hidden");
-      }, 1000);
-      
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Speichern";
-    } else {
-      alert("Fehler: " + (res.error || "Unbekannter Fehler"));
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Speichern";
-    }
-  } catch (err) {
-    console.error("Fehler beim Passwort-Reset:", err);
-    alert("Fehler: " + err.message);
+      if (res.success) {
+        submitBtn.textContent = "Erfolgreich!";
+        showToast("Passwort wurde erfolgreich zurückgesetzt!", "success");
+        
+        // Modal zurücksetzen und schließen
+        e.target.reset();
+        forgotPasswordModal.classList.add("hidden");
+        
+        // Login Modal öffnen
+        setTimeout(() => {
+          modal.classList.remove("hidden");
+        }, 1000);
+        
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Speichern";
+      } else {
+        showToast("Fehler: " + (res.error || "Unbekannter Fehler"), "error");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Speichern";
+      }
+    } catch (err) {
+      console.error("Fehler beim Passwort-Reset:", err);
+      showToast("Fehler: " + err.message, "error");
     submitBtn.disabled = false;
     submitBtn.textContent = "Speichern";
   }
@@ -277,27 +305,24 @@ if (signOutButton) {
 //-------------------------------------------------------
 // Profil Modal Logik
 //-------------------------------------------------------
-const openProfile = document.getElementById("profileButton");
-if (openProfile) {
-  openProfile.addEventListener("click", async (e) => {
-    e.preventDefault();
+window.openProfileModal = async () => {
+  const profileName = document.getElementById("profileName");
+  const profileText = document.getElementById("profileText");
+  
+  const email = localStorage.getItem("loggedInEmail");
+  if (!email) {
+    showToast("Kein Benutzer eingeloggt!", "error");
+    return;
+  }
+  
+  profileName.textContent = "Lade Profil...";
+  profileText.textContent = "";
+  const profileModal = document.getElementById("profileModal");
+  if (profileModal) profileModal.classList.remove("hidden");
 
-    const profileName = document.getElementById("profileName");
-    const profileText = document.getElementById("profileText");
-
-    const email = localStorage.getItem("loggedInEmail");
-    if (!email) {
-      alert("Kein Benutzer eingeloggt!");
-      return;
-    }
-
-    profileName.textContent = "Lade Profil...";
-    profileText.textContent = "";
-    profileModal.classList.remove("hidden");
-
-    try {
-      const result = await readPlayerDetails();
-      const { success, players } = result.data;
+  try {
+    const result = await readPlayerDetails();
+    const { success, players } = result.data;
 
       if (!success || !Array.isArray(players)) {
         throw new Error("Spieler-Liste konnte nicht geladen werden.");
@@ -326,11 +351,11 @@ if (openProfile) {
       profileName.textContent = "Fehler beim Laden!";
       profileText.textContent = err.message;
     }
-  });
 }
 
+
 //-------------------------------------------------------
-// Beim Laden: Auth-Status wiederherstellen
+// Beim Laden: Auth-Status wiederherstellen & Listeners
 //-------------------------------------------------------
 window.addEventListener("DOMContentLoaded", () => {
   const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
@@ -340,6 +365,27 @@ window.addEventListener("DOMContentLoaded", () => {
     });
     document.querySelectorAll(".loggedOut").forEach((el) => {
       el.style.display = "none";
+    });
+  }
+
+  // Desktop Profile Button
+  const profileBtn = document.getElementById("profileButton");
+  if (profileBtn) {
+    profileBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (typeof window.openProfileModal === "function") {
+        window.openProfileModal();
+      }
+    });
+  }
+
+  // Desktop SignOut Button
+  const signOutBtn = document.getElementById("signOutButton");
+  if (signOutBtn) {
+    signOutBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      localStorage.clear();
+      window.location.reload();
     });
   }
 });
@@ -388,13 +434,13 @@ if (isRanglistePage && matchModal) {
 
       if (data?.success) {
         submitBtn.textContent = "Gesendet!";
-        alert("Herausforderung erfolgreich gesendet!");
+        showToast("Herausforderung erfolgreich gesendet!", "success");
       } else {
         throw new Error(data?.error || "Unbekannter Fehler beim Speichern");
       }
     } catch (err) {
       console.error("Fehler beim Speichern des Matches:", err);
-      alert("Speichern fehlgeschlagen: " + (err.message || err));
+      showToast("Speichern fehlgeschlagen: " + (err.message || err), "error");
       submitBtn.disabled = false;
       submitBtn.textContent = "Herausforderung senden";
     }
@@ -460,7 +506,7 @@ async function loadChallenges() {
 window.openNotificationModal = async () => {
   const userId = localStorage.getItem("currentUserId");
   if (!userId) {
-    alert("Bitte einloggen!");
+    showToast("Bitte einloggen!", "error");
     return;
   }
 
@@ -498,7 +544,7 @@ window.openNotificationModal = async () => {
         const dateInput = document.getElementById(`date-${row}`);
 
         if (!dateInput.value) {
-          alert("Bitte ein Datum auswählen!");
+          showToast("Bitte ein Datum auswählen!", "error");
           return;
         }
 
@@ -520,7 +566,7 @@ window.openNotificationModal = async () => {
           }
         } catch (err) {
           console.error("Fehler beim Setzen des Datums:", err);
-          alert("Fehler: " + err.message);
+          showToast("Fehler: " + err.message, "error");
           btn.disabled = false;
           btn.textContent = "Datum setzen";
         }
