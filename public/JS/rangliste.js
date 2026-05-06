@@ -86,16 +86,10 @@ export async function renderRanking() {
 
       row.appendChild(box);
 
-      // Klick auf grüne Challengeable-Box öffnet das Match-Modal
       box.addEventListener("click", () => {
-        if (!box.classList.contains("challengeable")) return;
-
-        window.openMatchModal({
-          player1: player.name || "",
-          player1Id: player.playerId || "",
-          player3: localStorage.getItem("currentUserName") || "",
-          player3Id: localStorage.getItem("currentUserId") || "",
-          datum: "",
+        window.openProfileModal({
+          playerId: player.playerId || "",
+          boxElement: box,
         });
       });
 
@@ -153,25 +147,27 @@ export async function renderRanking() {
       me.box.classList.add("selected");
       const myRank = me.rank;
 
-      // Hilfsfunktion: Markiert Grün (frei) oder Rot (busy)
-      const markBox = (boxData) => {
+      const markChallengeableBox = (boxData) => {
         if (!boxData?.box) return;
-        const boxElement = boxData.box;
-        
-        // Ist dieser Spieler in einer offenen Forderung?
-        if (busyPlayerIds.has(String(boxData.playerId))) {
-          boxElement.classList.add("challenged"); // Rot
-          boxElement.style.cursor = "not-allowed";
-        } else {
-          boxElement.classList.add("challengeable"); // Grün
-          boxElement.style.cursor = "grab";
-        }
+        if (String(boxData.playerId) === String(me.playerId)) return;
+        boxData.box.classList.add("challengeable");
+        boxData.box.style.cursor = "grab";
+      };
+
+      const markBusyBox = (boxData) => {
+        if (!boxData?.box) return;
+        if (String(boxData.playerId) === String(me.playerId)) return;
+        if (!busyPlayerIds.has(String(boxData.playerId))) return;
+
+        boxData.box.classList.remove("challengeable");
+        boxData.box.classList.add("challenged");
+        boxData.box.style.cursor = "not-allowed";
       };
 
       // Links von mir in der gleichen Reihe
       if (Array.isArray(pyramid[myRowIndex])) {
         for (let i = 0; i < myIndex; i++) {
-          markBox(pyramid[myRowIndex][i]);
+          markChallengeableBox(pyramid[myRowIndex][i]);
         }
       }
 
@@ -179,18 +175,18 @@ export async function renderRanking() {
       const rowAbove = pyramid[myRowIndex - 1];
       if (Array.isArray(rowAbove)) {
         for (let j = myIndex; j < rowAbove.length; j++) {
-          markBox(rowAbove[j]);
+          markChallengeableBox(rowAbove[j]);
         }
       }
 
       // Sonderregel Rang 3
       if (myRank === 3) {
         const flat = pyramid.flat();
-        const rank2 = flat.find(p => p.rank === 2);
         const rank1 = flat.find(p => p.rank === 1);
-        markBox(rank2);
-        markBox(rank1);
+        markChallengeableBox(rank1);
       }
+
+      pyramid.flat().forEach(markBusyBox);
     };
 
     try {

@@ -2,7 +2,7 @@
 PROTOKOLL - ASKÖ Piberbach Tennis Ranglisten-WebApp
 ================================================================================
 Erstellt: 16.04.2026
-Letzte Änderung: 01.05.2026
+Letzte Änderung: 06.05.2026
 
 ================================================================================
 1. PROJEKTÜBERSICHT
@@ -819,6 +819,50 @@ Spalte G Update in Sheet:
   * Lösung 1 (CSS): Modal-Overlay explizit auf `100vw` x `100vh` gesetzt.
     Dadurch orientiert sich das Flexbox-Centering am Viewport und nicht am Dokument.
   * Lösung 2 (JS): Vor dem Öffnen des Menüs wird `scrollTo(0, 0)` ausgeführt.
+
+================================================================================
+15. CHANGELOG (06.05.2026 - Ranglisten Markierung und Profil-Modal)
+================================================================================
+
+2026-05-06:
+-----------
+- FEATURE: Ranglisten-Markierung nach Forderungslogik überarbeitet
+  * Eigene Position bleibt immer blau markiert
+  * Nur direkt forderbare Spieler werden grün markiert:
+    - alle links in derselben Zeile
+    - alle rechts in der Zeile direkt darüber
+    - Sonderregel: Platz 3 darf zusätzlich Platz 1 fordern
+  * Spieler mit offener Forderung werden gelb markiert
+  * Gelb überschreibt Grün, eigener Spieler ist davon ausgenommen
+
+- FEATURE: Klick auf Ranglisten-Kästchen öffnet Profil-Modal
+  * Klick auf eine Box öffnet nicht mehr direkt die Match-Anfrage
+  * Stattdessen wird zuerst das Profil des angeklickten Spielers geladen
+  * Übergabe erfolgt über die Spieler-ID des geklickten Kästchens
+
+- FEATURE: Profil-Modal zeigt Personendaten aus Tabelle "Personen"
+  * Suche des Profils erfolgt über die ID des angeklickten Spielers
+  * Anzeige im Modal:
+    - Vorname
+    - Nachname
+    - Geburtsdatum
+  * Fehlende Werte werden als "---" dargestellt
+
+- FEATURE: Fordern-Button im Profil-Modal
+  * Wenn der angeklickte Spieler grün markiert ist, erscheint ein Button "Fordern"
+  * Der Button nutzt dieselbe bestehende Match-/Forderungslogik wie
+    "Herausforderung senden"
+  * Dadurch werden weiterhin korrekt in "preMatches" geschrieben:
+    - fortlaufende ID
+    - SpielerIDs der beteiligten Spieler
+    - ZeitpunktForderung im Format YYMMDD-hhmm
+
+- TECHNIK: readPlayerDetails erweitert
+  * Rückgabe enthält jetzt zusätzlich:
+    - id
+    - firstName
+    - lastName
+  * Dadurch kann das Profil-Modal Spieler gezielt per ID laden
 
 ================================================================================
 ENDE DES PROTOKOLLS

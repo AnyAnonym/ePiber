@@ -758,10 +758,12 @@ export const readPlayerDetails = onCall(async () => {
     const header = values[0].map((h) => h.trim().toLowerCase());
     const firstNameIndex = header.indexOf("vorname");
     const lastNameIndex = header.indexOf("nachname");
+    const idIndex = header.indexOf("id");
     const emailIndex = header.indexOf("e-mail");
     const birthIndex = header.indexOf("geburtsdatum");
 
     if (
+      idIndex === -1 ||
       firstNameIndex === -1 ||
       lastNameIndex === -1 ||
       emailIndex === -1 ||
@@ -774,13 +776,14 @@ export const readPlayerDetails = onCall(async () => {
 
     // --- Spieler durchgehen ---
     const players = values.slice(1).map((row) => {
+      const id = row[idIndex] || "";
       const first = row[firstNameIndex] || "";
       const last = row[lastNameIndex] || "";
       const fullName = `${first.trim()} ${last.trim()}`.trim();
       const email = row[emailIndex] || "";
       const birthDate = row[birthIndex] || "";
 
-      return {fullName, email, birthDate};
+      return {id, firstName: first.trim(), lastName: last.trim(), fullName, email, birthDate};
     });
 
     console.log(`✅ ${players.length} Spieler geladen.`);

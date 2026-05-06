@@ -108,6 +108,7 @@ const forgotPasswordModal = createModal("forgotPasswordModal", `
 const profileModal = createModal("profileModal", `
   <h2 id="profileName">Profil</h2>
   <p id="profileText">Lade Profildaten...</p>
+  <div id="profileActions" style="display: flex; justify-content: flex-end; margin-top: 16px;"></div>
 `);
 
 // --- Match Modal (nur auf der Rangliste-Seite) ---
@@ -328,18 +329,19 @@ if (signOutButton) {
 //-------------------------------------------------------
 // Profil Modal Logik
 //-------------------------------------------------------
-window.openProfileModal = async () => {
+window.openProfileModal = async (profileOptions = {}) => {
   const profileName = document.getElementById("profileName");
   const profileText = document.getElementById("profileText");
-  
+  const profileActions = document.getElementById("profileActions");
   const email = localStorage.getItem("loggedInEmail");
-  if (!email) {
+  if (!email && !profileOptions.playerId) {
     showToast("Kein Benutzer eingeloggt!", "error");
     return;
   }
   
   profileName.textContent = "Lade Profil...";
   profileText.textContent = "";
+  profileActions.innerHTML = "";
   const profileModal = document.getElementById("profileModal");
   if (profileModal) profileModal.classList.remove("hidden");
 
@@ -351,24 +353,53 @@ window.openProfileModal = async () => {
         throw new Error("Spieler-Liste konnte nicht geladen werden.");
       }
 
-      const player = players.find(
-        (p) => p.email.trim().toLowerCase() === email.trim().toLowerCase()
-      );
+      const player = profileOptions.playerId
+        ? players.find((p) => String(p.id).trim() === String(profileOptions.playerId).trim())
+        : players.find((p) => p.email.trim().toLowerCase() === email.trim().toLowerCase());
 
       if (!player) {
         profileName.textContent = "Unbekanntes Profil";
         profileText.textContent = "Keine Daten gefunden.";
-        localStorage.removeItem("currentUserName");
+        if (!profileOptions.playerId) {
+          localStorage.removeItem("currentUserName");
+        }
         return;
       }
 
-      profileName.textContent = player.fullName || "Unbekannter Spieler";
+      const firstName = player.firstName || "---";
+      const lastName = player.lastName || "---";
+      const birthDate = player.birthDate || "---";
+      const fullName = `${firstName} ${lastName}`.trim() || "Unbekannter Spieler";
+
+      profileName.textContent = fullName;
       profileText.innerHTML = `
-        <strong>E-Mail:</strong> ${player.email || "-"}<br>
-        <strong>Geburtsdatum:</strong> ${player.birthDate || "-"}
+        <strong>Geburtsdatum:</strong> ${birthDate}
       `;
 
-      localStorage.setItem("currentUserName", player.fullName || "");
+      if (!profileOptions.playerId) {
+        localStorage.setItem("currentUserName", fullName);
+      }
+
+      const canChallenge = typeof profileOptions.canChallenge === "boolean"
+        ? profileOptions.canChallenge
+        : !!profileOptions.boxElement?.classList.contains("challengeable");
+
+      if (canChallenge) {
+        const challengeBtn = document.createElement("button");
+        challengeBtn.type = "button";
+        challengeBtn.className = "btn-login";
+        challengeBtn.textContent = "Fordern";
+        challengeBtn.addEventListener("click", () => {
+          profileModal.classList.add("hidden");
+          window.openMatchModal({
+            player1: fullName,
+            player1Id: player.id || "",
+            player3: localStorage.getItem("currentUserName") || "",
+            player3Id: localStorage.getItem("currentUserId") || "",
+          });
+        });
+        profileActions.appendChild(challengeBtn);
+      }
     } catch (err) {
       console.error("Fehler beim Laden des Profils:", err);
       profileName.textContent = "Fehler beim Laden!";

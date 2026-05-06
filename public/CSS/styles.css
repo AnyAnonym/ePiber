@@ -802,8 +802,8 @@ input[type="date"] {
 }
 
 .box.challenged {
-  border-color: #e74c3c;
-  background: #fdecea;
+  border-color: #f1c40f;
+  background: #fff6cc;
   cursor: not-allowed;
 }
 
