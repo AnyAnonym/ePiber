@@ -258,3 +258,8 @@ export async function renderRanking() {
 
   clearHighlights();
 }
+
+// Seite ready -> Rangliste aufbauen
+document.addEventListener("DOMContentLoaded", () => {
+  renderRanking();
+});

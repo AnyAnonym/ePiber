@@ -152,13 +152,36 @@ window.openLoginModal = () => {
   if (modal) modal.classList.remove("hidden");
 };
 
-const openBtn = document.getElementById("openLogin");
-if (openBtn) {
-  openBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    window.openLoginModal();
-  });
-}
+window.addEventListener("DOMContentLoaded", () => {
+  const openBtn = document.getElementById("openLogin");
+  if (openBtn) {
+    openBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      window.openLoginModal();
+    });
+  }
+
+  // Desktop Profile Button
+  const profileBtn = document.getElementById("profileButton");
+  if (profileBtn) {
+    profileBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (typeof window.openProfileModal === "function") {
+        window.openProfileModal();
+      }
+    });
+  }
+
+  // Desktop SignOut Button
+  const signOutBtn = document.getElementById("signOutButton");
+  if (signOutBtn) {
+    signOutBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      localStorage.clear();
+      window.location.reload();
+    });
+  }
+});
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();

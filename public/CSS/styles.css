@@ -140,6 +140,44 @@ header {
   flex-wrap: wrap;
 }
 
+/* Header Logo (Jetzi immer in der Mitte) */
+.header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  order: 2;
+}
+
+header .logo {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+}
+
+/* Desktop: 3-spaltig Layout (Logo Mitte) */
+.desktop-nav {
+  display: flex;
+  gap: 20px;
+  order: 1;
+  flex: 1;
+}
+
+.desktop-auth {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  order: 3;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* Header-Logo (links) wird nicht mehr genutzt */
+.header-logo {
+  display: none;
+}
+
 /* Header Logo (links) */
 .header-logo {
   color: #fff;
@@ -148,7 +186,7 @@ header {
   text-decoration: none;
   white-space: nowrap;
   order: 0;
-  display: none;
+  display: none; /* Standard: versteckt, nur Desktop zeigt es */
 }
 
 .header-logo:hover {
@@ -233,12 +271,76 @@ nav a.active {
 /* -------------------------------------------------- */
 
 /* Mobile Layout */
-@media (max-width: 700px) {
-  header {
-    flex-direction: row;
-    justify-content: space-between;
-    padding: 12px 16px;
+@media (max-width: 600px) {
+  .match-card {
+    padding: 10px 12px;
   }
+
+  .match-date {
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+  }
+
+  /* Horizontal layout - lang gezogenes Rechteck */
+  .match-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .team {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 0.9rem;
+  }
+
+  .vs {
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  .action-area {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+  }
+
+  .sets {
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .set {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    min-width: 35px;
+    text-align: center;
+  }
+}
+
+  .header-logo {
+    order: 0;
+    display: block;
+    font-size: 1.3rem;
+  }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: none !important;
+  }
+
+  .hamburger {
+    display: block;
+    order: 2;
+  }
+
 
   .header-logo {
     order: 0;
@@ -271,7 +373,7 @@ nav a.active {
     display: block;
     order: 2;
   }
-}
+
 
 /* Mobile Navigation Content */
 .mobile-nav-content {
@@ -781,9 +883,14 @@ input[type="date"] {
   font-size: 1rem;
 }
 
-@media (max-width: 700px) {
-  .match-card {
-    padding: 12px 16px;
+@media (max-width: 768px) {
+  main {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sidebar {
+    order: 2;
+  }
   }
 
   .match-content {
@@ -793,6 +900,44 @@ input[type="date"] {
     margin-top: 20px;
     gap: 8px;
   }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: none !important;
+  }
+
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE HEADER (Hamburger Menu)                */
+/* -------------------------------------------------- */
+
+@media (max-width: 600px) {
+  header {
+    padding: 10px 12px;
+    justify-content: space-between;
+  }
+
+  .header-logo {
+    display: none;
+  }
+
+  .header-center .logo {
+    display: block;
+    font-size: 1.3rem;
+    color: white;
+    font-weight: 700;
+  }
+
+  .hamburger {
+    display: block;
+    font-size: 1.6rem;
+  }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: none !important;
+  }
+}
 
   .team {
     flex: 1;
@@ -824,22 +969,14 @@ input[type="date"] {
     margin-bottom: 6px;
     font-size: 0.85rem;
   }
-}
+
 
 /* -------------------------------------------------- */
 /*  RESPONSIVES LAYOUT                                */
 /* -------------------------------------------------- */
 
-@media (max-width: 900px) {
-  main {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    order: 2;
-  }
-}
-
+/* -------------------------------------------------- */
+/*  RESPONSIVE TABLE                                   */
 /* -------------------------------------------------- */
 /*  NOTIFICATION BELL                                 */
 /* -------------------------------------------------- */
@@ -1130,28 +1267,116 @@ input[type="date"] {
   font-size: 1rem;
 }
 
-@media (max-width: 700px) {
-  .match-content {
-    flex-direction: column;
-    align-items: center;
+/* === DESKTOP (>900px) === */
+@media (min-width: 901px) {
+  .header-logo {
+    display: block;
   }
 
-  .action-area {
-    text-align: center;
-    margin-top: 10px;
+  .header-center .logo {
+    display: none;
   }
 
-  .dropdown-content {
-    left: auto;
-    right: 0;
+  .hamburger {
+    display: none;
+  }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: flex !important;
   }
 }
 
+/* === TABLET (601px – 900px) === */
+@media (max-width: 900px) {
+  header {
+    padding: 12px 16px;
+    justify-content: space-between;
+  }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: none !important;
+  }
+
+  .hamburger {
+    display: block;
+    font-size: 1.8rem;
+  }
+
+  .header-center .logo {
+    display: block;
+    font-size: 1.4rem;
+    color: white;
+    font-weight: 700;
+  }
+}
+
+/* === MOBILE (<=600px) === */
+@media (max-width: 600px) {
+  header {
+    padding: 10px 12px;
+    justify-content: space-between;
+  }
+
+  .header-logo {
+    display: none;
+  }
+
+  .header-center .logo {
+    display: block;
+    font-size: 1.3rem;
+    color: white;
+    font-weight: 700;
+  }
+
+  .hamburger {
+    display: block;
+    font-size: 1.6rem;
+  }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: none !important;
+  }
+}
+
+  .header-logo {
+    display: none;
+  }
+
+  .header-center {
+    display: flex;
+    flex: 1;
+    order: 1;
+    justify-content: center;
+  }
+
+  .header-center .logo {
+    display: block;
+    font-size: 1.3rem;
+    color: white;
+    font-weight: 700;
+  }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: none !important;
+  }
+
+  .hamburger {
+    display: block;
+    order: 2;
+  }
+
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE LAYOUT                                  */
 /* -------------------------------------------------- */
 /*  RESPONSIVE HEADER (Hamburger Menu)                */
 /* -------------------------------------------------- */
 
-@media (max-width: 900px) {
+@media (max-width: 600px) {
   .hamburger-btn {
     display: block;
     background: none;
@@ -1176,8 +1401,20 @@ input[type="date"] {
 }
 
 @media (min-width: 901px) {
-  .hamburger-btn {
+  .header-center .logo {
+    display: block;
+    font-size: 1.4rem;
+    color: white;
+    font-weight: 700;
+  }
+
+  .hamburger {
     display: none;
+  }
+
+  .desktop-nav,
+  .desktop-auth {
+    display: flex !important;
   }
 }
 
@@ -1199,10 +1436,30 @@ input[type="date"] {
 /*  RESPONSIVE MATCH CARDS                             */
 /* -------------------------------------------------- */
 
-@media (max-width: 600px) {
-  .match-card {
-    padding: 10px 12px;
+@media (max-width: 768px) {
+  .pyramid {
+    gap: 15px;
+    padding: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-width: 0;
+    padding-bottom: 15px;
   }
+
+  .row {
+    gap: 10px;
+    flex-wrap: nowrap;
+    min-width: max-content;
+  }
+
+  .box {
+    width: 100px;
+    height: 50px;
+    font-size: 0.9rem;
+    border-width: 2px;
+    flex-shrink: 0;
+  }
+}
 
   .match-date {
     font-size: 0.85rem;
@@ -1251,50 +1508,11 @@ input[type="date"] {
     min-width: 35px;
     text-align: center;
   }
-}
+
 
 /* -------------------------------------------------- */
 /*  RESPONSIVE TABLE                                   */
 /* -------------------------------------------------- */
-
-@media (max-width: 600px) {
-  .table {
-    font-size: 0.85rem;
-  }
-
-  .table th, .table td {
-    padding: 8px 6px;
-  }
-}
-
-/* -------------------------------------------------- */
-/*  RESPONSIVE PYRAMID                                 */
-/* -------------------------------------------------- */
-
-@media (max-width: 768px) {
-  .pyramid {
-    gap: 15px;
-    padding: 4px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    min-width: 0;
-    padding-bottom: 15px;
-  }
-
-  .row {
-    gap: 10px;
-    flex-wrap: nowrap;
-    min-width: max-content;
-  }
-
-  .box {
-    width: 100px;
-    height: 50px;
-    font-size: 0.9rem;
-    border-width: 2px;
-    flex-shrink: 0;
-  }
-}
 
 @media (max-width: 480px) {
   .pyramid {
@@ -1318,4 +1536,21 @@ input[type="date"] {
     border-radius: 10px;
     flex-shrink: 0;
   }
-}
+  }
+
+  .table th, .table td {
+    padding: 8px 6px;
+  }
+
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE PYRAMID                                 */
+/* -------------------------------------------------- */
+/*  RESPONSIVE PYRAMID                                 */
+/* -------------------------------------------------- */
+/*  RESPONSIVE PYRAMID                                 */
+/* -------------------------------------------------- */
+
+/* -------------------------------------------------- */
+/*  RESPONSIVE PYRAMID                                 */
+/* -------------------------------------------------- */
