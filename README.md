@@ -5,6 +5,10 @@ to publish our webseite we use firebase
 in public are all our scripts for the frontend
 in functions are all our scripts for the backend
 
+follwing files are ignored by git:
+  - SDK.js <-- a firebase SDK, enables access to some firebase features
+  - .firebaserc <-- a file that tells Firebase which project these files belong to
+
 ------------------------------------------------------------------------------------
 since we use firebase only I can deploy the webseite. -> so please write me under kilian.pimminger8@gmail.com
 
