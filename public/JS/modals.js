@@ -4,7 +4,7 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebas
 //-------------------------------------------------------
 // Toast Notification (Replaces Alert)
 //-------------------------------------------------------
-window.showToast = function(message, type = "info") {
+window.showToast = function (message, type = "info") {
   let container = document.getElementById("toastContainer");
   if (!container) {
     container = document.createElement("div");
@@ -267,7 +267,7 @@ document.getElementById("forgotPasswordForm").addEventListener("submit", async (
   }
 
   const passwordHash = await hashPassword(newPassword);
-  
+
   console.log("Passwort-Reset gestartet für:", email);
 
   submitBtn.disabled = true;
@@ -278,29 +278,29 @@ document.getElementById("forgotPasswordForm").addEventListener("submit", async (
     const result = await resetPasswordFn({ email, passwordHash });
     const res = result.data;
 
-      if (res.success) {
-        submitBtn.textContent = "Erfolgreich!";
-        showToast("Passwort wurde erfolgreich zurückgesetzt!", "success");
-        
-        // Modal zurücksetzen und schließen
-        e.target.reset();
-        forgotPasswordModal.classList.add("hidden");
-        
-        // Login Modal öffnen
-        setTimeout(() => {
-          modal.classList.remove("hidden");
-        }, 1000);
-        
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Speichern";
-      } else {
-        showToast("Fehler: " + (res.error || "Unbekannter Fehler"), "error");
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Speichern";
-      }
-    } catch (err) {
-      console.error("Fehler beim Passwort-Reset:", err);
-      showToast("Fehler: " + err.message, "error");
+    if (res.success) {
+      submitBtn.textContent = "Erfolgreich!";
+      showToast("Passwort wurde erfolgreich zurückgesetzt!", "success");
+
+      // Modal zurücksetzen und schließen
+      e.target.reset();
+      forgotPasswordModal.classList.add("hidden");
+
+      // Login Modal öffnen
+      setTimeout(() => {
+        modal.classList.remove("hidden");
+      }, 1000);
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Speichern";
+    } else {
+      showToast("Fehler: " + (res.error || "Unbekannter Fehler"), "error");
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Speichern";
+    }
+  } catch (err) {
+    console.error("Fehler beim Passwort-Reset:", err);
+    showToast("Fehler: " + err.message, "error");
     submitBtn.disabled = false;
     submitBtn.textContent = "Speichern";
   }
@@ -338,7 +338,7 @@ window.openProfileModal = async (profileOptions = {}) => {
     showToast("Kein Benutzer eingeloggt!", "error");
     return;
   }
-  
+
   profileName.textContent = "Lade Profil...";
   profileText.textContent = "";
   profileActions.innerHTML = "";
@@ -349,63 +349,108 @@ window.openProfileModal = async (profileOptions = {}) => {
     const result = await readPlayerDetails();
     const { success, players } = result.data;
 
-      if (!success || !Array.isArray(players)) {
-        throw new Error("Spieler-Liste konnte nicht geladen werden.");
-      }
-
-      const player = profileOptions.playerId
-        ? players.find((p) => String(p.id).trim() === String(profileOptions.playerId).trim())
-        : players.find((p) => p.email.trim().toLowerCase() === email.trim().toLowerCase());
-
-      if (!player) {
-        profileName.textContent = "Unbekanntes Profil";
-        profileText.textContent = "Keine Daten gefunden.";
-        if (!profileOptions.playerId) {
-          localStorage.removeItem("currentUserName");
-        }
-        return;
-      }
-
-      const firstName = player.firstName || "---";
-      const lastName = player.lastName || "---";
-      const birthDate = player.birthDate || "---";
-      const fullName = `${firstName} ${lastName}`.trim() || "Unbekannter Spieler";
-
-      profileName.textContent = fullName;
-      profileText.innerHTML = `
-        <strong>Geburtsdatum:</strong> ${birthDate}
-      `;
-
-      if (!profileOptions.playerId) {
-        localStorage.setItem("currentUserName", fullName);
-      }
-
-      const canChallenge = typeof profileOptions.canChallenge === "boolean"
-        ? profileOptions.canChallenge
-        : !!profileOptions.boxElement?.classList.contains("challengeable");
-
-      if (canChallenge) {
-        const challengeBtn = document.createElement("button");
-        challengeBtn.type = "button";
-        challengeBtn.className = "btn-login";
-        challengeBtn.textContent = "Fordern";
-        challengeBtn.addEventListener("click", () => {
-          profileModal.classList.add("hidden");
-          window.openMatchModal({
-            player1: fullName,
-            player1Id: player.id || "",
-            player3: localStorage.getItem("currentUserName") || "",
-            player3Id: localStorage.getItem("currentUserId") || "",
-          });
-        });
-        profileActions.appendChild(challengeBtn);
-      }
-    } catch (err) {
-      console.error("Fehler beim Laden des Profils:", err);
-      profileName.textContent = "Fehler beim Laden!";
-      profileText.textContent = err.message;
+    if (!success || !Array.isArray(players)) {
+      throw new Error("Spieler-Liste konnte nicht geladen werden.");
     }
-}
+
+    const player = profileOptions.playerId
+      ? players.find((p) => String(p.id).trim() === String(profileOptions.playerId).trim())
+      : players.find((p) => p.email.trim().toLowerCase() === email.trim().toLowerCase());
+
+    if (!player) {
+      profileName.textContent = "Unbekanntes Profil";
+      profileText.textContent = "Keine Daten gefunden.";
+      if (!profileOptions.playerId) {
+        localStorage.removeItem("currentUserName");
+      }
+      return;
+    }
+
+    const firstName = player.firstName || "---";
+    const lastName = player.lastName || "---";
+    const birthDate = player.birthDate || "---";
+    const fullName = `${firstName} ${lastName}`.trim() || "Unbekannter Spieler";
+
+    profileName.textContent = fullName;
+    profileText.innerHTML = `
+      <strong>Geburtsdatum:</strong> ${birthDate}
+    `;
+
+    if (!profileOptions.playerId) {
+      localStorage.setItem("currentUserName", fullName);
+    }
+
+    const canChallenge = typeof profileOptions.canChallenge === "boolean"
+      ? profileOptions.canChallenge
+      : !!profileOptions.boxElement?.classList.contains("challengeable");
+
+    if (canChallenge) {
+      const challengeBtn = document.createElement("button");
+      challengeBtn.type = "button";
+      challengeBtn.className = "btn-login";
+      challengeBtn.textContent = "Fordern";
+
+      // 👉 Neuer Direkt-Eintrag ohne weiteres Modal
+      challengeBtn.addEventListener("click", async () => {
+        try {
+          const player1Id = player.id || "";
+          const player3Id = localStorage.getItem("currentUserId") || "";
+          const player1Name = fullName;
+          const player3Name = localStorage.getItem("currentUserName") || "";
+
+          if (!player3Id || !player3Name) {
+            showToast("Bitte vorher einloggen!", "error");
+            return;
+          }
+
+          const now = new Date();
+          const yy = String(now.getFullYear()).slice(2);
+          const mm = String(now.getMonth() + 1).padStart(2, "0");
+          const dd = String(now.getDate()).padStart(2, "0");
+          const hh = String(now.getHours()).padStart(2, "0");
+          const mi = String(now.getMinutes()).padStart(2, "0");
+          const zeitpunktForderung = `${yy}${mm}${dd}-${hh}${mi}`;
+
+          const addMatchFn = httpsCallable(functions, "addMatch");
+
+          challengeBtn.disabled = true;
+          challengeBtn.textContent = "Sende...";
+
+          // 🔥 Direktes Speichern in Google Sheet
+          const result = await addMatchFn({
+            player1: player1Name,
+            player1Id: player1Id,
+            player3: player3Name,
+            player3Id: player3Id,
+            zeitpunktForderung,
+            bewerbId: window.currentBewerbId || "2",
+          });
+
+          const data = result.data;
+
+          if (data?.success) {
+            showToast("Herausforderung erfolgreich eingetragen!", "success");
+            challengeBtn.textContent = "Gesendet!";
+            profileModal.classList.add("hidden");
+          } else {
+            throw new Error(data?.error || "Unbekannter Fehler beim Speichern");
+          }
+        } catch (err) {
+          console.error("Fehler beim Fordern:", err);
+          showToast("Fehler: " + (err.message || err), "error");
+          challengeBtn.textContent = "Fordern";
+          challengeBtn.disabled = false;
+        }
+      });
+
+      profileActions.appendChild(challengeBtn);
+    }
+  } catch (err) {
+    console.error("Fehler beim Laden des Profils:", err);
+    profileName.textContent = "Fehler beim Laden!";
+    profileText.textContent = err.message;
+  }
+};
 
 
 //-------------------------------------------------------
@@ -473,6 +518,7 @@ if (isRanglistePage && matchModal) {
       player3: player3Input.value.trim(),
       player3Id: player3IdInput.value.trim(),
       zeitpunktForderung: zeitpunkt,
+      bewerbId: matchModal.dataset.bewerbId || "2",
     };
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -507,6 +553,7 @@ if (isRanglistePage && matchModal) {
     player1Id = "",
     player3 = "",
     player3Id = "",
+    bewerbId = "2",
   } = {}) => {
     player1Input.value = player1;
     player1IdInput.value = player1Id;
@@ -515,6 +562,8 @@ if (isRanglistePage && matchModal) {
     player3Input.value = player3 || localStorage.getItem("currentUserName") || "";
     player3IdInput.value = player3Id || localStorage.getItem("currentUserId") || "";
     player3Display.textContent = player3Input.value;
+
+    matchModal.dataset.bewerbId = bewerbId;
 
     matchModal.classList.remove("hidden");
   };

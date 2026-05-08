@@ -1164,12 +1164,38 @@ input[type="date"] {
   position: absolute;
   top: 10px;
   right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .match-card .match-date {
   font-weight: 600;
   color: var(--accent);
   margin-bottom: 8px;
+}
+
+.match-meta-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.match-meta-row .match-date {
+  margin-bottom: 0;
+}
+
+.badge-bewerb {
+  background: #d4edda;
+  color: #155724;
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 8px;
+  white-space: nowrap;
 }
 
 .match-card {

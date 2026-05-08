@@ -57,6 +57,15 @@ function formatDateToSheet(dateStr, timeStr) {
   return `${yy}${mm}${dd}-${hh}${mi}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 window.openDateModal = (row, match) => {
   currentDateRow = row;
   currentDateMatch = match;
@@ -246,11 +255,15 @@ async function loadPreMatches() {
       const team2 = [match.player3, match.player4].filter(Boolean).join(" / ") || "---";
       const statusBadge = getStatusBadge(match.status, match.ergebnis);
       const actionButton = getActionButton(match, userId);
+      const bewerbsartBadge = getBewerbsartBadge(match);
 
       return `
         <div class="match-card ${match.status === 'offen' ? 'status-offen' : match.status === 'bestaetigt' ? 'status-bestaetigt' : ''}">
-          <div class="match-status">${statusBadge}</div>
-          <div class="match-date">${match.datum || "Datum nicht festgelegt"}</div>
+          <div class="match-status">${bewerbsartBadge}${statusBadge}</div>
+          <div class="match-meta-row">
+            <div class="match-date">${match.datum || "Datum nicht festgelegt"}</div>
+            <div class="match-bewerbsart-wrap"></div>
+          </div>
           <div class="match-content">
             <div class="team">
               <div class="player main">${team1}</div>
@@ -306,6 +319,20 @@ function getStatusBadge(status, ergebnis) {
     default:
       return `<span class="badge">${status}</span>`;
   }
+}
+
+function getBewerbsartBadge(match) {
+  // Spezifischen Bewerb-Namen bevorzugen, sonst Art-Namen
+  const label = (match.bewerbBezeichnung || match.bewerbsart || "").trim();
+  if (!label) return "";
+
+  // Forderungszeitpunkt nur bei Rangliste (BewerbsartID = "2") anzeigen
+  const isRangliste = match.bewerbsartId === "2";
+  const forderung = isRangliste && match.zeitpunktForderung
+    ? ` (${escapeHtml(match.zeitpunktForderung)})`
+    : "";
+
+  return `<span class="badge-bewerb">${escapeHtml(label)}${forderung}</span>`;
 }
 
 function getActionButton(match, userId) {

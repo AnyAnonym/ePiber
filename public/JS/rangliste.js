@@ -8,6 +8,8 @@ const readPreMatches = httpsCallable(functions, "readPreMatches");
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id") || document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
 
+window.currentBewerbId = BEWERB_ID;
+
 /**
  * Lädt die Rangliste aus dem Backend
  */

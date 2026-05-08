@@ -857,6 +857,14 @@ Spalte G Update in Sheet:
     - SpielerIDs der beteiligten Spieler
     - ZeitpunktForderung im Format YYMMDD-hhmm
 
+- BUGFIX: Bewerbsart-Badge in preMatches sichtbar gemacht
+  * Ursache: Neue Forderungen wurden in preMatches mit leerer BewerbID gespeichert
+  * Folge: readPreMatches konnte keine Verknüpfung zu Bewerb/Bewerbsart herstellen
+  * Fix: addMatch speichert jetzt standardmäßig die aktuelle BewerbID,
+    fallback ist "2" für Rangliste
+  * Dadurch erscheint das grüne Bewerbsart-Badge nun zuverlässig
+  * Bei BewerbsartID "2" wird zusätzlich ZeitpunktForderung in Klammern angezeigt
+
 - TECHNIK: readPlayerDetails erweitert
   * Rückgabe enthält jetzt zusätzlich:
     - id

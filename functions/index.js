@@ -189,6 +189,7 @@ export const addMatch = onCall(async (request) => {
       player2Id = "",
       player3Id,
       player4Id = "",
+      bewerbId = "2",
     } = request.data || {};
 
     if (!player1Id || !player3Id) {
@@ -236,6 +237,7 @@ export const addMatch = onCall(async (request) => {
     const p2id = player2Id.toString().trim();
     const p3id = player3Id.toString().trim();
     const p4id = player4Id.toString().trim();
+    const resolvedBewerbId = bewerbId.toString().trim() || "2";
 
     // 🔹 Lese preMatches und matches für Validierungen
     const [preRes, matchesRes] = await Promise.all([
@@ -346,7 +348,7 @@ export const addMatch = onCall(async (request) => {
       range: "preMatches",
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [[newIdPre, "", zeitpunktForderung, "", "", p1id, p2id, p3id, p4id, "offen"]],
+        values: [[newIdPre, "", zeitpunktForderung, resolvedBewerbId, "", p1id, p2id, p3id, p4id, "offen"]],
       },
     });
 
@@ -806,7 +808,7 @@ export const readPreMatches = onCall(async (request) => {
     });
     const sheets = google.sheets({version: "v4", auth});
 
-    const [preRes, playerRes] = await Promise.all([
+    const [preRes, playerRes, bewerbRes, bewerbsartRes] = await Promise.all([
       sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
         range: "preMatches",
@@ -815,10 +817,20 @@ export const readPreMatches = onCall(async (request) => {
         spreadsheetId: SHEET_ID,
         range: "Personen",
       }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: "Bewerb",
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: "Bewerbsart",
+      }),
     ]);
 
     const preValues = preRes.data.values || [];
     const playerValues = playerRes.data.values || [];
+    const bewerbValues = bewerbRes.data.values || [];
+    const bewerbsartValues = bewerbsartRes.data.values || [];
 
     if (preValues.length < 2) {
       return {success: true, preMatches: []};
@@ -836,12 +848,52 @@ export const readPreMatches = onCall(async (request) => {
       playerMap.set(id, name.trim());
     });
 
+    const bewerbsartMap = new Map();
+    if (bewerbsartValues.length > 1) {
+      const baHeader = bewerbsartValues[0].map((h) => h.trim().toLowerCase());
+      const baIdIdx = baHeader.indexOf("id");
+      const baBezIdx = baHeader.indexOf("bezeichnung");
+
+      bewerbsartValues.slice(1).forEach((r) => {
+        const id = String(r[baIdIdx] || "").trim();
+        const name = String(r[baBezIdx] || "").trim();
+        if (id && name) {
+          bewerbsartMap.set(id, name);
+        }
+      });
+    }
+
+    const bewerbMap = new Map();
+    if (bewerbValues.length > 1) {
+      const bHeader = bewerbValues[0].map((h) => h.trim().toLowerCase());
+      const bIdIdx = bHeader.indexOf("id");
+      const bBewerbsartIdIdx = bHeader.indexOf("bewerbsartid");
+      const bBezIdx = bHeader.indexOf("bezeichnung");
+
+      bewerbValues.slice(1).forEach((r) => {
+        const id = String(r[bIdIdx] || "").trim();
+        const baId = String(r[bBewerbsartIdIdx] || "").trim();
+        const bez = String(r[bBezIdx] || "").trim();
+        const artName = bewerbsartMap.get(baId) || "";
+
+        if (id) {
+          bewerbMap.set(id, {
+            bezeichnung: bez,
+            bewerbsartName: artName,
+            bewerbsartId: baId,
+          });
+        }
+      });
+    }
+
     const preHeader = preValues[0].map((h) => h.trim().toLowerCase());
     const i1 = preHeader.indexOf("spielerid1");
     const i2 = preHeader.indexOf("spielerid2");
     const i3 = preHeader.indexOf("spielerid3");
     const i4 = preHeader.indexOf("spielerid4");
     const d = preHeader.indexOf("zeitpunktmatch");
+    const zeitpunktForderungIdx = preHeader.indexOf("zeitpunktforderung");
+    const bewerbIdIdx = preHeader.indexOf("bewerbid");
     const st = preHeader.indexOf("status");
     const er = preHeader.indexOf("ergebnis");
 
@@ -853,6 +905,9 @@ export const readPreMatches = onCall(async (request) => {
       const p3 = String(row[i3] || "");
       const p4 = String(row[i4] || "");
       const datum = d !== -1 ? formatSheetDate(row[d] || "") : "";
+      const bewerbId = bewerbIdIdx !== -1 ? (String(row[bewerbIdIdx] || "").trim() || "2") : "2";
+      const bewerbInfo = bewerbMap.get(bewerbId) || {};
+      const zeitpunktForderungRaw = zeitpunktForderungIdx !== -1 ? String(row[zeitpunktForderungIdx] || "") : "";
       const status = st !== -1 ? (row[st] || "offen") : "offen";
       const ergebnis = er !== -1 ? formatErgebnis(row[er] || "") : "";
 
@@ -873,6 +928,11 @@ export const readPreMatches = onCall(async (request) => {
         player3Id: p3,
         player4Id: p4,
         datum,
+        bewerbId,
+        bewerbsartId: bewerbInfo.bewerbsartId || "",
+        bewerbsart: bewerbInfo.bewerbsartName || "",
+        bewerbBezeichnung: bewerbInfo.bezeichnung || "",
+        zeitpunktForderung: formatSheetDate(zeitpunktForderungRaw),
         status,
         ergebnis,
         isForMe: isForMe,
