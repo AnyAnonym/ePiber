@@ -235,7 +235,7 @@ async function loadPreMatches() {
 
   const userId = localStorage.getItem("currentUserId") || null;
 
-  container.innerHTML = "<p class='loading-text'>Lade Forderungen...</p>";
+  container.innerHTML = "<p class='loading-text'>Lade offene Matches...</p>";
 
   try {
     const result = await readPreMatches({ userId });
@@ -246,7 +246,7 @@ async function loadPreMatches() {
     }
 
     if (preMatches.length === 0) {
-      container.innerHTML = "<p>Keine offenen Forderungen.</p>";
+      container.innerHTML = "<p>Keine offenen Matches.</p>";
       return;
     }
 
@@ -299,7 +299,7 @@ async function loadPreMatches() {
 
   } catch (err) {
     console.error("Fehler beim Laden:", err);
-    container.innerHTML = `<p>Fehler beim Laden der Forderungen: ${err.message}</p>`;
+    container.innerHTML = `<p>Fehler beim Laden der offenen Matches: ${err.message}</p>`;
   }
 }
 

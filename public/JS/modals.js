@@ -134,7 +134,7 @@ if (isRanglistePage) {
 
 // --- Notification Modal ---
 const notificationModal = createModal("notificationModal", `
-  <h2>Herausforderungen</h2>
+  <h2>offene Matches</h2>
   <div id="challengeList">
     <p>Lade...</p>
   </div>
@@ -574,7 +574,7 @@ if (isRanglistePage && matchModal) {
 }
 
 //-------------------------------------------------------
-// Notification Bell - offene Herausforderungen
+// Notification Bell - offene Matches
 //-------------------------------------------------------
 const getMyChallenges = httpsCallable(functions, "getMyChallenges");
 const setMatchDateFn = httpsCallable(functions, "setMatchDate");
@@ -602,7 +602,7 @@ async function loadChallenges() {
       updateNotificationBadge(challenges.length);
     }
   } catch (err) {
-    console.error("Fehler beim Laden der Herausforderungen:", err);
+    console.error("Fehler beim Laden der offenen Matches:", err);
   }
 }
 
@@ -624,7 +624,7 @@ window.openNotificationModal = async () => {
     if (!success) throw new Error("Fehler beim Laden");
 
     if (challenges.length === 0) {
-      listEl.innerHTML = "<p>Keine offenen Herausforderungen.</p>";
+      listEl.innerHTML = "<p>Keine offenen Matches.</p>";
       return;
     }
 

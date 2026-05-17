@@ -4,7 +4,7 @@ const pages = [
   { file: "index.html", label: "Dashboard" },
   { file: "players.html", label: "Spieler" },
   { file: "matches.html", label: "Matches" },
-  { file: "preMatches.html", label: "Forderungen" },
+  { file: "preMatches.html", label: "offene Matches" },
   { file: "Bewerbe.html", label: "Bewerbe" },
 ];
 
@@ -23,7 +23,7 @@ function renderHeader() {
         <a href="matches.html" class="dropbtn">Matches ▾</a>
         <div class="dropdown-content">
           <a href="matches.html" class="${currentPath === 'matches.html' ? 'active' : ''}" onclick="event.stopPropagation()">Matches</a>
-          <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}" onclick="event.stopPropagation()">Forderungen</a>
+          <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}" onclick="event.stopPropagation()">offene Matches</a>
         </div>
       </div>
         <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
@@ -65,7 +65,7 @@ function renderMobileNav() {
         <a href="index.html" class="${currentPath === 'index.html' ? 'active' : ''}">Dashboard</a>
         <a href="players.html" class="${currentPath === 'players.html' ? 'active' : ''}" data-auth="required">Spieler</a>
         <a href="matches.html" class="${currentPath === 'matches.html' ? 'active' : ''}">Matches</a>
-        <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}">Forderungen</a>
+        <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}">offene Matches</a>
         <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
       </nav>
     </div>
@@ -116,6 +116,16 @@ function initNavigation() {
         }
       });
     });
+
+    const notificationBell = document.getElementById("notificationBell");
+    if (notificationBell) {
+      notificationBell.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (typeof window.openNotificationModal === "function") {
+          window.openNotificationModal();
+        }
+      });
+    }
 
     const notificationBellMobile = document.getElementById("notificationBellMobile");
     if (notificationBellMobile) {

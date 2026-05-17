@@ -254,66 +254,113 @@ export const addMatch = onCall(async (request) => {
     const preRows = preRes.data.values || [];
     const matchesRows = matchesRes.data.values || [];
 
-    // --- Prüfe offene Forderungen ---
+    // --- Prüfe offene Matches ---
     if (preRows.length > 1) {
       const preHeader = preRows[0].map((h) => h.trim().toLowerCase());
       const i1 = preHeader.indexOf("spielerid1");
       const i2 = preHeader.indexOf("spielerid2");
       const i3 = preHeader.indexOf("spielerid3");
       const i4 = preHeader.indexOf("spielerid4");
-      const d = preHeader.indexOf("zeitpunktmatch");
+      const st = preHeader.indexOf("status");
 
       for (let i = 1; i < preRows.length; i++) {
         const row = preRows[i];
-        // Nur offene (kein ZeitpunktMatch) berücksichtigen
-        if (!row[d] || row[d] === "") {
-          const existing1 = String(row[i1] || "").trim();
-          const existing2 = String(row[i2] || "").trim();
-          const existing3 = String(row[i3] || "").trim();
-          const existing4 = String(row[i4] || "").trim();
+        const rowStatus = String(row[st] || "offen").trim().toLowerCase();
 
-          if (existing1 === p1id || existing1 === p3id ||
-              existing2 === p1id || existing2 === p3id ||
-              existing3 === p1id || existing3 === p3id ||
-              existing4 === p1id || existing4 === p3id) {
-            return {success: false, error: "Einer der Spieler hat bereits eine offene Forderung!"};
+        if (rowStatus === "offen" || rowStatus === "bestaetigt") {
+          const existing = [
+            String(row[i1] || "").trim(),
+            String(row[i2] || "").trim(),
+            String(row[i3] || "").trim(),
+            String(row[i4] || "").trim(),
+          ];
+
+          const blocked = [p1id, p3id].find((p) => existing.includes(p));
+          if (blocked) {
+            const isMe = (blocked === p3id);
+            console.error(
+                isMe ?
+                  `❌ FORDERUNG ABGELEHNT: Du (${p3id}) hast bereits eine offene Forderung!` :
+                  `❌ FORDERUNG ABGELEHNT: Spieler ${blocked} hat bereits eine offene Forderung!`,
+                `| Forderer: ${p3id} | Geforderter: ${p1id}`,
+                `| Bestehende Forderung in Zeile ${i + 1}:`,
+                `SpielerID1=${row[i1]} SpielerID3=${row[i3]} Status=${rowStatus}`,
+            );
+            return {
+              success: false,
+              error: isMe ?
+                "Du hast bereits eine offene Herausforderung! Bitte warte, bis diese abgeschlossen ist." :
+                "Dieser Spieler hat bereits eine offene Herausforderung und kann derzeit nicht gefordert werden.",
+            };
           }
         }
       }
     }
 
     // --- Prüfe 7-Tage-Regeln (Schutzzeit nach Sieg, Sperrzeit nach Niederlage) ---
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
     if (matchesRows.length > 1) {
       const matchesHeader = matchesRows[0].map((h) => h.trim().toLowerCase());
       const mi1 = matchesHeader.indexOf("spielerid1");
       const mi3 = matchesHeader.indexOf("spielerid3");
       const md = matchesHeader.indexOf("zeitpunkt");
       const mergebnis = matchesHeader.indexOf("ergebnis");
+      const mgewinner = matchesHeader.indexOf("gewinner");
+
+      const now = new Date();
+      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
       for (let i = 1; i < matchesRows.length; i++) {
         const row = matchesRows[i];
-        const matchDate = row[md] ? new Date(row[md]) : null;
+        const rawDate = String(row[md] || "").trim();
+        if (!rawDate) continue;
 
-        if (matchDate && matchDate >= sevenDaysAgo) {
-          const m1 = String(row[mi1] || "").trim();
-          const m3 = String(row[mi3] || "").trim();
-          const ergebnis = String(row[mergebnis] || "").trim();
+        // Datum parsen (JJMMDD-hhmm) – gleiche Logik wie clock.js: new Date()
+        const m = rawDate.match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+        if (!m) continue;
 
-          // Prüfe ob es ein abgeschlossenes Match ist
-          if (ergebnis && ergebnis.includes("/")) { // Minimum 2 Sätze (getrennt durch /)
-            // --- Schutzzeit: p3id (Geforderte) nach Sieg ---
-            if (m3 === p3id) {
-              return {success: false, error: "Geforderte(r) steht unter Schutzzeit (7 Tage nach Sieg)"};
-            }
+        const [, yy, mm, dd, hh, mi] = m;
+        const yyyy = parseInt(yy, 10) >= 50 ? "19" + yy : "20" + yy;
+        const matchDate = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:00`);
+        const endDate = new Date(matchDate.getTime() + SEVEN_DAYS_MS);
 
-            // --- Sperrzeit: p1id (Forderer) nach Niederlage ---
-            if (m1 === p1id) {
-              return {success: false, error: "Sie stehen unter Sperrzeit (7 Tage nach Niederlage)"};
-            }
-          }
+        // Noch aktiv?
+        if (endDate <= now) continue;
+
+        const m1 = String(row[mi1] || "").trim();
+        const m3 = String(row[mi3] || "").trim();
+        const ergebnis = String(row[mergebnis] || "").trim();
+        const gewinner = String(row[mgewinner] || "").trim();
+
+        if (!ergebnis) continue;
+
+        const verlierer = gewinner === m1 ? m3 : m1;
+        const remainingMs = endDate - now;
+        const remDays = Math.floor(remainingMs / 86400000);
+        const remHours = Math.floor((remainingMs % 86400000) / 3600000);
+        const remStr = `noch ${remDays}T ${remHours}h`;
+
+        // Schutzzeit: Geforderter (p1id) hat gewonnen → darf nicht gefordert werden
+        if (gewinner === p1id) {
+          console.error(
+              `❌ FORDERUNG ABGELEHNT: Geforderter ${p1id} hat Schutzzeit (${remStr})`,
+              `| Match vom ${rawDate} | Gewinner: ${gewinner}`,
+          );
+          return {
+            success: false,
+            error: `Geforderte(r) steht unter Schutzzeit (${remStr} verbleibend)`,
+          };
+        }
+
+        // Sperrzeit: Forderer (p3id) hat verloren → darf nicht fordern
+        if (verlierer === p3id) {
+          console.error(
+              `❌ FORDERUNG ABGELEHNT: Forderer ${p3id} hat Sperrzeit (${remStr})`,
+              `| Match vom ${rawDate} | Verlierer: ${verlierer}`,
+          );
+          return {
+            success: false,
+            error: `Sie stehen unter Sperrzeit (${remStr} verbleibend)`,
+          };
         }
       }
     }
@@ -618,7 +665,7 @@ export const verifyUserLogin = onCall(async (request) => {
 
 /**
  * Liest aus der "Personen"-Tabelle: Voller Name, E-Mail, Geburtsdatum
- * Liest offene Herausforderungen für einen Spieler aus preMatches.
+ * Liest offene Matches für einen Spieler aus preMatches.
  * Nur der GEFORDERTE (Spieler 1) bekommt die Notification.
  */
 export const getMyChallenges = onCall(async (request) => {
@@ -628,7 +675,7 @@ export const getMyChallenges = onCall(async (request) => {
       return {success: false, error: "userId fehlt"};
     }
 
-    console.log("🔔 Lade Herausforderungen für User:", userId);
+    console.log("🔔 Lade offene Matches für User:", userId);
 
     const auth = new google.auth.GoogleAuth({
       scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
@@ -692,7 +739,7 @@ export const getMyChallenges = onCall(async (request) => {
       }
     });
 
-    console.log(`✅ ${challenges.length} offene Herausforderungen gefunden.`);
+    console.log(`✅ ${challenges.length} offene Matches gefunden.`);
     return {success: true, challenges};
   } catch (err) {
     console.error("❌ Fehler in getMyChallenges:", err);
@@ -957,8 +1004,8 @@ export const setPreMatchResult = onCall(async (request) => {
   try {
     const {row, satz1, satz2, satz3, userId} = request.data || {};
 
-    if (!row || !satz1 || !satz2 || !satz3 || !userId) {
-      return {success: false, error: "Alle Felder erforderlich"};
+    if (!row || !satz1 || !satz2 || !userId) {
+      return {success: false, error: "Satz 1 und Satz 2 sind erforderlich"};
     }
 
     const auth = new google.auth.GoogleAuth({
@@ -1285,5 +1332,87 @@ export const readBewerbe = onCall(async () => {
   } catch (err) {
     console.error("❌ Fehler in readBewerbe:", err);
     return {success: false, error: err.message};
+  }
+});
+
+/**
+ * Liest aus "matches": wer hat Schutzzeit (Sieger) / Sperrzeit (Verlierer)
+ * Gibt nur noch aktive Beschränkungen zurück (< 7 Tage seit Match)
+ */
+export const readMatchRestrictions = onCall(async () => {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    });
+    const sheets = google.sheets({version: "v4", auth});
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "matches",
+    });
+
+    const values = res.data.values || [];
+    if (values.length < 2) {
+      return {success: true, schutzzeit: [], sperrzeit: []};
+    }
+
+    const header = values[0].map((h) => h.trim().toLowerCase());
+    const zeitpunktIdx = header.indexOf("zeitpunkt");
+    const s1Idx = header.indexOf("spielerid1");
+    const s3Idx = header.indexOf("spielerid3");
+    const gewinnerIdx = header.indexOf("gewinner");
+
+    if ([zeitpunktIdx, s1Idx, s3Idx, gewinnerIdx].includes(-1)) {
+      return {success: true, schutzzeit: [], sperrzeit: []};
+    }
+
+    const now = new Date();
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+    // Map: playerId → spätestes EndDatum
+    const schutzzeitMap = new Map();
+    const sperrzeitMap = new Map();
+
+    values.slice(1).forEach((row) => {
+      const rawDate = String(row[zeitpunktIdx] || "").trim();
+      if (!rawDate) return;
+
+      const m = rawDate.match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+      if (!m) return;
+
+      const [, yy, mm, dd, hh, mi] = m;
+      const yyyy = parseInt(yy, 10) >= 50 ? "19" + yy : "20" + yy;
+      const matchDate = new Date(`${yyyy}-${mm}-${dd}T${hh}:${mi}:00`);
+      const endDate = new Date(matchDate.getTime() + SEVEN_DAYS_MS);
+
+      if (endDate <= now) return; // Beschränkung bereits abgelaufen
+
+      const p1 = String(row[s1Idx] || "").trim();
+      const p3 = String(row[s3Idx] || "").trim();
+      const winner = String(row[gewinnerIdx] || "").trim();
+      if (!p1 || !p3 || !winner) return;
+
+      const loser = winner === p1 ? p3 : p1;
+
+      // Sieger → Schutzzeit (darf nicht gefordert werden)
+      if (!schutzzeitMap.has(winner) || schutzzeitMap.get(winner) < endDate) {
+        schutzzeitMap.set(winner, endDate);
+      }
+      // Verlierer → Sperrzeit (darf nicht fordern)
+      if (!sperrzeitMap.has(loser) || sperrzeitMap.get(loser) < endDate) {
+        sperrzeitMap.set(loser, endDate);
+      }
+    });
+
+    const toEntry = ([id, end]) => ({id, until: end.toISOString()});
+
+    return {
+      success: true,
+      schutzzeit: Array.from(schutzzeitMap.entries()).map(toEntry),
+      sperrzeit: Array.from(sperrzeitMap.entries()).map(toEntry),
+    };
+  } catch (err) {
+    console.error("❌ Fehler in readMatchRestrictions:", err);
+    return {success: false, error: err.message, schutzzeit: [], sperrzeit: []};
   }
 });
