@@ -166,11 +166,16 @@ WebApp-with-GoogleSheet_comunication/
 
 3.8 EntryList
 -------------
-| Spalte | Name       | Beschreibung                    |
-|--------|------------|--------------------------------|
-| A      | BewerbID   | Verweis auf Bewerb             |
-| B      | PersonID   | Verweis auf Person             |
-| C      | Entrydate  | Datum der Eintragung           |
+| Spalte | Name       | Beschreibung                                            |
+|--------|------------|--------------------------------------------------------|
+| A      | BewerbID   | Verweis auf Bewerb                                     |
+| B      | PersonID   | Verweis auf Person                                     |
+| C      | Entrydate  | Datum der Eintragung im Format YYMMDD-hhmm             |
+
+Hinweise:
+- Die Web-Oberfläche zeigt `Entrydate` als `DD.MM.YYYY - hh:mm` an.
+- In `entryList.html` wird statt der Bewerb-ID der Bewerbsname angezeigt.
+- Doppelte Eintragungen für dieselbe Person und denselben Bewerb werden verhindert.
 
 
 ================================================================================

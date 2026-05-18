@@ -61,7 +61,8 @@ body {
   font-weight: 500;
 }
 
-.modal-content input {
+.modal-content input,
+.modal-content select {
   width: 100%;
   padding: 8px 10px;
   margin-top: 6px;
@@ -85,6 +86,31 @@ body {
   font-size: 1.2rem;
   padding: 6px 14px;
   font-weight: 800;
+}
+
+.btn-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-login:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+.btn-login:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .modal-content .btn-login {
@@ -592,19 +618,23 @@ h1 {
   margin: 0 0 16px;
 }
 
-.table {
+.table,
+.entry-list-table {
   width: 100%;
   border-collapse: collapse;
 }
 
 .table th,
-.table td {
+.table td,
+.entry-list-table th,
+.entry-list-table td {
   padding: 10px 12px;
   border-bottom: 1px solid var(--table-border);
   text-align: left;
 }
 
-.table th {
+.table th,
+.entry-list-table th {
   background: #fafafa;
   font-weight: 600;
 }
@@ -1285,7 +1315,8 @@ input[type="date"] {
   font-weight: 500;
 }
 
-.satz-input-group input {
+.satz-input-group input,
+.satz-input-group select {
   width: 100%;
   padding: 10px;
   border: 1px solid #ccc;

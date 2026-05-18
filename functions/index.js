@@ -1303,34 +1303,287 @@ export const readBewerbe = onCall(async () => {
     });
     const sheets = google.sheets({version: "v4", auth});
 
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: "Bewerb",
-    });
+    const [bewerbRes, bewerbsartRes] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: "Bewerb",
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: "Bewerbsart",
+      }),
+    ]);
 
-    const values = res.data.values || [];
-    if (values.length < 2) {
+    const bewerbValues = bewerbRes.data.values || [];
+    const bewerbsartValues = bewerbsartRes.data.values || [];
+
+    if (bewerbValues.length < 2) {
       return {success: true, bewerbe: []};
     }
 
-    const header = values[0].map((h) => h.trim().toLowerCase());
+    // Bewerbsart-Map aufbauen
+    const bewerbsartMap = new Map();
+    if (bewerbsartValues.length > 1) {
+      const baHeader = bewerbsartValues[0].map((h) => h.trim().toLowerCase());
+      const baIdIdx = baHeader.indexOf("id");
+      const baEntryIdx = baHeader.indexOf("entrylistavailable");
+      const baBezIdx = baHeader.indexOf("bezeichnung");
+
+      bewerbsartValues.slice(1).forEach((r) => {
+        const id = String(r[baIdIdx] || "").trim();
+        if (id) {
+          bewerbsartMap.set(id, {
+            bezeichnung: String(r[baBezIdx] || "").trim(),
+            entryListAvailable:
+              baEntryIdx !== -1 ? String(r[baEntryIdx] || "0").trim() : "0",
+          });
+        }
+      });
+    }
+
+    const header = bewerbValues[0].map((h) => h.trim().toLowerCase());
     const idIdx = header.indexOf("id");
     const bewerbIdx = header.indexOf("bewerbsartid");
     const bezIdx = header.indexOf("bezeichnung");
     const startIdx = header.indexOf("bewerbsbeginn");
     const endIdx = header.indexOf("bewerbsende");
 
-    const bewerbe = values.slice(1).map((row) => ({
-      id: row[idIdx] || "",
-      bewerbsartId: row[bewerbIdx] || "",
-      bezeichnung: row[bezIdx] || "",
-      bewerbsbeginn: row[startIdx] || "",
-      bewerbsende: row[endIdx] || "",
-    }));
+    const bewerbe = bewerbValues.slice(1).map((row) => {
+      const bewerbsartId = String(row[bewerbIdx] || "").trim();
+      const baInfo = bewerbsartMap.get(bewerbsartId) || {};
+      return {
+        id: row[idIdx] || "",
+        bewerbsartId,
+        bezeichnung: row[bezIdx] || "",
+        bewerbsbeginn: row[startIdx] || "",
+        bewerbsende: row[endIdx] || "",
+        entryListAvailable: baInfo.entryListAvailable || "0",
+      };
+    });
 
     return {success: true, bewerbe};
   } catch (err) {
     console.error("❌ Fehler in readBewerbe:", err);
+    return {success: false, error: err.message};
+  }
+});
+
+/**
+ * Liest Einträge aus der EntryList-Tabelle für eine bestimmte BewerbID
+ */
+export const readEntryList = onCall(async (request) => {
+  try {
+    const bewerbId = request.data && request.data.bewerbId ?
+      String(request.data.bewerbId).trim() :
+      null;
+
+    if (!bewerbId) {
+      return {success: false, error: "BewerbID erforderlich"};
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    });
+    const sheets = google.sheets({version: "v4", auth});
+
+    const [entryRes, playerRes] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: "EntryList",
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: "Personen",
+      }),
+    ]);
+
+    const entryValues = entryRes.data.values || [];
+    const playerValues = playerRes.data.values || [];
+
+    // Personen-Map: ID → Vorname Nachname
+    const playerMap = new Map();
+    if (playerValues.length > 1) {
+      const pHeader = playerValues[0].map((h) => h.trim().toLowerCase());
+      const pIdIdx = pHeader.findIndex((h) => ["id", "personid", "personenid", "playerid", "spielerid"].includes(h));
+      const pFullNameIdx = pHeader.findIndex((h) => ["fullname", "full name", "vollername", "voller name"].includes(h));
+      const pNameIdx = pHeader.findIndex((h) => ["name", "spielername", "vollername"].includes(h));
+      const pFnIdx = pHeader.indexOf("vorname");
+      const pLnIdx = pHeader.indexOf("nachname");
+
+      if (pIdIdx !== -1) {
+        playerValues.slice(1).forEach((r) => {
+          const id = String(r[pIdIdx] || "").trim();
+          if (!id) return;
+          let name = "";
+          if (pFullNameIdx !== -1 && String(r[pFullNameIdx] || "").trim()) {
+            name = String(r[pFullNameIdx] || "").trim();
+          } else if (pNameIdx !== -1 && String(r[pNameIdx] || "").trim()) {
+            name = String(r[pNameIdx] || "").trim();
+          } else {
+            const firstName = String(r[pFnIdx] || "").trim();
+            const lastName = String(r[pLnIdx] || "").trim();
+            name = `${firstName} ${lastName}`.trim();
+          }
+          playerMap.set(id, name || "Unbekannt");
+        });
+      }
+    }
+
+    if (entryValues.length === 0) {
+      return {success: true, entries: []};
+    }
+
+    // EntryList parsen
+    const eHeader = entryValues[0].map((h) => h.trim().toLowerCase());
+    const findHeader = (patterns) =>
+      eHeader.findIndex((h) => patterns.some((pattern) => h === pattern));
+
+    const eIdIdx = findHeader(["id", "entryid"]);
+    const eBewerbIdIdx = findHeader([
+      "bewerbid",
+      "bewerb id",
+      "bewerb-id",
+      "bewerb",
+      "bewerbsid",
+      "bewerbs id",
+    ]);
+    const ePersonenIdIdx = findHeader([
+      "personenid",
+      "personen id",
+      "personen-id",
+      "personid",
+      "person id",
+      "playerid",
+      "player id",
+      "spielerid",
+      "spieler id",
+    ]);
+    let eDatumIdx = findHeader([
+      "datum",
+      "date",
+      "eingetragen",
+      "eingetragen am",
+      "datum uhrzeit",
+      "datum/uhrzeit",
+      "datum - uhrzeit",
+      "timestamp",
+      "zeit",
+      "zeitpunkt",
+      "entrydate",
+      "entry date",
+    ]);
+
+    if (eDatumIdx === -1 && entryValues[0].length > 3) {
+      const fallbackIdx = entryValues[0].length - 1;
+      if (fallbackIdx !== eIdIdx && fallbackIdx !== eBewerbIdIdx && fallbackIdx !== ePersonenIdIdx) {
+        eDatumIdx = fallbackIdx;
+      }
+    }
+
+    const entries = [];
+    entryValues.slice(1).forEach((r) => {
+      const ebId = eBewerbIdIdx !== -1 ? String(r[eBewerbIdIdx] || "").trim() : "";
+      if (ebId !== bewerbId) return;
+
+      const personenId = ePersonenIdIdx !== -1 ? String(r[ePersonenIdIdx] || "").trim() : "";
+      const datum = eDatumIdx !== -1 ? String(r[eDatumIdx] || "").trim() : "";
+      entries.push({
+        id: eIdIdx !== -1 ? String(r[eIdIdx] || "").trim() : "",
+        personenId,
+        name: playerMap.get(personenId) || "Unbekannt",
+        datum,
+      });
+    });
+
+    return {success: true, entries};
+  } catch (err) {
+    console.error("❌ Fehler in readEntryList:", err);
+    return {success: false, error: err.message};
+  }
+});
+
+/**
+ * Schreibt einen Eintrag in die EntryList-Tabelle (BewerbID, PersonenID, Datum)
+ */
+export const addEntryList = onCall(async (request) => {
+  try {
+    const {bewerbId, personenId, datum} = request.data || {};
+
+    if (!bewerbId || !personenId || !datum) {
+      return {success: false, error: "BewerbID, PersonenID und Datum sind erforderlich"};
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+    const sheets = google.sheets({version: "v4", auth});
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "EntryList",
+    });
+
+    const values = res.data.values || [];
+    if (values.length > 1) {
+      const header = values[0].map((h) => String(h || "").trim().toLowerCase());
+      const bewerbIdx = header.findIndex((h) => [
+        "bewerbid",
+        "bewerb id",
+        "bewerb-id",
+        "bewerb",
+        "bewerbsid",
+        "bewerbs id",
+      ].includes(h));
+      const personenIdx = header.findIndex((h) => [
+        "personenid",
+        "personen id",
+        "personen-id",
+        "personid",
+        "person id",
+        "playerid",
+        "player id",
+        "spielerid",
+        "spieler id",
+      ].includes(h));
+
+      if (bewerbIdx !== -1 && personenIdx !== -1) {
+        const alreadyRegistered = values.slice(1).some((r) => {
+          const existingBewerb = String(r[bewerbIdx] || "").trim();
+          const existingPersonen = String(r[personenIdx] || "").trim();
+          return existingBewerb === bewerbId && existingPersonen === personenId;
+        });
+
+        if (alreadyRegistered) {
+          return {success: false, error: "Du bist für diesen Bewerb bereits eingetragen."};
+        }
+      }
+    }
+
+    let nextId = 1;
+    if (values.length > 1) {
+      const idIdx = values[0].findIndex((h) => h.trim().toLowerCase() === "id");
+      if (idIdx !== -1) {
+        const numericIds = values.slice(1)
+            .map((r) => parseInt(r[idIdx], 10))
+            .filter((n) => !isNaN(n));
+        nextId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+      } else {
+        nextId = values.length;
+      }
+    }
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "EntryList",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[nextId, bewerbId, personenId, datum]],
+      },
+    });
+
+    return {success: true, id: nextId};
+  } catch (err) {
+    console.error("❌ Fehler in addEntryList:", err);
     return {success: false, error: err.message};
   }
 });

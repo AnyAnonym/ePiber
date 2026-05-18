@@ -1,5 +1,6 @@
 import { functions } from "./SDK.js";
-import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { httpsCallable } from
+  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
 const readBewerbe = httpsCallable(functions, "readBewerbe");
 
@@ -35,10 +36,12 @@ function formatSheetDate(raw) {
   return `${dd}.${mm}.${yyyy}`;
 }
 
+// ── Bewerb Cards ────────────────────────────────────────────────────────
+
 function createCard(b) {
   const card = document.createElement("div");
   const isRangliste = String(b.bewerbsartId).trim() === "2";
-  
+
   card.className = "bewerb-card";
 
   if (isRangliste) {
@@ -58,6 +61,21 @@ function createCard(b) {
       <span>Ende: ${end || "Offen"}</span>
     </div>
   `;
+
+  if (b.entryListAvailable === "1") {
+    const entryBtn = document.createElement("button");
+    entryBtn.type = "button";
+    entryBtn.className = "btn-login";
+    entryBtn.textContent = "Eintragen";
+    entryBtn.style.marginTop = "10px";
+
+    entryBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      window.location.href = `entryList.html?id=${b.id}`;
+    });
+
+    card.appendChild(entryBtn);
+  }
 
   return card;
 }
