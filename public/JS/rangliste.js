@@ -149,6 +149,12 @@ async function applyAllRules(container, pyramid, rankedList) {
 
   console.log(`✅ Daten geladen | Busy: ${busyIds.size} | Schutz: ${schutzzeitMap.size} | Sperre: ${sperrzeitMap.size}`);
 
+  // Aktuelle Platzierung speichern für Raushängen-Funktion
+  if (myState?.myRank != null) {
+    localStorage.setItem("currentRank", String(myState.myRank));
+    localStorage.setItem("currentBewerbId", BEWERB_ID);
+  }
+
   // ── Schritt 2: Meine Position in der Pyramide finden
   let myPlayerId = null, myRow = -1, myCol = -1;
 
@@ -278,6 +284,52 @@ export async function loadRanking() {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PYRAMIDE AUFBAUEN
 // ═══════════════════════════════════════════════════════════════════════════
+function renderRankingLegend() {
+  const section = document.getElementById("rankingSection");
+  if (!section) return;
+
+  const heading = section.querySelector("h2");
+  let body = section.querySelector(".ranking-body");
+  if (!body) {
+    body = document.createElement("div");
+    body.className = "ranking-body";
+    if (heading && heading.nextSibling) {
+      section.insertBefore(body, heading.nextSibling);
+    } else {
+      section.appendChild(body);
+    }
+  }
+
+  const container = document.getElementById("rankingContainer");
+  if (container && container.parentElement !== body) {
+    body.appendChild(container);
+  }
+
+  let legend = document.getElementById("rankingLegend");
+  if (!legend) {
+    legend = document.createElement("div");
+    legend.id = "rankingLegend";
+    legend.className = "ranking-legend";
+    body.insertBefore(legend, body.firstChild);
+  }
+
+  legend.innerHTML = `
+    <div class="legend-label">Legende:</div>
+    <div class="legend-items">
+      <div class="legend-item"><span class="legend-swatch default"></span><span>Nicht forderbar</span></div>
+      <div class="legend-item"><span class="legend-swatch challengeable"></span><span>Forderbar</span></div>
+      <div class="legend-item"><span class="legend-swatch challenged"></span><span>In offener Forderung</span></div>
+      <div class="legend-item"><span class="legend-swatch protected"></span><span>Schutzzeit / Sperrzeit</span></div>
+      <div class="legend-item"><span class="legend-swatch selected"></span><span>Mein Kästchen</span></div>
+    </div>
+    <button id="withdrawBtn" class="btn-login" style="margin-top: 12px; width: 100%;">Raushängen</button>
+  `;
+
+  document.getElementById("withdrawBtn")?.addEventListener("click", () => {
+    document.getElementById("withdrawModal")?.classList.remove("hidden");
+  });
+}
+
 export async function renderRanking() {
   const container = document.getElementById("rankingContainer");
   if (!container) return;
@@ -288,6 +340,8 @@ export async function renderRanking() {
       BEWERB_ID === "2" ? "Rangliste Herren" :
       BEWERB_ID === "3" ? "Rangliste Damen"  : "Rangliste";
   }
+
+  renderRankingLegend();
 
   const rankedList = await loadRanking();
   container.innerHTML = "";

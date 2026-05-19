@@ -1,6 +1,8 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
+const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
+
 //-------------------------------------------------------
 // Toast Notification (Replaces Alert)
 //-------------------------------------------------------
@@ -132,22 +134,55 @@ if (isRanglistePage) {
   `);
 }
 
-// --- Notification Modal ---
-const notificationModal = createModal("notificationModal", `
-  <h2>offene Matches</h2>
-  <div id="challengeList">
-    <p>Lade...</p>
-  </div>
+// --- Withdraw Modal ---
+const withdrawModal = createModal("withdrawModal", `
+  <h2>Raushängen</h2>
+  <form id="withdrawForm">
+    <label for="withdrawReason">Grund für Raushängen:</label>
+    <textarea id="withdrawReason" placeholder="Bitte geben Sie den Grund ein..." style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit;"></textarea>
+
+    <div style="display: flex; gap: 10px; margin-top: 12px; justify-content: flex-end;">
+      <button type="submit" class="btn-login">Senden</button>
+    </div>
+  </form>
 `);
 
-//-------------------------------------------------------
-// Cloud Function Referenzen
-//-------------------------------------------------------
-const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
+document.getElementById("withdrawForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const reason = document.getElementById("withdrawReason").value.trim();
+  if (!reason) {
+    showToast("Bitte geben Sie einen Grund an", "error");
+    return;
+  }
 
-//-------------------------------------------------------
-// Login Modal Logik
-//-------------------------------------------------------
+  try {
+    const withdrawFunc = httpsCallable(functions, "withdrawFromRanking");
+    const result = await withdrawFunc({
+      reason,
+      rank: localStorage.getItem("currentRank") || "?",
+      bewerbId: localStorage.getItem("currentBewerbId") || "2",
+      userId: localStorage.getItem("currentUserId") || "?",
+    });
+    if (result.data.success) {
+      showToast("Erfolgreich ausgehängt", "success");
+      withdrawModal.classList.add("hidden");
+      document.getElementById("withdrawReason").value = "";
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(result.data.error || "Fehler beim Speichern", "error");
+    }
+  } catch (err) {
+    console.error("Fehler:", err);
+    showToast("Fehler beim Raushängen: " + err.message, "error");
+  }
+});
+
+// Close button in withdraw modal
+const withdrawCloseBtn = withdrawModal.querySelector(".close");
+withdrawCloseBtn.addEventListener("click", () => {
+  withdrawModal.classList.add("hidden");
+});
+
 window.openLoginModal = () => {
   const modal = document.getElementById("loginModal");
   if (modal) modal.classList.remove("hidden");

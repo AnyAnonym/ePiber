@@ -1669,3 +1669,56 @@ export const readMatchRestrictions = onCall(async () => {
     return {success: false, error: err.message, schutzzeit: [], sperrzeit: []};
   }
 });
+
+/**
+ * Speichert einen Raushängen-Eintrag mit Grund, Datum/Uhrzeit und Platzierung
+ */
+export const withdrawFromRanking = onCall(async (request) => {
+  try {
+    const reason = request.data && request.data.reason ? String(request.data.reason).trim() : "";
+    const currentRank = request.data && request.data.rank ? String(request.data.rank).trim() : "?";
+    const currentBewerbId = request.data && request.data.bewerbId ? String(request.data.bewerbId).trim() : "2";
+    const currentUserId = request.data && request.data.userId ? String(request.data.userId).trim() : "?";
+
+    if (!reason) {
+      return {success: false, error: "Grund erforderlich"};
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+    const sheets = google.sheets({version: "v4", auth});
+
+    // Aktuelle Datum/Uhrzeit im Format YYMMDD-hhmm
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(2).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mi = String(now.getMinutes()).padStart(2, "0");
+    const dateTimeStr = `${yy}${mm}${dd}-${hh}${mi}`;
+
+    // Neue Zeile in "Withdrawn" Tabelle hinzufügen
+    // Format: BewerbID | PersonID | Grund | DatumUhrzeit | Platzierung
+    const values = [[
+      currentBewerbId,
+      currentUserId,
+      reason,
+      dateTimeStr,
+      currentRank,
+    ]];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "Withdrawn!A:E",
+      valueInputOption: "USER_ENTERED",
+      resource: {values},
+    });
+
+    console.log("✅ Raushängen gespeichert:", {reason, dateTimeStr, currentRank});
+    return {success: true, message: "Erfolgreich gespeichert"};
+  } catch (err) {
+    console.error("❌ Fehler in withdrawFromRanking:", err);
+    return {success: false, error: err.message};
+  }
+});
