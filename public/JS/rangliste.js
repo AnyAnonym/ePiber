@@ -229,16 +229,23 @@ async function applyAllRules(container, pyramid, rankedList) {
       return;
     }
 
-    // ── 2. Schutzzeit nach Sieg → lila (gilt für alle, nicht nur forderbare)
+    // ── 2. Schutzzeit nach Sieg → rosa (gilt für alle, nicht nur forderbare)
     if (schutzzeitMap.has(id)) {
-      box.classList.add("protected");
+      box.classList.add("schutz");
       box.style.cursor = "default";
       box.title = `Schutzzeit nach Sieg – läuft ab am ${schutzzeitMap.get(id).toLocaleString("de-AT")}`;
       startProtectionTimer(box, schutzzeitMap.get(id));
       return;
     }
 
-    // ── 3. Nur forderbare Positionen werden hier weiter behandelt
+    // ── 3. Sperrzeit nach Niederlage → sichtbar für alle
+    if (sperrzeitMap.has(id)) {
+      box.classList.add("sperrzeit");
+      box.title = `Sperrzeit nach Niederlage – läuft ab am ${sperrzeitMap.get(id).toLocaleString("de-AT")}`;
+      startProtectionTimer(box, sperrzeitMap.get(id));
+    }
+
+    // ── 4. Nur forderbare Positionen werden hier weiter behandelt
     if (challengeableIds.has(id)) {
       if (iAmBlocked) {
         // Ich selbst habe Sperrzeit → alle forderbaren Positionen lila
@@ -258,8 +265,9 @@ async function applyAllRules(container, pyramid, rankedList) {
   });
 
   console.log(`🎨 Forderbar: ${challengeableIds.size} | Busy(gelb): ${
-    [...challengeableIds].filter(id => busyIds.has(id)).length} | Geschützt(lila): ${
-    [...challengeableIds].filter(id => schutzzeitMap.has(id) || iAmBlocked).length}`);
+    [...challengeableIds].filter(id => busyIds.has(id)).length} | Geschützt(rosa): ${
+    [...challengeableIds].filter(id => schutzzeitMap.has(id)).length} | Sperre(lila): ${
+    [...challengeableIds].filter(id => sperrzeitMap.has(id)).length}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -319,14 +327,18 @@ function renderRankingLegend() {
       <div class="legend-item"><span class="legend-swatch default"></span><span>Nicht forderbar</span></div>
       <div class="legend-item"><span class="legend-swatch challengeable"></span><span>Forderbar</span></div>
       <div class="legend-item"><span class="legend-swatch challenged"></span><span>In offener Forderung</span></div>
-      <div class="legend-item"><span class="legend-swatch protected"></span><span>Schutzzeit / Sperrzeit</span></div>
+      <div class="legend-item"><span class="legend-swatch schutz"></span><span>Schutzzeit</span></div>
+      <div class="legend-item"><span class="legend-swatch sperrzeit"></span><span>Sperrzeit</span></div>
       <div class="legend-item"><span class="legend-swatch selected"></span><span>Mein Kästchen</span></div>
     </div>
-    <button id="withdrawBtn" class="btn-login" style="margin-top: 12px; width: 100%;">Raushängen</button>
+    <button id="withdrawBtn" class="btn-login" style="margin-top: 12px; width: 100%; display: none;">Raushängen</button>
   `;
 
   document.getElementById("withdrawBtn")?.addEventListener("click", () => {
-    document.getElementById("withdrawModal")?.classList.remove("hidden");
+    const btn = document.getElementById("withdrawBtn");
+    if (btn && btn.style.display !== "none") {
+      document.getElementById("withdrawModal")?.classList.remove("hidden");
+    }
   });
 }
 

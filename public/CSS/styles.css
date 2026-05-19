@@ -831,6 +831,16 @@ input[type="date"] {
   border-color: #f1c40f;
 }
 
+.ranking-legend .legend-swatch.schutz {
+  background: #fde8f1;
+  border-color: #d6336c;
+}
+
+.ranking-legend .legend-swatch.sperrzeit {
+  background: #f5eef8;
+  border-color: #8e44ad;
+}
+
 .ranking-legend .legend-swatch.protected {
   background: #f5eef8;
   border-color: #8e44ad;
@@ -909,9 +919,30 @@ input[type="date"] {
   cursor: not-allowed;
 }
 
+.box.sperrzeit {
+  border-color: #8e44ad !important;
+  background: #f5eef8 !important;
+}
+
+.box.sperrzeit:hover {
+  background: #e8daef !important;
+  box-shadow: 0 2px 8px rgba(142, 68, 173, 0.25);
+}
+
 /* -------------------------------------------------- */
-/*  SCHUTZZEIT / SPERRZEIT (lila)                     */
+/*  SCHUTZZEIT / SPERRZEIT                             */
 /* -------------------------------------------------- */
+
+.box.schutz {
+  border-color: #d6336c !important;
+  background: #fde8f1 !important;
+  cursor: default !important;
+}
+
+.box.schutz:hover {
+  background: #f8d5e2 !important;
+  box-shadow: 0 2px 8px rgba(214, 51, 108, 0.25);
+}
 
 .box.protected {
   border-color: #8e44ad !important;

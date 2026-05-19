@@ -754,6 +754,26 @@ Spalte G Update in Sheet:
 - FEATURE: Bewerbe Seite erstellt (Bewerbe.html, bewerbeList.js)
   * Überschrift "Bewerbe" mit drei Kategorien:
     - "Aktive Bewerbe": Begonnen, noch nicht beendet
+  * Buttons zur Bewerbe-Seite
+
+================================================================================
+14. WITHDRAW-BUTTON STATUS (19.05.2026)
+================================================================================
+
+- Feature: "Raushängen"-Button in der Ranglisten-Legende
+- Status: VERSTECKT (deaktiviert)
+- Implementiert: Vollständig vorhanden im Code (nicht gelöscht)
+- Versteck-Mechanismus: 
+  * HTML/CSS: style="display: none" auf dem Button
+  * JavaScript: Event-Handler prüft style.display !== "none" vor Aktivierung
+  * Modal: withdrawModal existiert noch, wird nicht aufgerufen wenn Button versteckt
+- Code-Lokationen:
+  * public/JS/rangliste.js: renderRankingLegend() - Button-HTML (Z. 310)
+  * public/JS/modals.js: withdrawModal und Form-Handler
+  * functions/index.js: withdrawFromRanking Cloud Function
+  * public/CSS/styles.css: Withdraw-Modal Styles
+- Aktivierung: Kann später durch Entfernen von "display: none" aktiviert werden
+- Grund: Feature wird später aktiviert
     - "Bevorstehende Bewerbe": Noch nicht begonnen, noch nicht beendet
     - "Beendete Bewerbe": Bereits beendet
   * Leere Kategorien werden automatisch ausgeblendet
@@ -761,6 +781,15 @@ Spalte G Update in Sheet:
   * ID 2 ist klickbar und leitet zu rangliste.html weiter
   * Grid-Layout für Bewerbe-Karten
   * Datumsanzeige: DD.MM.YYYY (ohne Uhrzeit)
+
+- FEATURE: Schutzzeit/Sperrzeit Darstellung angepasst (19.05.2026)
+  * Schutzzeit-Kästchen werden nun rosa dargestellt
+  * Sperrzeit-Kästchen werden nun lila dargestellt
+  * Legende wurde erweitert mit eigenem Eintrag für "Schutzzeit" und "Sperrzeit"
+  * Sperrzeiten werden jetzt für alle betroffenen Spieler sichtbar markiert, nicht nur für den aktuell eingeloggten Spieler
+  * Code-Lokationen:
+    - public/JS/rangliste.js: Sperrzeit-Logik aktualisiert, `box.sperrzeit` hinzugefügt
+    - public/CSS/styles.css: neue Styles für `.box.sperrzeit` und legend-swatch
 
 - FEATURE: readBewerbe Cloud Function hinzugefügt
   * Liest alle Bewerbe aus der "Bewerb"-Tabelle

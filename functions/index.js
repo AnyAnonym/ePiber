@@ -153,23 +153,24 @@ export const readFullMatches = onCall(async () => {
     const d = idx("zeitpunkt");
 
     // --- Matches mappen ---
-    const startRow = header[0].toLowerCase().includes("spieler") ? 1 : 0;
-    const allMatches = matchesValues.slice(startRow).map((row) => {
-      const ergebnisRaw = row[ergebnisIdx] || "";
-      const sets = ergebnisRaw ? ergebnisRaw.split("/").map((s) => formatSetScore(s)) : [];
+    const allMatches = matchesValues.slice(1) // Immer ab Reihe 2 (Header überspringen)
+        .filter((row) => row && row[i1]) // Leere Reihen + Reihen ohne Spieler filtern
+        .map((row) => {
+          const ergebnisRaw = row[ergebnisIdx] || "";
+          const sets = ergebnisRaw ? ergebnisRaw.split("/").map((s) => formatSetScore(s)) : [];
 
-      return {
-        date: formatSheetDate(row[d]),
-        players: [
-          playerMap.get(row[i1]) || "---",
-          playerMap.get(row[i2]) || "---",
-          playerMap.get(row[i3]) || "---",
-          playerMap.get(row[i4]) || "---",
-        ],
-        sets,
-        ergebnis: formatErgebnis(ergebnisRaw),
-      };
-    });
+          return {
+            date: formatSheetDate(row[d]),
+            players: [
+              playerMap.get(row[i1]) || "---",
+              playerMap.get(row[i2]) || "---",
+              playerMap.get(row[i3]) || "---",
+              playerMap.get(row[i4]) || "---",
+            ],
+            sets,
+            ergebnis: formatErgebnis(ergebnisRaw),
+          };
+        });
 
     console.log(`🏁 ${allMatches.length} Matches verarbeitet.`);
     return {success: true, matches: allMatches};
