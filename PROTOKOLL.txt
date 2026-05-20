@@ -907,5 +907,95 @@ Spalte G Update in Sheet:
   * Dadurch kann das Profil-Modal Spieler gezielt per ID laden
 
 ================================================================================
+16. CHANGELOG (20.05.2026 - Lila Markierung, EntryList, CORS & Permissions)
+================================================================================
+
+2026-05-20:
+-----------
+- FEATURE: Schutzzeit/Sperrzeit (lila) vollständig implementiert (rangliste.js)
+  * applyAllRules() als zentrale Regel-Funktion mit klarer Reihenfolge:
+    1. Eigenes Kästchen → blau
+    2. Offene Forderung → gelb (gilt für ALLE, nicht nur forderbare)
+    3. Schutzzeit nach Sieg → lila (gilt für ALLE)
+    4. Forderbar + eigene Sperrzeit → lila
+    5. Normal forderbar → grün
+    6. Sonst → grau
+  * startProtectionTimer() mit Countdown (update alle 60s via setInterval)
+  * Alle Daten (busyIds, restrictions, myState) via Promise.allSettled
+    parallel geladen → kein einzelner Fehler blockiert die Farbmarkierung
+  * DOM wird erst NACH komplettem Daten-Load atomar aktualisiert
+    → gelbe Boxen bleiben gelb (kein Grau-Flackern mehr)
+
+- BUGFIX: Gelbe Boxen wurden grau nach Daten-Neuladung
+  * Ursache: Vorher wurden DOM-Klassen vor dem Laden der restrictions
+    zurückgesetzt, und ein Fehler in fetchRestrictions überschrieb alles
+  * Fix: Promise.allSettled + atomare DOM-Aktualisierung am Ende
+
+- FEATURE: Validierungs-Fehler in addMatch mit console.error-Logging
+  * Jede abgelehnte Forderung loggt detailliert in Google Cloud Console:
+    - "FORDERUNG ABGELEHNT: Du hast bereits eine offene Forderung!"
+    - "FORDERUNG ABGELEHNT: Geforderter hat Schutzzeit (noch XT Xh)"
+    - "FORDERUNG ABGELEHNT: Forderer hat Sperrzeit (noch XT Xh)"
+
+- FEATURE: Satz 3 optional bei Ergebnis-Eingabe
+  * Frontend: Satz 3 Input hatte bereits kein required-Attribut
+  * Backend: Validierung in setPreMatchResult akzeptiert jetzt 2 oder 3 Sätze
+  * Ergebnis-Format: "6-4/6-1" (2 Sätze) oder "6-4/1-6/4-6" (3 Sätze)
+  * Gewinner-Berechnung: saetze = satz3 ? [satz1,satz2,satz3] : [satz1,satz2]
+
+- FEATURE: EntryList-System für Bewerbe
+  * Neue Cloud Function: readEntryList
+    - Liest EntryList-Tabelle, joined mit Personen für Spieler-Namen
+    - Filtert nach BewerbID
+  * Neue Cloud Function: addEntryList
+    - Schreibt {ID, BewerbID, PersonenID, Datum} in EntryList-Tabelle
+  * readBewerbe erweitert: Lädt Bewerbsart-Tabelle joined, gibt entryListAvailable
+  * Frontend: "Eintragen"-Button auf Bewerb-Karten (nur wenn entryListAvailable=1)
+    - Navigiert zu entryList.html?id=X (neue Seite)
+  * entryList.html + entryList.js: Vollständige Seite
+    - Überschrift: "Eintragungs Liste für Bewerb X"
+    - "Eintragen"-Button oben (BewerbID aus URL, PersonenID aus logged-in User,
+      Datum im clock.js-Format YYYY.MM.DD – hh:mm)
+    - Tabelle mit #, Name, Eingetragen am
+
+- BUGFIX: Desktop-Glocke öffnete kein Modal
+  * Ursache: #notificationBell hatte keinen click-Event-Listener
+  * Fix: Event-Listener mit e.preventDefault() + window.openNotificationModal()
+    hinzugefügt (wie mobile Glocke bereits hatte)
+
+- BUGFIX: Doppelte Logos im Desktop-Modus
+  * Ursache: Zwei konkurrierende Media-Queries überschrieben einander
+    - Frühe Query (min-width:601px) zeigte center-logo, versteckte header-logo
+    - Spätere Query (min-width:901px) überschrieb: zeigte header-logo,
+      versteckte center-logo
+  * Fix: Einheitliche Breakpoint-Struktur:
+    - ≤600px (Mobile): header-center.logo sichtbar, header-logo versteckt
+    - 601-900px (Tablet): header-center.logo sichtbar, header-logo versteckt
+    - ≥901px (Desktop): header-center.logo sichtbar, header-logo versteckt
+  * Ergebnis: Nur das untere/zentrierte Logo wird auf allen Geräten angezeigt
+
+- BUGFIX: "The caller does not have permission" bei Cloud Functions
+  * Problem: Cloud Functions (v2, Cloud Run) liefen unter Project "e-piber",
+    aber der default Compute Engine Service Account hatte keine Schreibrechte
+    auf das Google Sheet (nur Leserechte).
+  * Symptome:
+    - resetPassword: 403 Forbidden bei values.update auf Personen-Tabelle
+    - addMatch: CORS + 500 weil Cloud Run Auth blockierte, dann nach IAM-Fix
+      ebenfalls 403 "The caller does not have permission" beim Sheet-Schreibzugriff
+  * Lösung: Zwei Dinge waren nötig:
+    1. IAM: Cloud Run Service "addmatch" benötigte roles/run.invoker für allUsers
+       (ansonsten: "The request was not authenticated" – nur addmatch betroffen)
+    2. Sheet-Permissions: Der Compute Engine Standard Service Account von Project
+       "e-piber" (Format: [PROJECT_NUMBER]-compute@developer.gserviceaccount.com)
+       musste als Editor zum Google Sheet hinzugefügt werden
+  * Wichtig: Die vorhandene service-account.json ist vom ALTEN Project
+    "web-with-sheet-70c93" und wird nicht verwendet – die Cloud Functions
+    nutzen ADC (Application Default Credentials) des Projekts "e-piber"
+
+- FEATURE: reBewerbe erweitert (readBewerbe)
+  * Lädt jetzt Bewerbsart-Tabelle parallel für entryListAvailable
+  * Gibt pro Bewerb entryListAvailable zurück
+
+================================================================================
 ENDE DES PROTOKOLLS
 ================================================================================

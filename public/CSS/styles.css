@@ -351,56 +351,6 @@ nav a.active {
   }
 }
 
-  .header-logo {
-    order: 0;
-    display: block;
-    font-size: 1.3rem;
-  }
-
-  .desktop-nav,
-  .desktop-auth {
-    display: none !important;
-  }
-
-  .hamburger {
-    display: block;
-    order: 2;
-  }
-
-
-  .header-logo {
-    order: 0;
-    display: block;
-    font-size: 1.3rem;
-  }
-
-  .header-center {
-    flex: 1;
-    order: 1;
-    display: flex;
-    align-items: center;
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  header .logo {
-    margin: 0;
-    font-size: 1.3rem;
-    color: #d32f2f;
-    font-weight: 700;
-  }
-
-  .desktop-nav,
-  .desktop-auth {
-    display: none !important;
-  }
-
-  .hamburger {
-    display: block;
-    order: 2;
-  }
-
-
 /* Mobile Navigation Content */
 .mobile-nav-content {
   width: 90%;
@@ -1053,7 +1003,6 @@ input[type="date"] {
   .sidebar {
     order: 2;
   }
-  }
 
   .match-content {
     flex-direction: row;
@@ -1067,6 +1016,7 @@ input[type="date"] {
   .desktop-auth {
     display: none !important;
   }
+}
 
 
 /* -------------------------------------------------- */
@@ -1459,11 +1409,12 @@ input[type="date"] {
 /* === DESKTOP (>900px) === */
 @media (min-width: 901px) {
   .header-logo {
-    display: block;
+    display: none;
   }
 
   .header-center .logo {
-    display: none;
+    display: block;
+    font-size: 1.4rem;
   }
 
   .hamburger {
@@ -1527,83 +1478,6 @@ input[type="date"] {
   .desktop-nav,
   .desktop-auth {
     display: none !important;
-  }
-}
-
-  .header-logo {
-    display: none;
-  }
-
-  .header-center {
-    display: flex;
-    flex: 1;
-    order: 1;
-    justify-content: center;
-  }
-
-  .header-center .logo {
-    display: block;
-    font-size: 1.3rem;
-    color: white;
-    font-weight: 700;
-  }
-
-  .desktop-nav,
-  .desktop-auth {
-    display: none !important;
-  }
-
-  .hamburger {
-    display: block;
-    order: 2;
-  }
-
-
-/* -------------------------------------------------- */
-/*  RESPONSIVE LAYOUT                                  */
-/* -------------------------------------------------- */
-/*  RESPONSIVE HEADER (Hamburger Menu)                */
-/* -------------------------------------------------- */
-
-@media (max-width: 600px) {
-  .hamburger-btn {
-    display: block;
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.8rem;
-    cursor: pointer;
-    padding: 5px 10px;
-  }
-
-  .main-nav, .auth-buttons, .logo {
-    display: none !important;
-  }
-
-  header {
-    padding: 10px 16px;
-  }
-
-  .header-bar {
-    justify-content: center !important;
-  }
-}
-
-@media (min-width: 901px) {
-  .header-center .logo {
-    display: block;
-    font-size: 1.4rem;
-    color: white;
-    font-weight: 700;
-  }
-
-  .hamburger {
-    display: none;
-  }
-
-  .desktop-nav,
-  .desktop-auth {
-    display: flex !important;
   }
 }
 
@@ -1703,6 +1577,16 @@ input[type="date"] {
 /*  RESPONSIVE TABLE                                   */
 /* -------------------------------------------------- */
 
+@media (max-width: 768px) {
+  .box-rank-bg {
+    font-size: 2.5rem;
+  }
+
+  .box-name {
+    font-size: 0.7rem;
+  }
+}
+
 @media (max-width: 480px) {
   .pyramid {
     gap: 10px;
@@ -1724,6 +1608,14 @@ input[type="date"] {
     font-size: 0.8rem;
     border-radius: 10px;
     flex-shrink: 0;
+  }
+
+  .box-rank-bg {
+    font-size: 2rem;
+  }
+
+  .box-name {
+    font-size: 0.6rem;
   }
   }
 
