@@ -2,7 +2,7 @@
 PROTOKOLL - ASKÖ Piberbach Tennis Ranglisten-WebApp
 ================================================================================
 Erstellt: 16.04.2026
-Letzte Änderung: 06.05.2026
+Letzte Änderung: 20.05.2026
 
 ================================================================================
 1. PROJEKTÜBERSICHT
@@ -860,6 +860,51 @@ Spalte G Update in Sheet:
 
 2026-05-06:
 -----------
+
+================================================================================
+16. CHANGELOG (20.05.2026 - Mobile Responsiveness & UI Anpassungen)
+================================================================================
+
+2026-05-20:
+-----------
+- FEATURE: Mobile Font-Sizing für Ranglisten-Boxen
+  * Neue Media-Queries für responsive Text-Größen
+  * Tablet (≤768px): .box-rank-bg font-size 2.5rem, .box-name font-size 0.7rem
+  * Smartphone (≤480px): .box-rank-bg font-size 2rem, .box-name font-size 0.6rem
+  * Verhindert, dass lange Spielernamen aus den Kästchen laufen
+  * Verbessert UX auf mobilen Geräten
+
+- BUGFIX: Logo-Anzeige im Header-Layout
+  * Probleme: Falsch verschachtelte Media-Queries und doppelte CSS-Regeln
+  * Gelöst: Dedupliziert und bereinigt die @media-Queries
+  * Korrektes Verhalten jetzt: Logo in Mitte auf Desktop, in Navbar auf Mobile
+  * CSS-Dateien: public/CSS/styles.css (Zeilen 1048-1100, 1460-1605)
+
+- FEATURE: "Anmelden" Button auf allen Seiten ausgeblendet
+  * Geändert: .loggedOut von display: inline zu display: none
+  * Betroffen: Beide Versionen (#openLogin Desktop und #openLoginMobile Mobile)
+  * CSS: public/CSS/styles.css, Zeile 291-293
+  * Verhindert, dass unangemeldete User einen Login-Button sehen (alt. Auth-Flow)
+
+- FEATURE: "Eintragen" Buttons nur für eingeloggte User sichtbar
+  * Betroffen: Alle "Eintragen" Buttons auf folgenden Seiten/Funktionen:
+    - Bewerbe-Seite: "Eintragen" Button auf Bewerb-Karten (bewerbeList.js)
+    - Eintragungs-Liste: "Eintragen" Button im Toolbar (entryList.js)
+    - Offene Matches: "Ergebnis" Button für Match-Ergebnisse (preMatchesList.js)
+  * Implementierung: Klasse `loggedIn` hinzugefügt
+  * Automatische Sichtbarkeitskontrolle über modals.js DOMContentLoaded Event
+  * Nicht-eingeloggte User sehen diese Buttons nicht (display: none)
+
+- FEATURE: Auto-Reload nach erfolgreicher Forderung
+  * Nach erfolgreichem Senden einer Herausforderung lädt die Seite automatisch neu
+  * Timing: 1500ms (1,5 Sekunden) nach dem Success-Toast
+  * Betroffen: Beide Forderungs-Modi
+    - Forderung aus Profil-Modal (challengeBtn)
+    - Forderung aus Match-Modal auf Rangliste (submitBtn)
+  * Nutzen: Ranglisten-Kästchen-Farben aktualisieren sich automatisch
+    - Grüne Kästchen werden zu Gelb (nach Forderung werden sie von Gelb angezeigt)
+    - UI bleibt konsistent mit aktuellen Forderungs-Status
+  * Code: public/JS/modals.js, setTimeout mit window.location.reload()
 - FEATURE: Ranglisten-Markierung nach Forderungslogik überarbeitet
   * Eigene Position bleibt immer blau markiert
   * Nur direkt forderbare Spieler werden grün markiert:

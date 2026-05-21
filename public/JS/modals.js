@@ -467,6 +467,7 @@ window.openProfileModal = async (profileOptions = {}) => {
             showToast("Herausforderung erfolgreich eingetragen!", "success");
             challengeBtn.textContent = "Gesendet!";
             profileModal.classList.add("hidden");
+            setTimeout(() => window.location.reload(), 1500);
           } else {
             throw new Error(data?.error || "Unbekannter Fehler beim Speichern");
           }
@@ -570,6 +571,7 @@ if (isRanglistePage && matchModal) {
       if (data?.success) {
         submitBtn.textContent = "Gesendet!";
         showToast("Herausforderung erfolgreich gesendet!", "success");
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         throw new Error(data?.error || "Unbekannter Fehler beim Speichern");
       }

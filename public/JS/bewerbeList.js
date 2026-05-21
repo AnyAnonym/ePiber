@@ -65,7 +65,7 @@ function createCard(b) {
   if (b.entryListAvailable === "1") {
     const entryBtn = document.createElement("button");
     entryBtn.type = "button";
-    entryBtn.className = "btn-login";
+    entryBtn.className = "btn-login loggedIn";
     entryBtn.textContent = "Eintragen";
     entryBtn.style.marginTop = "10px";
 

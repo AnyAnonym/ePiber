@@ -359,7 +359,7 @@ function getActionButton(match, userId) {
   // Wenn Datum gesetzt und noch kein Ergebnis: "Ergebnis eintragen" Button
   if (match.datum && !match.ergebnis) {
     return `
-      <button class="result-btn btn-action" data-row="${match.row}">Ergebnis</button>
+      <button class="result-btn btn-action loggedIn" data-row="${match.row}">Ergebnis</button>
     `;
   }
 

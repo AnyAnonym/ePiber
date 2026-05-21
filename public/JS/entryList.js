@@ -184,7 +184,7 @@ function initToolbar() {
 
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "btn-login";
+  btn.className = "btn-login loggedIn";
   btn.textContent = "Eintragen";
   btn.addEventListener("click", () => handleEntrySubmit(btn));
   toolbar.appendChild(btn);
