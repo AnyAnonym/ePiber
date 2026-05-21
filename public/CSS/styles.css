@@ -1272,30 +1272,33 @@ input[type="date"] {
   border-left: 4px solid #28a745;
 }
 
-.match-card .match-status {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.match-header {
+  margin-bottom: 2px;
 }
 
-.match-card .match-date {
-  font-weight: 600;
-  color: var(--accent);
+.match-forderung {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
   margin-bottom: 8px;
 }
 
 .match-meta-row {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
   margin-bottom: 8px;
 }
 
+.match-meta-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 .match-meta-row .match-date {
+  position: static;
   margin-bottom: 0;
 }
 
@@ -1303,10 +1306,9 @@ input[type="date"] {
   background: #d4edda;
   color: #155724;
   border-radius: 12px;
-  padding: 3px 8px;
-  font-size: 0.8rem;
+  padding: 3px 10px;
+  font-size: 0.85rem;
   font-weight: 600;
-  margin-left: 8px;
   white-space: nowrap;
 }
 

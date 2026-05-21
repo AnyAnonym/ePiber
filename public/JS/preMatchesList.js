@@ -255,14 +255,23 @@ async function loadPreMatches() {
       const team2 = [match.player3, match.player4].filter(Boolean).join(" / ") || "---";
       const statusBadge = getStatusBadge(match.status, match.ergebnis);
       const actionButton = getActionButton(match, userId);
-      const bewerbsartBadge = getBewerbsartBadge(match);
+      const bewerbName = escapeHtml(match.bewerbBezeichnung || match.bewerbsart || "");
+      const isRangliste = match.bewerbsartId === "2";
+      const forderungsHtml = isRangliste && match.zeitpunktForderung
+        ? `<div class="match-forderung">Forderungs Datum: ${escapeHtml(match.zeitpunktForderung)}</div>`
+        : "";
 
       return `
         <div class="match-card ${match.status === 'offen' ? 'status-offen' : match.status === 'bestaetigt' ? 'status-bestaetigt' : ''}">
-          <div class="match-status">${bewerbsartBadge}${statusBadge}</div>
+          ${forderungsHtml}
           <div class="match-meta-row">
-            <div class="match-date">${match.datum || "Datum nicht festgelegt"}</div>
-            <div class="match-bewerbsart-wrap"></div>
+            <span class="match-date">Spiel Datum: ${match.datum || "Datum nicht festgelegt"}</span>
+            <div class="match-meta-right">
+              <div class="match-header">
+                <span class="badge-bewerb">Bewerb: ${bewerbName}</span>
+              </div>
+              ${statusBadge}
+            </div>
           </div>
           <div class="match-content">
             <div class="team">
@@ -337,7 +346,7 @@ function getBewerbsartBadge(match) {
 
 function getActionButton(match, userId) {
   if (!userId) {
-    return `<span class="waiting-text">Anmelden</span>`;
+    return "";
   }
 
   // Prüfe ob User Teil des Matches ist
