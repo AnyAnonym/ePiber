@@ -11,7 +11,8 @@ Letzte Änderung: 20.05.2026
 Projektname: ASKÖ Piberbach Tennis Dashboard
 Beschreibung: Web-Anwendung zur Verwaltung einer Tennis-Rangliste mit 
               Herausforderungssystem und Match-Verwaltung
-Live-URL: https://web-with-sheet-70c93.web.app/
+Test-URL: https://web-with-sheet-70c93.web.app/   
+Live-URL: https://e-piber.web.app
 
 Technologie-Stack:
 - Frontend: Vanilla JavaScript (ES6 Modules), HTML, CSS

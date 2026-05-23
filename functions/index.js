@@ -10,7 +10,8 @@ import {google} from "googleapis";
 
 // const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
-const SHEET_ID = "1E1CYezDcScIBvH9ebjN0hOkvttTdA6PFIgYKDMaeE04";
+// const SHEET_ID = "1E1CYezDcScIBvH9ebjN0hOkvttTdA6PFIgYKDMaeE04"; // for live
+const SHEET_ID = "11LgQskt3buVDS881NlsT4HW2tEeoZWvYT0fTT8VH1lk"; // for testing
 
 /**
  * Konvertiert JJMMDD-hhmm zu DD.MM.JJJJ - hh:mm
@@ -845,11 +846,12 @@ export const readPlayerDetails = onCall(async () => {
 });
 
 /**
- * Liest ALLE PreMatches (kein Filter).
+ * Liest PreMatches und filtert optional nach BewerbID.
  */
 export const readPreMatches = onCall(async (request) => {
   try {
     const userId = request.data && request.data.userId ? String(request.data.userId).trim() : null;
+    const filterBewerbId = request.data && request.data.bewerbId ? String(request.data.bewerbId).trim() : null;
 
     const auth = new google.auth.GoogleAuth({
       scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
@@ -954,15 +956,13 @@ export const readPreMatches = onCall(async (request) => {
       const p4 = String(row[i4] || "");
       const datum = d !== -1 ? formatSheetDate(row[d] || "") : "";
       const bewerbId = bewerbIdIdx !== -1 ? (String(row[bewerbIdIdx] || "").trim() || "2") : "2";
+      if (filterBewerbId && String(bewerbId).trim() !== filterBewerbId) {
+        return;
+      }
       const bewerbInfo = bewerbMap.get(bewerbId) || {};
       const zeitpunktForderungRaw = zeitpunktForderungIdx !== -1 ? String(row[zeitpunktForderungIdx] || "") : "";
       const status = st !== -1 ? (row[st] || "offen") : "offen";
       const ergebnis = er !== -1 ? formatErgebnis(row[er] || "") : "";
-
-      if (!p1 && !p2 && !p3 && !p4) {
-        return;
-      }
-
       const isForMe = userId ? [p1, p2, p3, p4].includes(userId) : false;
 
       const match = {

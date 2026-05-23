@@ -6,6 +6,7 @@ const readRankedPlayers     = httpsCallable(functions, "readRankedPlayers");
 const readPlayerDetails     = httpsCallable(functions, "readPlayerDetails");
 const readPreMatches        = httpsCallable(functions, "readPreMatches");
 const readMatchRestrictions = httpsCallable(functions, "readMatchRestrictions");
+const readBewerbe           = httpsCallable(functions, "readBewerbe");
 
 const params    = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id")
@@ -47,7 +48,7 @@ function startProtectionTimer(box, endDate) {
 
 /** Lädt IDs aller Spieler, die gerade in einer offenen Forderung stecken */
 async function fetchBusyIds() {
-  const res = await readPreMatches();
+  const res = await readPreMatches({ bewerbId: BEWERB_ID });
   const { success, preMatches = [] } = res?.data || {};
   if (!success) return new Set();
 
@@ -321,17 +322,34 @@ function renderRankingLegend() {
     body.insertBefore(legend, body.firstChild);
   }
 
+  // Sichtbarkeit abhängig vom Login-Status (localStorage keys, wie in fetchMyState verwendet)
+  const isLoggedIn = Boolean(
+    localStorage.getItem("currentUserEmail") ||
+    localStorage.getItem("loggedInEmail") ||
+    localStorage.getItem("currentUserId")
+  );
+
+  const items = [];
+  // "Nicht forderbar" und "Forderbar" nur sichtbar für eingeloggte Nutzer
+  if (isLoggedIn) {
+    items.push('<div class="legend-item"><span class="legend-swatch default"></span><span>Nicht forderbar</span></div>');
+    items.push('<div class="legend-item"><span class="legend-swatch challengeable"></span><span>Forderbar</span></div>');
+  }
+  // Diese Einträge sind für alle sichtbar
+  items.push('<div class="legend-item"><span class="legend-swatch challenged"></span><span>In offener Forderung</span></div>');
+  items.push('<div class="legend-item"><span class="legend-swatch schutz"></span><span>Schutzzeit</span></div>');
+  items.push('<div class="legend-item"><span class="legend-swatch sperrzeit"></span><span>Sperrzeit</span></div>');
+  // "Mein Kästchen" nur für eingeloggte Nutzer
+  if (isLoggedIn) {
+    items.push('<div class="legend-item"><span class="legend-swatch selected"></span><span>Mein Kästchen</span></div>');
+  }
+
   legend.innerHTML = `
     <div class="legend-label">Legende:</div>
     <div class="legend-items">
-      <div class="legend-item"><span class="legend-swatch default"></span><span>Nicht forderbar</span></div>
-      <div class="legend-item"><span class="legend-swatch challengeable"></span><span>Forderbar</span></div>
-      <div class="legend-item"><span class="legend-swatch challenged"></span><span>In offener Forderung</span></div>
-      <div class="legend-item"><span class="legend-swatch schutz"></span><span>Schutzzeit</span></div>
-      <div class="legend-item"><span class="legend-swatch sperrzeit"></span><span>Sperrzeit</span></div>
-      <div class="legend-item"><span class="legend-swatch selected"></span><span>Mein Kästchen</span></div>
+      ${items.join("\n      ")}
     </div>
-    <button id="withdrawBtn" class="btn-login" style="margin-top: 12px; width: 100%; display: none;">Raushängen</button>
+    <button id="withdrawBtn" class="btn-login" style="margin-top: 12px; width: 100%; display: ${isLoggedIn ? 'block' : 'none'};">Raushängen</button>
   `;
 
   document.getElementById("withdrawBtn")?.addEventListener("click", () => {
@@ -348,9 +366,14 @@ export async function renderRanking() {
 
   const h2 = document.querySelector("#rankingSection h2");
   if (h2) {
-    h2.textContent =
-      BEWERB_ID === "2" ? "Rangliste Herren" :
-      BEWERB_ID === "3" ? "Rangliste Damen"  : "Rangliste";
+    try {
+      const res = await readBewerbe();
+      const bewerbe = res.data?.bewerbe || [];
+      const bewerb = bewerbe.find((b) => String(b.id) === BEWERB_ID);
+      h2.textContent = bewerb ? bewerb.bezeichnung : "Rangliste";
+    } catch {
+      h2.textContent = "Rangliste";
+    }
   }
 
   renderRankingLegend();
