@@ -38,7 +38,7 @@ function formatSheetDate(raw) {
 
 // ── Bewerb Cards ────────────────────────────────────────────────────────
 
-function createCard(b) {
+function createCard(b, isUpcoming) {
   const card = document.createElement("div");
   const isRangliste = String(b.bewerbsartId).trim() === "2";
 
@@ -63,9 +63,10 @@ function createCard(b) {
   `;
 
   if (b.entryListAvailable === "1") {
+    if (!isUpcoming) return card;
     const entryBtn = document.createElement("button");
     entryBtn.type = "button";
-    entryBtn.className = "btn-login loggedIn";
+    entryBtn.className = "btn-login";
     entryBtn.textContent = "Eintragen";
     entryBtn.style.marginTop = "10px";
 
@@ -166,7 +167,7 @@ async function loadBewerbe() {
       const section = createSection("Bevorstehende Bewerbe", "grid-upcoming");
       container.appendChild(section);
       upcoming.forEach((b) => {
-        document.getElementById("grid-upcoming").appendChild(createCard(b));
+        document.getElementById("grid-upcoming").appendChild(createCard(b, true));
       });
     }
 

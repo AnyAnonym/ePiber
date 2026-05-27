@@ -152,6 +152,7 @@ export const readFullMatches = onCall(async () => {
     const i4 = idx("spielerid4");
     const ergebnisIdx = idx("ergebnis");
     const d = idx("zeitpunkt");
+    const gewinnerIdx = idx("gewinner");
 
     // --- Matches mappen ---
     const allMatches = matchesValues.slice(1) // Immer ab Reihe 2 (Header überspringen)
@@ -168,6 +169,13 @@ export const readFullMatches = onCall(async () => {
               playerMap.get(row[i3]) || "---",
               playerMap.get(row[i4]) || "---",
             ],
+            playerIds: [
+              row[i1] || "",
+              row[i2] || "",
+              row[i3] || "",
+              row[i4] || "",
+            ],
+            winnerId: gewinnerIdx !== -1 ? String(row[gewinnerIdx] || "").trim() : "",
             sets,
             ergebnis: formatErgebnis(ergebnisRaw),
           };
@@ -1585,6 +1593,89 @@ export const addEntryList = onCall(async (request) => {
     return {success: true, id: nextId};
   } catch (err) {
     console.error("❌ Fehler in addEntryList:", err);
+    return {success: false, error: err.message};
+  }
+});
+
+export const removeEntryList = onCall(async (request) => {
+  try {
+    const {bewerbId, personenId} = request.data || {};
+    if (!bewerbId || !personenId) {
+      return {success: false, error: "BewerbID und PersonenID sind erforderlich"};
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+    const sheets = google.sheets({version: "v4", auth});
+
+    // Sheet-Metadaten lesen, um sheetId für EntryList zu bekommen
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: SHEET_ID,
+    });
+    const entrySheet = spreadsheet.data.sheets.find((s) =>
+      s.properties.title === "EntryList",
+    );
+    if (!entrySheet) {
+      return {success: false, error: "Tabelle EntryList nicht gefunden"};
+    }
+    const sheetId = entrySheet.properties.sheetId;
+
+    // Alle Zeilen lesen
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "EntryList",
+    });
+    const values = res.data.values || [];
+    if (values.length < 2) {
+      return {success: false, error: "Keine Einträge gefunden"};
+    }
+
+    // Header-Index bestimmen
+    const header = values[0].map((h) => String(h || "").trim().toLowerCase());
+    const bewerbIdx = header.findIndex((h) => [
+      "bewerbid", "bewerb id", "bewerb-id", "bewerb", "bewerbsid", "bewerbs id",
+    ].includes(h));
+    const personenIdx = header.findIndex((h) => [
+      "personenid", "personen id", "personen-id", "personid", "person id",
+      "playerid", "player id", "spielerid", "spieler id",
+    ].includes(h));
+
+    if (bewerbIdx === -1 || personenIdx === -1) {
+      return {success: false, error: "Spalten nicht gefunden"};
+    }
+
+    // Zeile finden (0-basiert im API-Response, +1 wegen Header)
+    const rowIndex = values.findIndex((r, i) =>
+      i > 0 &&
+      String(r[bewerbIdx] || "").trim() === String(bewerbId).trim() &&
+      String(r[personenIdx] || "").trim() === String(personenId).trim(),
+    );
+
+    if (rowIndex === -1) {
+      return {success: false, error: "Kein passender Eintrag gefunden"};
+    }
+
+    // Zeile löschen (rowIndex ist 0-basiert aus values-Array = 1-basiert in Sheet)
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: rowIndex,
+              endIndex: rowIndex + 1,
+            },
+          },
+        }],
+      },
+    });
+
+    return {success: true};
+  } catch (err) {
+    console.error("❌ Fehler in removeEntryList:", err);
     return {success: false, error: err.message};
   }
 });

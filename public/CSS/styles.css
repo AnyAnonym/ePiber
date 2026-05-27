@@ -289,7 +289,7 @@ nav a.active {
 }
 
 .loggedOut {
-  display: none;
+  display: inline;
 }
 
 /* -------------------------------------------------- */
@@ -973,6 +973,10 @@ input[type="date"] {
 .player.sub {
   color: var(--muted);
   font-style: italic;
+}
+
+.team-winner .player {
+  font-weight: 700;
 }
 
 .vs {

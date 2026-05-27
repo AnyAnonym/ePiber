@@ -2,8 +2,9 @@ import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
-const readEntryList = httpsCallable(functions, "readEntryList");
+const readEntryList  = httpsCallable(functions, "readEntryList");
 const addEntryList   = httpsCallable(functions, "addEntryList");
+const removeEntryList = httpsCallable(functions, "removeEntryList");
 const readBewerbe    = httpsCallable(functions, "readBewerbe");
 
 const params = new URLSearchParams(window.location.search);
@@ -76,6 +77,7 @@ async function loadEntries() {
     if (!success) throw new Error("Fehler beim Laden");
 
     currentEntries = entries;
+    initToolbar();
 
     if (entries.length === 0) {
       container.innerHTML = "<p>Noch keine Einträge für diesen Bewerb.</p>";
@@ -168,30 +170,74 @@ async function loadBewerbsName() {
   }
 }
 
+async function handleEntryRemove(btn) {
+  const personenId = localStorage.getItem("currentUserId");
+  if (!personenId) {
+    showToast("Bitte vorher einloggen!", "error");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Entferne...";
+
+  try {
+    const res = await removeEntryList({
+      bewerbId: BEWERB_ID,
+      personenId,
+    });
+
+    if (res.data?.success) {
+      showToast("Erfolgreich ausgetragen!", "success");
+      await loadEntries();
+    } else {
+      throw new Error(res.data?.error || "Fehler beim Austragen");
+    }
+  } catch (err) {
+    console.error("Fehler beim Austragen:", err);
+    showToast("Fehler: " + (err.message || err), "error");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Austragen";
+}
+
 function initToolbar() {
   const toolbar = document.getElementById("entryListToolbar");
   if (!toolbar) return;
 
-  const heading = document.getElementById("entryListHeading");
-  if (heading) {
-    heading.textContent = BEWERB_ID
-      ? `Eintragungs Liste für Bewerb ${BEWERB_ID}`
-      : "Eintragungs Liste";
-  }
-
   toolbar.innerHTML = "";
   if (!BEWERB_ID) return;
 
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "btn-login loggedIn";
-  btn.textContent = "Eintragen";
-  btn.addEventListener("click", () => handleEntrySubmit(btn));
-  toolbar.appendChild(btn);
+  const personenId = localStorage.getItem("currentUserId");
+  if (!personenId) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-login loggedIn";
+    btn.textContent = "Anmelden";
+    toolbar.appendChild(btn);
+    return;
+  }
+
+  const isRegistered = currentEntries.some((entry) => entry.personenId === personenId);
+
+  if (isRegistered) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-login";
+    btn.textContent = "Austragen";
+    btn.addEventListener("click", () => handleEntryRemove(btn));
+    toolbar.appendChild(btn);
+  } else {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-login";
+    btn.textContent = "Eintragen";
+    btn.addEventListener("click", () => handleEntrySubmit(btn));
+    toolbar.appendChild(btn);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  initToolbar();
+  await loadEntries();
   await loadBewerbsName();
-  loadEntries();
 });

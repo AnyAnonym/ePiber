@@ -27,18 +27,22 @@ async function main() {
     container.innerHTML = matches
       .map((m) => {
         const [p1, p2, p3, p4] = m.players;
+        const [id1, id2, id3, id4] = m.playerIds || [];
         const sets = [...(m.sets || []), "---", "---", "---"].slice(0, 3);
+
+        const team1Won = m.winnerId && (m.winnerId === id1 || m.winnerId === id2);
+        const team2Won = m.winnerId && (m.winnerId === id3 || m.winnerId === id4);
 
         return `
           <div class="match-card">
             <div class="match-date">${m.date}</div>
             <div class="match-content">
-              <div class="team">
+              <div class="team${team1Won ? " team-winner" : ""}">
                 <div class="player main">${p1}</div>
                 <div class="player sub">${p2}</div>
               </div>
               <div class="vs">vs.</div>
-              <div class="team">
+              <div class="team${team2Won ? " team-winner" : ""}">
                 <div class="player main">${p3}</div>
                 <div class="player sub">${p4}</div>
               </div>

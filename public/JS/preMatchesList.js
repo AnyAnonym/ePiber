@@ -346,7 +346,7 @@ function getBewerbsartBadge(match) {
 
 function getActionButton(match, userId) {
   if (!userId) {
-    return "";
+    return `<span class="loggedout">Anmelden</span>`;
   }
 
   // Prüfe ob User Teil des Matches ist
