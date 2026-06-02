@@ -3,6 +3,7 @@ import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
 const readBewerbe = httpsCallable(functions, "readBewerbe");
+const readBewerbsart = httpsCallable(functions, "readBewerbsart");
 
 function parseSheetDate(raw) {
   if (!raw) return null;
@@ -132,12 +133,59 @@ async function loadBewerbe() {
   container.innerHTML = "<p class='loading-text'>Lade Bewerbe...</p>";
 
   try {
-    const result = await readBewerbe();
-    const { success, bewerbe = [] } = result.data || {};
+    const [bewerbRes, bewerbsartRes] = await Promise.all([
+      readBewerbe(),
+      readBewerbsart(),
+    ]);
 
-    if (!success) {
-      throw new Error("Fehler beim Laden");
+    const bewerbValues = bewerbRes.data?.values || [];
+    const bewerbsartValues = bewerbsartRes.data?.values || [];
+
+    if (bewerbValues.length < 2) {
+      container.innerHTML = "<p>Keine Bewerbe gefunden.</p>";
+      return;
     }
+
+    const baMap = new Map();
+    if (bewerbsartValues.length > 1) {
+      const baHeader = bewerbsartValues[0].map((h) => h.trim().toLowerCase());
+      const baIdIdx = baHeader.indexOf("id");
+      const baEntryIdx = baHeader.indexOf("entrylistavailable");
+      const baBezIdx = baHeader.indexOf("bezeichnung");
+      bewerbsartValues.slice(1).forEach((r) => {
+        const id = String(r[baIdIdx] || "").trim();
+        if (id) {
+          baMap.set(id, {
+            bezeichnung: String(r[baBezIdx] || "").trim(),
+            entryListAvailable: baEntryIdx !== -1 ? String(r[baEntryIdx] || "0").trim() : "0",
+          });
+        }
+      });
+    }
+
+    const bHeader = bewerbValues[0].map((h) => h.trim().toLowerCase());
+    const bIdIdx = bHeader.indexOf("id");
+    const bBewerbsartIdx = bHeader.indexOf("bewerbsartid");
+    const bBezIdx = bHeader.indexOf("bezeichnung");
+    const bEntryStartIdx = bHeader.indexOf("entrystart");
+    const bEntryDeadlineIdx = bHeader.indexOf("entrydeadline");
+    const bStartIdx = bHeader.indexOf("bewerbsbeginn");
+    const bEndIdx = bHeader.indexOf("bewerbsende");
+
+    const bewerbe = bewerbValues.slice(1).map((row) => {
+      const bewerbsartId = String(row[bBewerbsartIdx] || "").trim();
+      const baInfo = baMap.get(bewerbsartId) || {};
+      return {
+        id: row[bIdIdx] || "",
+        bewerbsartId,
+        bezeichnung: row[bBezIdx] || "",
+        entrystart: bEntryStartIdx !== -1 ? row[bEntryStartIdx] || "" : "",
+        entrydeadline: bEntryDeadlineIdx !== -1 ? row[bEntryDeadlineIdx] || "" : "",
+        bewerbsbeginn: row[bStartIdx] || "",
+        bewerbsende: row[bEndIdx] || "",
+        entryListAvailable: baInfo.entryListAvailable || "0",
+      };
+    });
 
     const filtered = bewerbe.filter((b) => String(b.id).trim() !== "1");
 

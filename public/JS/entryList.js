@@ -2,10 +2,11 @@ import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
-const readEntryList  = httpsCallable(functions, "readEntryList");
-const addEntryList   = httpsCallable(functions, "addEntryList");
+const readEntryList   = httpsCallable(functions, "readEntryList");
+const readPlayersList = httpsCallable(functions, "readPlayersList");
+const addEntryList    = httpsCallable(functions, "addEntryList");
 const removeEntryList = httpsCallable(functions, "removeEntryList");
-const readBewerbe    = httpsCallable(functions, "readBewerbe");
+const readBewerbe     = httpsCallable(functions, "readBewerbe");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
@@ -71,10 +72,52 @@ async function loadEntries() {
   }
 
   try {
-    const res = await readEntryList({ bewerbId: BEWERB_ID });
-    const { success, entries = [] } = res?.data || {};
+    const [entryRes, playerRes] = await Promise.all([
+      readEntryList({ bewerbId: BEWERB_ID }),
+      readPlayersList(),
+    ]);
 
-    if (!success) throw new Error("Fehler beim Laden");
+    if (!entryRes.data?.success) throw new Error("Fehler beim Laden");
+
+    const entryValues = entryRes.data.values || [];
+    const playerValues = playerRes.data?.values || [];
+
+    const playerMap = new Map();
+    if (playerValues.length > 1) {
+      const pHeader = playerValues[0].map((h) => h.trim().toLowerCase());
+      const pIdIdx = pHeader.indexOf("id");
+      const pFnIdx = pHeader.indexOf("vorname");
+      const pLnIdx = pHeader.indexOf("nachname");
+      playerValues.slice(1).forEach((r) => {
+        const id = String(r[pIdIdx] || "").trim();
+        const name = `${(r[pFnIdx] || "").trim()} ${(r[pLnIdx] || "").trim()}`.trim();
+        if (id) playerMap.set(id, name);
+      });
+    }
+
+    let entries = [];
+    if (entryValues.length > 1) {
+      const eHeader = entryValues[0].map((h) => h.trim().toLowerCase());
+      const eIdIdx = eHeader.indexOf("id");
+      const eBewerbIdIdx = eHeader.findIndex((h) =>
+        ["bewerbid", "bewerb id", "bewerb-id", "bewerb", "bewerbsid", "bewerbs id"].includes(h));
+      const ePersonenIdIdx = eHeader.findIndex((h) =>
+        ["personenid", "personen id", "personen-id", "personid", "person id", "playerid", "player id", "spielerid", "spieler id"].includes(h));
+      const eDatumIdx = eHeader.findIndex((h) =>
+        ["datum", "date", "eingetragen", "timestamp", "zeitpunkt", "entrydate", "entry date"].includes(h));
+
+      entries = entryValues.slice(1)
+        .filter((r) => {
+          const ebId = eBewerbIdIdx !== -1 ? String(r[eBewerbIdIdx] || "").trim() : "";
+          return ebId === BEWERB_ID;
+        })
+        .map((r) => ({
+          id: eIdIdx !== -1 ? String(r[eIdIdx] || "").trim() : "",
+          personenId: ePersonenIdIdx !== -1 ? String(r[ePersonenIdIdx] || "").trim() : "",
+          name: playerMap.get(String(r[ePersonenIdIdx] || "").trim()) || "Unbekannt",
+          datum: eDatumIdx !== -1 ? String(r[eDatumIdx] || "").trim() : "",
+        }));
+    }
 
     currentEntries = entries;
     initToolbar();
@@ -158,12 +201,15 @@ async function loadBewerbsName() {
 
   try {
     const res = await readBewerbe();
-    const { success, bewerbe = [] } = res?.data || {};
-    if (!success) return;
+    const bewerbeValues = res.data?.values || [];
+    if (bewerbeValues.length < 2) return;
 
-    const bewerb = bewerbe.find((b) => String(b.id).trim() === String(BEWERB_ID).trim());
-    if (bewerb && bewerb.bezeichnung) {
-      heading.textContent = `Eintragungs Liste für ${bewerb.bezeichnung}`;
+    const bHeader = bewerbeValues[0].map((h) => h.trim().toLowerCase());
+    const bIdIdx = bHeader.indexOf("id");
+    const bBezIdx = bHeader.indexOf("bezeichnung");
+    const bewerbRow = bewerbeValues.slice(1).find((r) => String(r[bIdIdx] || "").trim() === String(BEWERB_ID).trim());
+    if (bewerbRow && bewerbRow[bBezIdx]) {
+      heading.textContent = `Eintragungs Liste für ${bewerbRow[bBezIdx]}`;
     }
   } catch (err) {
     console.warn("Bewerbsname konnte nicht geladen werden:", err);

@@ -2,7 +2,8 @@ import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
-const readRankedPlayers     = httpsCallable(functions, "readRankedPlayers");
+const readRlPlatzierung     = httpsCallable(functions, "readRlPlatzierung");
+const readPlayersList       = httpsCallable(functions, "readPlayersList");
 const readPlayerDetails     = httpsCallable(functions, "readPlayerDetails");
 const readPreMatches        = httpsCallable(functions, "readPreMatches");
 const readMatchRestrictions = httpsCallable(functions, "readMatchRestrictions");
@@ -276,14 +277,53 @@ async function applyAllRules(container, pyramid, rankedList) {
 // ═══════════════════════════════════════════════════════════════════════════
 export async function loadRanking() {
   try {
-    const res = await readRankedPlayers({ bewerbId: BEWERB_ID });
-    const data = res?.data;
-    if (!data?.success || !Array.isArray(data.rankedList)) {
-      console.error("❌ Keine gültigen Ranglisten-Daten:", data);
+    const [rankRes, playersRes] = await Promise.all([
+      readRlPlatzierung(),
+      readPlayersList(),
+    ]);
+
+    if (!rankRes.data?.success || !playersRes.data?.success) {
+      console.error("❌ Fehler beim Laden der Ranglisten-Daten");
       return [];
     }
-    console.log(`🏆 ${data.rankedList.length} Spieler geladen (BewerbID: ${BEWERB_ID})`);
-    return data.rankedList;
+
+    const rankValues = rankRes.data.values || [];
+    const playerValues = playersRes.data.values || [];
+
+    if (rankValues.length < 2 || playerValues.length < 2) return [];
+
+    const rHeader = rankValues[0].map((h) => h.trim().toLowerCase());
+    const bewerbIdIdx = rHeader.indexOf("bewerbid");
+    const rankIdx = rHeader.indexOf("rang");
+    const personIdIdx = rHeader.indexOf("personid");
+
+    const pHeader = playerValues[0].map((h) => h.trim().toLowerCase());
+    const pIdIdx = pHeader.indexOf("id");
+    const pFnIdx = pHeader.indexOf("vorname");
+    const pLnIdx = pHeader.indexOf("nachname");
+
+    const playerMap = new Map();
+    playerValues.slice(1).forEach((r) => {
+      const id = r[pIdIdx];
+      const name = `${(r[pFnIdx] || "").trim()} ${(r[pLnIdx] || "").trim()}`.trim();
+      playerMap.set(id, name);
+    });
+
+    const rankedList = rankValues.slice(1)
+      .filter((row) => {
+        const bewerbId = String(row[bewerbIdIdx] || "").trim();
+        return !BEWERB_ID || bewerbId === BEWERB_ID;
+      })
+      .map((row) => ({
+        bewerbId: row[bewerbIdIdx] || "",
+        rank: Number(row[rankIdx]),
+        playerId: row[personIdIdx],
+        name: playerMap.get(row[personIdIdx]) || "Unbekannt",
+      }))
+      .sort((a, b) => a.rank - b.rank);
+
+    console.log(`🏆 ${rankedList.length} Spieler geladen (BewerbID: ${BEWERB_ID})`);
+    return rankedList;
   } catch (err) {
     console.error("❌ Fehler beim Laden der Rangliste:", err);
     return [];
@@ -368,9 +408,16 @@ export async function renderRanking() {
   if (h2) {
     try {
       const res = await readBewerbe();
-      const bewerbe = res.data?.bewerbe || [];
-      const bewerb = bewerbe.find((b) => String(b.id) === BEWERB_ID);
-      h2.textContent = bewerb ? bewerb.bezeichnung : "Rangliste";
+      const bewerbeValues = res.data?.values || [];
+      if (bewerbeValues.length > 1) {
+        const bHeader = bewerbeValues[0].map((h) => h.trim().toLowerCase());
+        const bIdIdx = bHeader.indexOf("id");
+        const bBezIdx = bHeader.indexOf("bezeichnung");
+        const bewerbRow = bewerbeValues.slice(1).find((r) => String(r[bIdIdx] || "").trim() === BEWERB_ID);
+        h2.textContent = bewerbRow ? (bewerbRow[bBezIdx] || "Rangliste") : "Rangliste";
+      } else {
+        h2.textContent = "Rangliste";
+      }
     } catch {
       h2.textContent = "Rangliste";
     }

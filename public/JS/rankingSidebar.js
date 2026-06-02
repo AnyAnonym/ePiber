@@ -1,7 +1,8 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import {functions} from "./SDK.js";
+import {httpsCallable} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
-const readRankedPlayers = httpsCallable(functions, "readRankedPlayers");
+const readRlPlatzierung = httpsCallable(functions, "readRlPlatzierung");
+const readPlayersList = httpsCallable(functions, "readPlayersList");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id") || document.getElementById("rankingContainer")?.dataset.bewerbId || "2";
@@ -25,16 +26,52 @@ function createSidebarHTML() {
 async function loadRanking() {
   try {
     console.log("⏳ Rangliste (Sidebar) wird geladen...", `(BewerbID: ${BEWERB_ID})`);
-    const response = await readRankedPlayers({ bewerbId: BEWERB_ID });
-    const { data } = response || {};
 
-    if (!data?.success || !Array.isArray(data.rankedList)) {
-      console.error("❌ Ungültige Daten erhalten:", data);
+    const [rankRes, playersRes] = await Promise.all([
+      readRlPlatzierung(),
+      readPlayersList(),
+    ]);
+
+    if (!rankRes.data?.success || !playersRes.data?.success) {
+      console.error("❌ Fehler beim Laden der Ranglisten-Daten");
       return [];
     }
 
-    console.log(`🏆 ${data.rankedList.length} Spieler empfangen (Sidebar)`);
-    return data.rankedList;
+    const rankValues = rankRes.data.values || [];
+    const playerValues = playersRes.data.values || [];
+
+    if (rankValues.length < 2 || playerValues.length < 2) return [];
+
+    const rHeader = rankValues[0].map((h) => h.trim().toLowerCase());
+    const bewerbIdIdx = rHeader.indexOf("bewerbid");
+    const rankIdx = rHeader.indexOf("rang");
+    const personIdIdx = rHeader.indexOf("personid");
+
+    const pHeader = playerValues[0].map((h) => h.trim().toLowerCase());
+    const pIdIdx = pHeader.indexOf("id");
+    const pFnIdx = pHeader.indexOf("vorname");
+    const pLnIdx = pHeader.indexOf("nachname");
+
+    const playerMap = new Map();
+    playerValues.slice(1).forEach((r) => {
+      const id = r[pIdIdx];
+      const name = `${(r[pFnIdx] || "").trim()} ${(r[pLnIdx] || "").trim()}`.trim();
+      playerMap.set(id, name);
+    });
+
+    const rankedList = rankValues.slice(1)
+      .filter((row) => {
+        const bewerbId = String(row[bewerbIdIdx] || "").trim();
+        return !BEWERB_ID || bewerbId === BEWERB_ID;
+      })
+      .map((row) => ({
+        rank: Number(row[rankIdx]),
+        name: playerMap.get(row[personIdIdx]) || "Unbekannt",
+      }))
+      .sort((a, b) => a.rank - b.rank);
+
+    console.log(`🏆 ${rankedList.length} Spieler empfangen (Sidebar)`);
+    return rankedList;
   } catch (err) {
     console.error("❌ Fehler beim Laden der Sidebar-Rangliste:", err);
     return [];
@@ -48,11 +85,10 @@ async function renderTopRanking() {
   if (!listElement) return;
 
   const rankedList = await loadRanking();
-
   const filledList = Array.isArray(rankedList) ? [...rankedList] : [];
 
   for (let r = filledList.length + 1; r <= 10; r++) {
-    filledList.push({ rank: r, name: "-" });
+    filledList.push({rank: r, name: "-"});
   }
 
   filledList.sort((a, b) => a.rank - b.rank);
