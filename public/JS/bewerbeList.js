@@ -38,7 +38,7 @@ function formatSheetDate(raw) {
 
 // ── Bewerb Cards ────────────────────────────────────────────────────────
 
-function createCard(b, isUpcoming) {
+function createCard(b, _isUpcoming) {
   const card = document.createElement("div");
   const isRangliste = String(b.bewerbsartId).trim() === "2";
 
@@ -62,20 +62,17 @@ function createCard(b, isUpcoming) {
     </div>
   `;
 
-  if (b.entryListAvailable === "1") {
-    if (!isUpcoming) return card;
-    const entryBtn = document.createElement("button");
-    entryBtn.type = "button";
-    entryBtn.className = "btn-login";
-    entryBtn.textContent = "Eintragen";
-    entryBtn.style.marginTop = "10px";
+  if (b.entryListAvailable === "1" && !isRangliste) {
+    const userId = localStorage.getItem("currentUserId");
+    const endDate = parseSheetDate(b.bewerbsende);
+    const isEnded = endDate ? endDate < new Date() : false;
 
-    entryBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      window.location.href = `entryList.html?id=${b.id}`;
-    });
-
-    card.appendChild(entryBtn);
+    if (userId && !isEnded) {
+      card.classList.add("clickable");
+      card.addEventListener("click", () => {
+        window.location.href = `entryList.html?id=${b.id}`;
+      });
+    }
   }
 
   return card;
@@ -167,7 +164,7 @@ async function loadBewerbe() {
       const section = createSection("Bevorstehende Bewerbe", "grid-upcoming");
       container.appendChild(section);
       upcoming.forEach((b) => {
-        document.getElementById("grid-upcoming").appendChild(createCard(b, true));
+        document.getElementById("grid-upcoming").appendChild(createCard(b));
       });
     }
 

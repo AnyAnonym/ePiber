@@ -1264,6 +1264,15 @@ input[type="date"] {
   color: #383d41;
 }
 
+.badge-wo {
+  background: #fff3cd;
+  color: #856404;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  vertical-align: middle;
+  margin-left: 3px;
+}
+
 /* -------------------------------------------------- */
 /*  MATCH CARD STATUS                                 */
 /* -------------------------------------------------- */
@@ -1330,6 +1339,16 @@ input[type="date"] {
   justify-content: flex-end;
   align-items: center;
   flex-wrap: wrap;
+}
+
+#preMatches-container .action-area,
+#preMatches-container .loggedout,
+#preMatches-container .waiting-text {
+  display: none !important;
+}
+
+#withdrawBtn {
+  display: none !important;
 }
 
 .btn-action {
