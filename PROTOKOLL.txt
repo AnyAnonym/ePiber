@@ -2,7 +2,7 @@
 PROTOKOLL - ASKÖ Piberbach Tennis Ranglisten-WebApp
 ================================================================================
 Erstellt: 16.04.2026
-Letzte Änderung: 20.05.2026
+Letzte Änderung: 02.06.2026
 
 ================================================================================
 1. PROJEKTÜBERSICHT
@@ -155,15 +155,15 @@ WebApp-with-GoogleSheet_comunication/
 
 3.7 Bewerb
 ----------
-| Spalte | Name             | Beschreibung                    |
-|--------|------------------|--------------------------------|
-| A      | ID               | Fortlaufende Nummer            |
-| B      | BewerbsartID     | Verweis auf Bewerbsart         |
-| C      | Bezeichnung      | z.B. "Vereinsmeisterschaft"    |
-| D      | Entrystart       | Beginn der Eintragung          |
-| E      | Entrydeadline    | Deadline der Eintragung        |
-| F      | Bewerbsbeginn    | Start des Bewerbs              |
-| G      | Bewerbsende      | Ende des Bewerbs               |
+| Spalte | Name                     | Beschreibung                    |
+|--------|--------------------------|--------------------------------|
+| A      | ID                       | Fortlaufende Nummer            |
+| B      | BewerbsartID             | Verweis auf Bewerbsart         |
+| C      | Bezeichnung              | z.B. "Vereinsmeisterschaft"    |
+| D      | Entrystart               | Beginn der Eintragungsfrist    |
+| E      | Entrydeadline            | Ende der Eintragungsfrist      |
+| F      | Bewerbsbeginn            | Start des Bewerbs              |
+| G      | Bewerbsende              | Ende des Bewerbs               |
 
 3.8 EntryList
 -------------
@@ -191,7 +191,8 @@ Gibt sortierte Liste mit {rank, playerId, name} zurück.
 4.2 readFullMatches
 -------------------
 Liest alle Matches mit Spieler-Namen statt IDs.
-Kombiniert matches + players Tabellen.
+Kombiniert matches + Personen + Bewerb Tabellen.
+Gibt pro Match zusätzlich bewerbName zurück.
 
 4.3 readPlayersList
 -------------------
@@ -1043,5 +1044,18 @@ Spalte G Update in Sheet:
   * Gibt pro Bewerb entryListAvailable zurück
 
 ================================================================================
+- FEATURE: Eintragungsliste Beginn/Ende in Bewerbe-Karten
+  * Backend: readBewerbe liest jetzt Eintragungsliste Beginn und
+    Eintragungsliste Ende aus der Bewerb-Tabelle
+  * Frontend: Anzeige dieser Daten neben Bewerbs Beginn/Ende,
+    nur sichtbar wenn entryListAvailable = "1"
+  * CSS: Eintragen/Fordern/Raushängen-Buttons auf preMatches und
+    Rangliste ausgeblendet (display: none)
+
+- FEATURE: Bewerb-Badge auf matches-Seite
+  * Backend: readFullMatches lädt jetzt Bewerb-Tabelle und gibt
+    bewerbName pro Match zurück
+  * Frontend: Badge mit Bewerb-Name rechts neben dem Match-Datum
+
 ENDE DES PROTOKOLLS
 ================================================================================

@@ -48,7 +48,10 @@ async function main() {
 
         return `
           <div class="match-card">
-            <div class="match-date">${m.date}</div>
+            <div class="match-meta-row">
+              <span class="match-date">${m.date}</span>
+              ${m.bewerbName ? `<div class="match-meta-right"><span class="badge-bewerb">Bewerb: ${m.bewerbName}</span></div>` : ""}
+            </div>
             <div class="match-content">
               <div class="team${team1Won ? " team-winner" : ""}">
                 <div class="player main">${p1}${team1Wo ? ' <span class="badge badge-wo">w.o.</span>' : ""}</div>

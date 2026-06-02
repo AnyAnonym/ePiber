@@ -53,12 +53,17 @@ function createCard(b, _isUpcoming) {
 
   const start = formatSheetDate(b.bewerbsbeginn);
   const end = b.bewerbsende ? formatSheetDate(b.bewerbsende) : "Offen";
+  const entryStart = formatSheetDate(b.entrystart);
+  const entryDeadline = formatSheetDate(b.entrydeadline);
+  const hasEntryList = b.entryListAvailable === "1";
 
   card.innerHTML = `
     <h3>${b.bezeichnung}</h3>
-    <div class="bewerb-dates">
-      <span>Beginn: ${start || "TBD"}</span>
-      <span>Ende: ${end || "Offen"}</span>
+    <div class="bewerb-dates${hasEntryList ? " with-entrylist" : ""}">
+      <span>Bewerbs Beginn: ${start || "---"}</span>
+      ${hasEntryList ? `<span>Eintragungsliste Beginn: ${entryStart || "---"}</span>` : ""}
+      <span>Bewerbs Ende: ${end || "Offen"}</span>
+      ${hasEntryList ? `<span>Eintragungsliste Ende: ${entryDeadline || "Offen"}</span>` : ""}
     </div>
   `;
 

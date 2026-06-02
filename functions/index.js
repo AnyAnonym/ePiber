@@ -110,7 +110,7 @@ export const readFullMatches = onCall(async () => {
     const sheets = google.sheets({version: "v4", auth});
 
     // --- Tabellen abrufen ---
-    const [matchesRes, playersRes] = await Promise.all([
+    const [matchesRes, playersRes, bewerbRes] = await Promise.all([
       sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
         range: "matches",
@@ -119,15 +119,20 @@ export const readFullMatches = onCall(async () => {
         spreadsheetId: SHEET_ID,
         range: "Personen",
       }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: "Bewerb",
+      }),
     ]);
 
     const matchesValues = matchesRes.data.values || [];
     const playersValues = playersRes.data.values || [];
+    const bewerbValues = bewerbRes.data.values || [];
     if (matchesValues.length < 2 || playersValues.length < 2) {
       throw new Error("Leere Tabellen (matches oder Personen).");
     }
 
-    // --- Header finden ---
+    // --- Kopfzeilen ---
     const header = matchesValues[0].map((h) => h.trim().toLowerCase());
     const playerHeader = playersValues[0].map((h) => h.trim().toLowerCase());
 
@@ -135,13 +140,27 @@ export const readFullMatches = onCall(async () => {
     const fnIndex = playerHeader.indexOf("vorname");
     const lnIndex = playerHeader.indexOf("nachname");
 
-    // --- ID → Name Map ---
+    // --- ID → Name Map (Personen) ---
     const playerMap = new Map();
     playersValues.slice(1).forEach((r) => {
       const id = r[idIndex];
       const name = `${r[fnIndex] || ""} ${r[lnIndex] || ""}`.trim();
       playerMap.set(id, name);
     });
+
+    // --- Bewerb-Map (BewerbID → Bezeichnung) ---
+    const bewerbMap = new Map();
+    if (bewerbValues.length > 1) {
+      const bHeader = bewerbValues[0].map((h) => h.trim().toLowerCase());
+      const bIdIdx = bHeader.indexOf("id");
+      const bBezIdx = bHeader.indexOf("bezeichnung");
+      bewerbValues.slice(1).forEach((r) => {
+        const id = String(r[bIdIdx] || "").trim();
+        if (id) {
+          bewerbMap.set(id, String(r[bBezIdx] || "").trim());
+        }
+      });
+    }
 
     // --- Spaltenindizes dynamisch ermitteln ---
     const idx = (label) => header.findIndex((v) => v.includes(label));
@@ -153,6 +172,7 @@ export const readFullMatches = onCall(async () => {
     const ergebnisIdx = idx("ergebnis");
     const d = idx("zeitpunkt");
     const gewinnerIdx = idx("gewinner");
+    const bewerbIdIdx = idx("bewerbid");
 
     // --- Matches mappen ---
     const allMatches = matchesValues.slice(1) // Immer ab Reihe 2 (Header überspringen)
@@ -160,6 +180,7 @@ export const readFullMatches = onCall(async () => {
         .map((row) => {
           const ergebnisRaw = row[ergebnisIdx] || "";
           const sets = ergebnisRaw ? ergebnisRaw.split("/").map((s) => formatSetScore(s)) : [];
+          const bewerbId = bewerbIdIdx !== -1 ? String(row[bewerbIdIdx] || "").trim() : "";
 
           return {
             date: formatSheetDate(row[d]),
@@ -178,6 +199,7 @@ export const readFullMatches = onCall(async () => {
             winnerId: gewinnerIdx !== -1 ? String(row[gewinnerIdx] || "").trim() : "",
             sets,
             ergebnis: formatErgebnis(ergebnisRaw),
+            bewerbName: bewerbMap.get(bewerbId) || "",
           };
         });
 
@@ -1354,6 +1376,8 @@ export const readBewerbe = onCall(async () => {
     const idIdx = header.indexOf("id");
     const bewerbIdx = header.indexOf("bewerbsartid");
     const bezIdx = header.indexOf("bezeichnung");
+    const entryStartIdx = header.indexOf("entrystart");
+    const entryDeadlineIdx = header.indexOf("entrydeadline");
     const startIdx = header.indexOf("bewerbsbeginn");
     const endIdx = header.indexOf("bewerbsende");
 
@@ -1364,6 +1388,8 @@ export const readBewerbe = onCall(async () => {
         id: row[idIdx] || "",
         bewerbsartId,
         bezeichnung: row[bezIdx] || "",
+        entrystart: entryStartIdx !== -1 ? row[entryStartIdx] || "" : "",
+        entrydeadline: entryDeadlineIdx !== -1 ? row[entryDeadlineIdx] || "" : "",
         bewerbsbeginn: row[startIdx] || "",
         bewerbsende: row[endIdx] || "",
         entryListAvailable: baInfo.entryListAvailable || "0",

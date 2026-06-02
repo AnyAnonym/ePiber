@@ -467,6 +467,12 @@ nav a.active {
   color: var(--muted);
 }
 
+.bewerb-dates.with-entrylist {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 24px;
+}
+
 .bewerb-card.clickable {
   cursor: pointer;
   border-color: var(--accent);
@@ -1347,7 +1353,8 @@ input[type="date"] {
   display: none !important;
 }
 
-#withdrawBtn {
+#withdrawBtn,
+#profileActions {
   display: none !important;
 }
 
