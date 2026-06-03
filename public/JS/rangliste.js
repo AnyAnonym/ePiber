@@ -70,7 +70,7 @@ async function fetchBusyIds() {
  * Gibt zurück, wer Schutzzeit (nach Sieg) bzw. Sperrzeit (nach Niederlage) hat.
  */
 async function fetchRestrictions() {
-  const res = await readMatchRestrictions();
+  const res = await readMatchRestrictions({ bewerbId: BEWERB_ID });
   const { success, schutzzeit = [], sperrzeit = [] } = res?.data || {};
   if (!success) return { schutzzeitMap: new Map(), sperrzeitMap: new Map() };
 

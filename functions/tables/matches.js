@@ -45,7 +45,7 @@ export async function createMatchData(sheets, {datum, p1, p2, p3, p4, ergebnisWe
   return {updates: res.data.updates};
 }
 
-export async function readMatchRestrictionsData(sheets) {
+export async function readMatchRestrictionsData(sheets, {bewerbId} = {}) {
   const values = await readMatchesData(sheets);
   if (values.length < 2) return {schutzzeit: [], sperrzeit: []};
 
@@ -54,6 +54,7 @@ export async function readMatchRestrictionsData(sheets) {
   const s1Idx = header.indexOf("spielerid1");
   const s3Idx = header.indexOf("spielerid3");
   const gewinnerIdx = header.indexOf("gewinner");
+  const bewerbIdx = header.indexOf("bewerbid");
 
   if ([zeitpunktIdx, s1Idx, s3Idx, gewinnerIdx].includes(-1)) {
     return {schutzzeit: [], sperrzeit: []};
@@ -66,6 +67,11 @@ export async function readMatchRestrictionsData(sheets) {
   const sperrzeitMap = new Map();
 
   values.slice(1).forEach((row) => {
+    if (bewerbId && bewerbIdx !== -1) {
+      const rowBewerb = String(row[bewerbIdx] || "").trim();
+      if (rowBewerb !== bewerbId) return;
+    }
+
     const rawDate = String(row[zeitpunktIdx] || "").trim();
     if (!rawDate) return;
     const m = rawDate.match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
@@ -93,10 +99,11 @@ export async function readMatchRestrictionsData(sheets) {
   };
 }
 
-export const readMatchRestrictions = onCall(async () => {
+export const readMatchRestrictions = onCall(async (request) => {
   try {
     const sheets = await getSheetsClient(true);
-    const result = await readMatchRestrictionsData(sheets);
+    const bewerbId = request.data?.bewerbId ? String(request.data.bewerbId).trim() : null;
+    const result = await readMatchRestrictionsData(sheets, {bewerbId});
     return {success: true, ...result};
   } catch (err) {
     console.error("Fehler in readMatchRestrictions:", err);

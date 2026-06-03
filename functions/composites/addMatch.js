@@ -77,7 +77,7 @@ export const addMatch = onCall(async (request) => {
       }
     }
 
-    const restrictions = await readMatchRestrictionsData(sheets);
+    const restrictions = await readMatchRestrictionsData(sheets, {bewerbId: resolvedBewerbId});
     const now = new Date();
 
     for (const entry of restrictions.schutzzeit) {

@@ -33,6 +33,7 @@ function formatSetScore(raw) {
 
 async function main() {
   const container = document.getElementById("matches-container");
+  if (!container) return;
   container.innerHTML = "<p>Lade Matches...</p>";
 
   try {
