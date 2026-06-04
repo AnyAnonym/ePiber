@@ -1057,5 +1057,27 @@ Spalte G Update in Sheet:
     bewerbName pro Match zurück
   * Frontend: Badge mit Bewerb-Name rechts neben dem Match-Datum
 
+================================================================================
+17. TABELLENSTRUKTUR: Bewerb – Geschlecht & Altersbeschränkungen (04.06.2026)
+================================================================================
+
+Die Tabelle "Bewerb" enthält zwei neue Spalten für Eintragungs-Voraussetzungen:
+
+- **Geschlecht**: Enthält eine oder mehrere IDs (kommasepariert), die auf die
+  Tabelle "Geschlecht" verweisen. Nur Spieler mit passendem Geschlecht dürfen
+  sich eintragen. Beispiel: "1" (nur männlich), "1,2" (männlich + weiblich).
+  Die Tabelle "Geschlecht" dient zur Entschlüsselung (ID → Bezeichnung).
+
+- **Alterskategorie**: Enthält eine Zahl mit nachgestelltem Vorzeichen (+ oder -), die die
+  Altersgrenze definiert:
+  * Zahl+ → alle ≥ Zahl dürfen teilnehmen (z.B. "18+" heißt ab 18)
+  * Zahl- → alle < Zahl dürfen teilnehmen (z.B. "12-" heißt unter 12)
+
+- **clock.js**: Enthält jetzt drei globale Hilfsfunktionen:
+  * `window.getCurrentDateTimeString()` → formatiertes Datum "YYYY.MM.DD – hh:mm"
+  * `window.getCurrentYear()` → aktuelles Jahr (Number)
+  * `window.getStorageTimestamp()` → JJMMDD-hhmm für Sheet-Speicherung
+  * Alle Altersberechnungen und Zeitstempel nutzen diese zentrale Quelle
+
 ENDE DES PROTOKOLLS
 ================================================================================

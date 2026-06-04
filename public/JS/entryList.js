@@ -170,7 +170,7 @@ async function handleEntrySubmit(btn) {
   btn.textContent = "Sende...";
 
   try {
-    const datum = formatTimestampForStorage(new Date());
+    const datum = window.getStorageTimestamp ? window.getStorageTimestamp() : formatTimestampForStorage(new Date());
 
     const res = await addEntryList({
       bewerbId: BEWERB_ID,

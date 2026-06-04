@@ -23,6 +23,70 @@ export const readEntryList = onCall(async (request) => {
   }
 });
 
+function parseBirthdate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+
+  let match = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (match) return new Date(+match[3], +match[2] - 1, +match[1]);
+
+  match = s.match(/^(\d{4})[.-](\d{2})[.-](\d{2})$/);
+  if (match) return new Date(+match[1], +match[2] - 1, +match[3]);
+
+  match = s.match(/^(\d{2})[.-](\d{2})[.-](\d{4})$/);
+  if (match) return new Date(+match[3], +match[2] - 1, +match[1]);
+
+  match = s.match(/^(\d{2})(\d{2})(\d{2})-/);
+  if (match) {
+    const yyyy = parseInt(match[1], 10) >= 50 ? 1900 + +match[1] : 2000 + +match[1];
+    return new Date(yyyy, +match[2] - 1, +match[3]);
+  }
+
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+
+  return null;
+}
+
+function calcAge(birthDate) {
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const m = now.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birthDate.getDate())) age--;
+  return age;
+}
+
+function parseAlterRule(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  const m = s.match(/^(\d+)([+-])$/);
+  if (!m) return null;
+  return {operator: m[2], value: parseInt(m[1], 10)};
+}
+
+function checkAlter(alterRaw, birthDate) {
+  if (!alterRaw) return null;
+  const rule = parseAlterRule(alterRaw);
+  if (!rule) return null;
+  const age = calcAge(birthDate);
+  if (rule.operator === "+") {
+    if (age < rule.value) return `Altersvoraussetzung nicht erfüllt: mindestens ${rule.value} Jahre erforderlich (aktuell: ${age})`;
+  } else if (rule.operator === "-") {
+    if (age >= rule.value) return `Altersvoraussetzung nicht erfüllt: unter ${rule.value} Jahre erforderlich (aktuell: ${age})`;
+  }
+  return null;
+}
+
+function checkGeschlecht(geschlechtRaw, playerGeschlechtId) {
+  if (!geschlechtRaw || String(geschlechtRaw).trim() === "") return null;
+  const allowedIds = String(geschlechtRaw).split(",").map((s) => s.trim()).filter(Boolean);
+  if (allowedIds.length === 0) return null;
+  if (!allowedIds.includes(String(playerGeschlechtId).trim())) {
+    return "Dein Geschlecht ist für diesen Bewerb nicht zugelassen.";
+  }
+  return null;
+}
+
 export async function addEntryListData(sheets, {bewerbId, personenId, datum}) {
   const values = await readEntryListData(sheets);
 
@@ -44,6 +108,61 @@ export async function addEntryListData(sheets, {bewerbId, personenId, datum}) {
         String(r[personenIdx] || "").trim() === personenId);
       if (alreadyRegistered) throw new Error("Du bist für diesen Bewerb bereits eingetragen.");
     }
+  }
+
+  const [bewerbRes, playerRes] = await Promise.all([
+    sheets.spreadsheets.values.get({spreadsheetId: SHEET_ID, range: "Bewerb!A:Z"}),
+    sheets.spreadsheets.values.get({spreadsheetId: SHEET_ID, range: "Personen!A:Z"}),
+  ]);
+
+  const bewerbValues = bewerbRes.data.values || [];
+  const playerValues = playerRes.data.values || [];
+
+  if (bewerbValues.length >= 2) {
+    const bHeader = bewerbValues[0].map((h) => h.trim().toLowerCase());
+    const bIdIdx = bHeader.indexOf("id");
+    const bGeschlechtIdx = bHeader.indexOf("geschlecht");
+    const bAlterIdx = bHeader.indexOf("alterskategorie");
+
+    console.log(`[addEntryList] Bewerb header: id=${bIdIdx} geschlecht=${bGeschlechtIdx} alter=${bAlterIdx}`);
+
+    if (bIdIdx !== -1) {
+      const bewerbRow = bewerbValues.slice(1).find((r) => String(r[bIdIdx] || "").trim() === String(bewerbId).trim());
+      if (bewerbRow && (bGeschlechtIdx !== -1 || bAlterIdx !== -1) && playerValues.length >= 2) {
+        const pHeader = playerValues[0].map((h) => h.trim().toLowerCase());
+        const pIdIdx = pHeader.indexOf("id");
+        const pGeschlechtIdx = pHeader.indexOf("geschlechtid");
+        const pBirthIdx = pHeader.indexOf("geburtsdatum");
+
+        console.log(`[addEntryList] Personen header: id=${pIdIdx} geschlechtid=${pGeschlechtIdx} geburtsdatum=${pBirthIdx}`);
+
+        if (pIdIdx !== -1) {
+          const playerRow = playerValues.slice(1).find((r) => String(r[pIdIdx] || "").trim() === String(personenId).trim());
+          if (playerRow) {
+            console.log(`[addEntryList] Player found, birthVal="${playerRow[pBirthIdx]}" alterVal="${bewerbRow[bAlterIdx]}"`);
+            if (bGeschlechtIdx !== -1 && pGeschlechtIdx !== -1) {
+              const err = checkGeschlecht(bewerbRow[bGeschlechtIdx], playerRow[pGeschlechtIdx]);
+              if (err) throw new Error(err);
+            }
+            if (bAlterIdx !== -1 && pBirthIdx !== -1) {
+              const birthDate = parseBirthdate(playerRow[pBirthIdx]);
+              console.log(`[addEntryList] parseBirthdate result: ${birthDate}`);
+              if (birthDate) {
+                const err = checkAlter(bewerbRow[bAlterIdx], birthDate);
+                console.log(`[addEntryList] alterRule="${bewerbRow[bAlterIdx]}" checkResult="${err}"`);
+                if (err) throw new Error(err);
+              }
+            }
+          } else {
+            console.log(`[addEntryList] Player row NOT found for personenId="${personenId}"`);
+          }
+        }
+      } else {
+        console.log(`[addEntryList] Skip: row=${!!bewerbRow} cols=${bGeschlechtIdx !== -1 || bAlterIdx !== -1}`);
+      }
+    }
+  } else {
+    console.log(`[addEntryList] bewerbValues too short: ${bewerbValues.length}`);
   }
 
   let nextId = 1;

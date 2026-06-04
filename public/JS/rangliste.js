@@ -49,15 +49,27 @@ function startProtectionTimer(box, endDate) {
 
 /** Lädt IDs aller Spieler, die gerade in einer offenen Forderung stecken */
 async function fetchBusyIds() {
-  const res = await readPreMatches({ bewerbId: BEWERB_ID });
-  const { success, preMatches = [] } = res?.data || {};
-  if (!success) return new Set();
+  const res = await readPreMatches();
+  const { success, values = [] } = res?.data || {};
+  if (!success || values.length < 2) return new Set();
+
+  const header = values[0].map((h) => h.trim().toLowerCase());
+  const statusIdx = header.indexOf("status");
+  const bewerbIdx = header.indexOf("bewerbid");
+  const p1Idx = header.indexOf("spielerid1");
+  const p2Idx = header.indexOf("spielerid2");
+  const p3Idx = header.indexOf("spielerid3");
+  const p4Idx = header.indexOf("spielerid4");
 
   const ids = new Set();
-  preMatches.forEach((pm) => {
-    const st = String(pm.status || "").trim().toLowerCase();
+  values.slice(1).forEach((row) => {
+    if (bewerbIdx !== -1) {
+      const rowBewerb = String(row[bewerbIdx] || "").trim();
+      if (rowBewerb !== BEWERB_ID) return;
+    }
+    const st = String(row[statusIdx] || "offen").trim().toLowerCase();
     if (st === "offen" || st === "bestaetigt") {
-      [pm.player1Id, pm.player2Id, pm.player3Id, pm.player4Id]
+      [row[p1Idx], row[p2Idx], row[p3Idx], row[p4Idx]]
         .filter(Boolean)
         .forEach((id) => ids.add(String(id).trim()));
     }
