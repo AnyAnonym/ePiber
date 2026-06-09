@@ -770,36 +770,27 @@ input[type="date"] {
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 1px solid #c4c4c4;
-}
-
-.ranking-legend .legend-swatch.default {
-  background: #fff;
+  border: 1px solid #666;
 }
 
 .ranking-legend .legend-swatch.challengeable {
   background: #e6f9e8;
-  border-color: #2ecc71;
 }
 
 .ranking-legend .legend-swatch.challenged {
   background: #fff6cc;
-  border-color: #f1c40f;
 }
 
 .ranking-legend .legend-swatch.schutz {
   background: #fde8f1;
-  border-color: #d6336c;
 }
 
 .ranking-legend .legend-swatch.sperrzeit {
   background: #f5eef8;
-  border-color: #8e44ad;
 }
 
 .ranking-legend .legend-swatch.protected {
   background: #f5eef8;
-  border-color: #8e44ad;
 }
 
 .ranking-legend .legend-swatch.selected {
@@ -810,7 +801,7 @@ input[type="date"] {
 .box {
   width: 120px;
   height: 70px;
-  border: 3px solid var(--table-border);
+  border: 3px solid #000;
   border-radius: 15px;
   background: #fff;
   display: flex;
@@ -864,19 +855,20 @@ input[type="date"] {
   background: #eaf1fb;
 }
 
+.box.challenge-with-me {
+  border-color: #0b57d0 !important;
+}
+
 .box.challengeable {
-  border-color: #2ecc71;
   background: #e6f9e8;
 }
 
 .box.challenged {
-  border-color: #f1c40f;
   background: #fff6cc;
   cursor: not-allowed;
 }
 
 .box.sperrzeit {
-  border-color: #8e44ad !important;
   background: #f5eef8 !important;
 }
 
@@ -890,7 +882,6 @@ input[type="date"] {
 /* -------------------------------------------------- */
 
 .box.schutz {
-  border-color: #d6336c !important;
   background: #fde8f1 !important;
   cursor: default !important;
 }
@@ -901,7 +892,6 @@ input[type="date"] {
 }
 
 .box.protected {
-  border-color: #8e44ad !important;
   background: #f5eef8 !important;
   cursor: not-allowed !important;
 }

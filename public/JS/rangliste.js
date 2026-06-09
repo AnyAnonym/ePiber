@@ -47,11 +47,11 @@ function startProtectionTimer(box, endDate) {
 //  DATEN-LOADER  (jeder unabhängig – kein Fehler blockiert den anderen)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Lädt IDs aller Spieler, die gerade in einer offenen Forderung stecken */
+/** Lädt IDs aller Spieler in offener Forderung + Rohdaten für Gegner-Analyse */
 async function fetchBusyIds() {
   const res = await readPreMatches();
   const { success, values = [] } = res?.data || {};
-  if (!success || values.length < 2) return new Set();
+  if (!success || values.length < 2) return { busyIds: new Set(), preMatches: [] };
 
   const header = values[0].map((h) => h.trim().toLowerCase());
   const statusIdx = header.indexOf("status");
@@ -61,7 +61,7 @@ async function fetchBusyIds() {
   const p3Idx = header.indexOf("spielerid3");
   const p4Idx = header.indexOf("spielerid4");
 
-  const ids = new Set();
+  const busyIds = new Set();
   values.slice(1).forEach((row) => {
     if (bewerbIdx !== -1) {
       const rowBewerb = String(row[bewerbIdx] || "").trim();
@@ -71,10 +71,10 @@ async function fetchBusyIds() {
     if (st === "offen" || st === "bestaetigt") {
       [row[p1Idx], row[p2Idx], row[p3Idx], row[p4Idx]]
         .filter(Boolean)
-        .forEach((id) => ids.add(String(id).trim()));
+        .forEach((id) => busyIds.add(String(id).trim()));
     }
   });
-  return ids;
+  return { busyIds, preMatches: values };
 }
 
 /**
@@ -148,9 +148,10 @@ async function applyAllRules(container, pyramid, rankedList) {
     fetchMyState(rankedList),
   ]);
 
-  const busyIds = busyRes.status === "fulfilled"
+  const busyData = busyRes.status === "fulfilled"
     ? busyRes.value
-    : (console.warn("⚠️ BusyIds nicht geladen:", busyRes.reason), new Set());
+    : (console.warn("⚠️ BusyIds nicht geladen:", busyRes.reason),
+       { busyIds: new Set(), preMatches: [] });
 
   const { schutzzeitMap, sperrzeitMap } = restrictRes.status === "fulfilled"
     ? restrictRes.value
@@ -161,7 +162,7 @@ async function applyAllRules(container, pyramid, rankedList) {
     ? myRes.value
     : (console.warn("⚠️ Eigener Spieler nicht geladen:", myRes.reason), null);
 
-  console.log(`✅ Daten geladen | Busy: ${busyIds.size} | Schutz: ${schutzzeitMap.size} | Sperre: ${sperrzeitMap.size}`);
+  console.log(`✅ Daten geladen | Busy: ${busyData.busyIds.size} | Schutz: ${schutzzeitMap.size} | Sperre: ${sperrzeitMap.size}`);
 
   // Aktuelle Platzierung speichern für Raushängen-Funktion
   if (myState?.myRank != null) {
@@ -217,10 +218,26 @@ async function applyAllRules(container, pyramid, rankedList) {
     console.log(`⛔ Du bist gesperrt bis: ${myBlockedUntil.toLocaleString("de-AT")}`);
   }
 
-  // ── Schritt 5: DOM ATOMAR aktualisieren  ← erst HIER werden Klassen geändert
+  // ── Schritt 5: Gegner bei Forderungen mit mir ermitteln
+  const myChallengeOpponents = new Set();
+  if (myPlayerId && busyData.preMatches.length >= 2) {
+    const pmHeader = busyData.preMatches[0].map((h) => h.trim().toLowerCase());
+    const pmP1Idx = pmHeader.indexOf("spielerid1");
+    const pmP2Idx = pmHeader.indexOf("spielerid2");
+    busyData.preMatches.slice(1).forEach((row) => {
+      const s1 = String(row[pmP1Idx] || "").trim();
+      const s2 = String(row[pmP2Idx] || "").trim();
+      if (s1 === myPlayerId) myChallengeOpponents.add(s2);
+      if (s2 === myPlayerId) myChallengeOpponents.add(s1);
+    });
+  }
+
+  // ── Schritt 6: DOM ATOMAR aktualisieren  ← erst HIER werden Klassen geändert
   container.querySelectorAll(".box").forEach((b) => {
-    b.classList.remove("selected", "challengeable", "challenged", "protected");
+    b.classList.remove("selected", "challengeable", "challenged", "protected",
+      "schutz", "sperrzeit", "challenge-with-me");
     b.style.cursor = "";
+    b.title = "";
     b.querySelector(".box-timer")?.remove();
   });
 
@@ -235,9 +252,15 @@ async function applyAllRules(container, pyramid, rankedList) {
     // Eigenes Kästchen nie überschreiben
     if (myPlayerId && id === myPlayerId) return;
 
-    // ── 1. Offene Forderung → gelb (gilt für alle, nicht nur forderbare)
-    if (busyIds.has(id)) {
-      box.classList.add("challenged");
+    // ── 1. Offene Forderung (gilt für alle, nicht nur forderbare)
+    if (busyData.busyIds.has(id)) {
+      if (myChallengeOpponents.has(id)) {
+        // Forderung MIT mir → blauer Rahmen
+        box.classList.add("challenge-with-me");
+      } else {
+        // Forderung zwischen anderen → schwarzer Rahmen (Default)
+        box.classList.add("challenged");
+      }
       box.style.cursor = "not-allowed";
       box.title = "Dieser Spieler hat bereits eine offene Forderung";
       return;
@@ -278,9 +301,9 @@ async function applyAllRules(container, pyramid, rankedList) {
     // ── 4. Nicht forderbar, kein gelb/lila → bleibt grau (keine Klasse)
   });
 
-  console.log(`🎨 Forderbar: ${challengeableIds.size} | Busy(gelb): ${
-    [...challengeableIds].filter(id => busyIds.has(id)).length} | Geschützt(rosa): ${
-    [...challengeableIds].filter(id => schutzzeitMap.has(id)).length} | Sperre(lila): ${
+  console.log(`🎨 Forderbar: ${challengeableIds.size} | Busy: ${
+    [...challengeableIds].filter(id => busyData.busyIds.has(id)).length} | Schutz: ${
+    [...challengeableIds].filter(id => schutzzeitMap.has(id)).length} | Sperre: ${
     [...challengeableIds].filter(id => sperrzeitMap.has(id)).length}`);
 }
 
@@ -382,9 +405,8 @@ function renderRankingLegend() {
   );
 
   const items = [];
-  // "Nicht forderbar" und "Forderbar" nur sichtbar für eingeloggte Nutzer
+  // "Forderbar" nur sichtbar für eingeloggte Nutzer
   if (isLoggedIn) {
-    items.push('<div class="legend-item"><span class="legend-swatch default"></span><span>Nicht forderbar</span></div>');
     items.push('<div class="legend-item"><span class="legend-swatch challengeable"></span><span>Forderbar</span></div>');
   }
   // Diese Einträge sind für alle sichtbar
