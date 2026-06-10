@@ -52,9 +52,12 @@ export const addMatch = onCall(async (request) => {
       const i3 = preHeader.indexOf("spielerid3");
       const i4 = preHeader.indexOf("spielerid4");
       const st = preHeader.indexOf("status");
+      const bIdx = preHeader.indexOf("bewerbid");
 
       for (let i = 1; i < preValues.length; i++) {
         const row = preValues[i];
+        const rowBewerb = bIdx !== -1 ? String(row[bIdx] || "").trim() : "";
+        if (rowBewerb !== resolvedBewerbId) continue;
         const rowStatus = String(row[st] || "offen").trim().toLowerCase();
         if (rowStatus === "offen" || rowStatus === "bestaetigt") {
           const existing = [

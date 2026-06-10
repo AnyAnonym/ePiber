@@ -224,11 +224,20 @@ async function applyAllRules(container, pyramid, rankedList) {
     const pmHeader = busyData.preMatches[0].map((h) => h.trim().toLowerCase());
     const pmP1Idx = pmHeader.indexOf("spielerid1");
     const pmP2Idx = pmHeader.indexOf("spielerid2");
+    const pmP3Idx = pmHeader.indexOf("spielerid3");
+    const pmP4Idx = pmHeader.indexOf("spielerid4");
+    const pmStatusIdx = pmHeader.indexOf("status");
+    const pmBewerbIdx = pmHeader.indexOf("bewerbid");
     busyData.preMatches.slice(1).forEach((row) => {
-      const s1 = String(row[pmP1Idx] || "").trim();
-      const s2 = String(row[pmP2Idx] || "").trim();
-      if (s1 === myPlayerId) myChallengeOpponents.add(s2);
-      if (s2 === myPlayerId) myChallengeOpponents.add(s1);
+      if (pmBewerbIdx !== -1 && String(row[pmBewerbIdx] || "").trim() !== BEWERB_ID) return;
+      const st = String(row[pmStatusIdx] || "offen").trim().toLowerCase();
+      if (st !== "offen" && st !== "bestaetigt") return;
+      const players = [pmP1Idx, pmP2Idx, pmP3Idx, pmP4Idx]
+        .map((idx) => (idx !== -1 ? String(row[idx] || "").trim() : ""))
+        .filter(Boolean);
+      if (players.includes(myPlayerId)) {
+        players.forEach((p) => { if (p !== myPlayerId) myChallengeOpponents.add(p); });
+      }
     });
   }
 
@@ -254,13 +263,12 @@ async function applyAllRules(container, pyramid, rankedList) {
 
     // ── 1. Offene Forderung (gilt für alle, nicht nur forderbare)
     if (busyData.busyIds.has(id)) {
+      box.classList.add("challenged");
       if (myChallengeOpponents.has(id)) {
-        // Forderung MIT mir → blauer Rahmen
+        // Forderung MIT mir → gelber Hintergrund + blauer Rahmen
         box.classList.add("challenge-with-me");
-      } else {
-        // Forderung zwischen anderen → schwarzer Rahmen (Default)
-        box.classList.add("challenged");
       }
+      // Forderung zwischen anderen → gelber Hintergrund + schwarzer Rahmen
       box.style.cursor = "not-allowed";
       box.title = "Dieser Spieler hat bereits eine offene Forderung";
       return;
@@ -497,9 +505,19 @@ export async function renderRanking() {
       `;
 
       rowEl.appendChild(box);
-      box.addEventListener("click", () =>
-        window.openProfileModal({ playerId: player.playerId || "", boxElement: box })
-      );
+      box.addEventListener("click", () => {
+        const isLoggedIn = Boolean(
+          localStorage.getItem("currentUserEmail") ||
+          localStorage.getItem("loggedInEmail") ||
+          localStorage.getItem("currentUserId")
+        );
+        if (isLoggedIn) {
+          window.openProfileModal({
+            playerId: player.playerId || "",
+            boxElement: box,
+          });
+        }
+      });
 
       rowBoxes.push({
         rank:     player.rank,

@@ -404,22 +404,21 @@ window.openProfileModal = async (profileOptions = {}) => {
     const firstName = player.firstName || "---";
     const lastName = player.lastName || "---";
     const birthDate = player.birthDate || "---";
+    const telefon = (player.telefon || "").trim().replace(/^0043/, "+43") || "---";
     const fullName = `${firstName} ${lastName}`.trim() || "Unbekannter Spieler";
 
     profileName.textContent = fullName;
     profileText.innerHTML = `
-      <strong>Geburtsdatum:</strong> ${birthDate}
+      <strong>Geburtsdatum:</strong> ${birthDate}<br>
+      <strong>Telefon:</strong> ${telefon}
     `;
 
     if (!profileOptions.playerId) {
       localStorage.setItem("currentUserName", fullName);
     }
 
-    const canChallenge = typeof profileOptions.canChallenge === "boolean"
-      ? profileOptions.canChallenge
-      : !!profileOptions.boxElement?.classList.contains("challengeable");
-
-    if (canChallenge) {
+    // "Fordern"-Button nur bei fremden Profilen (playerId gesetzt)
+    if (profileOptions.playerId) {
       const challengeBtn = document.createElement("button");
       challengeBtn.type = "button";
       challengeBtn.className = "btn-login";

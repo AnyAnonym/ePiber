@@ -30,6 +30,8 @@ function parsePlayerHeader(rows) {
     hashIdx: header.indexOf("passwdhash"),
     birthIdx: header.indexOf("geburtsdatum"),
     kennwortVergessenIdx: header.indexOf("kennwortvergessen"),
+    telefonIdx: header.indexOf("telefonmobil"),
+    aktivIdx: header.indexOf("aktiv"),
   };
 }
 
@@ -44,6 +46,7 @@ export async function readPlayerDetailsData(sheets) {
     fullName: `${(row[idx.firstNameIdx] || "").trim()} ${(row[idx.lastNameIdx] || "").trim()}`.trim(),
     email: row[idx.emailIdx] || "",
     birthDate: row[idx.birthIdx] || "",
+    telefon: row[idx.telefonIdx] || "",
   }));
 }
 

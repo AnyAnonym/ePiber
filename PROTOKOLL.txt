@@ -1079,5 +1079,28 @@ Die Tabelle "Bewerb" enthält zwei neue Spalten für Eintragungs-Voraussetzungen
   * `window.getStorageTimestamp()` → JJMMDD-hhmm für Sheet-Speicherung
   * Alle Altersberechnungen und Zeitstempel nutzen diese zentrale Quelle
 
+18. SPIELER-TABELLE: Telefon & Aktiv (10.06.2026)
+===============================================================================
+
+Die "Personen"-Tabelle enthält zwei neue Spalten für die Spieler-Übersicht:
+
+- **TelefonMobil**: Enthält die Mobiltelefonnummer.
+  * Anzeige in der Spieler-Tabelle: Präfix `0043` wird durch `+43` ersetzt.
+  * Bei leerem Feld wird `---` als Platzhalter angezeigt.
+
+- **Aktiv**: Zeigt an, ob der Spieler noch aktiv ist.
+  * `1` → Haken-Emoji (✅)
+  * `0` oder leer → keine Anzeige
+
+Backend-Änderungen (`functions/tables/personen.js`):
+- `parsePlayerHeader()`: `telefonIdx` (telefonmobil) und `aktivIdx` (aktiv) hinzugefügt
+- `readPlayersList()`: Rückgabe unverändert (`{success: true, values}` – rohes 2D-Array)
+
+Frontend-Änderungen (`public/JS/playerList.js`):
+- `formatTelefon(val)`: Ersetzt `0043` → `+43`, leere Werte → `---`
+- `formatAktiv(val)`: `"1"` → `"✅"`, alles andere → `""`
+- Header-Parsing über Spaltennamen (`id`, `vorname`, `nachname`, `telefonmobil`, `aktiv`)
+- Table-Rendering: 4 Spalten (ID, Name, Telefon, Aktiv)
+
 ENDE DES PROTOKOLLS
 ================================================================================
