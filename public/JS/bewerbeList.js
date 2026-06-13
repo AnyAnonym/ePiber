@@ -72,11 +72,16 @@ function createCard(b, _isUpcoming) {
     const userId = localStorage.getItem("currentUserId");
     const endDate = parseSheetDate(b.bewerbsende);
     const isEnded = endDate ? endDate < new Date() : false;
+    const deadline = parseSheetDate(b.entrydeadline);
+    const isPastDeadline = deadline ? deadline < new Date() : false;
+    const entryStart = parseSheetDate(b.entrystart);
+    const isBeforeStart = entryStart ? entryStart > new Date() : false;
+    const target = isPastDeadline ? `bewerbsRaster.html?id=${b.id}` : `entryList.html?id=${b.id}`;
 
-    if (userId && !isEnded) {
+    if (userId && !isEnded && !isBeforeStart) {
       card.classList.add("clickable");
       card.addEventListener("click", () => {
-        window.location.href = `entryList.html?id=${b.id}`;
+        window.location.href = target;
       });
     }
   }

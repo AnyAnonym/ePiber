@@ -11,6 +11,29 @@ const readBewerbe     = httpsCallable(functions, "readBewerbe");
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
 let currentEntries = [];
+let entryStartDate = null;
+let entryDeadlineDate = null;
+
+function parseSheetDate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const m8 = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m8) return new Date(+m8[1], +m8[2] - 1, +m8[3]);
+  const m6 = s.match(/^(\d{2})(\d{2})(\d{2})/);
+  if (m6) {
+    const y = +m6[1] >= 50 ? 1900 + +m6[1] : 2000 + +m6[1];
+    return new Date(y, +m6[2] - 1, +m6[3]);
+  }
+  return null;
+}
+
+function isEntryPeriodActive() {
+  const now = new Date();
+  if (entryStartDate && now < entryStartDate) return false;
+  if (entryDeadlineDate && now > entryDeadlineDate) return false;
+  return true;
+}
 
 function formatDateTime(date) {
   const yyyy = date.getFullYear();
@@ -166,6 +189,11 @@ async function handleEntrySubmit(btn) {
     return;
   }
 
+  if (!isEntryPeriodActive()) {
+    showToast("Die Eintragungsfrist ist nicht aktiv.", "error");
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = "Sende...";
 
@@ -207,9 +235,15 @@ async function loadBewerbsName() {
     const bHeader = bewerbeValues[0].map((h) => h.trim().toLowerCase());
     const bIdIdx = bHeader.indexOf("id");
     const bBezIdx = bHeader.indexOf("bezeichnung");
+    const bEntryStartIdx = bHeader.indexOf("entrystart");
+    const bEntryDeadlineIdx = bHeader.indexOf("entrydeadline");
     const bewerbRow = bewerbeValues.slice(1).find((r) => String(r[bIdIdx] || "").trim() === String(BEWERB_ID).trim());
-    if (bewerbRow && bewerbRow[bBezIdx]) {
-      heading.textContent = `Eintragungs Liste für ${bewerbRow[bBezIdx]}`;
+    if (bewerbRow) {
+      if (bewerbRow[bBezIdx]) {
+        heading.textContent = `Eintragungs Liste für ${bewerbRow[bBezIdx]}`;
+      }
+      entryStartDate = bEntryStartIdx !== -1 ? parseSheetDate(bewerbRow[bEntryStartIdx]) : null;
+      entryDeadlineDate = bEntryDeadlineIdx !== -1 ? parseSheetDate(bewerbRow[bEntryDeadlineIdx]) : null;
     }
   } catch (err) {
     console.warn("Bewerbsname konnte nicht geladen werden:", err);
@@ -254,6 +288,25 @@ function initToolbar() {
   toolbar.innerHTML = "";
   if (!BEWERB_ID) return;
 
+  const active = isEntryPeriodActive();
+  let statusMsg = "";
+  if (!active && entryStartDate) {
+    const dd = String(entryStartDate.getDate()).padStart(2, "0");
+    const mm = String(entryStartDate.getMonth() + 1).padStart(2, "0");
+    statusMsg = `Eintragungsliste beginnt erst am ${dd}.${mm}.${entryStartDate.getFullYear()}.`;
+  } else if (!active && entryDeadlineDate) {
+    const dd = String(entryDeadlineDate.getDate()).padStart(2, "0");
+    const mm = String(entryDeadlineDate.getMonth() + 1).padStart(2, "0");
+    statusMsg = `Eintragungsliste endete am ${dd}.${mm}.${entryDeadlineDate.getFullYear()}.`;
+  }
+
+  if (statusMsg) {
+    const msg = document.createElement("p");
+    msg.className = "bewerb-date-info";
+    msg.textContent = statusMsg;
+    toolbar.appendChild(msg);
+  }
+
   const personenId = localStorage.getItem("currentUserId");
   if (!personenId) {
     const btn = document.createElement("button");
@@ -273,7 +326,7 @@ function initToolbar() {
     btn.textContent = "Austragen";
     btn.addEventListener("click", () => handleEntryRemove(btn));
     toolbar.appendChild(btn);
-  } else {
+  } else if (active) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn-login";
@@ -284,6 +337,6 @@ function initToolbar() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await loadEntries();
   await loadBewerbsName();
+  await loadEntries();
 });

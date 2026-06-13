@@ -1656,13 +1656,87 @@ input[type="date"] {
   }
 
 
+.bewerb-date-info {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #fff3cd;
+  border-radius: 6px;
+  color: #856404;
+  font-size: 0.9rem;
+}
+
 /* -------------------------------------------------- */
-/*  RESPONSIVE PYRAMID                                 */
+/*  BRACKET / TURNIERRASTER                           */
 /* -------------------------------------------------- */
-/*  RESPONSIVE PYRAMID                                 */
-/* -------------------------------------------------- */
-/*  RESPONSIVE PYRAMID                                 */
-/* -------------------------------------------------- */
+
+.bracket {
+  display: flex;
+  flex-direction: row;
+  gap: 40px;
+  overflow-x: auto;
+  padding: 16px 0;
+  justify-content: center;
+}
+
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  min-width: 160px;
+  gap: 16px;
+}
+
+.bracket-round-header {
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  color: var(--muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bracket-match {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.bracket-player {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  background: #fff;
+  border-bottom: 1px solid #e6e6e6;
+  white-space: nowrap;
+}
+
+.bracket-player:last-child {
+  border-bottom: none;
+}
+
+.bracket-player.bye {
+  color: #999;
+  font-style: italic;
+}
+
+.bracket-player-count {
+  display: inline-block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+@media (max-width: 768px) {
+  .bracket-round {
+    min-width: 120px;
+  }
+  .bracket-player {
+    font-size: 0.75rem;
+    padding: 6px 10px;
+  }
+}
 
 /* -------------------------------------------------- */
 /*  RESPONSIVE PYRAMID                                 */

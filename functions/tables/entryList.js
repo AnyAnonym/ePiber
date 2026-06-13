@@ -23,6 +23,26 @@ export const readEntryList = onCall(async (request) => {
   }
 });
 
+function parseSheetDate(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const m8 = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m8) return new Date(+m8[1], +m8[2] - 1, +m8[3]);
+  const m6 = s.match(/^(\d{2})(\d{2})(\d{2})/);
+  if (m6) {
+    const y = +m6[1] >= 50 ? 1900 + +m6[1] : 2000 + +m6[1];
+    return new Date(y, +m6[2] - 1, +m6[3]);
+  }
+  return null;
+}
+
+function formatSimpleDate(d) {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}.${mm}.${d.getFullYear()}`;
+}
+
 function parseBirthdate(raw) {
   if (!raw) return null;
   const s = String(raw).trim();
@@ -121,6 +141,8 @@ export async function addEntryListData(sheets, {bewerbId, personenId, datum}) {
   if (bewerbValues.length >= 2) {
     const bHeader = bewerbValues[0].map((h) => h.trim().toLowerCase());
     const bIdIdx = bHeader.indexOf("id");
+    const bEntryStartIdx = bHeader.indexOf("entrystart");
+    const bEntryDeadlineIdx = bHeader.indexOf("entrydeadline");
     const bGeschlechtIdx = bHeader.indexOf("geschlecht");
     const bAlterIdx = bHeader.indexOf("alterskategorie");
 
@@ -128,6 +150,20 @@ export async function addEntryListData(sheets, {bewerbId, personenId, datum}) {
 
     if (bIdIdx !== -1) {
       const bewerbRow = bewerbValues.slice(1).find((r) => String(r[bIdIdx] || "").trim() === String(bewerbId).trim());
+      if (bewerbRow) {
+        if (bEntryStartIdx !== -1 && bewerbRow[bEntryStartIdx]) {
+          const start = parseSheetDate(bewerbRow[bEntryStartIdx]);
+          if (start && new Date() < start) {
+            throw new Error(`Eintragungsliste beginnt erst am ${formatSimpleDate(start)}.`);
+          }
+        }
+        if (bEntryDeadlineIdx !== -1 && bewerbRow[bEntryDeadlineIdx]) {
+          const end = parseSheetDate(bewerbRow[bEntryDeadlineIdx]);
+          if (end && new Date() > end) {
+            throw new Error(`Eintragungsliste endete am ${formatSimpleDate(end)}.`);
+          }
+        }
+      }
       if (bewerbRow && (bGeschlechtIdx !== -1 || bAlterIdx !== -1) && playerValues.length >= 2) {
         const pHeader = playerValues[0].map((h) => h.trim().toLowerCase());
         const pIdIdx = pHeader.indexOf("id");
