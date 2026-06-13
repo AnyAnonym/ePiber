@@ -218,6 +218,9 @@ async function applyAllRules(container, pyramid, rankedList) {
     console.log(`⛔ Du bist gesperrt bis: ${myBlockedUntil.toLocaleString("de-AT")}`);
   }
 
+  // ── Schritt 4b: Habe ich selbst eine offene Forderung?
+  const iAmBusy = myPlayerId ? busyData.busyIds.has(myPlayerId) : false;
+
   // ── Schritt 5: Gegner bei Forderungen mit mir ermitteln
   const myChallengeOpponents = new Set();
   if (myPlayerId && busyData.preMatches.length >= 2) {
@@ -292,7 +295,12 @@ async function applyAllRules(container, pyramid, rankedList) {
 
     // ── 4. Nur forderbare Positionen werden hier weiter behandelt
     if (challengeableIds.has(id)) {
-      if (iAmBlocked) {
+      if (iAmBusy) {
+        // Ich habe bereits eine offene Forderung → nicht forderbar
+        box.title = "Du hast bereits eine offene Forderung";
+        box.style.cursor = "not-allowed";
+
+      } else if (iAmBlocked) {
         // Ich selbst habe Sperrzeit → alle forderbaren Positionen lila
         box.classList.add("protected");
         box.style.cursor = "not-allowed";
@@ -412,25 +420,34 @@ function renderRankingLegend() {
     localStorage.getItem("currentUserId")
   );
 
-  const items = [];
-  // "Forderbar" nur sichtbar für eingeloggte Nutzer
+  const itemsBox = [];
+  const itemsFrame = [];
+  // "Forderbar" und "Ich" nur sichtbar für eingeloggte Nutzer
   if (isLoggedIn) {
-    items.push('<div class="legend-item"><span class="legend-swatch challengeable"></span><span>Forderbar</span></div>');
+    itemsBox.push('<div class="legend-item"><span class="legend-swatch challengeable"></span><span>Forderbar</span></div>');
+    itemsBox.push('<div class="legend-item"><span class="legend-swatch selected"></span><span>Ich</span></div>');
   }
   // Diese Einträge sind für alle sichtbar
-  items.push('<div class="legend-item"><span class="legend-swatch challenged"></span><span>In offener Forderung</span></div>');
-  items.push('<div class="legend-item"><span class="legend-swatch schutz"></span><span>Schutzzeit</span></div>');
-  items.push('<div class="legend-item"><span class="legend-swatch sperrzeit"></span><span>Sperrzeit</span></div>');
-  // "Mein Kästchen" nur für eingeloggte Nutzer
+  itemsBox.push('<div class="legend-item"><span class="legend-swatch challenged"></span><span>In offener Forderung</span></div>');
+  itemsBox.push('<div class="legend-item"><span class="legend-swatch schutz"></span><span>Schutzzeit</span></div>');
+  itemsBox.push('<div class="legend-item"><span class="legend-swatch sperrzeit"></span><span>Sperrzeit</span></div>');
+
+  // Rahmen-Sektion (nur für eingeloggte Nutzer)
   if (isLoggedIn) {
-    items.push('<div class="legend-item"><span class="legend-swatch selected"></span><span>Mein Kästchen</span></div>');
+    itemsFrame.push('<div class="legend-item"><span class="legend-swatch challenge-with-me"></span><span>Mit mir in einer offenen Forderung</span></div>');
+  }
+
+  const sections = [];
+  sections.push('<div class="legend-subheading">Kästchen</div>');
+  sections.push('<div class="legend-items">' + itemsBox.join("") + '</div>');
+  if (itemsFrame.length) {
+    sections.push('<div class="legend-subheading">Rahmen</div>');
+    sections.push('<div class="legend-items">' + itemsFrame.join("") + '</div>');
   }
 
   legend.innerHTML = `
     <div class="legend-label">Legende:</div>
-    <div class="legend-items">
-      ${items.join("\n      ")}
-    </div>
+    ${sections.join("\n")}
     <button id="withdrawBtn" class="btn-login" style="margin-top: 12px; width: 100%; display: ${isLoggedIn ? 'block' : 'none'};">Raushängen</button>
   `;
 

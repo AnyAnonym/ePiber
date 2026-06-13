@@ -770,7 +770,6 @@ input[type="date"] {
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  border: 1px solid #666;
 }
 
 .ranking-legend .legend-swatch.challengeable {
@@ -782,20 +781,31 @@ input[type="date"] {
 }
 
 .ranking-legend .legend-swatch.schutz {
-  background: #fde8f1;
+  background: #f4b8c8;
 }
 
 .ranking-legend .legend-swatch.sperrzeit {
-  background: #f5eef8;
+  background: #dcc7e8;
 }
 
 .ranking-legend .legend-swatch.protected {
-  background: #f5eef8;
+  background: #dcc7e8;
 }
 
 .ranking-legend .legend-swatch.selected {
   background: #eaf1fb;
-  border-color: #0b57d0;
+  border: 1px solid #0b57d0;
+}
+
+.ranking-legend .legend-swatch.challenge-with-me {
+  background: #fff;
+  border: 1px solid #0b57d0;
+}
+
+.ranking-legend .legend-subheading {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-top: 8px;
 }
 
 .box {
@@ -821,7 +831,7 @@ input[type="date"] {
   position: absolute;
   font-size: 4rem;
   font-weight: 900;
-  color: #e0e0e0;
+  color: #b0b0b0;
   z-index: 0;
   user-select: none;
   pointer-events: none;
@@ -869,11 +879,11 @@ input[type="date"] {
 }
 
 .box.sperrzeit {
-  background: #f5eef8 !important;
+  background: #dcc7e8 !important;
 }
 
 .box.sperrzeit:hover {
-  background: #e8daef !important;
+  background: #ceb5dd !important;
   box-shadow: 0 2px 8px rgba(142, 68, 173, 0.25);
 }
 
@@ -882,22 +892,22 @@ input[type="date"] {
 /* -------------------------------------------------- */
 
 .box.schutz {
-  background: #fde8f1 !important;
+  background: #f4b8c8 !important;
   cursor: default !important;
 }
 
 .box.schutz:hover {
-  background: #f8d5e2 !important;
+  background: #eba0b4 !important;
   box-shadow: 0 2px 8px rgba(214, 51, 108, 0.25);
 }
 
 .box.protected {
-  background: #f5eef8 !important;
+  background: #dcc7e8 !important;
   cursor: not-allowed !important;
 }
 
 .box.protected:hover {
-  background: #e8daef !important;
+  background: #ceb5dd !important;
   box-shadow: 0 2px 8px rgba(142, 68, 173, 0.25);
 }
 
