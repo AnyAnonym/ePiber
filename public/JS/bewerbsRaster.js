@@ -2,100 +2,149 @@ import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
-const readEntryList    = httpsCallable(functions, "readEntryList");
+const readPreMatches   = httpsCallable(functions, "readPreMatches");
 const readPlayersList  = httpsCallable(functions, "readPlayersList");
 const readBewerbe      = httpsCallable(functions, "readBewerbe");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
 
-function buildBracket(players) {
-  if (players.length === 0) return [];
-
-  const n = players.length;
-  const size = Math.pow(2, Math.ceil(Math.log2(n)));
-  const rounds = Math.log2(size);
-  const tree = [];
-
-  for (let r = 0; r < rounds; r++) {
-    const matchesInRound = size / Math.pow(2, r + 1);
-    tree[r] = [];
-    for (let m = 0; m < matchesInRound; m++) {
-      tree[r][m] = { top: null, bottom: null };
-    }
-  }
-
-  for (let i = 0; i < size; i++) {
-    const player = i < n ? players[i] : null;
-    const matchIdx = Math.floor(i / 2);
-    if (i % 2 === 0) {
-      tree[0][matchIdx].top = player;
-    } else {
-      tree[0][matchIdx].bottom = player;
-    }
-  }
-
-  return tree;
+function parseRaster(val) {
+  if (!val) return null;
+  const s = String(val).trim().toUpperCase();
+  if (!s) return null;
+  if (s === "F") return { roundKey: "F", match: 1, roundName: "Finale", order: 7 };
+  const m = s.match(/^(R[1-9]|AF|VF|HF)-P(\d+)$/);
+  if (!m) return null;
+  const LABELS = {
+    R1: "1. Runde", R2: "2. Runde", R3: "3. Runde",
+    AF: "Achtelfinale", VF: "Viertelfinale", HF: "Halbfinale",
+  };
+  const ORDER = { R1: 1, R2: 2, R3: 3, AF: 4, VF: 5, HF: 6, F: 7 };
+  return {
+    roundKey: m[1],
+    match: parseInt(m[2], 10),
+    roundName: LABELS[m[1]] || m[1],
+    order: ORDER[m[1]] || 99,
+  };
 }
 
-function renderBracket(tree) {
+function buildRounds(data, header, playerMap) {
+  const h = header.map((c) => String(c).trim().toLowerCase());
+  const bwIdx = h.indexOf("bewerbid");
+  const p1Idx = h.indexOf("spielerid1");
+  const p2Idx = h.indexOf("spielerid2");
+  const p3Idx = h.indexOf("spielerid3");
+  const p4Idx = h.indexOf("spielerid4");
+  const rtIdx = h.indexOf("rasterpaarung");
+
+  const rounds = {};
+
+  data.forEach((row) => {
+    if (bwIdx >= 0) {
+      const rowBw = String(row[bwIdx] || "").trim();
+      if (rowBw !== String(BEWERB_ID).trim()) return;
+    }
+
+    const rasterRaw = rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "";
+    const p = parseRaster(rasterRaw);
+    if (!p) return;
+
+    const p1 = String(row[p1Idx] || "").trim();
+    const p2 = String(row[p2Idx] || "").trim();
+    const p3 = String(row[p3Idx] || "").trim();
+    const p4 = String(row[p4Idx] || "").trim();
+
+    if (!rounds[p.roundKey]) {
+      rounds[p.roundKey] = {
+        roundKey: p.roundKey,
+        roundName: p.roundName,
+        order: p.order,
+        matches: [],
+      };
+    }
+
+    rounds[p.roundKey].matches.push({
+      matchNum: p.match,
+      top: {
+        id: p1,
+        name: playerMap.get(p1) || null,
+        partner: p2 ? playerMap.get(p2) || null : null,
+      },
+      bottom: {
+        id: p3,
+        name: playerMap.get(p3) || null,
+        partner: p4 ? playerMap.get(p4) || null : null,
+      },
+    });
+  });
+
+  Object.values(rounds).forEach((r) => {
+    r.matches.sort((a, b) => a.matchNum - b.matchNum);
+  });
+
+  return Object.values(rounds).sort((a, b) => a.order - b.order);
+}
+
+function renderBracket(bracketRounds) {
   const container = document.getElementById("bracketContainer");
   if (!container) return;
 
   container.innerHTML = "";
 
-  if (!tree || tree.length === 0) {
-    container.innerHTML = "<p>Keine Spieler im Raster.</p>";
+  if (!bracketRounds || bracketRounds.length === 0) {
+    container.innerHTML = "<p>Keine Rasterdaten für diesen Bewerb.</p>";
     return;
   }
 
-  const roundNames = ["Achtelfinale", "Viertelfinale", "Halbfinale", "Finale"];
-  const numRounds = tree.length;
+  const wrapper = document.createElement("div");
+  wrapper.className = "bracket";
 
-  const bracketDiv = document.createElement("div");
-  bracketDiv.className = "bracket";
-
-  tree.forEach((round, rIdx) => {
-    const roundDiv = document.createElement("div");
-    roundDiv.className = "bracket-round";
-
-    const roundNum = numRounds - rIdx;
-    const label = roundNames[roundNum - 1] || `Runde ${roundNum}`;
+  bracketRounds.forEach((round) => {
+    const col = document.createElement("div");
+    col.className = "bracket-round";
 
     const header = document.createElement("div");
     header.className = "bracket-round-header";
-    header.textContent = label;
-    roundDiv.appendChild(header);
+    header.textContent = round.roundName;
+    col.appendChild(header);
 
-    round.forEach((match) => {
-      const matchDiv = document.createElement("div");
-      matchDiv.className = "bracket-match";
+    round.matches.forEach((match) => {
+      const md = document.createElement("div");
+      md.className = "bracket-match";
 
-      [match.top, match.bottom].forEach((entry) => {
-        const div = document.createElement("div");
-        div.className = "bracket-player";
-        if (entry) {
-          div.textContent = entry.name;
-          div.dataset.playerId = entry.id;
-          div.addEventListener("click", () => {
+      [match.top, match.bottom].forEach((slot) => {
+        const el = document.createElement("div");
+        el.className = "bracket-player";
+
+        let label = "—";
+        if (slot.name) {
+          label = slot.name;
+          if (slot.partner) label += ` + ${slot.partner}`;
+        }
+
+        el.textContent = label;
+        if (!slot.name) el.classList.add("bye");
+
+        if (slot.id) {
+          el.dataset.playerId = slot.id;
+          el.addEventListener("click", () => {
             if (typeof window.openProfileModal === "function") {
-              window.openProfileModal(entry.id);
+              window.openProfileModal(slot.id);
             }
           });
-        } else {
-          div.textContent = "—";
-          div.classList.add("bye");
         }
-        matchDiv.appendChild(div);
+
+        md.appendChild(el);
       });
 
-      roundDiv.appendChild(matchDiv);
+      col.appendChild(md);
     });
 
-    bracketDiv.appendChild(roundDiv);
+    wrapper.appendChild(col);
   });
 
-  container.appendChild(bracketDiv);
+  container.appendChild(wrapper);
 }
 
 async function loadBracket() {
@@ -112,72 +161,57 @@ async function loadBracket() {
   if (container) container.innerHTML = "<p class='loading-text'>Lade Raster...</p>";
 
   try {
-    const [bewerbRes, entryRes, playerRes] = await Promise.all([
+    const [bewerbRes, preRes, playerRes] = await Promise.all([
       readBewerbe(),
-      readEntryList({ bewerbId: BEWERB_ID }),
+      readPreMatches(),
       readPlayersList(),
     ]);
 
     const bewerbValues = bewerbRes.data?.values || [];
-    const entryValues = entryRes.data?.values || [];
+    const preValues = preRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
 
     let bewerbName = `Bewerb ${BEWERB_ID}`;
     if (bewerbValues.length > 1) {
-      const bHeader = bewerbValues[0].map((h) => h.trim().toLowerCase());
-      const bIdIdx = bHeader.indexOf("id");
-      const bBezIdx = bHeader.indexOf("bezeichnung");
+      const bh = bewerbValues[0].map((h) => String(h).trim().toLowerCase());
+      const idIdx = bh.indexOf("id");
+      const bzIdx = bh.indexOf("bezeichnung");
       const row = bewerbValues.slice(1).find(
-        (r) => String(r[bIdIdx] || "").trim() === String(BEWERB_ID).trim());
-      if (row && row[bBezIdx]) bewerbName = row[bBezIdx];
+        (r) => String(r[idIdx] || "").trim() === String(BEWERB_ID).trim());
+      if (row && row[bzIdx]) bewerbName = row[bzIdx];
     }
-
     if (heading) heading.textContent = `Turnierraster – ${bewerbName}`;
 
     const playerMap = new Map();
     if (playerValues.length > 1) {
-      const pHeader = playerValues[0].map((h) => h.trim().toLowerCase());
-      const pIdIdx = pHeader.indexOf("id");
-      const pFnIdx = pHeader.indexOf("vorname");
-      const pLnIdx = pHeader.indexOf("nachname");
+      const ph = playerValues[0].map((h) => String(h).trim().toLowerCase());
+      const pidIdx = ph.indexOf("id");
+      const pfnIdx = ph.indexOf("vorname");
+      const plnIdx = ph.indexOf("nachname");
       playerValues.slice(1).forEach((r) => {
-        const id = String(r[pIdIdx] || "").trim();
-        const name = `${(r[pFnIdx] || "").trim()} ${(r[pLnIdx] || "").trim()}`.trim();
+        const id = String(r[pidIdx] || "").trim();
+        const name = [r[pfnIdx], r[plnIdx]].filter(Boolean).map((s) => String(s).trim()).join(" ");
         if (id) playerMap.set(id, name);
       });
     }
 
-    let playerIds = [];
-    if (entryValues.length > 1) {
-      const eHeader = entryValues[0].map((h) => h.trim().toLowerCase());
-      const eBewerbIdx = eHeader.findIndex((h) =>
-        ["bewerbid", "bewerb id", "bewerb-id", "bewerb", "bewerbsid", "bewerbs id"].includes(h));
-      const ePersonenIdx = eHeader.findIndex((h) =>
-        ["personenid", "personen id", "personen-id", "personid",
-          "person id", "playerid", "player id", "spielerid", "spieler id"].includes(h));
-      playerIds = entryValues.slice(1)
-        .filter((r) => String(r[eBewerbIdx] || "").trim() === String(BEWERB_ID).trim())
-        .map((r) => String(r[ePersonenIdx] || "").trim())
-        .filter(Boolean);
-    }
-
-    if (playerIds.length === 0) {
-      if (container) container.innerHTML = "<p>Keine Eintragungen für diesen Bewerb.</p>";
+    if (preValues.length < 2) {
+      if (container) container.innerHTML = "<p>Keine Rasterdaten vorhanden.</p>";
       if (info) info.textContent = "";
       return;
     }
 
-    const players = playerIds.map((id) => ({
-      id,
-      name: playerMap.get(id) || `Spieler ${id}`,
-    }));
+    const header = preValues[0];
+    const data = preValues.slice(1);
 
+    const bracketRounds = buildRounds(data, header, playerMap);
+
+    const totalMatches = bracketRounds.reduce((sum, r) => sum + r.matches.length, 0);
     if (info) {
-      info.innerHTML = `<span class="bracket-player-count">${players.length} Teilnehmer</span>`;
+      info.innerHTML = `<span class="bracket-player-count">${bracketRounds.length} Runden, ${totalMatches} Partien</span>`;
     }
 
-    const tree = buildBracket(players);
-    renderBracket(tree);
+    renderBracket(bracketRounds);
 
   } catch (err) {
     console.error("Fehler beim Laden des Turnierrasters:", err);
