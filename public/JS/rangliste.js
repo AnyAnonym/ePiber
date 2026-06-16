@@ -301,11 +301,9 @@ async function applyAllRules(container, pyramid, rankedList) {
         box.style.cursor = "not-allowed";
 
       } else if (iAmBlocked) {
-        // Ich selbst habe Sperrzeit → alle forderbaren Positionen lila
-        box.classList.add("protected");
+        // Ich selbst habe Sperrzeit → forderbare Positionen sind nicht klickbar
         box.style.cursor = "not-allowed";
         box.title = `Du hast Sperrzeit – läuft ab am ${myBlockedUntil.toLocaleString("de-AT")}`;
-        startProtectionTimer(box, myBlockedUntil);
 
       } else {
         // Alles OK → grün, kann gefordert werden

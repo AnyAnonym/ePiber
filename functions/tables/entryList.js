@@ -16,6 +16,10 @@ export const readEntryList = onCall(async (request) => {
 
     const sheets = await getSheetsClient(true);
     const values = await readEntryListData(sheets);
+    console.log(`[readEntryList] BewerbId=${bewerbId} rows=${values.length} header=${JSON.stringify(values[0] || [])}`);
+    if (values.length > 1) {
+      console.log(`[readEntryList] first data row=${JSON.stringify(values[1])}`);
+    }
     return {success: true, values, bewerbId};
   } catch (err) {
     console.error("Fehler in readEntryList:", err);
@@ -212,12 +216,15 @@ export async function addEntryListData(sheets, {bewerbId, personenId, datum}) {
     }
   }
 
-  await sheets.spreadsheets.values.append({
+  console.log(`[addEntryList] Writing entry: id=${nextId} bewerb=${bewerbId} person=${personenId} datum=${datum}`);
+
+  const appendRes = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
     range: "EntryList",
     valueInputOption: "USER_ENTERED",
     requestBody: {values: [[nextId, bewerbId, personenId, datum]]},
   });
+  console.log(`[addEntryList] Append response: ${JSON.stringify(appendRes.status)}`);
   return {id: nextId};
 }
 

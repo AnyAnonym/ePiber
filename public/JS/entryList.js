@@ -129,6 +129,11 @@ async function loadEntries() {
       const eDatumIdx = eHeader.findIndex((h) =>
         ["datum", "date", "eingetragen", "timestamp", "zeitpunkt", "entrydate", "entry date"].includes(h));
 
+      console.log("[loadEntries] header:", JSON.stringify(eHeader));
+      console.log("[loadEntries] eIdIdx:", eIdIdx, "eBewerbIdIdx:", eBewerbIdIdx, "ePersonenIdIdx:", ePersonenIdIdx, "eDatumIdx:", eDatumIdx);
+      console.log("[loadEntries] BEWERB_ID:", BEWERB_ID);
+      console.log("[loadEntries] first data row:", JSON.stringify(entryValues[1]));
+
       entries = entryValues.slice(1)
         .filter((r) => {
           const ebId = eBewerbIdIdx !== -1 ? String(r[eBewerbIdIdx] || "").trim() : "";
@@ -142,6 +147,7 @@ async function loadEntries() {
         }));
     }
 
+    console.log("[loadEntries] filtered entries count:", entries.length);
     currentEntries = entries;
     initToolbar();
 
