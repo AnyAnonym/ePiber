@@ -5,11 +5,16 @@ import { httpsCallable } from
 const readPreMatches   = httpsCallable(functions, "readPreMatches");
 const readMatchesList  = httpsCallable(functions, "readMatchesList");
 const readPlayersList  = httpsCallable(functions, "readPlayersList");
+const readBewerbe      = httpsCallable(functions, "readBewerbe");
+const readBewerbsart   = httpsCallable(functions, "readBewerbsart");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
 
-const ROUND_LABELS = ["1. Runde", "Achtelfinale", "Viertelfinale", "Halbfinale", "Finale"];
+const ROUND_DISPLAY = {
+  R1: "1. Runde", R2: "2. Runde", R3: "3. Runde",
+  AF: "Achtelfinale", VF: "Viertelfinale", HF: "Halbfinale", F: "Finale",
+};
 
 function parseRaster(val) {
   if (!val) return null;
@@ -39,7 +44,7 @@ function parseResult(val) {
   return sets;
 }
 
-function buildRounds(preData, preHeader, matchData, matchHeader, playerMap) {
+function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1CountConfigPlayers) {
   const slotMap = {};
 
   function processRows(data, header, isMatch) {
@@ -94,17 +99,42 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap) {
     }
   }
 
-  if (r1Count < 1) return [];
+  if (r1CountConfigPlayers < 2) return [];
 
-  const roundDefs = [
-    { label: ROUND_LABELS[0], count: r1Count, keyPfx: "R1" },
-    { label: ROUND_LABELS[1], count: Math.ceil(r1Count / 2), keyPfx: "AF" },
-    { label: ROUND_LABELS[2], count: Math.ceil(r1Count / 4), keyPfx: "VF" },
-    { label: ROUND_LABELS[3], count: Math.ceil(r1Count / 8), keyPfx: "HF" },
-    { label: ROUND_LABELS[4], count: 1, keyPfx: "F" },
-  ];
+  const effCount = Math.floor(r1CountConfigPlayers / 2);
 
-  return roundDefs.map((rd) => {
+  // Halving sequence: [32,16,8,4,2,1] for 64er, [16,8,4,2,1] for 32er
+  const seq = [effCount];
+  while (seq[seq.length - 1] > 1) seq.push(Math.ceil(seq[seq.length - 1] / 2));
+
+  const n = seq.length;
+  const roundDefs = [];
+
+  // Everything before the last 4 entries are R rounds
+  for (let i = 0; i < n - 4; i++) {
+    const rNum = i + 1;
+    roundDefs.push({
+      label: ROUND_DISPLAY["R" + rNum] || "R" + rNum + ". Runde",
+      count: seq[i],
+      keyPfx: "R" + rNum,
+    });
+  }
+
+  // Last 4 are always AF, VF, HF, F
+  if (n >= 4) {
+    roundDefs.push({ label: ROUND_DISPLAY.AF, count: seq[n - 4], keyPfx: "AF" });
+    roundDefs.push({ label: ROUND_DISPLAY.VF, count: seq[n - 3], keyPfx: "VF" });
+    roundDefs.push({ label: ROUND_DISPLAY.HF, count: seq[n - 2], keyPfx: "HF" });
+    roundDefs.push({ label: ROUND_DISPLAY.F, count: 1, keyPfx: "F" });
+  } else {
+    // Fallback for very small brackets (< 4 rounds)
+    roundDefs.push({ label: ROUND_DISPLAY.F, count: 1, keyPfx: "F" });
+  }
+
+  console.log("buildRounds: r1CountConfigPlayers=" + r1CountConfigPlayers + " effCount=" + effCount + " seq=" + JSON.stringify(seq));
+  console.log("roundDefs:", JSON.stringify(roundDefs.map(d => d.label + ":" + d.count)));
+
+  const result = roundDefs.map((rd) => {
     const matches = [];
     for (let m = 1; m <= rd.count; m++) {
       const key = rd.keyPfx + "-" + m;
@@ -119,6 +149,8 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap) {
     }
     return { roundName: rd.label, matches };
   });
+  console.log("result rounds:", JSON.stringify(result.map(r => r.roundName + ":" + r.matches.length)));
+  return result;
 }
 
 function addConnectors(grid, rounds) {
@@ -133,6 +165,8 @@ function addConnectors(grid, rounds) {
     if (!byCol[col]) byCol[col] = [];
     byCol[col].push(el);
   });
+
+  console.log("addConnectors: columns=" + Object.keys(byCol).length + " per col:", JSON.stringify(Object.entries(byCol).map(([k,v]) => k+":"+v.length)));
 
   for (let col = 1; col < rounds.length; col++) {
     const left = byCol[col];
@@ -189,16 +223,30 @@ function renderBracket(rounds) {
   }
 
   const numRounds = rounds.length;
-  const gridRows = Math.pow(2, numRounds);
+  const r1Count = rounds[0].matches.length;
+  const gridRows = r1Count * 2;
+
+  console.log("renderBracket: rounds=" + numRounds + " r1Count=" + r1Count + " gridRows=" + gridRows);
 
   const bracketDiv = document.createElement("div");
   bracketDiv.className = "bracket";
+
+  const headerRow = document.createElement("div");
+  headerRow.className = "bracket-header-row";
+  headerRow.style.setProperty("--cols", numRounds);
+  rounds.forEach((r) => {
+    const h = document.createElement("div");
+    h.className = "bracket-round-header";
+    h.textContent = r.roundName;
+    headerRow.appendChild(h);
+  });
+  bracketDiv.appendChild(headerRow);
 
   const grid = document.createElement("div");
   grid.className = "bracket-grid";
   grid.style.setProperty("--cols", numRounds);
   grid.style.setProperty("--rows", gridRows);
-  grid.style.height = (gridRows * 80) + "px";
+  grid.style.height = (gridRows * 52) + "px";
 
   rounds.forEach((round, rIdx) => {
     round.matches.forEach((match, mIdx) => {
@@ -262,15 +310,48 @@ async function loadBracket() {
   if (container) container.innerHTML = "<p class='loading-text'>Lade Raster...</p>";
 
   try {
-    const [preRes, matchRes, playerRes] = await Promise.all([
+    const [bewerbRes, bewbsRes, preRes, matchRes, playerRes] = await Promise.all([
+      readBewerbe(),
+      readBewerbsart(),
       readPreMatches(),
       readMatchesList(),
       readPlayersList(),
     ]);
 
+    const bewerbValues = bewerbRes.data?.values || [];
+    const bewbsValues = bewbsRes.data?.values || [];
     const preValues = preRes.data?.values || [];
     const matchValues = matchRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
+
+    let r1CountConfigPlayers = 16;
+    let bewerbName = "";
+    if (bewerbValues.length > 1 && bewbsValues.length > 1) {
+      const bh = bewerbValues[0].map((h) => String(h).trim().toLowerCase());
+      const bIdIdx = bh.indexOf("id");
+      const bBewbsIdx = bh.indexOf("bewerbsartid");
+      const bBezIdx = bh.indexOf("bezeichnung");
+      const bewerbRow = bewerbValues.slice(1).find(
+        (r) => String(r[bIdIdx] || "").trim() === String(BEWERB_ID).trim());
+      if (bewerbRow && bBewbsIdx !== -1) {
+        const bewbsId = String(bewerbRow[bBewbsIdx] || "").trim();
+        if (bBezIdx !== -1) bewerbName = String(bewerbRow[bBezIdx] || "").trim();
+        const ash = bewbsValues[0].map((h) => String(h).trim().toLowerCase());
+        const aIdIdx = ash.indexOf("id");
+        const aRastIdx = ash.indexOf("rasterfunktion");
+        if (aIdIdx !== -1 && aRastIdx !== -1) {
+          const artRow = bewbsValues.slice(1).find(
+            (r) => String(r[aIdIdx] || "").trim() === bewbsId);
+          if (artRow && artRow[aRastIdx]) {
+            const parsed = parseInt(artRow[aRastIdx], 10);
+            if (!isNaN(parsed) && parsed >= 2) r1CountConfigPlayers = parsed;
+          }
+        }
+      }
+    }
+
+    const heading = document.getElementById("bracketHeading");
+    if (heading) heading.textContent = "Turnierraster - " + (bewerbName || "Bewerb");
 
     const playerMap = new Map();
     if (playerValues.length > 1) {
@@ -290,7 +371,7 @@ async function loadBracket() {
     const matchHeader = matchValues[0] || [];
     const matchData = matchValues.slice(1);
 
-    const rounds = buildRounds(preData, preHeader, matchData, matchHeader, playerMap);
+    const rounds = buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1CountConfigPlayers);
 
     if (rounds.length === 0) {
       if (container) container.innerHTML = "<p>Keine Rasterdaten für diesen Bewerb.</p>";
