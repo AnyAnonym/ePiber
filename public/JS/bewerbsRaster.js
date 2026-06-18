@@ -110,8 +110,12 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
   const n = seq.length;
   const roundDefs = [];
 
-  // Everything before the last 4 entries are R rounds
-  for (let i = 0; i < n - 4; i++) {
+  // Number of fixed-named rounds at the end: up to 4 (AF, VF, HF, F)
+  const fixedCount = Math.min(n, 4);
+  const rCount = n - fixedCount; // R rounds before the fixed block
+
+  // R rounds (R1, R2, ...)
+  for (let i = 0; i < rCount; i++) {
     const rNum = i + 1;
     roundDefs.push({
       label: ROUND_DISPLAY["R" + rNum] || "R" + rNum + ". Runde",
@@ -120,15 +124,16 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
     });
   }
 
-  // Last 4 are always AF, VF, HF, F
-  if (n >= 4) {
-    roundDefs.push({ label: ROUND_DISPLAY.AF, count: seq[n - 4], keyPfx: "AF" });
-    roundDefs.push({ label: ROUND_DISPLAY.VF, count: seq[n - 3], keyPfx: "VF" });
-    roundDefs.push({ label: ROUND_DISPLAY.HF, count: seq[n - 2], keyPfx: "HF" });
-    roundDefs.push({ label: ROUND_DISPLAY.F, count: 1, keyPfx: "F" });
-  } else {
-    // Fallback for very small brackets (< 4 rounds)
-    roundDefs.push({ label: ROUND_DISPLAY.F, count: 1, keyPfx: "F" });
+  // Fixed rounds: mapped from the end — F, HF, VF, AF
+  const FIXED = ["AF", "VF", "HF", "F"];
+  const fixedOffset = 4 - fixedCount; // how many fixed names to skip from the left
+  for (let i = 0; i < fixedCount; i++) {
+    const keyPfx = FIXED[fixedOffset + i];
+    roundDefs.push({
+      label: ROUND_DISPLAY[keyPfx] || keyPfx,
+      count: seq[rCount + i],
+      keyPfx,
+    });
   }
 
   console.log("buildRounds: r1CountConfigPlayers=" + r1CountConfigPlayers + " effCount=" + effCount + " seq=" + JSON.stringify(seq));
@@ -326,6 +331,7 @@ async function loadBracket() {
 
     let r1CountConfigPlayers = 16;
     let bewerbName = "";
+    let isRoundRobin = false;
     if (bewerbValues.length > 1 && bewbsValues.length > 1) {
       const bh = bewerbValues[0].map((h) => String(h).trim().toLowerCase());
       const bIdIdx = bh.indexOf("id");
@@ -339,6 +345,7 @@ async function loadBracket() {
         const ash = bewbsValues[0].map((h) => String(h).trim().toLowerCase());
         const aIdIdx = ash.indexOf("id");
         const aRastIdx = ash.indexOf("rasterfunktion");
+        const aRoundRobinIdx = ash.indexOf("roundrobin");
         if (aIdIdx !== -1 && aRastIdx !== -1) {
           const artRow = bewbsValues.slice(1).find(
             (r) => String(r[aIdIdx] || "").trim() === bewbsId);
@@ -346,12 +353,20 @@ async function loadBracket() {
             const parsed = parseInt(artRow[aRastIdx], 10);
             if (!isNaN(parsed) && parsed >= 2) r1CountConfigPlayers = parsed;
           }
+          if (artRow && aRoundRobinIdx !== -1) {
+            isRoundRobin = String(artRow[aRoundRobinIdx] || "0").trim() === "1";
+          }
         }
       }
     }
 
     const heading = document.getElementById("bracketHeading");
-    if (heading) heading.textContent = "Turnierraster - " + (bewerbName || "Bewerb");
+    const info = document.getElementById("bracketInfo");
+
+    function setHeading(text) {
+      if (heading) heading.textContent = text;
+    }
+    setHeading("Turnierraster - " + (bewerbName || "Bewerb"));
 
     const playerMap = new Map();
     if (playerValues.length > 1) {
@@ -379,6 +394,42 @@ async function loadBracket() {
     }
 
     renderBracket(rounds);
+
+    if (isRoundRobin && info) {
+      info.innerHTML = "";
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:12px;margin-bottom:16px;";
+
+      const btnRaster = document.createElement("button");
+      btnRaster.className = "btn-action";
+      btnRaster.textContent = "Raster";
+      btnRaster.addEventListener("click", () => {
+        setHeading("Turnierraster - " + (bewerbName || "Bewerb"));
+        container.innerHTML = "";
+        renderBracket(rounds);
+      });
+
+      const btnGruppe = document.createElement("button");
+      btnGruppe.className = "btn-action";
+      btnGruppe.textContent = "Gruppe";
+      btnGruppe.addEventListener("click", async () => {
+        setHeading("Round Robin - " + (bewerbName || "Bewerb"));
+        try {
+          const mod = await import("./RoundRobin.js");
+          if (mod.renderRoundRobin) {
+            container.innerHTML = "";
+            mod.renderRoundRobin(BEWERB_ID, container, { r1CountConfigPlayers, bewerbName });
+          }
+        } catch (err) {
+          console.error("RoundRobin Fehler:", err);
+          container.innerHTML = "<p>Fehler beim Laden der Gruppen-Ansicht.</p>";
+        }
+      });
+
+      btnRow.appendChild(btnRaster);
+      btnRow.appendChild(btnGruppe);
+      info.appendChild(btnRow);
+    }
 
   } catch (err) {
     console.error("Fehler beim Laden des Turnierrasters:", err);
