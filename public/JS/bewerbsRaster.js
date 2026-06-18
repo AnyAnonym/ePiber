@@ -9,164 +9,109 @@ const readBewerbe      = httpsCallable(functions, "readBewerbe");
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
 
-const ROUND_LABELS = ["1. Runde", "Achtelfinale", "Viertelfinale", "Halbfinale", "Finale"];
-
 function parseRaster(val) {
   if (!val) return null;
   const s = String(val).trim().toUpperCase();
   if (!s) return null;
-  if (s === "F") return { roundKey: "F", match: 1 };
+  if (s === "F") return { roundKey: "F", match: 1, roundName: "Finale", order: 7 };
   const m = s.match(/^(R[1-9]|AF|VF|HF)-P(\d+)$/);
   if (!m) return null;
-  return { roundKey: m[1], match: parseInt(m[2], 10) };
+  const LABELS = {
+    R1: "1. Runde", R2: "2. Runde", R3: "3. Runde",
+    AF: "Achtelfinale", VF: "Viertelfinale", HF: "Halbfinale",
+  };
+  const ORDER = { R1: 1, R2: 2, R3: 3, AF: 4, VF: 5, HF: 6, F: 7 };
+  return {
+    roundKey: m[1],
+    match: parseInt(m[2], 10),
+    roundName: LABELS[m[1]] || m[1],
+    order: ORDER[m[1]] || 99,
+  };
 }
 
 function buildRounds(data, header, playerMap) {
   const h = header.map((c) => String(c).trim().toLowerCase());
   const bwIdx = h.indexOf("bewerbid");
   const p1Idx = h.indexOf("spielerid1");
+  const p2Idx = h.indexOf("spielerid2");
   const p3Idx = h.indexOf("spielerid3");
+  const p4Idx = h.indexOf("spielerid4");
   const rtIdx = h.indexOf("rasterpaarung");
 
-  const slotMap = {};
+  const rounds = {};
 
   data.forEach((row) => {
-    if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
-    const p = parseRaster(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
+    if (bwIdx >= 0) {
+      const rowBw = String(row[bwIdx] || "").trim();
+      if (rowBw !== String(BEWERB_ID).trim()) return;
+    }
+
+    const rasterRaw = rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "";
+    const p = parseRaster(rasterRaw);
     if (!p) return;
-    const key = p.roundKey + "-" + p.match;
-    slotMap[key] = {
-      top: { id: String(row[p1Idx] || "").trim(), name: null },
-      bottom: { id: String(row[p3Idx] || "").trim(), name: null },
-    };
-  });
 
-  Object.values(slotMap).forEach((e) => {
-    if (e.top.id) e.top.name = playerMap.get(e.top.id) || null;
-    if (e.bottom.id) e.bottom.name = playerMap.get(e.bottom.id) || null;
-  });
+    const p1 = String(row[p1Idx] || "").trim();
+    const p2 = String(row[p2Idx] || "").trim();
+    const p3 = String(row[p3Idx] || "").trim();
+    const p4 = String(row[p4Idx] || "").trim();
 
-  let r1Count = 0;
-  for (const key of Object.keys(slotMap)) {
-    const m = key.match(/^R1-(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      if (n > r1Count) r1Count = n;
+    if (!rounds[p.roundKey]) {
+      rounds[p.roundKey] = {
+        roundKey: p.roundKey,
+        roundName: p.roundName,
+        order: p.order,
+        matches: [],
+      };
     }
-  }
 
-  if (r1Count < 1) return [];
-
-  const roundDefs = [
-    { label: ROUND_LABELS[0], count: r1Count, keyPfx: "R1" },
-    { label: ROUND_LABELS[1], count: Math.ceil(r1Count / 2), keyPfx: "AF" },
-    { label: ROUND_LABELS[2], count: Math.ceil(r1Count / 4), keyPfx: "VF" },
-    { label: ROUND_LABELS[3], count: Math.ceil(r1Count / 8), keyPfx: "HF" },
-    { label: ROUND_LABELS[4], count: 1, keyPfx: "F" },
-  ];
-
-  return roundDefs.map((rd) => {
-    const matches = [];
-    for (let m = 1; m <= rd.count; m++) {
-      const key = rd.keyPfx + "-" + m;
-      const sm = slotMap[key];
-      matches.push({
-        matchNum: m,
-        top: sm ? sm.top : { id: "", name: null },
-        bottom: sm ? sm.bottom : { id: "", name: null },
-      });
-    }
-    return { roundName: rd.label, matches };
+    rounds[p.roundKey].matches.push({
+      matchNum: p.match,
+      top: {
+        id: p1,
+        name: playerMap.get(p1) || null,
+        partner: p2 ? playerMap.get(p2) || null : null,
+      },
+      bottom: {
+        id: p3,
+        name: playerMap.get(p3) || null,
+        partner: p4 ? playerMap.get(p4) || null : null,
+      },
+    });
   });
+
+  Object.values(rounds).forEach((r) => {
+    r.matches.sort((a, b) => a.matchNum - b.matchNum);
+  });
+
+  return Object.values(rounds).sort((a, b) => a.order - b.order);
 }
 
-function addConnectors(grid, rounds) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", "bracket-lines");
-  grid.appendChild(svg);
-
-  const matchEls = grid.querySelectorAll(".bracket-match");
-  const byCol = {};
-  matchEls.forEach((el) => {
-    const col = parseInt(el.style.gridColumn, 10);
-    if (!byCol[col]) byCol[col] = [];
-    byCol[col].push(el);
-  });
-
-  for (let col = 1; col < rounds.length; col++) {
-    const left = byCol[col];
-    const right = byCol[col + 1];
-    if (!left || !right) continue;
-
-    left.sort((a, b) => parseInt(a.style.gridRow, 10) - parseInt(b.style.gridRow, 10));
-    right.sort((a, b) => parseInt(a.style.gridRow, 10) - parseInt(b.style.gridRow, 10));
-
-    for (let i = 0; i < left.length; i += 2) {
-      const topEl = left[i];
-      const botEl = left[i + 1];
-      const nextEl = right[Math.floor(i / 2)];
-      if (!topEl || !botEl || !nextEl) continue;
-
-      const gRect = grid.getBoundingClientRect();
-      const tRect = topEl.getBoundingClientRect();
-      const bRect = botEl.getBoundingClientRect();
-      const nRect = nextEl.getBoundingClientRect();
-
-      const x1 = tRect.right - gRect.left;
-      const y1 = tRect.top + tRect.height / 2 - gRect.top;
-      const x2 = bRect.right - gRect.left;
-      const y2 = bRect.top + bRect.height / 2 - gRect.top;
-      const x3 = nRect.left - gRect.left;
-      const y3 = nRect.top + nRect.height / 2 - gRect.top;
-
-      const midX = (x1 + x3) / 2;
-      const midY = (y1 + y2) / 2;
-
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      const d = [
-        `M ${x1} ${y1}`,
-        `L ${midX} ${y1}`,
-        `L ${midX} ${y2}`,
-        `L ${x2} ${y2}`,
-        `M ${midX} ${midY}`,
-        `L ${x3} ${midY}`,
-      ].join(" ");
-      path.setAttribute("d", d);
-      svg.appendChild(path);
-    }
-  }
-}
-
-function renderBracket(rounds) {
+function renderBracket(bracketRounds) {
   const container = document.getElementById("bracketContainer");
   if (!container) return;
+
   container.innerHTML = "";
 
-  if (!rounds || rounds.length === 0) {
+  if (!bracketRounds || bracketRounds.length === 0) {
     container.innerHTML = "<p>Keine Rasterdaten für diesen Bewerb.</p>";
     return;
   }
 
-  const numRounds = rounds.length;
-  const gridRows = Math.pow(2, numRounds);
+  const wrapper = document.createElement("div");
+  wrapper.className = "bracket";
 
-  const bracketDiv = document.createElement("div");
-  bracketDiv.className = "bracket";
+  bracketRounds.forEach((round) => {
+    const col = document.createElement("div");
+    col.className = "bracket-round";
 
-  const grid = document.createElement("div");
-  grid.className = "bracket-grid";
-  grid.style.setProperty("--cols", numRounds);
-  grid.style.setProperty("--rows", gridRows);
-  grid.style.height = (gridRows * 80) + "px";
+    const header = document.createElement("div");
+    header.className = "bracket-round-header";
+    header.textContent = round.roundName;
+    col.appendChild(header);
 
-  rounds.forEach((round, rIdx) => {
-    round.matches.forEach((match, mIdx) => {
-      const row = (1 + 2 * mIdx) * Math.pow(2, rIdx);
-
+    round.matches.forEach((match) => {
       const md = document.createElement("div");
       md.className = "bracket-match";
-      md.style.gridColumn = rIdx + 1;
-      md.style.gridRow = row;
 
       [match.top, match.bottom].forEach((slot) => {
         const el = document.createElement("div");
@@ -175,6 +120,7 @@ function renderBracket(rounds) {
         let label = "—";
         if (slot.name) {
           label = slot.name;
+          if (slot.partner) label += ` + ${slot.partner}`;
         }
 
         el.textContent = label;
@@ -192,14 +138,13 @@ function renderBracket(rounds) {
         md.appendChild(el);
       });
 
-      grid.appendChild(md);
+      col.appendChild(md);
     });
+
+    wrapper.appendChild(col);
   });
 
-  bracketDiv.appendChild(grid);
-  container.appendChild(bracketDiv);
-
-  addConnectors(grid, rounds);
+  container.appendChild(wrapper);
 }
 
 async function loadBracket() {
@@ -227,16 +172,15 @@ async function loadBracket() {
     const playerValues = playerRes.data?.values || [];
 
     let bewerbName = `Bewerb ${BEWERB_ID}`;
-
     if (bewerbValues.length > 1) {
       const bh = bewerbValues[0].map((h) => String(h).trim().toLowerCase());
-      const bIdIdx = bh.indexOf("id");
+      const idIdx = bh.indexOf("id");
       const bzIdx = bh.indexOf("bezeichnung");
-      const bewerbRow = bewerbValues.slice(1).find(
-        (r) => String(r[bIdIdx] || "").trim() === String(BEWERB_ID).trim());
-      if (bewerbRow && bewerbRow[bzIdx]) bewerbName = bewerbRow[bzIdx];
+      const row = bewerbValues.slice(1).find(
+        (r) => String(r[idIdx] || "").trim() === String(BEWERB_ID).trim());
+      if (row && row[bzIdx]) bewerbName = row[bzIdx];
     }
-
+    if (heading) heading.textContent = `Turnierraster – ${bewerbName}`;
 
     const playerMap = new Map();
     if (playerValues.length > 1) {
@@ -257,15 +201,17 @@ async function loadBracket() {
       return;
     }
 
-    const rounds = buildRounds(preValues.slice(1), preValues[0], playerMap);
+    const header = preValues[0];
+    const data = preValues.slice(1);
 
-    if (rounds.length === 0) {
-      if (container) container.innerHTML = "<p>Keine Rasterdaten für diesen Bewerb.</p>";
-      if (info) info.textContent = "";
-      return;
+    const bracketRounds = buildRounds(data, header, playerMap);
+
+    const totalMatches = bracketRounds.reduce((sum, r) => sum + r.matches.length, 0);
+    if (info) {
+      info.innerHTML = `<span class="bracket-player-count">${bracketRounds.length} Runden, ${totalMatches} Partien</span>`;
     }
 
-    renderBracket(rounds);
+    renderBracket(bracketRounds);
 
   } catch (err) {
     console.error("Fehler beim Laden des Turnierrasters:", err);
