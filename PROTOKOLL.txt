@@ -2,7 +2,7 @@
 PROTOKOLL - ASKÖ Piberbach Tennis Ranglisten-WebApp
 ================================================================================
 Erstellt: 16.04.2026
-Letzte Änderung: 02.06.2026
+Letzte Änderung: 18.06.2026
 
 ================================================================================
 1. PROJEKTÜBERSICHT
@@ -34,6 +34,7 @@ WebApp-with-GoogleSheet_comunication/
 │   ├── preMatches.html             # Offene Forderungen
 │   ├── rangliste.html              # Interaktive Ranglisten-Pyramide
 │   ├── Bewerbe.html                # Bewerbe-Übersicht
+│   ├── bewerbsRaster.html          # Turnierraster-Baumansicht
 │   ├── CSS/
 │   │   └── styles.css             # Globale Styles
 │   └── JS/
@@ -45,7 +46,8 @@ WebApp-with-GoogleSheet_comunication/
 │       ├── preMatchesList.js        # PreMatch-Liste Rendering
 │       ├── rankingSidebar.js       # Sidebar Top-10
 │       ├── rangliste.js            # Ranglisten-Pyramide Logik
-│       └── bewerbeList.js          # Bewerbe-Karten Rendering
+│       ├── bewerbeList.js          # Bewerbe-Karten Rendering
+│       └── bewerbsRaster.js        # Turnierraster-Logik
 │
 ├── functions/                       # Firebase Cloud Functions (Backend)
 │   ├── index.js                    # Alle Cloud Functions
@@ -112,6 +114,7 @@ WebApp-with-GoogleSheet_comunication/
 | H      | SpielerID3       | Herausforderer                       |
 | I      | SpielerID4       | Team Herausforderer (optional)       |
 | J      | status           | offen, bestaetigt, gespielt         |
+| K      | RasterPaarung    | Runden-Paarung (z.B. R1-P1, AF-P3) |
 
 3.4 matches
 -----------
@@ -130,8 +133,7 @@ WebApp-with-GoogleSheet_comunication/
 | K      | Bemerkung        | Optionale Notiz                 |
 | L      | PTN-Wertung      | PTN-Punkte                      |
 | M      | Gewinner         | ID des Gewinners                |
-
-3.5 MatchTyp
+| N      | RasterPaarung    | Runden-Paarung (optional, für Turnierraster) |
 ------------
 | Spalte | Name               | Beschreibung                    |
 |--------|--------------------|--------------------------------|
@@ -201,6 +203,7 @@ Gibt alle Spieler aus players-Tabelle zurück.
 4.4 readMatchesList
 -------------------
 Gibt rohe Match-Daten aus matches-Tabelle zurück.
+Enthält optional RasterPaarung-Spalte für Turnierraster-Zuordnung.
 
 4.5 upsertData
 --------------
@@ -289,6 +292,48 @@ Verhindert unautorisierten Passwort-Reset.
 - Grüne Boxen = forderbar
 - Blaue Box = eigener Rang
 - Öffnet Match-Anfrage-Modal
+
+5.6 bewerbsRaster.html (Turnierraster-Baumansicht)
+---------------------------------------------------
+- Aufrufbar über bewerbsRaster.html?id=<BewerbID>
+- Zeigt ein KO-Turnierraster als seitliche Baumansicht (CSS-Grid)
+- 5 fixe Runden: 1. Runde → Achtelfinale → Viertelfinale → Halbfinale → Finale
+- Die Anzahl der Partien in R1 wird dynamisch aus den Daten ermittelt
+- Die Folgerunden werden automatisch berechnet (AF=R1/2, VF=R1/4, HF=R1/8, F=1)
+- Datenquelle: preMatches (geplante Partien) + matches (gespielte Partien)
+- Daten aus matches überschreiben preMatches-Einträge im selben Raster-Slot
+- Ergebnisse werden als Satzpunkte (z.B. "11 | 9 | 11") neben dem Spielernamen angezeigt
+- Der Gewinner wird grün hervorgehoben
+- Dynamische SVG-Verbindungslinien zwischen den Runden
+- Positionierung der Linien erfolgt live über getBoundingClientRect()
+- Keine Runden-Überschriften, kein Info-Text – nur das reine Baum-Layout
+- Klick auf einen Spieler öffnet das Profil-Modal
+- Leere Slots zeigen "—" (kursiv, grau)
+
+RasterPaarung-Format:
+  R1-P1  = 1. Runde, Paarung 1
+  AF-P3  = Achtelfinale, Paarung 3
+  VF-P2  = Viertelfinale, Paarung 2
+  HF-P1  = Halbfinale, Paarung 1
+  F      = Finale (nur eine Paarung, kein P-Suffix)
+
+Datenzusammenführung (preMatches + matches):
+  1. Beide Tabellen werden parallel geladen (Promise.all)
+  2. preMatches-Einträge werden zuerst in eine slotMap eingetragen
+  3. matches-Einträge mit RasterPaarung überschreiben vorhandene Slots
+  4. R1-Zählung bestimmt die Rastergröße (8 R1-Einträge → 16er-Raster)
+  5. Fehlende Slots (nicht in Daten) werden als leere "—" Kästchen dargestellt
+
+CSS-Klassen:
+  .bracket              – Äußerer Container (overflow-x: auto)
+  .bracket-grid         – CSS-Grid mit --cols und --rows Variablen
+  .bracket-match        – Ein Match-Kästchen (160px breit)
+  .bracket-player       – Spieler-Zeile (oben/unten)
+  .bracket-player.winner – Grüne Hervorhebung des Gewinners
+  .bracket-player.bye   – Grauer, kursiver Text für leere Slots
+  .bracket-lines        – SVG-Overlay für Verbindungslinien
+  .bracket-lines path   – Linien-Stil (#bbb, 2px)
+  .pscore               – Satzpunkte (rechtsbündig, fett)
 
 
 ================================================================================
@@ -1101,6 +1146,105 @@ Frontend-Änderungen (`public/JS/playerList.js`):
 - `formatAktiv(val)`: `"1"` → `"✅"`, alles andere → `""`
 - Header-Parsing über Spaltennamen (`id`, `vorname`, `nachname`, `telefonmobil`, `aktiv`)
 - Table-Rendering: 4 Spalten (ID, Name, Telefon, Aktiv)
+
+===============================================================================
+19. TURNIERRASTER (bewerbsRaster – 18.06.2026)
+===============================================================================
+
+19.1 Übersicht
+--------------
+Das Turnierraster (bewerbsRaster.html) zeigt ein KO-Turnier als seitliche
+Baumansicht. Es wird über bewerbsRaster.html?id=<BewerbID> aufgerufen und
+liest Daten aus preMatches (geplante Partien) und matches (gespielte Partien).
+
+Aufbau:
+- 5 fixe Runden: 1. Runde → Achtelfinale → Viertelfinale → Halbfinale → Finale
+- Keine Zwischenrunden (R2, R3) – für 16er-Raster optimiert
+- R1-Anzahl wird aus den Daten ermittelt (Anzahl der R1-Paarungen)
+- Folgerunden: AF = ceil(R1/2), VF = ceil(R1/4), HF = ceil(R1/8), F = 1
+
+19.2 Datenquellen
+-----------------
+- **preMatches**: Enthält RasterPaarung (Spalte K) zur Position im Baum
+- **matches**: Enthält optional RasterPaarung (Spalte N) + Ergebnis + Gewinner
+- **Priorität**: matches überschreiben preMatches für denselben Slot
+
+19.3 RasterPaarung-Format
+--------------------------
+  R1-P1  → 1. Runde, Paarung 1
+  R1-P8  → 1. Runde, Paarung 8 (16er = 8 Paarungen)
+  AF-P3  → Achtelfinale, Paarung 3
+  VF-P2  → Viertelfinale, Paarung 2
+  HF-P1  → Halbfinale, Paarung 1
+  F      → Finale (kein P-Suffix nötig)
+
+19.4 Rendering
+--------------
+- **CSS-Grid**: 5 Spalten, R1(16er)=32 Zeilen, jede Zeile 80px
+- **Positionierung**: `gridRow = (1 + 2*mIdx) * 2^rIdx` für Baumstruktur
+- **SVG-Linien**: Dynamische Verbindungen zwischen Match-Kästchen
+  * Berechnet aus getBoundingClientRect() jedes Elements
+  * Von der rechten Mitte zweier Kästchen zur linken Mitte des nächsten
+  * Z-index 1 (hinter den Match-Kästchen mit z-index 2)
+- **Ergebnisse**: Satzpunkte (z.B. "11 | 9 | 11") rechts neben Spielername
+- **Gewinner**: Grün hervorgehoben (Klasse .winner)
+
+19.5 Dateien
+------------
+- `public/bewerbsRaster.html` – HTML-Seite
+- `public/JS/bewerbsRaster.js` – JavaScript-Logik (ES6 Module)
+- `public/CSS/styles.css` – Styles (ab Zeile ~1672)
+
+19.6 JavaScript-Architektur (bewerbsRaster.js)
+-----------------------------------------------
+- **parseRaster(val)**: Parst RasterPaarung-String → {roundKey, match}
+- **parseResult(val)**: Parst Ergebnis-String "11-7/9-11/11-5" → [{left,right}, ...]
+- **buildRounds(preData, preHeader, matchData, matchHeader, playerMap)**:
+  1. processRows() für preMatches (isMatch=false)
+  2. processRows() für matches (isMatch=true, überschreibt)
+  3. Spieler-Namen via playerMap auflösen
+  4. R1 zählen → Rastergröße bestimmen
+  5. 5 Runden-Definitionen erstellen (R1, AF, VF, HF, F)
+  6. slotMap-Daten in die Runden-Struktur mappen
+- **addConnectors(grid, rounds)**: SVG-Overlay mit Verbindungslinien
+- **renderBracket(rounds)**: DOM-Bau (Grid, Match-Kästchen, Spieler)
+- **loadBracket()**: Einstieg – liest preMatches + matches + players parallel
+
+19.7 Tabellen-Erweiterungen
+----------------------------
+preMatches (Spalte K hinzugefügt):
+  | K | RasterPaarung | Runden-Paarung (z.B. R1-P1, AF-P3) |
+
+matches (Spalte N hinzugefügt):
+  | N | RasterPaarung | Runden-Paarung (optional, für Turnierraster) |
+
+
+===============================================================================
+20. CHANGELOG – Turnierraster
+===============================================================================
+
+2026-06-18:
+-----------
+- FEATURE: Turnierraster-Seite erstellt (bewerbsRaster.html, bewerbsRaster.js)
+  * KO-Baumansicht mit CSS-Grid und dynamischen SVG-Verbindungslinien
+  * 5 fixe Runden (R1 → AF → VF → HF → F), keine Zwischenrunden
+  * Daten aus preMatches + matches (matches überschreibt)
+  * Ergebnisse und Gewinner-Anzeige mit grüner Hervorhebung
+  * Klick auf Spieler → Profil-Modal
+  * Keine Runden-Überschriften, kein Info-Text
+  * Dynamische Linien-Positionierung über getBoundingClientRect()
+
+- FEATURE: RasterPaarung-Spalte in preMatches (K) und matches (N)
+  * Format: R1-P1, AF-P3, VF-P2, HF-P1, F
+  * Wird von bewerbsRaster.js zur Positionierung im Baum ausgewertet
+
+- BUGFIX: Filterung nach BewerbID in buildRounds()
+  * Beide Tabellen (preMatches, matches) werden korrekt nach BewerbID gefiltert
+  * Nur Einträge mit übereinstimmender BewerbID werden im Raster angezeigt
+
+- FEATURE: Ergebnis-Parsing mit parseResult()
+  * Unterstützt Format "11-7/9-11/11-5" (beliebig viele Sätze, "/" getrennt)
+  * Einzelergebnisse werden mit "|" getrennt angezeigt
 
 ENDE DES PROTOKOLLS
 ================================================================================

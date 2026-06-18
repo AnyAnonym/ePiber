@@ -1742,6 +1742,23 @@ input[type="date"] {
   border-bottom: 1px solid #e6e6e6;
   white-space: nowrap;
   cursor: default;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.bracket-player .pscore {
+  font-weight: 600;
+  color: #555;
+  flex-shrink: 0;
+}
+.bracket-player.winner {
+  background: #e8f5e9;
+  font-weight: 600;
+}
+.bracket-player.winner .pscore {
+  color: #2e7d32;
 }
 
 .bracket-player:last-child {
@@ -1751,6 +1768,10 @@ input[type="date"] {
 .bracket-player.bye {
   color: #999;
   font-style: italic;
+}
+
+.bracket-match.has-result .bracket-player {
+  border-bottom: none;
 }
 
 .bracket-player-count {

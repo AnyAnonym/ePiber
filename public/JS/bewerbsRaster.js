@@ -3,6 +3,7 @@ import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
 const readPreMatches   = httpsCallable(functions, "readPreMatches");
+const readMatchesList  = httpsCallable(functions, "readMatchesList");
 const readPlayersList  = httpsCallable(functions, "readPlayersList");
 
 const params = new URLSearchParams(window.location.search);
@@ -20,25 +21,64 @@ function parseRaster(val) {
   return { roundKey: m[1], match: parseInt(m[2], 10) };
 }
 
-function buildRounds(data, header, playerMap) {
-  const h = header.map((c) => String(c).trim().toLowerCase());
-  const bwIdx = h.indexOf("bewerbid");
-  const p1Idx = h.indexOf("spielerid1");
-  const p3Idx = h.indexOf("spielerid3");
-  const rtIdx = h.indexOf("rasterpaarung");
+function parseResult(val) {
+  if (!val) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+  const parts = s.split("/").filter(Boolean);
+  if (parts.length === 0) return null;
+  const sets = parts.map((p) => {
+    const sc = p.split("-");
+    if (sc.length !== 2) return null;
+    const a = parseInt(sc[0], 10);
+    const b = parseInt(sc[1], 10);
+    if (isNaN(a) || isNaN(b)) return null;
+    return { left: a, right: b };
+  });
+  if (sets.some((s) => s === null)) return null;
+  return sets;
+}
 
+function buildRounds(preData, preHeader, matchData, matchHeader, playerMap) {
   const slotMap = {};
 
-  data.forEach((row) => {
-    if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
-    const p = parseRaster(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
-    if (!p) return;
-    const key = p.roundKey + "-" + p.match;
-    slotMap[key] = {
-      top: { id: String(row[p1Idx] || "").trim(), name: null },
-      bottom: { id: String(row[p3Idx] || "").trim(), name: null },
-    };
-  });
+  function processRows(data, header, isMatch) {
+    const h = header.map((c) => String(c).trim().toLowerCase());
+    const bwIdx = h.indexOf("bewerbid");
+    const p1Idx = h.indexOf("spielerid1");
+    const p3Idx = h.indexOf("spielerid3");
+    const rtIdx = h.indexOf("rasterpaarung");
+    const ergebnisIdx = isMatch ? h.indexOf("ergebnis") : -1;
+    const gewinnerIdx = isMatch ? h.indexOf("gewinner") : -1;
+
+    data.forEach((row) => {
+      if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
+      const p = parseRaster(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
+      if (!p) return;
+      const key = p.roundKey + "-" + p.match;
+
+      const entry = {
+        top: { id: String(row[p1Idx] || "").trim(), name: null },
+        bottom: { id: String(row[p3Idx] || "").trim(), name: null },
+        result: null,
+        winner: null,
+      };
+
+      if (isMatch) {
+        const rawResult = String(row[ergebnisIdx] || "").trim();
+        entry.result = parseResult(rawResult);
+        entry.winner = String(row[gewinnerIdx] || "").trim();
+      }
+
+      const existing = slotMap[key];
+      if (!existing || isMatch) {
+        slotMap[key] = entry;
+      }
+    });
+  }
+
+  processRows(preData, preHeader, false);
+  processRows(matchData, matchHeader, true);
 
   Object.values(slotMap).forEach((e) => {
     if (e.top.id) e.top.name = playerMap.get(e.top.id) || null;
@@ -73,6 +113,8 @@ function buildRounds(data, header, playerMap) {
         matchNum: m,
         top: sm ? sm.top : { id: "", name: null },
         bottom: sm ? sm.bottom : { id: "", name: null },
+        result: sm ? sm.result : null,
+        winner: sm ? sm.winner : null,
       });
     }
     return { roundName: rd.label, matches };
@@ -167,23 +209,31 @@ function renderBracket(rounds) {
       md.style.gridColumn = rIdx + 1;
       md.style.gridRow = row;
 
-      [match.top, match.bottom].forEach((slot) => {
+      if (match.result) md.classList.add("has-result");
+
+      [match.top, match.bottom].forEach((slot, sIdx) => {
         const el = document.createElement("div");
         el.className = "bracket-player";
 
-        let label = "—";
-        if (slot.name) {
-          label = slot.name;
+        const slotId = slot.id;
+        const isWinner = match.winner && slotId && match.winner === slotId;
+
+        if (isWinner) el.classList.add("winner");
+
+        if (match.result && slot.name) {
+          const side = sIdx === 0 ? "left" : "right";
+          const score = match.result.map((s) => side === "left" ? s.left : s.right).join(" | ");
+          el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>`;
+        } else {
+          el.textContent = slot.name || "—";
+          if (!slot.name) el.classList.add("bye");
         }
 
-        el.textContent = label;
-        if (!slot.name) el.classList.add("bye");
-
-        if (slot.id) {
-          el.dataset.playerId = slot.id;
+        if (slotId) {
+          el.dataset.playerId = slotId;
           el.addEventListener("click", () => {
             if (typeof window.openProfileModal === "function") {
-              window.openProfileModal(slot.id);
+              window.openProfileModal(slotId);
             }
           });
         }
@@ -212,12 +262,14 @@ async function loadBracket() {
   if (container) container.innerHTML = "<p class='loading-text'>Lade Raster...</p>";
 
   try {
-    const [preRes, playerRes] = await Promise.all([
+    const [preRes, matchRes, playerRes] = await Promise.all([
       readPreMatches(),
+      readMatchesList(),
       readPlayersList(),
     ]);
 
     const preValues = preRes.data?.values || [];
+    const matchValues = matchRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
 
     const playerMap = new Map();
@@ -233,12 +285,12 @@ async function loadBracket() {
       });
     }
 
-    if (preValues.length < 2) {
-      if (container) container.innerHTML = "<p>Keine Rasterdaten vorhanden.</p>";
-      return;
-    }
+    const preHeader = preValues[0] || [];
+    const preData = preValues.slice(1);
+    const matchHeader = matchValues[0] || [];
+    const matchData = matchValues.slice(1);
 
-    const rounds = buildRounds(preValues.slice(1), preValues[0], playerMap);
+    const rounds = buildRounds(preData, preHeader, matchData, matchHeader, playerMap);
 
     if (rounds.length === 0) {
       if (container) container.innerHTML = "<p>Keine Rasterdaten für diesen Bewerb.</p>";
