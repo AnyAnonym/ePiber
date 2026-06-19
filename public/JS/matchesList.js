@@ -92,8 +92,19 @@ async function main() {
     const gewinnerIdx = idx("gewinner");
     const bewerbIdIdx = idx("bewerbid");
 
+    function dateToTs(raw) {
+      if (!raw) return Infinity;
+      const m = String(raw).trim().match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+      if (!m) return Infinity;
+      const [, yy, mm, dd, hh, mi] = m;
+      const yyyy = parseInt(yy, 10) >= 50 ? 1900 + parseInt(yy) : 2000 + parseInt(yy);
+      return new Date(yyyy, parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(mi)).getTime();
+    }
+    const now = Date.now();
+
     const matches = matchesValues.slice(1)
       .filter((row) => row && row[i1])
+      .sort((a, b) => Math.abs(dateToTs(a[d]) - now) - Math.abs(dateToTs(b[d]) - now))
       .map((row) => {
         const ergebnisRaw = row[ergebnisIdx] || "";
         const sets = ergebnisRaw ? ergebnisRaw.split("/").map((s) => formatSetScore(s)) : [];

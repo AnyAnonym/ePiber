@@ -415,7 +415,7 @@ async function loadBracket() {
       btnGruppe.addEventListener("click", async () => {
         setHeading("Round Robin - " + (bewerbName || "Bewerb"));
         try {
-          const mod = await import("./RoundRobin.js");
+          const mod = await import("./RoundRobin.js?v=2");
           if (mod.renderRoundRobin) {
             container.innerHTML = "";
             mod.renderRoundRobin(BEWERB_ID, container, { r1CountConfigPlayers, bewerbName });

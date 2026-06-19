@@ -283,9 +283,22 @@ async function loadPreMatches() {
     const st = preHeader.indexOf("status");
     const er = preHeader.indexOf("ergebnis");
 
+    function dateToTs(raw) {
+      if (!raw) return Infinity;
+      const m = String(raw).trim().match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+      if (!m) return Infinity;
+      const [, yy, mm, dd, hh, mi] = m;
+      const yyyy = parseInt(yy, 10) >= 50 ? 1900 + parseInt(yy) : 2000 + parseInt(yy);
+      return new Date(yyyy, parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(mi)).getTime();
+    }
+    const now = Date.now();
+    const preValuesData = preValues.slice(1)
+      .map((row, idx) => ({ row, origIdx: idx }))
+      .sort((a, b) => Math.abs(dateToTs(a.row[d]) - now) - Math.abs(dateToTs(b.row[d]) - now));
+
     const preMatches = [];
-    preValues.slice(1).forEach((row, rowIndex) => {
-      const rowNum = rowIndex + 2;
+    preValuesData.forEach(({ row, origIdx }) => {
+      const rowNum = origIdx + 2;
       const p1 = String(row[i1] || "");
       const p2 = String(row[i2] || "");
       const p3 = String(row[i3] || "");

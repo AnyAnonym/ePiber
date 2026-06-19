@@ -35,33 +35,58 @@ function collectPlayers(data, header, bewerbId) {
   return ids;
 }
 
+function parseResult(val) {
+  if (!val) return null;
+  const parts = String(val).trim().split("/").filter(Boolean);
+  if (parts.length === 0) return null;
+  const sets = [];
+  for (const p of parts) {
+    const sc = p.split("-");
+    if (sc.length !== 2) return null;
+    const a = parseInt(sc[0], 10);
+    const b = parseInt(sc[1], 10);
+    if (isNaN(a) || isNaN(b)) return null;
+    sets.push({ left: a, right: b });
+  }
+  return sets;
+}
+
 function buildStats(matchData, matchHeader, bewerbId) {
   const h = matchHeader.map((c) => String(c).trim().toLowerCase());
   const bwIdx = h.indexOf("bewerbid");
   const p1Idx = h.indexOf("spielerid1");
   const p3Idx = h.indexOf("spielerid3");
   const gwIdx = h.indexOf("gewinner");
+  const ergebnisIdx = h.indexOf("ergebnis");
 
-  const played = {};
-  const won = {};
+  const stats = {};
 
   matchData.forEach((row) => {
     if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(bewerbId).trim()) return;
     const p1 = String(row[p1Idx] || "").trim();
     const p3 = p3Idx !== -1 ? String(row[p3Idx] || "").trim() : "";
     const winner = gwIdx !== -1 ? String(row[gwIdx] || "").trim() : "";
+    const rawResult = ergebnisIdx !== -1 ? String(row[ergebnisIdx] || "").trim() : "";
+    const sets = parseResult(rawResult);
 
-    if (p1) {
-      played[p1] = (played[p1] || 0) + 1;
-      if (winner === p1) won[p1] = (won[p1] || 0) + 1;
-    }
-    if (p3) {
-      played[p3] = (played[p3] || 0) + 1;
-      if (winner === p3) won[p3] = (won[p3] || 0) + 1;
-    }
+    [p1, p3].forEach((pid, idx) => {
+      if (!pid) return;
+      if (!stats[pid]) stats[pid] = { siege: 0, saetzeW: 0, saetzeL: 0, gamesW: 0, gamesL: 0 };
+      if (winner === pid) stats[pid].siege++;
+      if (sets) {
+        sets.forEach((s) => {
+          const mine = idx === 0 ? s.left : s.right;
+          const opp = idx === 0 ? s.right : s.left;
+          stats[pid].gamesW += mine;
+          stats[pid].gamesL += opp;
+          if (mine > opp) stats[pid].saetzeW++;
+          else stats[pid].saetzeL++;
+        });
+      }
+    });
   });
 
-  return { played, won };
+  return stats;
 }
 
 export async function renderRoundRobin(bewerbId, container, opts) {
@@ -123,21 +148,36 @@ export async function renderRoundRobin(bewerbId, container, opts) {
 
     let html = "";
     sorted.forEach(([gNum, ids]) => {
-      html += `<div style="display:inline-flex;flex-direction:column;border:2px solid #0b57d0;border-radius:12px;padding:16px;margin:0 12px 16px 0;min-width:350px;background:#fff;vertical-align:top;">`;
+      const rows = ids.map((id) => {
+        const s = stats[id] || { siege: 0, saetzeW: 0, saetzeL: 0, gamesW: 0, gamesL: 0 };
+        return { id, ...s };
+      });
+
+      rows.sort((a, b) => {
+        if (b.siege !== a.siege) return b.siege - a.siege;
+        const diffA = a.saetzeW - a.saetzeL;
+        const diffB = b.saetzeW - b.saetzeL;
+        if (diffB !== diffA) return diffB - diffA;
+        return (b.gamesW - b.gamesL) - (a.gamesW - a.gamesL);
+      });
+
+      html += `<div style="display:inline-flex;flex-direction:column;border:2px solid #0b57d0;border-radius:12px;padding:16px;margin:0 12px 16px 0;min-width:400px;background:#fff;vertical-align:top;">`;
       html += `<div style="margin:0 0 12px 0;font-weight:700;font-size:1.05rem;color:#0b57d0;text-align:center;">Gruppe ${gNum}</div>`;
       html += `<table style="width:100%;border-collapse:collapse;font-size:0.9rem;">`;
       html += `<thead><tr style="background:#eef;font-weight:600;">`;
+      html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Rang</th>`;
       html += `<th style="padding:6px 8px;text-align:left;border-bottom:2px solid #0b57d0;">Name</th>`;
-      html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">gespielte Partien</th>`;
-      html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">gewonnene Partien</th>`;
+      html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Siege</th>`;
+      html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Sätze<br><span style="font-weight:400;font-size:0.7rem;">W-L</span></th>`;
+      html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Games<br><span style="font-weight:400;font-size:0.7rem;">W-L</span></th>`;
       html += `</tr></thead><tbody>`;
-      ids.forEach((id) => {
-        const p = stats.played[id] || 0;
-        const w = stats.won[id] || 0;
+      rows.forEach((r, idx) => {
         html += `<tr style="border-bottom:1px solid #e0e0e0;">`;
-        html += `<td style="padding:6px 8px;">${playerMap.get(id) || "—"}</td>`;
-        html += `<td style="padding:6px 8px;text-align:center;">${p}</td>`;
-        html += `<td style="padding:6px 8px;text-align:center;">${w}</td>`;
+        html += `<td style="padding:6px 8px;text-align:center;">${idx + 1}</td>`;
+        html += `<td style="padding:6px 8px;">${playerMap.get(r.id) || "—"}</td>`;
+        html += `<td style="padding:6px 8px;text-align:center;">${r.siege}</td>`;
+        html += `<td style="padding:6px 8px;text-align:center;">${r.saetzeW}-${r.saetzeL}</td>`;
+        html += `<td style="padding:6px 8px;text-align:center;">${r.gamesW}-${r.gamesL}</td>`;
         html += `</tr>`;
       });
       html += `</tbody></table></div>`;
