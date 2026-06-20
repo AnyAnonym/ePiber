@@ -1271,7 +1271,7 @@ input[type="date"] {
   color: #383d41;
 }
 
-.badge-wo {
+.badge-wo, .badge-ret {
   background: #fff3cd;
   color: #856404;
   font-size: 0.7rem;
@@ -1768,6 +1768,15 @@ input[type="date"] {
 .bracket-player.bye {
   color: #999;
   font-style: italic;
+}
+
+@keyframes blink-green {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(0, 180, 0, 0.35); }
+}
+
+.bracket-player.blink-green {
+  animation: blink-green 1.2s ease-in-out infinite;
 }
 
 .bracket-match.has-result .bracket-player {

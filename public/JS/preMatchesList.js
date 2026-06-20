@@ -27,6 +27,19 @@ function formatErgebnis(raw) {
   return String(raw).split("/").map((s) => formatSetScore(s)).join("/");
 }
 
+function parsePlayerId(raw) {
+  const s = String(raw || "").trim();
+  const wo = /\[w\.o\.\]/.test(s);
+  const cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  return { cleanId, special: wo ? "wo" : null };
+}
+
+function badgeHtml(type) {
+  if (type === "wo") return ' <span class="badge badge-wo">w.o.</span>';
+  if (type === "ret") return ' <span class="badge badge-wo">ret.</span>';
+  return "";
+}
+
 //-------------------------------------------------------
 // Modal: Datum und Platz setzen
 //-------------------------------------------------------
@@ -294,15 +307,16 @@ async function loadPreMatches() {
     const now = Date.now();
     const preValuesData = preValues.slice(1)
       .map((row, idx) => ({ row, origIdx: idx }))
+      .filter(({ row }) => !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3])))
       .sort((a, b) => Math.abs(dateToTs(a.row[d]) - now) - Math.abs(dateToTs(b.row[d]) - now));
 
     const preMatches = [];
     preValuesData.forEach(({ row, origIdx }) => {
       const rowNum = origIdx + 2;
-      const p1 = String(row[i1] || "");
-      const p2 = String(row[i2] || "");
-      const p3 = String(row[i3] || "");
-      const p4 = String(row[i4] || "");
+      const pid1 = parsePlayerId(row[i1]);
+      const pid2 = parsePlayerId(row[i2]);
+      const pid3 = parsePlayerId(row[i3]);
+      const pid4 = parsePlayerId(row[i4]);
       const datum = parseSheetDate(row[d] || "");
       const bewerbId = bewerbIdIdx !== -1 ? (String(row[bewerbIdIdx] || "").trim() || "2") : "2";
       const bewerbInfo = cachedBewerbMap.get(bewerbId) || {};
@@ -310,18 +324,22 @@ async function loadPreMatches() {
       const zeitpunktForderungRaw = zeitpunktForderungIdx !== -1 ? String(row[zeitpunktForderungIdx] || "") : "";
       const status = st !== -1 ? (row[st] || "offen") : "offen";
       const ergebnis = er !== -1 ? formatErgebnis(row[er] || "") : "";
-      const isForMe = userId ? [p1, p2, p3, p4].includes(userId) : false;
+      const isForMe = userId ? [pid1.cleanId, pid2.cleanId, pid3.cleanId, pid4.cleanId].includes(userId) : false;
 
       preMatches.push({
         row: rowNum,
-        player1: cachedPlayerMap.get(p1) || p1,
-        player2: cachedPlayerMap.get(p2) || p2,
-        player3: cachedPlayerMap.get(p3) || p3,
-        player4: cachedPlayerMap.get(p4) || p4,
-        player1Id: p1,
-        player2Id: p2,
-        player3Id: p3,
-        player4Id: p4,
+        player1: cachedPlayerMap.get(pid1.cleanId) || pid1.cleanId,
+        player2: cachedPlayerMap.get(pid2.cleanId) || pid2.cleanId,
+        player3: cachedPlayerMap.get(pid3.cleanId) || pid3.cleanId,
+        player4: cachedPlayerMap.get(pid4.cleanId) || pid4.cleanId,
+        player1Id: pid1.cleanId,
+        player2Id: pid2.cleanId,
+        player3Id: pid3.cleanId,
+        player4Id: pid4.cleanId,
+        player1Special: pid1.special,
+        player2Special: pid2.special,
+        player3Special: pid3.special,
+        player4Special: pid4.special,
         datum,
         bewerbId,
         bewerbsartId: bewerbInfo.bewerbsartId || "",
@@ -336,8 +354,12 @@ async function loadPreMatches() {
     });
 
     container.innerHTML = preMatches.map((match) => {
-      const team1 = [match.player1, match.player2].filter(Boolean).join(" / ") || "---";
-      const team2 = [match.player3, match.player4].filter(Boolean).join(" / ") || "---";
+      const team1Name = [match.player1, match.player2].filter(Boolean).join(" / ") || "---";
+      const team2Name = [match.player3, match.player4].filter(Boolean).join(" / ") || "---";
+      const team1Special = match.player1Special || match.player2Special;
+      const team2Special = match.player3Special || match.player4Special;
+      const team1 = team1Name + badgeHtml(team1Special);
+      const team2 = team2Name + badgeHtml(team2Special);
       const statusBadge = getStatusBadge(match.status, match.ergebnis);
       const actionButton = getActionButton(match, userId);
       const bewerbName = escapeHtml(match.bewerbBezeichnung || match.bewerbsart || "");

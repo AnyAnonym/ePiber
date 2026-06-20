@@ -16,6 +16,20 @@ const ROUND_DISPLAY = {
   AF: "Achtelfinale", VF: "Viertelfinale", HF: "Halbfinale", F: "Finale",
 };
 
+function parsePlayerId(raw) {
+  const s = String(raw || "").trim();
+  const wo = /\[w\.o\.\]/.test(s);
+  const cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  const pre = /^PRE$/i.test(cleanId);
+  return { cleanId, special: wo ? "wo" : null, pre };
+}
+
+function badgeHtml(type) {
+  if (type === "wo") return '<span class="badge badge-wo">w.o.</span>';
+  if (type === "ret") return '<span class="badge badge-wo">ret.</span>';
+  return "";
+}
+
 function parseRaster(val) {
   if (!val) return null;
   const s = String(val).trim().toUpperCase();
@@ -33,6 +47,11 @@ function parseResult(val) {
   const parts = s.split("/").filter(Boolean);
   if (parts.length === 0) return null;
   const sets = parts.map((p) => {
+    if (/\[ret\]/.test(p)) {
+      const sc = p.split("-");
+      const retOnLeft = sc[0] && sc[0].includes("[ret]");
+      return { left: 0, right: 0, special: "ret", retOnLeft };
+    }
     const sc = p.split("-");
     if (sc.length !== 2) return null;
     const a = parseInt(sc[0], 10);
@@ -62,9 +81,12 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
       if (!p) return;
       const key = p.roundKey + "-" + p.match;
 
+      const pid1 = parsePlayerId(row[p1Idx]);
+      const pid3 = parsePlayerId(row[p3Idx]);
+
       const entry = {
-        top: { id: String(row[p1Idx] || "").trim(), name: null },
-        bottom: { id: String(row[p3Idx] || "").trim(), name: null },
+        top: { id: pid1.cleanId, name: null, special: pid1.special, pre: pid1.pre },
+        bottom: { id: pid3.cleanId, name: null, special: pid3.special, pre: pid3.pre },
         result: null,
         winner: null,
       };
@@ -86,8 +108,9 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
   processRows(matchData, matchHeader, true);
 
   Object.values(slotMap).forEach((e) => {
-    if (e.top.id) e.top.name = playerMap.get(e.top.id) || null;
-    if (e.bottom.id) e.bottom.name = playerMap.get(e.bottom.id) || null;
+    const resolve = (id) => /^BYE$/i.test(id) ? "BYE" : /^PRE$/i.test(id) ? null : (playerMap.get(id) || null);
+    if (e.top.id) e.top.name = resolve(e.top.id);
+    if (e.bottom.id) e.bottom.name = resolve(e.bottom.id);
   });
 
   let r1Count = 0;
@@ -267,6 +290,8 @@ function renderBracket(rounds) {
       [match.top, match.bottom].forEach((slot, sIdx) => {
         const el = document.createElement("div");
         el.className = "bracket-player";
+        slot._el = el;
+        if (slot.pre) el.classList.add("blink-green");
 
         const slotId = slot.id;
         const isWinner = match.winner && slotId && match.winner === slotId;
@@ -276,9 +301,10 @@ function renderBracket(rounds) {
         if (match.result && slot.name) {
           const side = sIdx === 0 ? "left" : "right";
           const score = match.result.map((s) => side === "left" ? s.left : s.right).join(" | ");
-          el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>`;
+          const hasRet = match.result.some((s) => s.special && (side === "left" ? s.retOnLeft : !s.retOnLeft));
+          el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
         } else {
-          el.textContent = slot.name || "—";
+          el.innerHTML = (slot.name || "—") + (slot.name ? " " + badgeHtml(slot.special) : "");
           if (!slot.name) el.classList.add("bye");
         }
 
@@ -303,6 +329,11 @@ function renderBracket(rounds) {
 
   addConnectors(grid, rounds);
 }
+
+let cachedRounds = null;
+let cachedPlayerMap = null;
+let cachedR1Count = 16;
+let cachedBewerbName = "";
 
 async function loadBracket() {
   const container = document.getElementById("bracketContainer");
@@ -387,6 +418,10 @@ async function loadBracket() {
     const matchData = matchValues.slice(1);
 
     const rounds = buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1CountConfigPlayers);
+    cachedRounds = rounds;
+    cachedPlayerMap = playerMap;
+    cachedR1Count = r1CountConfigPlayers;
+    cachedBewerbName = bewerbName;
 
     if (rounds.length === 0) {
       if (container) container.innerHTML = "<p>Keine Rasterdaten für diesen Bewerb.</p>";
@@ -407,12 +442,14 @@ async function loadBracket() {
         setHeading("Turnierraster - " + (bewerbName || "Bewerb"));
         container.innerHTML = "";
         renderBracket(rounds);
+        startPolling();
       });
 
       const btnGruppe = document.createElement("button");
       btnGruppe.className = "btn-action";
       btnGruppe.textContent = "Gruppe";
       btnGruppe.addEventListener("click", async () => {
+        stopPolling();
         setHeading("Round Robin - " + (bewerbName || "Bewerb"));
         try {
           const mod = await import("./RoundRobin.js?v=2");
@@ -437,6 +474,94 @@ async function loadBracket() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  loadBracket();
+let pollTimer = null;
+
+async function refreshNames() {
+  if (!cachedRounds) return;
+  try {
+    const [preRes, matchRes, playerRes] = await Promise.all([
+      readPreMatches(), readMatchesList(), readPlayersList(),
+    ]);
+    const preValues = preRes.data?.values || [];
+    const matchValues = matchRes.data?.values || [];
+    const playerValues = playerRes.data?.values || [];
+
+    const playerMap = new Map();
+    if (playerValues.length > 1) {
+      const ph = playerValues[0].map((h) => String(h).trim().toLowerCase());
+      const pidIdx = ph.indexOf("id");
+      const pfnIdx = ph.indexOf("vorname");
+      const plnIdx = ph.indexOf("nachname");
+      playerValues.slice(1).forEach((r) => {
+        const id = String(r[pidIdx] || "").trim();
+        const name = [r[pfnIdx], r[plnIdx]].filter(Boolean).map((s) => String(s).trim()).join(" ");
+        if (id) playerMap.set(id, name);
+      });
+    }
+
+    const preHeader = preValues[0] || [];
+    const preData = preValues.slice(1);
+    const matchHeader = matchValues[0] || [];
+    const matchData = matchValues.slice(1);
+
+    const fresh = buildRounds(preData, preHeader, matchData, matchHeader, playerMap, cachedR1Count);
+    if (fresh.length === 0) return;
+
+    fresh.forEach((round, rIdx) => {
+      round.matches.forEach((match, mIdx) => {
+        const oldMatch = cachedRounds[rIdx]?.matches[mIdx];
+        if (!oldMatch) return;
+        [match.top, match.bottom].forEach((slot, sIdx) => {
+          const oldSlot = sIdx === 0 ? oldMatch.top : oldMatch.bottom;
+          const el = oldSlot._el;
+          if (!el) return;
+          const nameChanged = slot.name !== oldSlot.name;
+          const preChanged = slot.pre !== oldSlot.pre;
+          const specialChanged = slot.special !== oldSlot.special;
+          if (!nameChanged && !preChanged && !specialChanged) return;
+
+          oldSlot.name = slot.name;
+          oldSlot.pre = slot.pre;
+          oldSlot.id = slot.id;
+          oldSlot.special = slot.special;
+
+          if (slot.id) el.dataset.playerId = slot.id;
+
+          if (match.result && slot.name) {
+            const side = sIdx === 0 ? "left" : "right";
+            const score = match.result.map((s) => side === "left" ? s.left : s.right).join(" | ");
+            const hasRet = match.result.some((s) => s.special && (side === "left" ? s.retOnLeft : !s.retOnLeft));
+            el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
+          } else {
+            el.innerHTML = (slot.name || "—") + (slot.name ? " " + badgeHtml(slot.special) : "");
+            el.classList.toggle("bye", !slot.name);
+          }
+          el.classList.toggle("blink-green", !!slot.pre);
+        });
+      });
+    });
+  } catch (err) {
+    console.error("refreshNames Fehler:", err);
+  }
+}
+
+function startPolling() {
+  stopPolling();
+  const poll = async () => {
+    const c = document.getElementById("bracketContainer");
+    if (c && c.innerHTML !== "" && cachedRounds) {
+      await refreshNames();
+    }
+    pollTimer = setTimeout(poll, 2000);
+  };
+  pollTimer = setTimeout(poll, 2000);
+}
+
+function stopPolling() {
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadBracket();
+  startPolling();
 });

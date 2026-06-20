@@ -3,12 +3,19 @@ import {httpsCallable} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-
 
 window.addEventListener("load", main);
 
-function getWalkoverTeam(sets) {
+function parsePlayerId(raw) {
+  const s = String(raw || "").trim();
+  const wo = /\[w\.o\.\]/.test(s);
+  const cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  return { cleanId, special: wo ? "wo" : null };
+}
+
+function getRetTeam(sets) {
   for (const set of sets) {
-    if (!set.includes("[w.o.]")) continue;
+    if (!set.includes("[ret]")) continue;
     const parts = set.split("-");
-    if (parts[0] && parts[0].includes("[w.o.]")) return "team1";
-    if (parts[1] && parts[1].includes("[w.o.]")) return "team2";
+    if (parts[0] && parts[0].includes("[ret]")) return "team1";
+    if (parts[1] && parts[1].includes("[ret]")) return "team2";
   }
   return null;
 }
@@ -103,9 +110,13 @@ async function main() {
     const now = Date.now();
 
     const matches = matchesValues.slice(1)
-      .filter((row) => row && row[i1])
+      .filter((row) => row && row[i1] && !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3])))
       .sort((a, b) => Math.abs(dateToTs(a[d]) - now) - Math.abs(dateToTs(b[d]) - now))
       .map((row) => {
+        const pid1 = parsePlayerId(row[i1]);
+        const pid2 = parsePlayerId(row[i2]);
+        const pid3 = parsePlayerId(row[i3]);
+        const pid4 = parsePlayerId(row[i4]);
         const ergebnisRaw = row[ergebnisIdx] || "";
         const sets = ergebnisRaw ? ergebnisRaw.split("/").map((s) => formatSetScore(s)) : [];
         const bewerbId = bewerbIdIdx !== -1 ? String(row[bewerbIdIdx] || "").trim() : "";
@@ -113,16 +124,22 @@ async function main() {
         return {
           date: parseSheetDate(row[d]),
           players: [
-            playerMap.get(row[i1]) || "---",
-            playerMap.get(row[i2]) || "---",
-            playerMap.get(row[i3]) || "---",
-            playerMap.get(row[i4]) || "---",
+            playerMap.get(pid1.cleanId) || "---",
+            playerMap.get(pid2.cleanId) || "---",
+            playerMap.get(pid3.cleanId) || "---",
+            playerMap.get(pid4.cleanId) || "---",
           ],
           playerIds: [
-            row[i1] || "",
-            row[i2] || "",
-            row[i3] || "",
-            row[i4] || "",
+            pid1.cleanId,
+            pid2.cleanId,
+            pid3.cleanId,
+            pid4.cleanId,
+          ],
+          playerSpecial: [
+            pid1.special,
+            pid2.special,
+            pid3.special,
+            pid4.special,
           ],
           winnerId: gewinnerIdx !== -1 ? String(row[gewinnerIdx] || "").trim() : "",
           sets,
@@ -136,16 +153,24 @@ async function main() {
       return;
     }
 
+    const badgeHtml = (type) => {
+      if (type === "wo") return ' <span class="badge badge-wo">w.o.</span>';
+      if (type === "ret") return ' <span class="badge badge-wo">ret.</span>';
+      return "";
+    };
+
     container.innerHTML = matches.map((m) => {
       const [p1, p2, p3, p4] = m.players;
       const [id1, id2, id3, id4] = m.playerIds || [];
+      const [spec1, spec2, spec3, spec4] = m.playerSpecial || [];
       const sets = [...(m.sets || []), "---", "---", "---"].slice(0, 3);
 
       const team1Won = m.winnerId && (m.winnerId === id1 || m.winnerId === id2);
       const team2Won = m.winnerId && (m.winnerId === id3 || m.winnerId === id4);
-      const woTeam = m.sets ? getWalkoverTeam(m.sets) : null;
-      const team1Wo = woTeam === "team1";
-      const team2Wo = woTeam === "team2";
+
+      const retTeam = m.sets ? getRetTeam(m.sets) : null;
+      const ret1 = retTeam === "team1" ? "ret" : null;
+      const ret2 = retTeam === "team2" ? "ret" : null;
 
       return `
         <div class="match-card">
@@ -155,16 +180,16 @@ async function main() {
           </div>
           <div class="match-content">
             <div class="team${team1Won ? " team-winner" : ""}">
-              <div class="player main">${p1}${team1Wo ? ' <span class="badge badge-wo">w.o.</span>' : ""}</div>
-              <div class="player sub">${p2}</div>
+              <div class="player main">${p1}${badgeHtml(spec1 || ret1)}</div>
+              <div class="player sub">${p2}${badgeHtml(spec2)}</div>
             </div>
             <div class="vs">vs.</div>
             <div class="team${team2Won ? " team-winner" : ""}">
-              <div class="player main">${p3}${team2Wo ? ' <span class="badge badge-wo">w.o.</span>' : ""}</div>
-              <div class="player sub">${p4}</div>
+              <div class="player main">${p3}${badgeHtml(spec3 || ret2)}</div>
+              <div class="player sub">${p4}${badgeHtml(spec4)}</div>
             </div>
             <div class="sets">
-              ${sets.map((s) => `<div class="set">${s.replace("[w.o.]", "")}</div>`).join("")}
+              ${sets.map((s) => `<div class="set">${s.replace("[ret]", "")}</div>`).join("")}
             </div>
           </div>
         </div>

@@ -15,6 +15,12 @@ function parseGroup(val) {
   return parseInt(m[1], 10);
 }
 
+function parsePlayerId(raw) {
+  const s = String(raw || "").trim();
+  const cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  return cleanId;
+}
+
 function collectPlayers(data, header, bewerbId) {
   const h = header.map((c) => String(c).trim().toLowerCase());
   const bwIdx = h.indexOf("bewerbid");
@@ -27,8 +33,8 @@ function collectPlayers(data, header, bewerbId) {
     if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(bewerbId).trim()) return;
     const g = parseGroup(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
     if (g === null) return;
-    const p1 = String(row[p1Idx] || "").trim();
-    const p3 = p3Idx !== -1 ? String(row[p3Idx] || "").trim() : "";
+    const p1 = parsePlayerId(row[p1Idx]);
+    const p3 = p3Idx !== -1 ? parsePlayerId(row[p3Idx]) : "";
     if (p1) ids.push({ group: g, id: p1 });
     if (p3) ids.push({ group: g, id: p3 });
   });
@@ -41,6 +47,7 @@ function parseResult(val) {
   if (parts.length === 0) return null;
   const sets = [];
   for (const p of parts) {
+    if (/\[ret\]/.test(p)) continue;
     const sc = p.split("-");
     if (sc.length !== 2) return null;
     const a = parseInt(sc[0], 10);
@@ -48,6 +55,7 @@ function parseResult(val) {
     if (isNaN(a) || isNaN(b)) return null;
     sets.push({ left: a, right: b });
   }
+  if (sets.length === 0) return null;
   return sets;
 }
 
@@ -63,8 +71,8 @@ function buildStats(matchData, matchHeader, bewerbId) {
 
   matchData.forEach((row) => {
     if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(bewerbId).trim()) return;
-    const p1 = String(row[p1Idx] || "").trim();
-    const p3 = p3Idx !== -1 ? String(row[p3Idx] || "").trim() : "";
+    const p1 = parsePlayerId(row[p1Idx]);
+    const p3 = p3Idx !== -1 ? parsePlayerId(row[p3Idx]) : "";
     const winner = gwIdx !== -1 ? String(row[gwIdx] || "").trim() : "";
     const rawResult = ergebnisIdx !== -1 ? String(row[ergebnisIdx] || "").trim() : "";
     const sets = parseResult(rawResult);
