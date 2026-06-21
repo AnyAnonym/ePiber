@@ -169,6 +169,7 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
       const sm = slotMap[key];
       matches.push({
         matchNum: m,
+        _key: key,
         top: sm ? sm.top : { id: "", name: null },
         bottom: sm ? sm.bottom : { id: "", name: null },
         result: sm ? sm.result : null,
@@ -284,6 +285,7 @@ function renderBracket(rounds) {
       md.className = "bracket-match";
       md.style.gridColumn = rIdx + 1;
       md.style.gridRow = row;
+      match._el = md;
 
       if (match.result) md.classList.add("has-result");
 
@@ -291,6 +293,7 @@ function renderBracket(rounds) {
         const el = document.createElement("div");
         el.className = "bracket-player";
         slot._el = el;
+        slot._side = sIdx === 0 ? "left" : "right";
         if (slot.pre) el.classList.add("blink-green");
 
         const slotId = slot.id;
@@ -299,9 +302,8 @@ function renderBracket(rounds) {
         if (isWinner) el.classList.add("winner");
 
         if (match.result && slot.name) {
-          const side = sIdx === 0 ? "left" : "right";
-          const score = match.result.map((s) => side === "left" ? s.left : s.right).join(" | ");
-          const hasRet = match.result.some((s) => s.special && (side === "left" ? s.retOnLeft : !s.retOnLeft));
+          const score = match.result.map((s) => slot._side === "left" ? s.left : s.right).join(" | ");
+          const hasRet = match.result.some((s) => s.special && (slot._side === "left" ? s.retOnLeft : !s.retOnLeft));
           el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
         } else {
           el.innerHTML = (slot.name || "—") + (slot.name ? " " + badgeHtml(slot.special) : "");
@@ -331,7 +333,6 @@ function renderBracket(rounds) {
 }
 
 let cachedRounds = null;
-let cachedPlayerMap = null;
 let cachedR1Count = 16;
 let cachedBewerbName = "";
 
@@ -419,7 +420,6 @@ async function loadBracket() {
 
     const rounds = buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1CountConfigPlayers);
     cachedRounds = rounds;
-    cachedPlayerMap = playerMap;
     cachedR1Count = r1CountConfigPlayers;
     cachedBewerbName = bewerbName;
 
@@ -452,7 +452,7 @@ async function loadBracket() {
         stopPolling();
         setHeading("Round Robin - " + (bewerbName || "Bewerb"));
         try {
-          const mod = await import("./RoundRobin.js?v=2");
+          const mod = await import("./RoundRobin.js?v=3");
           if (mod.renderRoundRobin) {
             container.innerHTML = "";
             mod.renderRoundRobin(BEWERB_ID, container, { r1CountConfigPlayers, bewerbName });
@@ -479,12 +479,11 @@ let pollTimer = null;
 async function refreshNames() {
   if (!cachedRounds) return;
   try {
-    const [preRes, matchRes, playerRes] = await Promise.all([
-      readPreMatches(), readMatchesList(), readPlayersList(),
+    const [playerRes, matchRes] = await Promise.all([
+      readPlayersList(), readMatchesList(),
     ]);
-    const preValues = preRes.data?.values || [];
-    const matchValues = matchRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
+    const matchValues = matchRes.data?.values || [];
 
     const playerMap = new Map();
     if (playerValues.length > 1) {
@@ -499,47 +498,85 @@ async function refreshNames() {
       });
     }
 
-    const preHeader = preValues[0] || [];
-    const preData = preValues.slice(1);
     const matchHeader = matchValues[0] || [];
     const matchData = matchValues.slice(1);
+    const mh = matchHeader.map((c) => String(c).trim().toLowerCase());
+    const bwIdx = mh.indexOf("bewerbid");
+    const rtIdx = mh.indexOf("rasterpaarung");
+    const p1Idx = mh.indexOf("spielerid1");
+    const p3Idx = mh.indexOf("spielerid3");
+    const ergebnisIdx = mh.indexOf("ergebnis");
+    const gewinnerIdx = mh.indexOf("gewinner");
 
-    const fresh = buildRounds(preData, preHeader, matchData, matchHeader, playerMap, cachedR1Count);
-    if (fresh.length === 0) return;
+    // Build result/winner map from fresh match data
+    const keyResultMap = {};
+    matchData.forEach((row) => {
+      if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
+      const p = parseRaster(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
+      if (!p) return;
+      const key = p.roundKey + "-" + p.match;
+      const rawResult = ergebnisIdx !== -1 ? String(row[ergebnisIdx] || "").trim() : "";
+      keyResultMap[key] = {
+        result: parseResult(rawResult),
+        winner: String(row[gewinnerIdx] || "").trim(),
+      };
+    });
 
-    fresh.forEach((round, rIdx) => {
+    let anyOverallChange = false;
+
+    cachedRounds.forEach((round, rIdx) => {
       round.matches.forEach((match, mIdx) => {
-        const oldMatch = cachedRounds[rIdx]?.matches[mIdx];
+        const oldMatch = round.matches[mIdx];
         if (!oldMatch) return;
-        [match.top, match.bottom].forEach((slot, sIdx) => {
-          const oldSlot = sIdx === 0 ? oldMatch.top : oldMatch.bottom;
+
+        const key = oldMatch._key;
+
+        const freshR = key && keyResultMap[key];
+        const newResult = freshR ? freshR.result : null;
+        const newWinner = freshR ? freshR.winner : null;
+        const resultChanged = JSON.stringify(newResult) !== JSON.stringify(oldMatch.result);
+        const winnerChanged = newWinner !== oldMatch.winner;
+
+        let anyMatchChange = resultChanged || winnerChanged;
+
+        const resolve = (id) => /^BYE$/i.test(id) ? "BYE" : /^PRE$/i.test(id) ? null : (playerMap.get(id) || null);
+
+        [oldMatch.top, oldMatch.bottom].forEach((oldSlot) => {
           const el = oldSlot._el;
           if (!el) return;
-          const nameChanged = slot.name !== oldSlot.name;
-          const preChanged = slot.pre !== oldSlot.pre;
-          const specialChanged = slot.special !== oldSlot.special;
-          if (!nameChanged && !preChanged && !specialChanged) return;
 
-          oldSlot.name = slot.name;
-          oldSlot.pre = slot.pre;
-          oldSlot.id = slot.id;
-          oldSlot.special = slot.special;
+          const newName = oldSlot.id ? resolve(oldSlot.id) : null;
+          const nameChanged = newName !== oldSlot.name;
 
-          if (slot.id) el.dataset.playerId = slot.id;
+          if (!nameChanged && !resultChanged && !winnerChanged) return;
+          anyMatchChange = true;
 
-          if (match.result && slot.name) {
-            const side = sIdx === 0 ? "left" : "right";
-            const score = match.result.map((s) => side === "left" ? s.left : s.right).join(" | ");
-            const hasRet = match.result.some((s) => s.special && (side === "left" ? s.retOnLeft : !s.retOnLeft));
-            el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
+          oldSlot.name = newName;
+
+          const side = oldSlot._side;
+          const isWinner = newWinner && oldSlot.id && newWinner === oldSlot.id;
+          el.classList.toggle("winner", isWinner);
+          el.classList.toggle("blink-green", !!oldSlot.pre);
+
+          if (newResult && oldSlot.name) {
+            const score = newResult.map((s) => side === "left" ? s.left : s.right).join(" | ");
+            const hasRet = newResult.some((s) => s.special && (side === "left" ? s.retOnLeft : !s.retOnLeft));
+            el.innerHTML = `<span class="pname">${oldSlot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
           } else {
-            el.innerHTML = (slot.name || "—") + (slot.name ? " " + badgeHtml(slot.special) : "");
-            el.classList.toggle("bye", !slot.name);
+            el.innerHTML = (oldSlot.name || "—") + (oldSlot.name ? " " + badgeHtml(oldSlot.special) : "");
+            el.classList.toggle("bye", !oldSlot.name);
           }
-          el.classList.toggle("blink-green", !!slot.pre);
         });
+
+        if (anyMatchChange) {
+          oldMatch.result = newResult;
+          oldMatch.winner = newWinner;
+          if (oldMatch._el) oldMatch._el.classList.toggle("has-result", !!newResult);
+          anyOverallChange = true;
+        }
       });
     });
+
   } catch (err) {
     console.error("refreshNames Fehler:", err);
   }

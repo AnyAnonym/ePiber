@@ -68,9 +68,11 @@ function buildStats(matchData, matchHeader, bewerbId) {
   const ergebnisIdx = h.indexOf("ergebnis");
 
   const stats = {};
+  const playerMatches = {};
 
   matchData.forEach((row) => {
     if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(bewerbId).trim()) return;
+
     const p1 = parsePlayerId(row[p1Idx]);
     const p3 = p3Idx !== -1 ? parsePlayerId(row[p3Idx]) : "";
     const winner = gwIdx !== -1 ? String(row[gwIdx] || "").trim() : "";
@@ -91,10 +93,16 @@ function buildStats(matchData, matchHeader, bewerbId) {
           else stats[pid].saetzeL++;
         });
       }
+
+      const oppId = idx === 0 ? p3 : p1;
+      if (oppId) {
+        if (!playerMatches[pid]) playerMatches[pid] = [];
+        playerMatches[pid].push({ opponent: oppId, result: rawResult || "—" });
+      }
     });
   });
 
-  return stats;
+  return { stats, playerMatches };
 }
 
 export async function renderRoundRobin(bewerbId, container, opts) {
@@ -139,8 +147,6 @@ export async function renderRoundRobin(bewerbId, container, opts) {
       if (!seen.has(key)) { seen.add(key); unique.push(e); }
     });
 
-    const stats = buildStats(matchValues.slice(1), matchHeader, bewerbId);
-
     const groups = new Map();
     unique.forEach((e) => {
       if (!groups.has(e.group)) groups.set(e.group, []);
@@ -154,11 +160,14 @@ export async function renderRoundRobin(bewerbId, container, opts) {
       return;
     }
 
+    const { stats, playerMatches } = buildStats(matchValues.slice(1), matchHeader, bewerbId);
+
     let html = "";
     sorted.forEach(([gNum, ids]) => {
       const rows = ids.map((id) => {
         const s = stats[id] || { siege: 0, saetzeW: 0, saetzeL: 0, gamesW: 0, gamesL: 0 };
-        return { id, ...s };
+        const matches = playerMatches[id] || [];
+        return { id, ...s, matches };
       });
 
       rows.sort((a, b) => {
@@ -169,12 +178,13 @@ export async function renderRoundRobin(bewerbId, container, opts) {
         return (b.gamesW - b.gamesL) - (a.gamesW - a.gamesL);
       });
 
-      html += `<div style="display:inline-flex;flex-direction:column;border:2px solid #0b57d0;border-radius:12px;padding:16px;margin:0 12px 16px 0;min-width:400px;background:#fff;vertical-align:top;">`;
+      html += `<div style="display:inline-flex;flex-direction:column;border:2px solid #0b57d0;border-radius:12px;padding:16px;margin:0 12px 16px 0;min-width:480px;background:#fff;vertical-align:top;">`;
       html += `<div style="margin:0 0 12px 0;font-weight:700;font-size:1.05rem;color:#0b57d0;text-align:center;">Gruppe ${gNum}</div>`;
       html += `<table style="width:100%;border-collapse:collapse;font-size:0.9rem;">`;
       html += `<thead><tr style="background:#eef;font-weight:600;">`;
       html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Rang</th>`;
       html += `<th style="padding:6px 8px;text-align:left;border-bottom:2px solid #0b57d0;">Name</th>`;
+      html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Spiele</th>`;
       html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Siege</th>`;
       html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Sätze<br><span style="font-weight:400;font-size:0.7rem;">W-L</span></th>`;
       html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid #0b57d0;">Games<br><span style="font-weight:400;font-size:0.7rem;">W-L</span></th>`;
@@ -183,6 +193,7 @@ export async function renderRoundRobin(bewerbId, container, opts) {
         html += `<tr style="border-bottom:1px solid #e0e0e0;">`;
         html += `<td style="padding:6px 8px;text-align:center;">${idx + 1}</td>`;
         html += `<td style="padding:6px 8px;">${playerMap.get(r.id) || "—"}</td>`;
+        html += `<td style="padding:6px 8px;text-align:center;">${r.matches.length}</td>`;
         html += `<td style="padding:6px 8px;text-align:center;">${r.siege}</td>`;
         html += `<td style="padding:6px 8px;text-align:center;">${r.saetzeW}-${r.saetzeL}</td>`;
         html += `<td style="padding:6px 8px;text-align:center;">${r.gamesW}-${r.gamesL}</td>`;

@@ -1680,8 +1680,8 @@ input[type="date"] {
 
 .bracket-header-row {
   display: grid;
-  grid-template-columns: repeat(var(--cols, 4), minmax(160px, 1fr));
-  gap: 40px;
+  grid-template-columns: repeat(var(--cols, 4), minmax(200px, 1fr));
+  gap: 56px;
   justify-items: center;
   margin-bottom: 24px;
   padding: 0;
@@ -1699,9 +1699,9 @@ input[type="date"] {
 
 .bracket-grid {
   display: grid;
-  grid-template-columns: repeat(var(--cols, 4), minmax(160px, 1fr));
+  grid-template-columns: repeat(var(--cols, 4), minmax(200px, 1fr));
   grid-template-rows: repeat(var(--rows, 16), 1fr);
-  gap: 12px 40px;
+  gap: 12px 56px;
   justify-items: center;
   align-items: start;
   width: fit-content;
@@ -1719,7 +1719,7 @@ input[type="date"] {
   z-index: 1;
 }
 .bracket-lines path {
-  stroke: #bbb;
+  stroke: #555;
   stroke-width: 2;
   fill: none;
 }
@@ -1727,10 +1727,10 @@ input[type="date"] {
 .bracket-match {
   display: flex;
   flex-direction: column;
-  border: 1px solid #ccc;
+  border: 2px solid #666;
   border-radius: 6px;
   overflow: hidden;
-  width: 160px;
+  width: 200px;
   position: relative;
   z-index: 2;
 }
@@ -1800,7 +1800,7 @@ input[type="date"] {
 
 @media (max-width: 768px) {
   .bracket-match {
-    width: 120px;
+    width: 150px;
   }
   .bracket-player {
     font-size: 0.75rem;
