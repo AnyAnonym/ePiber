@@ -19,14 +19,17 @@ const ROUND_DISPLAY = {
 function parsePlayerId(raw) {
   const s = String(raw || "").trim();
   const wo = /\[w\.o\.\]/.test(s);
-  const cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  const gesetzt = /\[gesetzt\]/i.test(s);
+  let cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  cleanId = cleanId.replace(/\[gesetzt\]/gi, "").trim();
   const pre = /^PRE$/i.test(cleanId);
-  return { cleanId, special: wo ? "wo" : null, pre };
+  return { cleanId, special: wo ? "wo" : null, pre, gesetzt };
 }
 
 function badgeHtml(type) {
   if (type === "wo") return '<span class="badge badge-wo">w.o.</span>';
   if (type === "ret") return '<span class="badge badge-wo">ret.</span>';
+  if (type === "gesetzt") return '<span class="badge badge-gesetzt">gesetzt</span>';
   return "";
 }
 
@@ -85,8 +88,8 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
       const pid3 = parsePlayerId(row[p3Idx]);
 
       const entry = {
-        top: { id: pid1.cleanId, name: null, special: pid1.special, pre: pid1.pre },
-        bottom: { id: pid3.cleanId, name: null, special: pid3.special, pre: pid3.pre },
+        top: { id: pid1.cleanId, name: null, special: pid1.special, pre: pid1.pre, gesetzt: pid1.gesetzt },
+        bottom: { id: pid3.cleanId, name: null, special: pid3.special, pre: pid3.pre, gesetzt: pid3.gesetzt },
         result: null,
         winner: null,
       };
@@ -95,6 +98,12 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
         const rawResult = String(row[ergebnisIdx] || "").trim();
         entry.result = parseResult(rawResult);
         entry.winner = String(row[gewinnerIdx] || "").trim();
+        // Preserve gesetzt from preMatches if not set in matches
+        const existing = slotMap[key];
+        if (existing) {
+          if (!pid1.gesetzt && existing.top.gesetzt) entry.top.gesetzt = true;
+          if (!pid3.gesetzt && existing.bottom.gesetzt) entry.bottom.gesetzt = true;
+        }
       }
 
       const existing = slotMap[key];
@@ -304,9 +313,9 @@ function renderBracket(rounds) {
         if (match.result && slot.name) {
           const score = match.result.map((s) => slot._side === "left" ? s.left : s.right).join(" | ");
           const hasRet = match.result.some((s) => s.special && (slot._side === "left" ? s.retOnLeft : !s.retOnLeft));
-          el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
+          el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}${slot.gesetzt ? " " + badgeHtml("gesetzt") : ""}`;
         } else {
-          el.innerHTML = (slot.name || "—") + (slot.name ? " " + badgeHtml(slot.special) : "");
+          el.innerHTML = (slot.name || "—") + (slot.name ? " " + badgeHtml(slot.special) : "") + (slot.gesetzt ? " " + badgeHtml("gesetzt") : "");
           if (!slot.name) el.classList.add("bye");
         }
 
@@ -314,7 +323,7 @@ function renderBracket(rounds) {
           el.dataset.playerId = slotId;
           el.addEventListener("click", () => {
             if (typeof window.openProfileModal === "function") {
-              window.openProfileModal(slotId);
+              window.openProfileModal({ playerId: slotId });
             }
           });
         }
@@ -335,6 +344,7 @@ function renderBracket(rounds) {
 let cachedRounds = null;
 let cachedR1Count = 16;
 let cachedBewerbName = "";
+let playerMap = new Map();
 
 async function loadBracket() {
   const container = document.getElementById("bracketContainer");
@@ -400,7 +410,7 @@ async function loadBracket() {
     }
     setHeading("Turnierraster - " + (bewerbName || "Bewerb"));
 
-    const playerMap = new Map();
+    playerMap = new Map();
     if (playerValues.length > 1) {
       const ph = playerValues[0].map((h) => String(h).trim().toLowerCase());
       const pidIdx = ph.indexOf("id");
@@ -476,111 +486,180 @@ async function loadBracket() {
 
 let pollTimer = null;
 
-async function refreshNames() {
-  if (!cachedRounds) return;
-  try {
-    const [playerRes, matchRes] = await Promise.all([
-      readPlayersList(), readMatchesList(),
-    ]);
-    const playerValues = playerRes.data?.values || [];
-    const matchValues = matchRes.data?.values || [];
+// async function refreshNames() {
+//   if (!cachedRounds) return;
+//   try {
+//     const [preRes, matchRes, playerRes] = await Promise.all([
+//       readPreMatches(), readMatchesList(), readPlayersList(),
+//     ]);
+//     const preValues = preRes.data?.values || [];
+//     const matchValues = matchRes.data?.values || [];
+//     const playerValues = playerRes.data?.values || [];
+// 
+//     console.log("refreshNames: playerValues.length=" + playerValues.length);
+// 
+//     const playerMap = new Map();
+//     if (playerValues.length > 1) {
+//       const ph = playerValues[0].map((h) => String(h).trim().toLowerCase());
+//       const pidIdx = ph.indexOf("id");
+//       const pfnIdx = ph.indexOf("vorname");
+//       const plnIdx = ph.indexOf("nachname");
+//       playerValues.slice(1).forEach((r) => {
+//         const id = String(r[pidIdx] || "").trim();
+//         const name = [r[pfnIdx], r[plnIdx]].filter(Boolean).map((s) => String(s).trim()).join(" ");
+//         if (id) playerMap.set(id, name);
+//       });
+//     }
+// 
+//     console.log("refreshNames: playerMap.size=" + playerMap.size);
+// 
+//     const preHeader = preValues[0] || [];
+//     const preData = preValues.slice(1);
+//     const matchHeader = matchValues[0] || [];
+//     const matchData = matchValues.slice(1);
+// 
+//     function idx(hdr) {
+//       return hdr.map((c) => String(c).trim().toLowerCase());
+//     }
+// 
+//     const phdr = idx(preHeader);
+//     const pBwIdx = phdr.indexOf("bewerbid");
+//     const pRtIdx = phdr.indexOf("rasterpaarung");
+//     const pP1Idx = phdr.indexOf("spielerid1");
+//     const pP3Idx = phdr.indexOf("spielerid3");
+// 
+//     const keyResultMap = {};
+//     preData.forEach((row) => {
+//       if (pBwIdx >= 0 && String(row[pBwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
+//       const p = parseRaster(pRtIdx >= 0 ? String(row[pRtIdx] || "").trim() : "");
+//       if (!p) return;
+//       const key = p.roundKey + "-" + p.match;
+//       if (!keyResultMap[key]) {
+//         keyResultMap[key] = {
+//           topId: parsePlayerId(row[pP1Idx]).cleanId,
+//           bottomId: parsePlayerId(row[pP3Idx]).cleanId,
+//           topPre: parsePlayerId(row[pP1Idx]).pre,
+//           bottomPre: parsePlayerId(row[pP3Idx]).pre,
+//           result: null,
+//           winner: null,
+//         };
+//       }
+//     });
+// 
+//     const mhdr = idx(matchHeader);
+//     const mBwIdx = mhdr.indexOf("bewerbid");
+//     const mRtIdx = mhdr.indexOf("rasterpaarung");
+//     const mP1Idx = mhdr.indexOf("spielerid1");
+//     const mP3Idx = mhdr.indexOf("spielerid3");
+//     const mErgIdx = mhdr.indexOf("ergebnis");
+//     const mGwIdx = mhdr.indexOf("gewinner");
+// 
+//     matchData.forEach((row) => {
+//       if (mBwIdx >= 0 && String(row[mBwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
+//       const p = parseRaster(mRtIdx >= 0 ? String(row[mRtIdx] || "").trim() : "");
+//       if (!p) return;
+//       const key = p.roundKey + "-" + p.match;
+//       const rawResult = mErgIdx >= 0 ? String(row[mErgIdx] || "").trim() : "";
+//       if (!keyResultMap[key]) {
+//         keyResultMap[key] = { topId: "", bottomId: "", topPre: false, bottomPre: false, result: null, winner: null };
+//       }
+//       keyResultMap[key].result = parseResult(rawResult);
+//       keyResultMap[key].winner = String(row[mGwIdx] || "").trim();
+//       keyResultMap[key].topId = parsePlayerId(row[mP1Idx]).cleanId;
+//       keyResultMap[key].bottomId = parsePlayerId(row[mP3Idx]).cleanId;
+//       keyResultMap[key].topPre = parsePlayerId(row[mP1Idx]).pre;
+//       keyResultMap[key].bottomPre = parsePlayerId(row[mP3Idx]).pre;
+//     });
+// 
+//     const playerMapOk = playerMap.size > 0;
+//     console.log("refreshNames: playerMapOk=" + playerMapOk + " rounds=" + cachedRounds.length + " keyResultMap=" + Object.keys(keyResultMap).length);
+//     let anyOverallChange = false;
+// 
+//     cachedRounds.forEach((round, rIdx) => {
+//       round.matches.forEach((match, mIdx) => {
+//         const oldMatch = round.matches[mIdx];
+//         if (!oldMatch) return;
+// 
+//         const key = oldMatch._key;
+// 
+//         const freshR = key && keyResultMap[key];
+//         const newResult = freshR ? freshR.result : null;
+//         const newWinner = freshR ? freshR.winner : null;
+//         const newTopId = freshR ? freshR.topId : "";
+//         const newBottomId = freshR ? freshR.bottomId : "";
+//         const resultChanged = JSON.stringify(newResult) !== JSON.stringify(oldMatch.result);
+//         const winnerChanged = newWinner !== oldMatch.winner;
+// 
+//         let anyMatchChange = resultChanged || winnerChanged;
+// 
+//         const resolve = (id) => /^BYE$/i.test(id) ? "BYE" : /^PRE$/i.test(id) ? null : (playerMap.get(id) || null);
+// 
+//         [oldMatch.top, oldMatch.bottom].forEach((oldSlot, sIdx) => {
+//           const el = oldSlot._el;
+//           if (!el) return;
+// 
+//           const newSlotId = sIdx === 0 ? newTopId : newBottomId;
+//           const newPre = freshR ? (sIdx === 0 ? freshR.topPre : freshR.bottomPre) : false;
+//           if (oldSlot.id === "88" || newSlotId === "88" || newSlotId === "PRE") console.log("refreshNames: 88/PRE debug key=" + key + " oldSlot.id=" + oldSlot.id + " newSlotId=" + newSlotId + " freshR=" + !!freshR);
+//           let idChanged = false;
+//           if (newSlotId && newSlotId !== oldSlot.id) {
+//             idChanged = true;
+//             anyMatchChange = true;
+//             oldSlot.id = newSlotId;
+//             if (el) el.dataset.playerId = newSlotId;
+//           }
+//           if (newPre !== oldSlot.pre) {
+//             oldSlot.pre = newPre;
+//             anyMatchChange = true;
+//           }
+// 
+//           let newName = oldSlot.name;
+//           if (playerMapOk && oldSlot.id) {
+//             const resolved = resolve(oldSlot.id);
+//             if (resolved) {
+//               newName = resolved;
+//             } else if (/^PRE$/i.test(oldSlot.id)) {
+//               newName = null;
+//             }
+//           }
+//           const nameChanged = newName !== oldSlot.name;
+// 
+//           if (!nameChanged && !resultChanged && !winnerChanged && !idChanged) return;
+//           if (nameChanged || idChanged) console.log("refreshNames: Slot geändert ID=" + oldSlot.id + " Name='" + oldSlot.name + "' → '" + newName + "'");
+//           anyMatchChange = true;
+// 
+//           oldSlot.name = newName;
+// 
+//           const side = oldSlot._side;
+//           const isWinner = newWinner && oldSlot.id && newWinner === oldSlot.id;
+//           el.classList.toggle("winner", isWinner);
+//           el.classList.toggle("blink-green", !!newPre);
+// 
+//           if (newResult && oldSlot.name) {
+//             const score = newResult.map((s) => side === "left" ? s.left : s.right).join(" | ");
+//             const hasRet = newResult.some((s) => s.special && (side === "left" ? s.retOnLeft : !s.retOnLeft));
+//             el.innerHTML = `<span class="pname">${oldSlot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
+//           } else {
+//             el.innerHTML = (oldSlot.name || "—") + (oldSlot.name ? " " + badgeHtml(oldSlot.special) : "");
+//             el.classList.toggle("bye", !oldSlot.name);
+//           }
+//         });
+// 
+//         if (anyMatchChange) {
+//           oldMatch.result = newResult;
+//           oldMatch.winner = newWinner;
+//           if (oldMatch._el) oldMatch._el.classList.toggle("has-result", !!newResult);
+//           anyOverallChange = true;
+//         }
+//       });
+//     });
+// 
+//   } catch (err) {
+//     console.error("refreshNames Fehler:", err);
+//   }
+// }
 
-    const playerMap = new Map();
-    if (playerValues.length > 1) {
-      const ph = playerValues[0].map((h) => String(h).trim().toLowerCase());
-      const pidIdx = ph.indexOf("id");
-      const pfnIdx = ph.indexOf("vorname");
-      const plnIdx = ph.indexOf("nachname");
-      playerValues.slice(1).forEach((r) => {
-        const id = String(r[pidIdx] || "").trim();
-        const name = [r[pfnIdx], r[plnIdx]].filter(Boolean).map((s) => String(s).trim()).join(" ");
-        if (id) playerMap.set(id, name);
-      });
-    }
-
-    const matchHeader = matchValues[0] || [];
-    const matchData = matchValues.slice(1);
-    const mh = matchHeader.map((c) => String(c).trim().toLowerCase());
-    const bwIdx = mh.indexOf("bewerbid");
-    const rtIdx = mh.indexOf("rasterpaarung");
-    const p1Idx = mh.indexOf("spielerid1");
-    const p3Idx = mh.indexOf("spielerid3");
-    const ergebnisIdx = mh.indexOf("ergebnis");
-    const gewinnerIdx = mh.indexOf("gewinner");
-
-    // Build result/winner map from fresh match data
-    const keyResultMap = {};
-    matchData.forEach((row) => {
-      if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
-      const p = parseRaster(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
-      if (!p) return;
-      const key = p.roundKey + "-" + p.match;
-      const rawResult = ergebnisIdx !== -1 ? String(row[ergebnisIdx] || "").trim() : "";
-      keyResultMap[key] = {
-        result: parseResult(rawResult),
-        winner: String(row[gewinnerIdx] || "").trim(),
-      };
-    });
-
-    let anyOverallChange = false;
-
-    cachedRounds.forEach((round, rIdx) => {
-      round.matches.forEach((match, mIdx) => {
-        const oldMatch = round.matches[mIdx];
-        if (!oldMatch) return;
-
-        const key = oldMatch._key;
-
-        const freshR = key && keyResultMap[key];
-        const newResult = freshR ? freshR.result : null;
-        const newWinner = freshR ? freshR.winner : null;
-        const resultChanged = JSON.stringify(newResult) !== JSON.stringify(oldMatch.result);
-        const winnerChanged = newWinner !== oldMatch.winner;
-
-        let anyMatchChange = resultChanged || winnerChanged;
-
-        const resolve = (id) => /^BYE$/i.test(id) ? "BYE" : /^PRE$/i.test(id) ? null : (playerMap.get(id) || null);
-
-        [oldMatch.top, oldMatch.bottom].forEach((oldSlot) => {
-          const el = oldSlot._el;
-          if (!el) return;
-
-          const newName = oldSlot.id ? resolve(oldSlot.id) : null;
-          const nameChanged = newName !== oldSlot.name;
-
-          if (!nameChanged && !resultChanged && !winnerChanged) return;
-          anyMatchChange = true;
-
-          oldSlot.name = newName;
-
-          const side = oldSlot._side;
-          const isWinner = newWinner && oldSlot.id && newWinner === oldSlot.id;
-          el.classList.toggle("winner", isWinner);
-          el.classList.toggle("blink-green", !!oldSlot.pre);
-
-          if (newResult && oldSlot.name) {
-            const score = newResult.map((s) => side === "left" ? s.left : s.right).join(" | ");
-            const hasRet = newResult.some((s) => s.special && (side === "left" ? s.retOnLeft : !s.retOnLeft));
-            el.innerHTML = `<span class="pname">${oldSlot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}`;
-          } else {
-            el.innerHTML = (oldSlot.name || "—") + (oldSlot.name ? " " + badgeHtml(oldSlot.special) : "");
-            el.classList.toggle("bye", !oldSlot.name);
-          }
-        });
-
-        if (anyMatchChange) {
-          oldMatch.result = newResult;
-          oldMatch.winner = newWinner;
-          if (oldMatch._el) oldMatch._el.classList.toggle("has-result", !!newResult);
-          anyOverallChange = true;
-        }
-      });
-    });
-
-  } catch (err) {
-    console.error("refreshNames Fehler:", err);
-  }
-}
+async function refreshNames() {}
 
 function startPolling() {
   stopPolling();

@@ -1280,6 +1280,15 @@ input[type="date"] {
   margin-left: 3px;
 }
 
+.badge-gesetzt {
+  background: #cce5ff;
+  color: #004085;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  vertical-align: middle;
+  margin-left: 3px;
+}
+
 /* -------------------------------------------------- */
 /*  MATCH CARD STATUS                                 */
 /* -------------------------------------------------- */
