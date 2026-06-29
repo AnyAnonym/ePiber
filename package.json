@@ -2,5 +2,11 @@
   "dependencies": {
     "cors": "^2.8.6",
     "googleapis": "^171.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "eslint-config-google": "^0.14.0",
+    "globals": "^17.7.0"
   }
 }
