@@ -34,13 +34,21 @@ Bei der Erstellung von Commits sollte die folgende Struktur verwendet werden, ba
 
 ## Commit-Message Format
 
+**WICHTIG: Die Versionsnummer MUSS am Anfang stehen!**
+
 ```
-<type>(<scope>): <description>
+<VERSION> <type>(<scope>): <description>
 
 [optional body]
 
 [optional footer]
 ```
+
+**Beispiele (Versionsnummer führend):**
+- `1.20.1 fix(navigator): resolve state management bug`
+- `1.21.0 feat(matches): add new tournament feature`
+- `1.21.1 docs(config): add copilot commit guidelines`
+- `2.0.0 breaking(database): refactor tournament schema`
 
 ### Types
 - `feat` - Neue Feature (MINOR)
@@ -70,15 +78,27 @@ Verwende **Gitlens Commit Composer** um deine Commits zu organisieren:
 - Strukturiere größere Änderungen in mehrere, semantisch sinnvolle Commits
 - Nutze die Commit-Vorschläge basierend auf deinen Änderungen
 
-## Versionierung
+## Versionierung - WICHTIG für Copilot
 
-Die Versionsnummern folgen diesem Schema: `MAJOR.MINOR.PATCH`
+Die Versionsnummern folgen **Semantic Versioning**: `MAJOR.MINOR.PATCH`
 
-Beispiel-Progression:
+**Regeln für Versions-Updates basierend auf Commit-Types:**
+1. **MAJOR** erhöhen wenn: `breaking()` oder massive strukturelle Änderungen
+   - Beispiel: `1.20.0` → `2.0.0`
+2. **MINOR** erhöhen wenn: `feat()` oder neue Features hinzugefügt werden
+   - Beispiel: `1.20.0` → `1.21.0`
+3. **PATCH** erhöhen wenn: `fix()`, `docs()`, `refactor()`, `perf()`, `test()`, `style()`
+   - Beispiel: `1.20.0` → `1.20.1`
+
+**Beispiel-Progression:**
 - `1.0.0` - Initial Release
-- `1.1.0` - Neue Features hinzufügt (MINOR)
-- `1.1.1` - Bugfix (PATCH)
-- `2.0.0` - Breaking Changes (MAJOR)
+- `1.1.0` - Neue Features hinzufügt → MINOR
+- `1.1.1` - Bugfix → PATCH
+- `1.2.0` - Weitere Features → MINOR
+- `2.0.0` - Breaking Changes → MAJOR
+
+**ANWEISUNG FÜR COPILOT**: 
+Nutze diese Versioning-Regeln, um in deinen Commit-Summaries oder Release-Notes zu dokumentieren, wie sich die Versionsnummer ändert. Mache die Versions-Auswirkung bei jedem Commit bewusst!
 
 ---
 
@@ -101,3 +121,5 @@ Beispiel-Progression:
 - Oder schreibe die Commit-Messages manuell nach diesem Schema
 
 **Ziel**: Eine klare, versionierbare Projekt-Historie mit automatischem Release-Management basierend auf Commit-Types.
+
+**Wichtig**: bitte die Major.Minor.Build struktur beibehalten, um die Versionskontrolle und Release-Management zu vereinfachen.
