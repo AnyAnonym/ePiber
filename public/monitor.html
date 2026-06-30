@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; overflow: hidden; }
+    #monitor-frame {
+      width: 100vw;
+      height: 100vh;
+      border: none;
+    }
+    #monitor-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 2rem;
+      z-index: 9999;
+      transition: opacity 0.5s;
+    }
+    #monitor-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <iframe id="monitor-frame"></iframe>
+  <div id="monitor-overlay">Warte auf Navigation...</div>
+
+  <script type="module" src="JS/SDK.js"></script>
+  <script type="module" src="JS/monitorPolling.js"></script>
+</body>
+</html>

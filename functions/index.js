@@ -13,6 +13,8 @@ export {readBewerbsart} from "./tables/bewerbsart.js";
 export {readMatchTyp} from "./tables/matchTyp.js";
 export {readRlPlatzierung, swapRanksData} from "./tables/rlPlatzierung.js";
 export {readEntryList, addEntryList, removeEntryList} from "./tables/entryList.js";
+export {readNavigator} from "./tables/navigator.js";
+export {setNavigatorTarget, getNavigatorTarget} from "./tables/navigatorState.js";
 export {withdrawFromRanking} from "./tables/withdrawn.js";
 
 // ── Composites ──────────────────────────────────────────────────────────────

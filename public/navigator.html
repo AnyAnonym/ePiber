@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Navigator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #f0f2f5;
+    }
+    #navigator-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 0 auto;
+    }
+    .nav-btn {
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      background: #0d6efd;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .nav-btn:hover {
+      background: #0b5ed7;
+    }
+  </style>
+</head>
+<body>
+  <div id="navigator-container"><p>Lade Navigation...</p></div>
+
+  <script type="module" src="JS/SDK.js"></script>
+  <script type="module" src="JS/navigatorList.js"></script>
+</body>
+</html>
