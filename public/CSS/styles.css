@@ -1907,6 +1907,21 @@ input[type="date"] {
 .nav-btn:hover {
   background: #0b5ed7;
 }
+.nav-btn.active {
+  background: #198754;
+}
+.nav-btn.active:hover {
+  background: #157347;
+}
+.nav-btn.blink-yellow {
+  animation: nav-blink 0.6s ease-in-out infinite;
+  background: #ffc107;
+  color: #000;
+}
+@keyframes nav-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
 
 /* -------------------------------------------------- */
 /*  MONITOR                                            */

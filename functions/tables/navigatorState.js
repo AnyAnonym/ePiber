@@ -7,14 +7,20 @@ const db = getFirestore();
 const DOC = "navigator/state";
 
 export const setNavigatorTarget = onCall(async (request) => {
-  const {path} = request.data || {};
+  const {path, status} = request.data || {};
   if (!path) return {success: false, error: "path erforderlich"};
-  await db.doc(DOC).set({target: path, updated: new Date().toISOString()});
+  const payload = {
+    target: path,
+    status: status || "pending",
+    updated: new Date().toISOString(),
+  };
+  await db.doc(DOC).set(payload);
   return {success: true};
 });
 
 export const getNavigatorTarget = onCall(async () => {
   const snap = await db.doc(DOC).get();
-  const path = snap.exists ? (snap.data().target || "") : "";
-  return {success: true, path};
+  if (!snap.exists) return {success: true, path: "", status: ""};
+  const data = snap.data();
+  return {success: true, path: data.target || "", status: data.status || ""};
 });

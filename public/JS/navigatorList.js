@@ -4,6 +4,11 @@ import { httpsCallable } from
 
 const readNavigator = httpsCallable(functions, "readNavigator");
 const setNavigatorTarget = httpsCallable(functions, "setNavigatorTarget");
+const getNavigatorTarget = httpsCallable(functions, "getNavigatorTarget");
+
+let currentActiveBtn = null;
+let pendingBtn = null;
+let statusPollId = null;
 
 async function loadNavigator() {
   const container = document.getElementById("navigator-container");
@@ -12,13 +17,10 @@ async function loadNavigator() {
   try {
     const res = await readNavigator();
     const { success, values, error } = res.data;
-    console.log("Navigator response:", success, values, error);
-
     if (!success) {
       container.innerHTML = "<p>Fehler: " + (error || "Unbekannter Fehler") + "</p>";
       return;
     }
-
     if (!Array.isArray(values) || values.length <= 1) {
       container.innerHTML = "<p>Keine Navigationseinträge gefunden.</p>";
       return;
@@ -27,7 +29,6 @@ async function loadNavigator() {
     const header = values[0].map((h) => String(h).trim().toLowerCase());
     const nameIdx = header.indexOf("name");
     const zielIdx = header.indexOf("ziel");
-
     if (nameIdx === -1) {
       container.innerHTML = "<p>Spalte Name fehlt.</p>";
       return;
@@ -41,7 +42,6 @@ async function loadNavigator() {
       .filter((r) => r.name);
 
     container.innerHTML = "";
-
     if (rows.length === 0) {
       container.innerHTML = "<p>Keine Navigationseinträge gefunden.</p>";
       return;
@@ -65,12 +65,16 @@ async function loadNavigator() {
       btn.style.height = btnHeight + "px";
       if (ziel) {
         btn.addEventListener("click", async () => {
-          console.log("navigator: button clicked ziel=" + ziel);
+          document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active", "blink-yellow"));
+          btn.classList.add("blink-yellow");
+          pendingBtn = btn;
           try {
-            const res = await setNavigatorTarget({path: ziel});
-            console.log("navigator: setNavigatorTarget response", res.data);
+            await setNavigatorTarget({path: ziel});
           } catch (err) {
             console.error("setNavigatorTarget Fehler:", err);
+          }
+          if (!statusPollId) {
+            statusPollId = setInterval(pollStatus, 150);
           }
         });
       }
@@ -79,6 +83,29 @@ async function loadNavigator() {
   } catch (err) {
     console.error("Navigator Fehler:", err);
     container.innerHTML = "<p>Fehler beim Laden der Navigation.</p>";
+  }
+}
+
+async function pollStatus() {
+  try {
+    const res = await getNavigatorTarget();
+    const { success, status } = res.data;
+    if (!success || status !== "loaded") return;
+    if (pendingBtn) {
+      pendingBtn.classList.remove("blink-yellow");
+      pendingBtn.classList.add("active");
+      if (currentActiveBtn && currentActiveBtn !== pendingBtn) {
+        currentActiveBtn.classList.remove("active");
+      }
+      currentActiveBtn = pendingBtn;
+      pendingBtn = null;
+    }
+    if (statusPollId) {
+      clearInterval(statusPollId);
+      statusPollId = null;
+    }
+  } catch (err) {
+    // silent
   }
 }
 
