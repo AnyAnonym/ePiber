@@ -82,5 +82,22 @@ Beispiel-Progression:
 
 ---
 
-**Hinweis**: Diese Richtlinien helfen dabei, die Projekt-Historie übersichtlich zu halten und Release-Management zu vereinfachen.
-**Hinweis**: wir sind gerade bei 1.20.0 da der letzte Release 1.19.3 der von palf80 563351 erstellt wurde. Danach haben wir wie gesagt 1.20.0 gemacht, da wir ja auch neue Features hinzugefügt haben.
+## 📝 Wichtige Hinweise
+
+**Aktuelle Version**: `1.20.0`
+- **Commit**: `4030e79fcad3e53aa905e47238a611b516c559d0` (gepusht)
+- Letztes Release vor dieser Version: `1.19.3` (von palf80)
+- Version `1.20.0` wurde erstellt, da neue Features hinzugefügt wurden (MINOR-Update)
+- **⚠️ Alle neuen Commits sollten ab diesem Punkt mit der unten definierten Struktur fortgesetzt werden**
+
+**Verwendung in VS Code** (Empfohlen):
+- Diese Richtlinien werden von GitHub Copilot in VS Code automatisch berücksichtigt
+- Nutze **Gitlens Commit Composer** (VS Code Extension) für intelligente Commit-Strukturierung
+- Die Anleitung hilft dir, semantisch korrekte Commits zu erstellen
+
+**In GitHub Desktop**:
+- Diese Richtlinien werden derzeit NICHT automatisch berücksichtigt
+- Nutze VS Code für Commits mit Copilot-Unterstützung, dann pushe via GitHub Desktop
+- Oder schreibe die Commit-Messages manuell nach diesem Schema
+
+**Ziel**: Eine klare, versionierbare Projekt-Historie mit automatischem Release-Management basierend auf Commit-Types.
