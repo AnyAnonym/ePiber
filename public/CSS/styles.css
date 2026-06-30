@@ -2041,13 +2041,55 @@ input[type="date"] {
 #nächste, #letzte {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  font-weight: bold;
+  justify-content: flex-start;
   width: 100%;
   color: var(--fg);
+  padding: 12px;
+  overflow: hidden;
 }
+#nächste {
+  font-size: 1.2rem;
+  font-weight: bold;
+  justify-content: center;
+}
+.archived-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-align: center;
+  width: 100%;
+}
+.archived-empty {
+  color: var(--muted);
+  font-weight: normal;
+}
+.archived-entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto auto;
+  grid-template-areas:
+    "hdr hdr"
+    "t1  s1"
+    "vs  s2"
+    "t2  s3";
+  gap: 0 8px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--table-border);
+  width: 100%;
+}
+.archived-entry:last-child {
+  border-bottom: none;
+}
+.ae-header { grid-area: hdr; font-size: 0.8rem; color: var(--muted); text-align: left; padding-bottom: 2px; }
+.ae-t1 { grid-area: t1; font-size: 0.9rem; font-weight: 600; text-align: left; }
+.ae-vs { grid-area: vs; font-size: 0.8rem; color: var(--muted); text-align: left; }
+.ae-t2 { grid-area: t2; font-size: 0.9rem; font-weight: 600; text-align: left; }
+.ae-s1 { grid-area: s1; font-size: 1rem; font-weight: 600; color: var(--accent); text-align: right; }
+.ae-s2 { grid-area: s2; font-size: 1rem; font-weight: 600; color: var(--accent); text-align: right; }
+.ae-s3 { grid-area: s3; font-size: 1rem; font-weight: 600; color: var(--accent); text-align: right; }
 .rechts-line {
   height: 2px;
   width: 80%;
