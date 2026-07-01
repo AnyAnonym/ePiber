@@ -623,12 +623,6 @@ footer {
   flex-wrap: wrap;
 }
 
-.footer-clock {
-  font-family: monospace;
-  font-weight: 600;
-  font-size: 0.85rem;
-}
-
 /* -------------------------------------------------- */
 /*  TOAST NOTIFICATIONS (Replaces Alerts)             */
 /* -------------------------------------------------- */

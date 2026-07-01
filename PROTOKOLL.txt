@@ -1246,5 +1246,47 @@ matches (Spalte N hinzugefügt):
   * Unterstützt Format "11-7/9-11/11-5" (beliebig viele Sätze, "/" getrennt)
   * Einzelergebnisse werden mit "|" getrennt angezeigt
 
+===============================================================================
+21. CHANGELOG – Footer-Refactoring (v1.22.4)
+===============================================================================
+
+2026-07-01:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- REFACTORING: Footer-Logik aus navbar.js in eigene footer.js ausgelagert
+  * Neue Datei: public/JS/footer.js
+    – Rendert den Footer-Container (© ASKÖ Piberbach – Tennis + Uhr)
+    – Einmalige Anzeige von Datum/Uhrzeit beim Seitenladen via
+      getCurrentDateTimeString() aus clock.js (kein Intervall-Update)
+  * navbar.js: renderFooter() und zugehöriger Aufruf in initNavigation() entfernt
+
+- REFACTORING: clock.js zur reinen Utility-/Library-Datei umgebaut
+  * Nur noch globale Konvertierungsfunktionen:
+    – window.getCurrentDateTimeString() → "YYYY.MM.DD – HH:MM"
+    – window.getCurrentYear() → aktuelles Jahr
+    – window.getStorageTimestamp() → "YYMMDD-HHMM"
+  * Uhr-DOM-Logik (setInterval, #clock-Element) entfernt → lebt jetzt in footer.js
+
+- STYLE: Einheitlicher Schriftstil im Footer
+  * CSS-Klasse .footer-clock (monospace, font-weight 600, 0.85rem) aus styles.css entfernt
+  * Datum/Uhrzeit erbt nun den gleichen Stil wie "© ASKÖ Piberbach – Tennis"
+
+- BUILD: Alle 8 HTML-Seiten aktualisiert
+  * Script-Einbindung geändert: clock.js (Utility) + footer.js (Footer-Rendering)
+  * Betrifft: index.html, Bewerbe.html, bewerbsRaster.html, entryList.html,
+    matches.html, players.html, preMatches.html, rangliste.html
+
+- FEATURE: Globale Konfigurationsdatei global.js eingeführt
+  * Neue Datei: public/JS/global.js
+    – Enthält window.APP_VERSION als zentrale Versionskonstante
+  * In allen 10 HTML-Seiten als erstes normales Script eingebunden
+    (vor clock.js bzw. SDK.js bei monitor.html und navigator.html)
+
+- FEATURE: Versionsnummer im Footer
+  * Footer-Aufbau nun: Datum/Uhrzeit | © ASKÖ Piberbach – Tennis | vX.X.X
+  * Äquidistante Trennzeichen (|) zwischen den drei Elementen
+  * Versionsnummer wird dynamisch aus window.APP_VERSION (global.js) gelesen
+
 ENDE DES PROTOKOLLS
 ================================================================================

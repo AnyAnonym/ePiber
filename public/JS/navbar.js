@@ -73,22 +73,9 @@ function renderMobileNav() {
   `;
 }
 
-function renderFooter() {
-  const footerContainer = document.getElementById("footer-container");
-  if (!footerContainer) return;
-
-  footerContainer.innerHTML = `
-  <footer class="footer">
-    © ASKÖ Piberbach – Tennis
-    <div id="clock" class="footer-clock"></div>
-  </footer>
-  `;
-}
-
 function initNavigation() {
   renderHeader();
   renderMobileNav();
-  renderFooter();
 
   const hamburgerBtn = document.getElementById("hamburgerBtn");
   const mobileNavModal = document.getElementById("mobileNavModal");

@@ -231,7 +231,7 @@ async function loadBewerbsName() {
   const heading = document.getElementById("entryListHeading");
   if (!heading || !BEWERB_ID) return;
 
-  heading.textContent = `Eintragungs Liste für Bewerb ${BEWERB_ID}`;
+  heading.textContent = `Entrylist für`;
 
   try {
     const res = await readBewerbe();
@@ -246,7 +246,7 @@ async function loadBewerbsName() {
     const bewerbRow = bewerbeValues.slice(1).find((r) => String(r[bIdIdx] || "").trim() === String(BEWERB_ID).trim());
     if (bewerbRow) {
       if (bewerbRow[bBezIdx]) {
-        heading.textContent = `Eintragungs Liste für ${bewerbRow[bBezIdx]}`;
+        heading.textContent = `Entrylist für ${bewerbRow[bBezIdx]}`;
       }
       entryStartDate = bEntryStartIdx !== -1 ? parseSheetDate(bewerbRow[bEntryStartIdx]) : null;
       entryDeadlineDate = bEntryDeadlineIdx !== -1 ? parseSheetDate(bewerbRow[bEntryDeadlineIdx]) : null;

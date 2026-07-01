@@ -1,44 +1,23 @@
 (function () {
-  function findAndStartClock() {
-    const el = document.getElementById("clock");
-    
-    // Wenn das Element noch nicht da ist (weil navbar.js noch nicht fertig ist),
-    // versuche es in 50ms erneut.
-    if (!el) {
-      setTimeout(findAndStartClock, 50);
-      return;
-    }
+  window.getCurrentDateTimeString = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}.${mm}.${dd} – ${hh}:${mi}`;
+  };
 
-    // Funktion zum Aktualisieren der Zeit
-    function formatDateTime(date) {
-      const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, "0");
-      const dd = String(date.getDate()).padStart(2, "0");
-      const hh = String(date.getHours()).padStart(2, "0");
-      const mi = String(date.getMinutes()).padStart(2, "0");
-      return `${yyyy}.${mm}.${dd} – ${hh}:${mi}`;
-    }
+  window.getCurrentYear = () => new Date().getFullYear();
 
-    function update() {
-      const now = new Date();
-      el.textContent = formatDateTime(now);
-    }
-
-    window.getCurrentDateTimeString = () => formatDateTime(new Date());
-    window.getCurrentYear = () => new Date().getFullYear();
-    window.getStorageTimestamp = () => {
-      const now = new Date();
-      const yy = String(now.getFullYear()).slice(-2);
-      const mm = String(now.getMonth() + 1).padStart(2, "0");
-      const dd = String(now.getDate()).padStart(2, "0");
-      const hh = String(now.getHours()).padStart(2, "0");
-      const mi = String(now.getMinutes()).padStart(2, "0");
-      return `${yy}${mm}${dd}-${hh}${mi}`;
-    };
-
-    update(); // Sofort aktualisieren
-    setInterval(update, 60000); // Dann jede Minute
-  }
-
-  findAndStartClock();
+  window.getStorageTimestamp = () => {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mi = String(now.getMinutes()).padStart(2, "0");
+    return `${yy}${mm}${dd}-${hh}${mi}`;
+  };
 })();
