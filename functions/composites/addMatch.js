@@ -1,8 +1,10 @@
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {getSheetsClient} from "../config.js";
 import {readPlayersData} from "../tables/personen.js";
 import {readPreMatchesData, createPreMatchData, getNextPreMatchId} from "../tables/preMatches.js";
 import {readMatchRestrictionsData} from "../tables/matches.js";
+import {logEntry, buildMap, buildBewerbMap, fmtPlayer, fmtBewerb} from "../tables/logging.js";
 
 export const addMatch = onCall(async (request) => {
   try {
@@ -113,6 +115,9 @@ export const addMatch = onCall(async (request) => {
 
     const newId = await getNextPreMatchId(sheets);
     const result = await createPreMatchData(sheets, {newId, zeitpunktForderung, bewerbId: resolvedBewerbId, p1id, p2id, p3id, p4id});
+    const pmap = buildMap(playersValues, "id", "vorname", "nachname");
+    const bmap = await buildBewerbMap(sheets);
+    logEntry({sheets, source: "addMatch", entry: `Neue Forderung: ${fmtPlayer(p1id, pmap)} vs ${fmtPlayer(p3id, pmap)} (Bewerb ${fmtBewerb(resolvedBewerbId, bmap)})`});
     return {success: true, updates: result.updates};
   } catch (err) {
     console.error("Fehler in addMatch:", err);

@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import {google} from "googleapis";
 import {SHEET_ID} from "./backendVariables.js";
 

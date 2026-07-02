@@ -1,5 +1,7 @@
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {SHEET_ID, getSheetsClient} from "../config.js";
+import {logEntry} from "./logging.js";
 
 export async function readPlayersData(sheets) {
   const res = await sheets.spreadsheets.values.get({
@@ -61,40 +63,6 @@ export const readPlayerDetails = onCall(async () => {
   }
 });
 
-export async function createPlayerData(sheets, {firstName, lastName, email, hash}) {
-  const values = await readPlayersData(sheets);
-  const idx = parsePlayerHeader(values);
-
-  const emailExists = values.slice(1).some(
-      (row) => row[idx.emailIdx] && row[idx.emailIdx].trim().toLowerCase() === email.trim().toLowerCase(),
-  );
-  if (emailExists) throw new Error("Diese E-Mail ist bereits registriert.");
-
-  const numericIds = values.slice(1)
-      .map((r) => parseInt(r[idx.idIdx], 10))
-      .filter((n) => !isNaN(n) && n > 0);
-  const newId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
-
-  const newRow = [newId, lastName, firstName, "", email, "", "", "", "", hash];
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: "Personen!A:J",
-    valueInputOption: "USER_ENTERED",
-    requestBody: {values: [newRow]},
-  });
-  return {inserted: newRow};
-}
-
-export const createPlayer = onCall(async (request) => {
-  try {
-    const sheets = await getSheetsClient(false);
-    const result = await createPlayerData(sheets, request.data);
-    return {success: true, ...result};
-  } catch (err) {
-    console.error("Fehler in createPlayer:", err);
-    return {success: false, error: err.message};
-  }
-});
 
 export async function verifyUserLoginData(sheets, {email, passwordHash}) {
   const values = await readPlayersData(sheets);
@@ -162,6 +130,7 @@ export const resetPassword = onCall(async (request) => {
   try {
     const sheets = await getSheetsClient(false);
     const result = await resetPasswordData(sheets, request.data);
+    logEntry({sheets, source: "resetPassword", entry: `Passwort zurückgesetzt für ${request.data?.email}`});
     return {success: true, ...result};
   } catch (err) {
     console.error("Fehler in resetPassword:", err);

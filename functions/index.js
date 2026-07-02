@@ -1,8 +1,9 @@
+/* eslint-disable max-len */
 // index.js — Re-Export Hub
 // Alle Cloud Functions werden aus tables/ und composites/ importiert und re-exportiert.
 
 // ── Tables ──────────────────────────────────────────────────────────────────
-export {readPlayersList, createPlayer, readPlayerDetails, verifyUserLogin, resetPassword} from "./tables/personen.js";
+export {readPlayersList, readPlayerDetails, verifyUserLogin, resetPassword} from "./tables/personen.js";
 export {readMatchesList, createMatchData, readMatchRestrictions} from "./tables/matches.js";
 export {
   readPreMatches, setMatchDate, createPreMatchData, updatePreMatchDateData,

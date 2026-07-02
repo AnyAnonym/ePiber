@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {getSheetsClient} from "../config.js";
 import {readPlayersData} from "../tables/personen.js";

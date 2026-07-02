@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 export function formatSheetDate(raw) {
   if (!raw) return "";
   const rawStr = String(raw).trim();

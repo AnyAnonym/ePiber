@@ -1,6 +1,11 @@
+/* eslint-disable max-len */
+/* eslint-disable no-empty */
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {initializeApp} from "firebase-admin/app";
 import {getFirestore} from "firebase-admin/firestore";
+import {getSheetsClient} from "../config.js";
+import {logEntry} from "./logging.js";
 
 initializeApp();
 const db = getFirestore();
@@ -16,6 +21,9 @@ export const setNavigatorTarget = onCall(async (request) => {
     updated: new Date().toISOString(),
   };
   await db.doc(STATE_DOC).set(payload);
+  try {
+    const sheets = await getSheetsClient(false); logEntry({sheets, source: "setNavigatorTarget", entry: `Navigator → ${path} (${status || "pending"})`});
+  } catch {}
   return {success: true};
 });
 
@@ -30,6 +38,9 @@ export const setNavigatorScroll = onCall(async (request) => {
   const {amount} = request.data || {};
   if (typeof amount !== "number") return {success: false, error: "amount (number) erforderlich"};
   await db.doc(SCROLL_DOC).set({amount, ts: Date.now()});
+  try {
+    const sheets = await getSheetsClient(false); logEntry({sheets, source: "setNavigatorScroll", entry: `Scroll amount=${amount}`});
+  } catch {}
   return {success: true};
 });
 

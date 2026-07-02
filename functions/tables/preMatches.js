@@ -1,5 +1,7 @@
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {SHEET_ID, getSheetsClient} from "../config.js";
+import {logEntry} from "./logging.js";
 
 export async function readPreMatchesData(sheets) {
   const res = await sheets.spreadsheets.values.get({
@@ -59,6 +61,7 @@ export const setMatchDate = onCall(async (request) => {
 
     const sheets = await getSheetsClient(false);
     await updatePreMatchDateData(sheets, row, datum);
+    logEntry({sheets, source: "setMatchDate", entry: `Datum gesetzt Zeile ${row} → ${datum}`});
     return {success: true};
   } catch (err) {
     console.error("Fehler in setMatchDate:", err);

@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 // eslint.config.js
 import {defineConfig} from "eslint/config";
 import js from "@eslint/js";

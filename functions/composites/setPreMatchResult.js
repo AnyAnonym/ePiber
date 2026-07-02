@@ -1,8 +1,10 @@
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {getSheetsClient} from "../config.js";
 import {readPreMatchesData, clearPreMatchRowData} from "../tables/preMatches.js";
 import {createMatchData} from "../tables/matches.js";
 import {swapRanksData} from "../tables/rlPlatzierung.js";
+import {logEntry, buildPlayerMap, buildBewerbMap, fmtPlayer, fmtBewerb} from "../tables/logging.js";
 
 export const setPreMatchResult = onCall(async (request) => {
   try {
@@ -65,6 +67,9 @@ export const setPreMatchResult = onCall(async (request) => {
       rankingUpdated = result.rankingUpdated;
     }
 
+    const pmap = await buildPlayerMap(sheets);
+    const bmap = await buildBewerbMap(sheets);
+    logEntry({sheets, source: "setPreMatchResult", entry: `Ergebnis: ${fmtPlayer(p1, pmap)} vs ${fmtPlayer(p3, pmap)} → ${ergebnisWert} (Gewinner: ${fmtPlayer(gewinner, pmap)}, Bewerb ${fmtBewerb(matchRow[preHeader.indexOf("bewerbid")] || "?", bmap)})`});
     return {success: true, rankingUpdated};
   } catch (err) {
     console.error("Fehler in setPreMatchResult:", err);

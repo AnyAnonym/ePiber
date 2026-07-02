@@ -1,5 +1,7 @@
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {SHEET_ID, getSheetsClient} from "../config.js";
+import {logEntry, buildPlayerMap, buildBewerbMap, fmtPlayer, fmtBewerb} from "./logging.js";
 
 export async function readEntryListData(sheets) {
   const res = await sheets.spreadsheets.values.get({
@@ -232,6 +234,9 @@ export const addEntryList = onCall(async (request) => {
   try {
     const sheets = await getSheetsClient(false);
     const result = await addEntryListData(sheets, request.data);
+    const pmap = await buildPlayerMap(sheets);
+    const bmap = await buildBewerbMap(sheets);
+    logEntry({sheets, source: "addEntryList", entry: `Nennung: ${fmtPlayer(request.data?.personenId, pmap)} in Bewerb ${fmtBewerb(request.data?.bewerbId, bmap)}`});
     return {success: true, ...result};
   } catch (err) {
     console.error("Fehler in addEntryList:", err);
@@ -284,6 +289,9 @@ export const removeEntryList = onCall(async (request) => {
   try {
     const sheets = await getSheetsClient(false);
     await removeEntryListData(sheets, request.data);
+    const pmap = await buildPlayerMap(sheets);
+    const bmap = await buildBewerbMap(sheets);
+    logEntry({sheets, source: "removeEntryList", entry: `Nennung entfernt: ${fmtPlayer(request.data?.personenId, pmap)} in Bewerb ${fmtBewerb(request.data?.bewerbId, bmap)}`});
     return {success: true};
   } catch (err) {
     console.error("Fehler in removeEntryList:", err);

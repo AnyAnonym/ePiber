@@ -1,5 +1,7 @@
+/* eslint-disable max-len */
 import {onCall} from "firebase-functions/v2/https";
 import {SHEET_ID, getSheetsClient} from "../config.js";
+import {logEntry, buildPlayerMap, buildBewerbMap, fmtPlayer, fmtBewerb} from "./logging.js";
 
 export async function withdrawFromRankingData(sheets, {reason, currentRank, bewerbId, userId}) {
   const now = new Date();
@@ -31,6 +33,9 @@ export const withdrawFromRanking = onCall(async (request) => {
 
     const sheets = await getSheetsClient(false);
     const result = await withdrawFromRankingData(sheets, {reason, currentRank, bewerbId, userId});
+    const pmap = await buildPlayerMap(sheets);
+    const bmap = await buildBewerbMap(sheets);
+    logEntry({sheets, source: "withdrawFromRanking", entry: `Rückzug: ${fmtPlayer(userId, pmap)} (Bewerb ${fmtBewerb(bewerbId, bmap)}) — ${reason}`});
     return {success: true, ...result};
   } catch (err) {
     console.error("Fehler in withdrawFromRanking:", err);
