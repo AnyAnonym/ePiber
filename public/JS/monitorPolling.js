@@ -4,11 +4,14 @@ import { httpsCallable } from
 
 const getNavigatorTarget = httpsCallable(functions, "getNavigatorTarget");
 const setNavigatorTarget = httpsCallable(functions, "setNavigatorTarget");
+const getNavigatorScroll = httpsCallable(functions, "getNavigatorScroll");
+const setNavigatorScroll = httpsCallable(functions, "setNavigatorScroll");
 const frame = document.getElementById("monitor-frame");
 const overlay = document.getElementById("monitor-overlay");
 
 let currentTarget = "";
 let pendingTarget = "";
+let lastScrollTs = 0;
 
 frame.addEventListener("load", async () => {
   if (pendingTarget) {
@@ -20,6 +23,21 @@ frame.addEventListener("load", async () => {
     pendingTarget = "";
   }
 });
+
+async function pollScroll() {
+  try {
+    const res = await getNavigatorScroll();
+    const { success, amount, ts } = res.data;
+    if (!success || !amount || ts <= lastScrollTs) return;
+    lastScrollTs = ts;
+    if (frame.contentWindow) {
+      frame.contentWindow.scrollBy(0, amount);
+    }
+    await setNavigatorScroll({ amount: 0 });
+  } catch (err) {
+    // silent
+  }
+}
 
 async function poll() {
   try {
@@ -45,3 +63,4 @@ async function poll() {
 
 poll();
 setInterval(poll, 2000);
+setInterval(pollScroll, 150);
