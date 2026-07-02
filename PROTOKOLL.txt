@@ -1288,5 +1288,11 @@ matches (Spalte N hinzugefügt):
   * Äquidistante Trennzeichen (|) zwischen den drei Elementen
   * Versionsnummer wird dynamisch aus window.APP_VERSION (global.js) gelesen
 
+- HINWEIS: Deploy-Timeout bei firebase deploy (v1.22.4)
+  * googleapis-Library verursacht Timeout beim Laden der Cloud Functions
+    (Fehler: "User code failed to load. Timeout after 10000.")
+  * Workaround in PowerShell vor dem Deploy ausführen:
+    $env:FUNCTIONS_DISCOVERY_TIMEOUT = 120
+
 ENDE DES PROTOKOLLS
 ================================================================================
