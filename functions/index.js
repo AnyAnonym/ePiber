@@ -16,6 +16,7 @@ export {readRlPlatzierung, swapRanksData} from "./tables/rlPlatzierung.js";
 export {readEntryList, addEntryList, removeEntryList} from "./tables/entryList.js";
 export {readNavigator} from "./tables/navigator.js";
 export {setNavigatorTarget, getNavigatorTarget, setNavigatorScroll, getNavigatorScroll} from "./tables/navigatorState.js";
+export {setScoreboardCourt, getScoreboardCourts} from "./tables/scoreboardState.js";
 export {withdrawFromRanking} from "./tables/withdrawn.js";
 
 // ── Composites ──────────────────────────────────────────────────────────────

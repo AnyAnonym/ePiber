@@ -6,10 +6,12 @@ const readMatchesList = httpsCallable(functions, "readMatchesList");
 const readPreMatches = httpsCallable(functions, "readPreMatches");
 const readPlayersList = httpsCallable(functions, "readPlayersList");
 const readBewerbe = httpsCallable(functions, "readBewerbe");
+const getScoreboardCourts = httpsCallable(functions, "getScoreboardCourts");
 
 const COURT_URL = 'https://scorer-tennis.b-cdn.net/json/24.voll.json';
-const COURT_POLL = 2000;
+const COURT_POLL = 1000;
 const MATCHES_POLL = 5000;
+const SCOREBOARD_POLL = 1000;
 
 let playerMap = new Map();
 let bewerbMap = new Map();
@@ -272,13 +274,39 @@ async function pollCourt() {
   setTimeout(pollCourt, COURT_POLL);
 }
 
+// ── Scoreboard state (Spielernamen + Bewerb aus Firestore) ──
+
+function updateScoreboardCourt(courtKey, courtData) {
+  if (courtKey !== '1' && courtKey !== '2') return;
+  const prefix = 'p' + courtKey;
+  setText(prefix + '-name-h', courtData.homePlayer);
+  setText(prefix + '-name-g', courtData.guestPlayer);
+  setText(prefix + '-datetime', courtData.dateTime);
+  setText(prefix + '-bewerb', courtData.bewerb);
+}
+
+async function pollScoreboard() {
+  try {
+    const res = await getScoreboardCourts();
+    const { success, courts } = res.data;
+    if (success && courts) {
+      Object.keys(courts).forEach((key) => {
+        updateScoreboardCourt(key, courts[key]);
+      });
+    }
+  } catch (err) {
+    // silent
+  }
+  setTimeout(pollScoreboard, SCOREBOARD_POLL);
+}
+
 // ── Init ──
 
 await loadPlayers();
 await loadBewerbe();
 
 // Erster Durchlauf aller Polls abwarten, dann Seite einblenden
-await Promise.all([pollCourt(), pollMatches(), pollPreMatches()]);
+await Promise.all([pollCourt(), pollScoreboard(), pollMatches(), pollPreMatches()]);
 
 const loader = document.getElementById("scoreboard-loader");
 const content = document.getElementById("scoreboard-content");

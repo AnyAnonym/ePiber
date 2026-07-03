@@ -1360,5 +1360,61 @@ matches (Spalte N hinzugefügt):
 
 - BUILD: APP_VERSION in global.js auf 1.23.3 aktualisiert
 
+
+===============================================================================
+24. CHANGELOG – Scoreboard-Live-Daten & Navigator-Overlays (v1.23.4)
+===============================================================================
+
+2026-07-03:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- FEATURE: Scoreboard Live-Platzbelegung aus Firestore
+  * Neue Backend-Datenstruktur ScoreboardCourts in globalBackendVariables.js
+    – Pro Platz: matchId, bewerb, homePlayer, guestPlayer, dateTime
+  * Neue Backend-Functions in scoreboardState.js:
+    – getScoreboardCourts() — liest Platzbelegung aus Firestore
+    – setScoreboardCourt() — schreibt Platzbelegung für Platz 1 oder 2
+    – Lazy-Init: Testdaten werden erst beim ersten Zugriff geschrieben
+  * scoreboardPolling.js: Neue pollScoreboard()-Funktion pollt alle 5s
+    Spielernamen, Bewerbsname und Datum/Uhrzeit aus Firestore
+
+- FEATURE: Datum/Uhrzeit im Scoreboard
+  * Neues Element p1-datetime / p2-datetime unter Platz-Header, über Bewerbsname
+  * Reduzierte vertikale Abstände zwischen Platz/Datum/Bewerb
+
+- FEATURE: Navigator-Overlays für Platzzuweisung (navigatorList.js)
+  * OL-Platz-1 / OL-Platz-2 in Spalte "Ziel" öffnet Overlay statt URL
+  * Overlay mit 5 Auswahlmöglichkeiten:
+    – "Individual" — kein matchId, aktuelles Datum, Bewerb="Individual"
+    – 4 nächste offene Matches mit Paarung + Datum | Bewerbsname
+  * Selektion wird farblich hervorgehoben (grüner Hintergrund)
+  * Übernehmen / Abbrechen Buttons zentriert am unteren Rand
+  * Overlay-Größe: 60% Höhe/Breite, halbtransparenter Hintergrund
+
+- FEATURE: Individual-Spielerauswahl mit Overlay-Kaskade
+  * Bei Individual → Übernehmen: Overlay "Spieler Heim" öffnet sich
+  * Nach Bestätigung: Overlay "Spieler Gast" öffnet sich
+  * Spielerliste sortiert nach Nachname A-Z, Anzeige "Nachname Vorname"
+  * Bei Abbruch in einem der Spieler-Overlays wird nichts geschrieben
+  * Erst nach Bestätigung beider Spieler werden Daten ans Backend gesendet
+
+- STYLE: Navigator-Buttons responsive
+  * Button-Größen per CSS statt JS-Inline-Styles (calc + CSS-Variable --nav-rows)
+  * Schriftgröße mit clamp(0.7rem, 1.5vw, 1.2rem) skaliert mit Viewport
+  * Buttons rutschen nicht mehr unter die Scroll-Navigation-Buttons
+  * padding-bottom: 80px + max-height verhindert Überlappung
+
+- STYLE: "vs." zwischen Heim und Gast unter 1000px ausgeblendet
+
+- BUGFIX: Deploy-Fehler durch sofortigen Firestore-Zugriff behoben
+  * ensureDefaults() wird nicht mehr beim Modul-Import aufgerufen
+  * Lazy-Init innerhalb der Cloud Functions (wo Credentials verfügbar sind)
+
+- BUGFIX: ESLint-Fehler behoben (ungenutzter catch-Parameter, überflüssiger
+  eslint-disable Kommentar in scoreboardState.js)
+
+- BUILD: APP_VERSION in global.js auf 1.23.4 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================

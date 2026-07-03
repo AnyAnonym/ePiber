@@ -76,14 +76,14 @@
   font-size: 6rem;
   font-weight: bold;
   text-align: center;
-  padding: 8px 0;
+  padding: 4px 0 0 0;
   color: var(--accent);
 }
 .platz-sub {
   font-size: 3rem;
   text-align: center;
   color: var(--muted);
-  margin-bottom: 10px;
+  margin-bottom: 2px;
 }
 .platz-row {
   display: flex;
@@ -232,22 +232,23 @@
 /* ── Responsive: unter 1400px kleinere Schriftgrößen ── */
 @media (max-width: 1000px) {
   .platz-header {
-    font-size: 3rem;
+    font-size: 2rem;
   }
   .platz-sub {
-    font-size: 1.5rem;
+    font-size: 0.9rem;
   }
   .platz-cell {
     font-size: 0.8rem;
   }
   .platz-cell.label {
-    font-size: 2.75rem;
+    font-size: 1.3rem;
   }
   .platz-scores .platz-cell {
-    font-size: 2.5rem;
+    font-size: 1.3rem;
   }
   .platz-vs {
     font-size: 1rem;
+    display: none;
   }
   .platz-row {
     flex-direction: column;
