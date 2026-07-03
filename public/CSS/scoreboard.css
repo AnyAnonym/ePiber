@@ -89,7 +89,26 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 0;
+  padding: 4px 0;
+}
+.platz-vs {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: -16px 0;
+  padding: 0 0 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.platz-vs span {
+  flex: 1;
+  text-align: center;
+}
+.platz-scores-ghost {
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
 }
 .platz-cell {
   background: var(--accent);
@@ -198,4 +217,48 @@
   height: 2px;
   width: 80%;
   background: var(--table-border);
+}
+
+/* ── Responsive: unter 1500px rechte Spalte ausblenden ── */
+@media (max-width: 1300px) {
+  #scoreboard-content {
+    grid-template-columns: 1fr;
+  }
+  #rechts {
+    display: none;
+  }
+}
+
+/* ── Responsive: unter 1400px kleinere Schriftgrößen ── */
+@media (max-width: 1000px) {
+  .platz-header {
+    font-size: 3rem;
+  }
+  .platz-sub {
+    font-size: 1.5rem;
+  }
+  .platz-cell {
+    font-size: 0.8rem;
+  }
+  .platz-cell.label {
+    font-size: 2.75rem;
+  }
+  .platz-scores .platz-cell {
+    font-size: 2.5rem;
+  }
+  .platz-vs {
+    font-size: 1rem;
+  }
+  .platz-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .platz-scores {
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+  .platz-vs .platz-scores-ghost {
+    display: none;
+  }
 }

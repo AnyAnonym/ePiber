@@ -1330,5 +1330,35 @@ matches (Spalte N hinzugefügt):
 
 - BUILD: APP_VERSION in global.js auf 1.23.2 aktualisiert
 
+
+===============================================================================
+23. CHANGELOG – Scoreboard-Layout-Anpassungen (v1.23.3)
+===============================================================================
+
+2026-07-03:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- STYLE: Unterschiedliche Breiten für Sätze und Punkte
+  * Punkte-Zelle (last-child): lila Hintergrund (#7b1fa2), 110px Breite
+
+- STYLE: "vs." Trenner zwischen Heim und Gast eingefügt (scoreboard.html)
+  * Neues Element .platz-vs zwischen den beiden .platz-row Zeilen
+  * Zentrierung nur über die Spielername-Spalte via Ghost-Platzhalter
+    (unsichtbare .platz-scores-ghost mit identischen Breiten)
+  * Reduzierter vertikaler Abstand zum Namen über negative Margins
+
+- STYLE: Responsive Breakpoints für Scoreboard (scoreboard.css)
+  * Unter 1300px: Rechte Spalte (#rechts) ausgeblendet, einspaltiges Grid
+  * Unter 1000px: Halbierte Schriftgrößen (rem-basiert, unabhängig anpassbar)
+    – .platz-header: 3rem, .platz-sub: 1.5rem, .platz-cell.label: 2.75rem
+    – .platz-scores .platz-cell: 2.5rem, .platz-vs: 1rem
+  * Unter 1000px: Scores-Block unter den Namen statt daneben
+    – .platz-row wechselt auf flex-direction: column
+    – .platz-scores zentriert, Ghost-Platzhalter ausgeblendet
+    – Symmetrischer Abstand (8px) zwischen Name/Scores oben und unten
+
+- BUILD: APP_VERSION in global.js auf 1.23.3 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================
