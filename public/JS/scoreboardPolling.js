@@ -222,6 +222,7 @@ async function pollMatches() {
   } catch (err) {
     // silent
   }
+  setTimeout(pollMatches, MATCHES_POLL);
 }
 
 async function pollPreMatches() {
@@ -234,6 +235,7 @@ async function pollPreMatches() {
   } catch (err) {
     // silent
   }
+  setTimeout(pollPreMatches, MATCHES_POLL);
 }
 
 // ── Court data (JSON) ──
@@ -274,8 +276,12 @@ async function pollCourt() {
 
 await loadPlayers();
 await loadBewerbe();
-pollCourt();
-pollMatches();
-pollPreMatches();
-setInterval(pollMatches, MATCHES_POLL);
-setInterval(pollPreMatches, MATCHES_POLL);
+
+// Erster Durchlauf aller Polls abwarten, dann Seite einblenden
+await Promise.all([pollCourt(), pollMatches(), pollPreMatches()]);
+
+const loader = document.getElementById("scoreboard-loader");
+const content = document.getElementById("scoreboard-content");
+if (content) content.classList.add("loaded");
+if (loader) loader.classList.add("hidden");
+setTimeout(() => { if (loader) loader.remove(); }, 500);

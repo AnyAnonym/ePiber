@@ -5,9 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Scoreboard</title>
   <link rel="stylesheet" href="./CSS/styles.css" />
+  <link rel="stylesheet" href="./CSS/scoreboard.css" />
 </head>
 <body class="scoreboard-body">
-  <div id="platz1">
+  <div id="scoreboard-loader">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Daten werden geladen...</div>
+  </div>
+  <div id="scoreboard-content">
+    <div id="platz1">
     <div class="platz-header">Platz 1</div>
     <div class="platz-sub">Datum - Bewerb</div>
     <div class="platz-row"><span class="platz-cell label" id="p1-name-h">Heim</span><div class="platz-scores"><span class="platz-cell" id="p1-h-s1">Satz 1</span><span class="platz-cell" id="p1-h-s2">Satz 2</span><span class="platz-cell" id="p1-h-s3">Satz 3</span><span class="platz-cell" id="p1-h-p">Punkte</span></div></div>
@@ -23,6 +29,7 @@
     <div id="nächste"></div>
     <div class="rechts-line"></div>
     <div id="letzte"></div>
+  </div>
   </div>
   <script type="module" src="./JS/scoreboardPolling.js"></script>
 </body>

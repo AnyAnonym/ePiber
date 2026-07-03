@@ -1294,5 +1294,41 @@ matches (Spalte N hinzugefügt):
   * Workaround in PowerShell vor dem Deploy ausführen:
     $env:FUNCTIONS_DISCOVERY_TIMEOUT = 120
 
+
+===============================================================================
+22. CHANGELOG – Scoreboard-Überarbeitung (v1.23.2)
+===============================================================================
+
+2026-07-03:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- REFACTORING: Scoreboard-Polling Race-Condition behoben (scoreboardPolling.js)
+  * pollMatches() und pollPreMatches() von setInterval auf setTimeout umgebaut
+  * Funktioniert nun analog zu pollCourt(): nächster Aufruf erst nach Abschluss
+    des vorherigen (kein Überholen bei langsamen Datenbankabfragen möglich)
+  * setInterval-Aufrufe am Ende der Datei entfernt
+
+- REFACTORING: Scoreboard-CSS aus styles.css in eigene scoreboard.css ausgelagert
+  * Neue Datei: public/CSS/scoreboard.css
+  * Gesamter SCOREBOARD-Block (ca. 160 Zeilen) aus styles.css entfernt
+  * scoreboard.html bindet nun styles.css (globale Variablen) + scoreboard.css ein
+
+- STYLE: Unterschiedliche Breiten für Sätze und Punkte im Scoreboard
+  * Satz-Zellen: 60px Breite
+  * Punkte-Zelle (letztes Element): 110px Breite, lila Hintergrund (#7b1fa2)
+
+- FEATURE: Lade-Overlay für Scoreboard
+  * Spinner + "Daten werden geladen..." Text während des initialen Datenladens
+  * Content initial versteckt (display: none), erst nach erstem Durchlauf
+    aller drei Polls (Court, Matches, PreMatches) via Promise.all eingeblendet
+  * Sanftes Fade-Out des Overlays (0.4s Transition)
+  * Verhindert sichtbares "Verzeihen" der Seite beim Laden der Dummy-Texte
+
+- FEATURE: Scoreboard in Navigationsleiste aufgenommen (navbar.js)
+  * Neuer Eintrag "Scoreboard" nach "Bewerbe" in Desktop- und Mobile-Navigation
+
+- BUILD: APP_VERSION in global.js auf 1.23.2 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================

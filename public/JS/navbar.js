@@ -6,6 +6,7 @@ const pages = [
   { file: "matches.html", label: "Matches" },
   { file: "preMatches.html", label: "offene Matches" },
   { file: "Bewerbe.html", label: "Bewerbe" },
+  { file: "scoreboard.html", label: "Scoreboard" },
 ];
 
 function renderHeader() {
@@ -27,6 +28,7 @@ function renderHeader() {
         </div>
       </div>
         <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
+        <a href="scoreboard.html" class="${currentPath === 'scoreboard.html' ? 'active' : ''}">Scoreboard</a>
     </nav>
 
     <div class="header-center">
@@ -67,6 +69,7 @@ function renderMobileNav() {
         <a href="matches.html" class="${currentPath === 'matches.html' ? 'active' : ''}">Matches</a>
         <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}">offene Matches</a>
         <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
+        <a href="scoreboard.html" class="${currentPath === 'scoreboard.html' ? 'active' : ''}">Scoreboard</a>
       </nav>
     </div>
   </div>
