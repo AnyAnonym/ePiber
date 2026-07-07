@@ -45,6 +45,8 @@ async function poll() {
     const { success, path } = res.data;
 
     if (success && path && path !== currentTarget) {
+      // OL-Pfade ignorieren (Overlays, keine HTML-Seiten)
+      if (/^OL-/i.test(path)) return;
       currentTarget = path;
       pendingTarget = path;
       const suffix = path.includes("?") ? "&monitor=1" : "?monitor=1";

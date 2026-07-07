@@ -697,6 +697,10 @@ input[type="date"] {
 .players-table tr:hover {
   background: #fafafa;
 }
+.players-table tr.entry-paid td {
+  color: #198754;
+  font-weight: 600;
+}
 
 /* -------------------------------------------------- */
 /*  PYRAMIDEN-DESIGN (aus deiner bestehenden Datei)    */
@@ -2023,6 +2027,46 @@ input[type="date"] {
 }
 .platz-overlay-btn.cancel:hover {
   background: #5a6268;
+}
+
+/* ── Platzaktivierung ── */
+.aktivierung-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.platz-aktivierung-btn {
+  width: 80%;
+  padding: 24px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  border: 3px solid;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  font-family: inherit;
+}
+.platz-aktivierung-btn.aktivierung-active {
+  background: #d1e7dd;
+  border-color: #198754;
+  color: #198754;
+}
+.platz-aktivierung-btn.aktivierung-active:hover {
+  background: #badbcc;
+}
+.platz-aktivierung-btn.aktivierung-inactive {
+  background: #f8d7da;
+  border-color: #dc3545;
+  color: #dc3545;
+}
+.platz-aktivierung-btn.aktivierung-inactive:hover {
+  background: #f1c1c6;
+}
+.platz-aktivierung-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 #scroll-btns {

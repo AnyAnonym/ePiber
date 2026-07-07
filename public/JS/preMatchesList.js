@@ -308,7 +308,40 @@ async function loadPreMatches() {
     const preValuesData = preValues.slice(1)
       .map((row, idx) => ({ row, origIdx: idx }))
       .filter(({ row }) => !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3])))
-      .sort((a, b) => Math.abs(dateToTs(a.row[d]) - now) - Math.abs(dateToTs(b.row[d]) - now));
+      .sort((a, b) => {
+        const tsA = dateToTs(a.row[d]);
+        const tsB = dateToTs(b.row[d]);
+        const aHasDate = tsA !== Infinity;
+        const bHasDate = tsB !== Infinity;
+
+        // Matches MIT Datum zuerst, ältestes zuerst
+        if (aHasDate && bHasDate) return tsA - tsB;
+        if (aHasDate && !bHasDate) return -1;
+        if (!aHasDate && bHasDate) return 1;
+
+        // Beide ohne Datum: Ranglistenspiele (bewerbsartId "2") zuerst
+        const bIdA = bewerbIdIdx !== -1 ? String(a.row[bewerbIdIdx] || "").trim() : "";
+        const bIdB = bewerbIdIdx !== -1 ? String(b.row[bewerbIdIdx] || "").trim() : "";
+        const infoA = cachedBewerbMap.get(bIdA) || {};
+        const infoB = cachedBewerbMap.get(bIdB) || {};
+        const aIsRL = infoA.bewerbsartId === "2";
+        const bIsRL = infoB.bewerbsartId === "2";
+
+        if (aIsRL && !bIsRL) return -1;
+        if (!aIsRL && bIsRL) return 1;
+
+        // Beide Ranglistenspiele: nach Forderungsdatum (ältestes zuerst)
+        if (aIsRL && bIsRL) {
+          const fA = dateToTs(a.row[zeitpunktForderungIdx]);
+          const fB = dateToTs(b.row[zeitpunktForderungIdx]);
+          if (fA !== fB) return fA - fB;
+        }
+
+        // Beide keine Ranglistenspiele (oder gleich): alphanumerisch nach Bewerbsname
+        const nameA = (infoA.bezeichnung || "").toLowerCase();
+        const nameB = (infoB.bezeichnung || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
 
     const preMatches = [];
     preValuesData.forEach(({ row, origIdx }) => {

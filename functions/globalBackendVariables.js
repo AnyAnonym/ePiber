@@ -4,6 +4,7 @@ export const Navigator = null;
 // Scoreboard – Live-Platzbelegung (wird zur Laufzeit überschrieben)
 export const ScoreboardCourts = {
   "1": {
+    aktiv: "0",
     matchId: "69",
     bewerb: "Vereinsmeisterschaft 2026 Männer A",
     homePlayer: "Matthias Stadler",
@@ -11,6 +12,7 @@ export const ScoreboardCourts = {
     dateTime: "03.07.2026 - 18:00",
   },
   "2": {
+    aktiv: "1",
     matchId: "88",
     bewerb: "Individual",
     homePlayer: "Schwarzer Arni",

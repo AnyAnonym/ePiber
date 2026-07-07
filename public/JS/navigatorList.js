@@ -9,6 +9,7 @@ const readPreMatches = httpsCallable(functions, "readPreMatches");
 const readPlayersList = httpsCallable(functions, "readPlayersList");
 const readBewerbe = httpsCallable(functions, "readBewerbe");
 const setScoreboardCourt = httpsCallable(functions, "setScoreboardCourt");
+const getScoreboardCourts = httpsCallable(functions, "getScoreboardCourts");
 
 let currentActiveBtn = null;
 let pendingBtn = null;
@@ -40,7 +41,7 @@ async function loadPlayers() {
       const name = `${vorname} ${nachname}`.trim();
       if (id) {
         map.set(id, name || id);
-        details.push({ id, vorname, nachname, display: `${nachname} ${vorname}`.trim() });
+        details.push({ id, vorname, nachname, display: `${nachname} ${vorname}`.trim(), fullName: `${vorname} ${nachname}`.trim() });
       }
     });
     playerMap = map;
@@ -82,8 +83,8 @@ async function loadNextMatches() {
     const i3 = idx("spielerid3");
     const d = idx("zeitpunktmatch");
     const bewerbIdIdx = idx("bewerbid");
+    const rasterIdx = idx("rasterpaarung");
 
-    const now = Date.now();
     nextMatches = values.slice(1)
       .filter((row) => row && row[i1] && !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3])))
       .map((row) => {
@@ -93,16 +94,14 @@ async function loadNextMatches() {
         const pid3 = String(row[i3] || "").trim();
         const bewerbId = bewerbIdIdx >= 0 ? String(row[bewerbIdIdx] || "").trim() : "";
         const dateTimeRaw = d >= 0 ? String(row[d] || "").trim() : "";
-        return { matchId, pid1, pid3, bewerbId, dateTimeRaw, ts };
+        const rasterRaw = rasterIdx >= 0 ? String(row[rasterIdx] || "").trim() : "";
+        return { matchId, pid1, pid3, bewerbId, dateTimeRaw, rasterRaw, ts };
       })
       .sort((a, b) => {
-        const aFut = a.ts > now;
-        const bFut = b.ts > now;
-        if (aFut !== bFut) return aFut ? -1 : 1;
         if (a.ts && b.ts) return a.ts - b.ts;
         return a.ts ? -1 : b.ts ? 1 : 0;
       })
-      .slice(0, 4);
+      .slice(0, 8);
   } catch (err) {
     // silent
   }
@@ -136,6 +135,21 @@ function parseSheetDate(raw) {
   return `${dd}.${mm}. - ${hh}:${mi}`;
 }
 
+function parseRunde(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim().toUpperCase();
+  const roundMatch = s.match(/^(R\d+|AF|VF|HF|F|G\d+)/);
+  if (!roundMatch) return "";
+  const code = roundMatch[1];
+  if (/^R(\d+)$/.test(code)) return code.replace(/^R/, "") + ".Runde";
+  if (code === "AF") return "Achtelfinale";
+  if (code === "VF") return "Viertelfinale";
+  if (code === "HF") return "Halbfinale";
+  if (code === "F") return "Finale";
+  if (/^G(\d+)$/.test(code)) return code.replace(/^G/, "") + ".Gruppe";
+  return code;
+}
+
 function openPlayerOverlay(label) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -155,14 +169,14 @@ function openPlayerOverlay(label) {
     let selectedName = null;
 
     // Spielerliste nach Nachname sortiert
-    playerDetails.forEach(({ display }) => {
+    playerDetails.forEach(({ display, fullName }) => {
       const btn = document.createElement("button");
       btn.className = "platz-overlay-option";
       btn.innerHTML = `<span class="platz-overlay-paarung">${display}</span>`;
       btn.addEventListener("click", () => {
         list.querySelectorAll(".platz-overlay-option").forEach((b) => b.classList.remove("selected"));
         btn.classList.add("selected");
-        selectedName = display;
+        selectedName = fullName;
       });
       list.appendChild(btn);
     });
@@ -197,7 +211,10 @@ function openPlayerOverlay(label) {
   });
 }
 
-function openPlatzOverlay(court) {
+async function openPlatzOverlay(court) {
+  // Daten frisch laden bei jedem Overlay-Öffnen
+  await Promise.all([loadPlayers(), loadBewerbe(), loadNextMatches()]);
+
   const overlay = document.createElement("div");
   overlay.className = "platz-overlay";
 
@@ -227,24 +244,26 @@ function openPlatzOverlay(court) {
   });
   list.appendChild(indBtn);
 
-  // Optionen 2-5: nächste 4 preMatches
+  // Optionen 2-9: nächste 8 preMatches
   nextMatches.forEach((match) => {
     const homeName = playerMap.get(match.pid1) || match.pid1;
     const guestName = playerMap.get(match.pid3) || match.pid3;
     const bewerbName = bewerbMap.get(match.bewerbId) || "";
     const dateTime = parseSheetDate(match.dateTimeRaw);
+    const runde = parseRunde(match.rasterRaw);
 
+    const infoParts = [dateTime, bewerbName, runde].filter(Boolean);
     const btn = document.createElement("button");
     btn.className = "platz-overlay-option";
     btn.innerHTML = `
       <span class="platz-overlay-paarung">${homeName} vs. ${guestName}</span>
-      <span class="platz-overlay-bewerb">${dateTime ? dateTime + " | " : ""}${bewerbName}</span>
+      <span class="platz-overlay-bewerb">${infoParts.join(" | ")}</span>
     `;
     btn.addEventListener("click", () => {
       list.querySelectorAll(".platz-overlay-option").forEach((b) => b.classList.remove("selected"));
       btn.classList.add("selected");
       isIndividual = false;
-      selectedData = { matchId: match.matchId, homePlayer: homeName, guestPlayer: guestName, bewerb: bewerbName, dateTime };
+      selectedData = { matchId: match.matchId, homePlayer: homeName, guestPlayer: guestName, bewerb: bewerbName, dateTime, runde };
     });
     list.appendChild(btn);
   });
@@ -282,6 +301,7 @@ function openPlatzOverlay(court) {
           guestPlayer,
           bewerb: "Individual",
           dateTime: getCurrentDateTime(),
+          runde: "",
         });
       } catch (err) {
         console.error("setScoreboardCourt Fehler:", err);
@@ -295,6 +315,7 @@ function openPlatzOverlay(court) {
           guestPlayer: selectedData.guestPlayer,
           bewerb: selectedData.bewerb,
           dateTime: selectedData.dateTime,
+          runde: selectedData.runde,
         });
       } catch (err) {
         console.error("setScoreboardCourt Fehler:", err);
@@ -310,14 +331,99 @@ function openPlatzOverlay(court) {
   document.body.appendChild(overlay);
 }
 
+// ── Platzaktivierung Overlay ──
+
+async function openAktivierungOverlay() {
+  const overlay = document.createElement("div");
+  overlay.className = "platz-overlay";
+
+  const box = document.createElement("div");
+  box.className = "platz-overlay-box";
+
+  const title = document.createElement("div");
+  title.className = "platz-overlay-title";
+  title.textContent = "Platzaktivierung";
+  box.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "platz-overlay-list aktivierung-list";
+
+  // Aktuellen Status laden
+  let courtData = { "1": {}, "2": {} };
+  try {
+    const res = await getScoreboardCourts();
+    const { success, courts } = res.data;
+    if (success && courts) {
+      if (courts["1"]) courtData["1"] = courts["1"];
+      if (courts["2"]) courtData["2"] = courts["2"];
+    }
+  } catch (err) {
+    // silent
+  }
+
+  function createCourtBtn(courtKey) {
+    const btn = document.createElement("button");
+    btn.className = "platz-aktivierung-btn";
+    updateBtnStyle(btn, courtKey);
+
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const cd = courtData[courtKey];
+      const newStatus = (cd.aktiv || 0) === 1 ? 0 : 1;
+      try {
+        await setScoreboardCourt({
+          court: courtKey,
+          aktiv: newStatus,
+          matchId: cd.matchId || "",
+          bewerb: cd.bewerb || "",
+          homePlayer: cd.homePlayer || "",
+          guestPlayer: cd.guestPlayer || "",
+          dateTime: cd.dateTime || "",
+          runde: cd.runde || "",
+        });
+        courtData[courtKey].aktiv = newStatus;
+      } catch (err) {
+        console.error("Toggle Fehler:", err);
+      }
+      updateBtnStyle(btn, courtKey);
+      btn.disabled = false;
+    });
+
+    return btn;
+  }
+
+  function updateBtnStyle(btn, courtKey) {
+    const isActive = (courtData[courtKey].aktiv || 0) === 1;
+    btn.textContent = `Platz ${courtKey}`;
+    btn.classList.remove("aktivierung-active", "aktivierung-inactive");
+    btn.classList.add(isActive ? "aktivierung-active" : "aktivierung-inactive");
+  }
+
+  list.appendChild(createCourtBtn("1"));
+  list.appendChild(createCourtBtn("2"));
+  box.appendChild(list);
+
+  const actions = document.createElement("div");
+  actions.className = "platz-overlay-actions";
+
+  const btnClose = document.createElement("button");
+  btnClose.className = "platz-overlay-btn cancel";
+  btnClose.textContent = "Schließen";
+  btnClose.addEventListener("click", () => overlay.remove());
+
+  actions.appendChild(btnClose);
+  box.appendChild(actions);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
 // ── Navigator laden ──
 
 async function loadNavigator() {
   const container = document.getElementById("navigator-container");
   if (!container) return;
 
-  // Daten für Overlay vorladen
-  await Promise.all([loadPlayers(), loadBewerbe(), loadNextMatches()]);
+  // Daten werden erst beim Öffnen des Overlays geladen
 
   try {
     const res = await readNavigator();
@@ -358,11 +464,16 @@ async function loadNavigator() {
       btn.textContent = name;
       if (ziel) {
         // Overlay-Ziele abfangen
-        const olMatch = ziel.trim().match(/^OL-Platz-(\d)/i);
-        if (olMatch) {
-          const court = olMatch[1];
+        const olPlatzMatch = ziel.trim().match(/^OL-Platz-(\d)/i);
+        const olAktivMatch = ziel.trim().match(/^OL-Platzaktivierung$/i);
+        if (olPlatzMatch) {
+          const court = olPlatzMatch[1];
           btn.addEventListener("click", () => {
             openPlatzOverlay(court);
+          });
+        } else if (olAktivMatch) {
+          btn.addEventListener("click", () => {
+            openAktivierungOverlay();
           });
         } else {
           btn.addEventListener("click", async () => {

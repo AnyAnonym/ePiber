@@ -13,19 +13,83 @@ const BEWERB_ID = params.get("id");
 let currentEntries = [];
 let entryStartDate = null;
 let entryDeadlineDate = null;
+let entryStartRaw = "";
+let entryDeadlineRaw = "";
 
-function parseSheetDate(raw) {
+// Parst Datumsformat: "YYMMDD", "YYMMDD-HHMM", "YYYYMMDD", "YYYYMMDD-HHMM"
+// Bei nur Datum: Start → 00:00, Deadline → 23:59
+function parseSheetDate(raw, isDeadline = false) {
   if (!raw) return null;
   const s = String(raw).trim();
   if (!s) return null;
-  const m8 = s.match(/^(\d{4})(\d{2})(\d{2})/);
-  if (m8) return new Date(+m8[1], +m8[2] - 1, +m8[3]);
-  const m6 = s.match(/^(\d{2})(\d{2})(\d{2})/);
+
+  // Format YYMMDD-HHMM
+  const mTime6 = s.match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (mTime6) {
+    const y = +mTime6[1] >= 50 ? 1900 + +mTime6[1] : 2000 + +mTime6[1];
+    return new Date(y, +mTime6[2] - 1, +mTime6[3], +mTime6[4], +mTime6[5]);
+  }
+
+  // Format YYYYMMDD-HHMM
+  const mTime8 = s.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (mTime8) {
+    return new Date(+mTime8[1], +mTime8[2] - 1, +mTime8[3], +mTime8[4], +mTime8[5]);
+  }
+
+  // Format YYMMDD (nur Datum)
+  const m6 = s.match(/^(\d{2})(\d{2})(\d{2})$/);
   if (m6) {
     const y = +m6[1] >= 50 ? 1900 + +m6[1] : 2000 + +m6[1];
-    return new Date(y, +m6[2] - 1, +m6[3]);
+    if (isDeadline) return new Date(y, +m6[2] - 1, +m6[3], 23, 59, 59);
+    return new Date(y, +m6[2] - 1, +m6[3], 0, 0, 0);
   }
+
+  // Format YYYYMMDD (nur Datum)
+  const m8 = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m8) {
+    if (isDeadline) return new Date(+m8[1], +m8[2] - 1, +m8[3], 23, 59, 59);
+    return new Date(+m8[1], +m8[2] - 1, +m8[3], 0, 0, 0);
+  }
+
   return null;
+}
+
+// Formatiert Roh-Datum für Anzeige
+function formatEntryDate(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim();
+
+  // Format YYMMDD-HHMM
+  const mTime6 = s.match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (mTime6) {
+    const [, yy, mm, dd, hh, mi] = mTime6;
+    const yyyy = +yy >= 50 ? `19${yy}` : `20${yy}`;
+    return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
+  }
+
+  // Format YYYYMMDD-HHMM
+  const mTime8 = s.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (mTime8) {
+    const [, yyyy, mm, dd, hh, mi] = mTime8;
+    return `${dd}.${mm}.${yyyy} ${hh}:${mi}`;
+  }
+
+  // Format YYMMDD
+  const m6 = s.match(/^(\d{2})(\d{2})(\d{2})$/);
+  if (m6) {
+    const [, yy, mm, dd] = m6;
+    const yyyy = +yy >= 50 ? `19${yy}` : `20${yy}`;
+    return `${dd}.${mm}.${yyyy}`;
+  }
+
+  // Format YYYYMMDD
+  const m8 = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m8) {
+    const [, yyyy, mm, dd] = m8;
+    return `${dd}.${mm}.${yyyy}`;
+  }
+
+  return s;
 }
 
 function isEntryPeriodActive() {
@@ -113,8 +177,10 @@ async function loadEntries() {
       const pLnIdx = pHeader.indexOf("nachname");
       playerValues.slice(1).forEach((r) => {
         const id = String(r[pIdIdx] || "").trim();
-        const name = `${(r[pFnIdx] || "").trim()} ${(r[pLnIdx] || "").trim()}`.trim();
-        if (id) playerMap.set(id, name);
+        const vorname = (r[pFnIdx] || "").trim();
+        const nachname = (r[pLnIdx] || "").trim();
+        const display = `${nachname} ${vorname}`.trim();
+        if (id) playerMap.set(id, { display, nachname });
       });
     }
 
@@ -128,6 +194,8 @@ async function loadEntries() {
         ["personenid", "personen id", "personen-id", "personid", "person id", "playerid", "player id", "spielerid", "spieler id"].includes(h));
       const eDatumIdx = eHeader.findIndex((h) =>
         ["datum", "date", "eingetragen", "timestamp", "zeitpunkt", "entrydate", "entry date"].includes(h));
+      const eGebuehrIdx = eHeader.findIndex((h) =>
+        ["gebuehrbezahlt", "gebuehr bezahlt", "gebühr bezahlt", "gebuehr", "gebühr"].includes(h));
 
       console.log("[loadEntries] header:", JSON.stringify(eHeader));
       console.log("[loadEntries] eIdIdx:", eIdIdx, "eBewerbIdIdx:", eBewerbIdIdx, "ePersonenIdIdx:", ePersonenIdIdx, "eDatumIdx:", eDatumIdx);
@@ -139,12 +207,20 @@ async function loadEntries() {
           const ebId = eBewerbIdIdx !== -1 ? String(r[eBewerbIdIdx] || "").trim() : "";
           return ebId === BEWERB_ID;
         })
-        .map((r) => ({
-          id: eIdIdx !== -1 ? String(r[eIdIdx] || "").trim() : "",
-          personenId: ePersonenIdIdx !== -1 ? String(r[ePersonenIdIdx] || "").trim() : "",
-          name: playerMap.get(String(r[ePersonenIdIdx] || "").trim()) || "Unbekannt",
-          datum: eDatumIdx !== -1 ? String(r[eDatumIdx] || "").trim() : "",
-        }));
+        .map((r) => {
+          const personenId = ePersonenIdIdx !== -1 ? String(r[ePersonenIdIdx] || "").trim() : "";
+          const playerInfo = playerMap.get(personenId) || { display: "Unbekannt", nachname: "" };
+          const gebuehrBezahlt = eGebuehrIdx !== -1 ? String(r[eGebuehrIdx] || "").trim() : "";
+          return {
+            id: eIdIdx !== -1 ? String(r[eIdIdx] || "").trim() : "",
+            personenId,
+            name: playerInfo.display,
+            nachname: playerInfo.nachname,
+            datum: eDatumIdx !== -1 ? String(r[eDatumIdx] || "").trim() : "",
+            gebuehrBezahlt: gebuehrBezahlt !== "",
+          };
+        })
+        .sort((a, b) => a.nachname.localeCompare(b.nachname));
     }
 
     console.log("[loadEntries] filtered entries count:", entries.length);
@@ -166,6 +242,7 @@ async function loadEntries() {
     const tbody = document.createElement("tbody");
     entries.forEach((entry, idx) => {
       const tr = document.createElement("tr");
+      if (entry.gebuehrBezahlt) tr.classList.add("entry-paid");
       tr.innerHTML = `
         <td>${idx + 1}</td>
         <td>${entry.name || "Unbekannt"}</td>
@@ -248,8 +325,10 @@ async function loadBewerbsName() {
       if (bewerbRow[bBezIdx]) {
         heading.textContent = `Entrylist für ${bewerbRow[bBezIdx]}`;
       }
-      entryStartDate = bEntryStartIdx !== -1 ? parseSheetDate(bewerbRow[bEntryStartIdx]) : null;
-      entryDeadlineDate = bEntryDeadlineIdx !== -1 ? parseSheetDate(bewerbRow[bEntryDeadlineIdx]) : null;
+      entryStartRaw = bEntryStartIdx !== -1 ? String(bewerbRow[bEntryStartIdx] || "").trim() : "";
+      entryDeadlineRaw = bEntryDeadlineIdx !== -1 ? String(bewerbRow[bEntryDeadlineIdx] || "").trim() : "";
+      entryStartDate = parseSheetDate(entryStartRaw, false);
+      entryDeadlineDate = parseSheetDate(entryDeadlineRaw, true);
     }
   } catch (err) {
     console.warn("Bewerbsname konnte nicht geladen werden:", err);
@@ -296,14 +375,14 @@ function initToolbar() {
 
   const active = isEntryPeriodActive();
   let statusMsg = "";
-  if (!active && entryStartDate) {
-    const dd = String(entryStartDate.getDate()).padStart(2, "0");
-    const mm = String(entryStartDate.getMonth() + 1).padStart(2, "0");
-    statusMsg = `Eintragungsliste beginnt erst am ${dd}.${mm}.${entryStartDate.getFullYear()}.`;
-  } else if (!active && entryDeadlineDate) {
-    const dd = String(entryDeadlineDate.getDate()).padStart(2, "0");
-    const mm = String(entryDeadlineDate.getMonth() + 1).padStart(2, "0");
-    statusMsg = `Eintragungsliste endete am ${dd}.${mm}.${entryDeadlineDate.getFullYear()}.`;
+  if (!active) {
+    const von = formatEntryDate(entryStartRaw);
+    const bis = formatEntryDate(entryDeadlineRaw);
+    let zeitraum = "";
+    if (von && bis) zeitraum = ` (${von} bis ${bis})`;
+    else if (von) zeitraum = ` (ab ${von})`;
+    else if (bis) zeitraum = ` (bis ${bis})`;
+    statusMsg = `Die Entrylist ist aktuell nicht geöffnet${zeitraum}.`;
   }
 
   if (statusMsg) {

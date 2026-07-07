@@ -1416,5 +1416,93 @@ matches (Spalte N hinzugefügt):
 
 - BUILD: APP_VERSION in global.js auf 1.23.4 aktualisiert
 
+
+===============================================================================
+25. CHANGELOG – Scoreboard-Erweiterungen, Sortierung, Caching (v1.23.5)
+===============================================================================
+
+2026-07-07:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- FEATURE: Platzaktivierung über Navigator (OL-Platzaktivierung)
+  * Neues Overlay mit Toggle-Buttons für Platz 1 und 2
+  * Status wird per getScoreboardCourts gelesen und farblich dargestellt
+    (grün = aktiv, rot = inaktiv)
+  * Klick toggelt aktiv-Status im Backend, bestehende Daten bleiben erhalten
+  * Schließen-Button zum Verlassen des Overlays
+
+- FEATURE: Court-Polling gesteuert durch aktiv-Status
+  * pollCourt() stoppt komplett wenn kein Platz aktiv ist
+  * pollScoreboard() startet pollCourt() automatisch neu wenn ein Platz
+    aktiviert wird
+  * aktiv-Status steuert NUR das Polling der Live-Scores (Sätze/Punkte)
+    von COURT_URL — Spielernamen, Bewerb, Datum werden IMMER gepollt
+  * Platz-Header "Platz 1"/"Platz 2" wird grün (aktiv) oder rot (inaktiv)
+    eingefärbt (CSS: .court-active, .court-inactive)
+
+- FEATURE: Runde/Rasterpaarung im Scoreboard und Navigator-Overlays
+  * Backend (scoreboardState.js) um runde-Feld erweitert
+  * Navigator sendet beim Zuweisen die geparste Runde mit
+  * Am Scoreboard: Bewerb | Runde (z.B. "Vereinsmeisterschaft | 2.Runde")
+  * Fallback: Wenn runde in Firestore leer, wird per matchId aus
+    preMatch/Match-Raster-Maps nachgeschlagen
+  * parseRunde() übersetzt: R1→1.Runde, AF→Achtelfinale, VF→Viertelfinale,
+    HF→Halbfinale, F→Finale, G1→1.Gruppe etc.
+
+- FEATURE: Neues Scoreboard-Seitenpanel-Layout (Letzte/Nächste Spiele)
+  * Kompakteres Layout: Header (Datum | Bewerb | Runde) + Content-Zeile
+  * Einzel: "Spieler1 - Spieler3" | Ergebnis (rechtsbündig)
+  * Doppel-Unterstützung: Team1/Team2 untereinander mit "-" Separator
+  * Ergebnis vertikal zentriert zur Spieleranzeige
+  * Gewinner/Verlierer-Styling bei Letzten Spielen:
+    – .ae-winner: font-weight 800 (extra fett)
+    – .ae-loser: font-weight 400, opacity 0.55 (heller)
+  * Gewinner wird per Satzanalyse ermittelt (determineWinner)
+  * 6 Einträge pro Sektion (statt vorher 4)
+
+- FEATURE: Schmale Schrift für Spielernamen im Seitenpanel
+  * Google Font "Roboto Flex" (variable Breite) eingebunden
+  * .ae-players: font-family "Roboto Flex", font-stretch 50%
+
+- FEATURE: "vs." zwischen Heim/Gast am Scoreboard ausblendbar
+  * .platz-vs auf display: none gesetzt
+
+- FEATURE: Navigator-Overlay Daten werden erst bei Bedarf geladen
+  * Players, Bewerbe, NextMatches nicht mehr beim Seitenstart vorladen
+  * Daten werden frisch beim Öffnen des Overlay geladen (immer aktuell)
+  * 8 statt 4 nächste Matches im Overlay angezeigt
+  * Einfache Sortierung nach Datum aufsteigend (kein Date.now()-Vergleich)
+
+- FEATURE: Datum | Bewerb | Runde im Navigator-Overlay
+  * Match-Buttons zeigen Datum, Bewerbsname und Runde mit "|" getrennt
+
+- FEATURE: Individual-Spielerauswahl: "Vorname Nachname" ans Backend
+  * Auswahlliste zeigt "Nachname Vorname" (sortiert nach Nachname)
+  * Ans Backend wird "Vorname Nachname" gesendet (korrekte Scoreboard-Anzeige)
+
+- STYLE: preMatches.html Sortierung überarbeitet
+  * Matches mit Datum zuerst, ältestes zuerst aufsteigend
+  * Matches ohne Datum danach: Ranglistenspiele zuerst (nach Forderungsdatum),
+    dann andere Bewerbe alphanumerisch nach Bewerbsname
+
+- STYLE: EntryList-Verbesserungen (entryList.js)
+  * Spielernamen als "Nachname Vorname" angezeigt, sortiert nach Nachname A-Z
+  * Grüne Markierung (CSS: .entry-paid) wenn GebuehrBezahlt-Spalte befüllt
+  * EntryList-Zeitraum: einheitliche Meldung "Die Entrylist ist aktuell nicht
+    geöffnet (DD.MM.YYYY HH:MM bis DD.MM.YYYY HH:MM)."
+  * parseSheetDate unterstützt YYMMDD, YYMMDD-HHMM, YYYYMMDD, YYYYMMDD-HHMM
+  * Bei nur Datum: Tag ist inklusive (Deadline = 23:59:59)
+
+- STYLE: Scoreboard Spieler-IDs korrekt aufgelöst
+  * playerMap in scoreboardPolling.js: IDs konsistent als String gespeichert
+
+- CONFIG: Cache-Control Header in firebase.json
+  * HTML, JS, CSS mit "Cache-Control: no-cache" ausgeliefert
+  * Browser fragt bei jedem Aufruf nach, bekommt 304 wenn unverändert
+  * Garantiert sofortige Auslieferung neuer Versionen nach Deploy
+
+- BUILD: APP_VERSION in global.js auf 1.23.5 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================

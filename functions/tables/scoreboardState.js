@@ -18,7 +18,7 @@ async function ensureDefaults() {
 }
 
 export const setScoreboardCourt = onCall({invoker: "public"}, async (request) => {
-  const {court, matchId, bewerb, homePlayer, guestPlayer, dateTime} = request.data || {};
+  const {court, matchId, bewerb, homePlayer, guestPlayer, dateTime, aktiv, runde} = request.data || {};
   if (!court || (court !== "1" && court !== "2")) {
     return {success: false, error: "court muss '1' oder '2' sein"};
   }
@@ -28,6 +28,8 @@ export const setScoreboardCourt = onCall({invoker: "public"}, async (request) =>
     [`${court}.homePlayer`]: homePlayer || "",
     [`${court}.guestPlayer`]: guestPlayer || "",
     [`${court}.dateTime`]: dateTime || "",
+    [`${court}.aktiv`]: typeof aktiv === "number" ? aktiv : 0,
+    [`${court}.runde`]: runde || "",
   };
   try {
     await db.doc(STATE_DOC).update(payload);
