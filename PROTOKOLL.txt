@@ -1791,5 +1791,33 @@ Testseite:
 
 - BUILD: APP_VERSION in global.js auf 1.24.2 aktualisiert
 
+
+===============================================================================
+29. CHANGELOG – EntryList RL-Spalte, Scoreboard-Abstände (v1.24.3)
+===============================================================================
+
+2026-07-10:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- FEATURE: Ranglistenposition in EntryList (entryList.js)
+  * Neue Spalte "RL" zwischen ID und Name
+  * readRlPlatzierung wird parallel mitgeladen
+  * Geschlechtsspezifische Rangliste: Herren-Bewerb → Herren-Rangliste,
+    Frauen-Bewerb → Frauen-Rangliste, Mixed → Mixed-Rangliste
+  * Zuordnung über Bewerb-Geschlecht → Ranglisten-Bewerb (bewerbsartId=2)
+    mit gleichem Geschlecht
+
+- STYLE: EntryList Tabelle kompakter
+  * Padding von 12px/16px auf 8px/6px reduziert
+
+- STYLE: Scoreboard Datum/Bewerb-Zeilen enger zusammen
+  * .platz-sub: margin 0, padding 0, line-height 1.15
+
+- BUGFIX: scoreboard.css überzählige schließende Klammer entfernt
+  * Extra "}" nach .platz-sub brach gesamtes CSS danach
+
+- BUILD: APP_VERSION in global.js auf 1.24.3 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================

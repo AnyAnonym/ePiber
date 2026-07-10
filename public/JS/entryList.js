@@ -7,6 +7,7 @@ const readPlayersList = httpsCallable(functions, "readPlayersList");
 const addEntryList    = httpsCallable(functions, "addEntryList");
 const removeEntryList = httpsCallable(functions, "removeEntryList");
 const readBewerbe     = httpsCallable(functions, "readBewerbe");
+const readRlPlatzierung = httpsCallable(functions, "readRlPlatzierung");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
@@ -159,15 +160,63 @@ async function loadEntries() {
   }
 
   try {
-    const [entryRes, playerRes] = await Promise.all([
+    const [entryRes, playerRes, rlRes, bewerbeRes] = await Promise.all([
       readEntryList({ bewerbId: BEWERB_ID }),
       readPlayersList(),
+      readRlPlatzierung(),
+      readBewerbe(),
     ]);
 
     if (!entryRes.data?.success) throw new Error("Fehler beim Laden");
 
     const entryValues = entryRes.data.values || [];
     const playerValues = playerRes.data?.values || [];
+    const rlValues = rlRes.data?.values || [];
+    const bewerbeValues = bewerbeRes.data?.values || [];
+
+    // Geschlecht des aktuellen Bewerbs ermitteln
+    let bewerbGeschlecht = "";
+    let rlBewerbId = "";
+    if (bewerbeValues.length > 1) {
+      const bHeader = bewerbeValues[0].map((h) => h.trim().toLowerCase());
+      const bIdIdx = bHeader.indexOf("id");
+      const bBaIdx = bHeader.indexOf("bewerbsartid");
+      const bGeschIdx = bHeader.indexOf("geschlecht");
+
+      // Geschlecht des aktuellen Bewerbs
+      const currentBewerb = bewerbeValues.slice(1).find((r) => String(r[bIdIdx] || "").trim() === String(BEWERB_ID).trim());
+      if (currentBewerb && bGeschIdx >= 0) {
+        bewerbGeschlecht = String(currentBewerb[bGeschIdx] || "").trim();
+      }
+
+      // Passenden Ranglisten-Bewerb finden (bewerbsartId=2, gleiches Geschlecht)
+      if (bewerbGeschlecht) {
+        const rlBewerb = bewerbeValues.slice(1).find((r) => {
+          const baId = String(r[bBaIdx] || "").trim();
+          const gesch = String(r[bGeschIdx] || "").trim();
+          return baId === "2" && gesch === bewerbGeschlecht;
+        });
+        if (rlBewerb) rlBewerbId = String(rlBewerb[bIdIdx] || "").trim();
+      }
+    }
+
+    // Ranglisten-Map: personId → Rang (gefiltert nach passendem RL-Bewerb)
+    const rlMap = new Map();
+    if (rlValues.length > 1 && rlBewerbId) {
+      const rlHeader = rlValues[0].map((h) => h.trim().toLowerCase());
+      const rlPersonIdx = rlHeader.indexOf("personid");
+      const rlRangIdx = rlHeader.indexOf("rang");
+      const rlBewerbIdx = rlHeader.indexOf("bewerbid");
+      if (rlPersonIdx >= 0 && rlRangIdx >= 0) {
+        rlValues.slice(1).forEach((r) => {
+          const bId = rlBewerbIdx >= 0 ? String(r[rlBewerbIdx] || "").trim() : "";
+          if (bId !== rlBewerbId) return;
+          const pid = String(r[rlPersonIdx] || "").trim();
+          const rang = parseInt(String(r[rlRangIdx] || ""), 10);
+          if (pid && !isNaN(rang)) rlMap.set(pid, rang);
+        });
+      }
+    }
 
     const playerMap = new Map();
     if (playerValues.length > 1) {
@@ -216,6 +265,7 @@ async function loadEntries() {
             personenId,
             name: playerInfo.display,
             nachname: playerInfo.nachname,
+            rlRang: rlMap.get(personenId) || "",
             datum: eDatumIdx !== -1 ? String(r[eDatumIdx] || "").trim() : "",
             gebuehrBezahlt: gebuehrBezahlt !== "",
           };
@@ -236,7 +286,7 @@ async function loadEntries() {
     table.className = "players-table";
 
     const thead = document.createElement("thead");
-    thead.innerHTML = "<tr><th>#</th><th>ID</th><th>Name</th><th>Eingetragen am</th></tr>";
+    thead.innerHTML = "<tr><th>#</th><th>ID</th><th>RL</th><th>Name</th><th>Eingetragen am</th></tr>";
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
@@ -246,6 +296,7 @@ async function loadEntries() {
       tr.innerHTML = `
         <td>${idx + 1}</td>
         <td>${entry.personenId}</td>
+        <td>${entry.rlRang || "—"}</td>
         <td>${entry.name || "Unbekannt"}</td>
         <td>${formatStoredDate(entry.datum)}</td>
       `;

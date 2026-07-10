@@ -116,7 +116,9 @@
   font-size: 3rem;
   text-align: center;
   color: var(--muted);
-  margin-bottom: 2px;
+  margin: 0;
+  padding: 0;
+  line-height: 1.15;
 }
 .platz-row {
   display: flex;
