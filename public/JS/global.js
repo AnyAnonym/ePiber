@@ -1,3 +1,3 @@
 (function () {
-  window.APP_VERSION = "1.24.0";
+  window.APP_VERSION = "1.24.1";
 })();

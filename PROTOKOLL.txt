@@ -1686,5 +1686,50 @@ Testseite:
     und WebSocket-Verbindung zum Cloud Run Service
   - WebSocket-URL konfigurierbar, auto-reconnect bei Verbindungsabbruch
 
+
+===============================================================================
+27. CHANGELOG – Konfiguration zentralisiert (v1.24.1)
+===============================================================================
+
+2026-07-10:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- REFACTORING: SCORER_SERVICE_URL aus scoreboardState.js in backendVariables.js
+  * scoreboardState.js importiert SCORER_SERVICE_URL aus backendVariables.js
+  * Kein hardcoded URL mehr in der Cloud Function
+
+- BUGFIX: SDK.js Region fehlte auf Live-System
+  * getFunctions(app, "europe-west3") war beim Wechsel auf Live nicht gesetzt
+  * Frontend rief us-central1 statt europe-west3 auf
+
+- DOKU: Umschaltung Live/Developer-System
+  Beim Wechsel zwischen Live (e-piber) und Developer (firsttest-3de07)
+  müssen folgende Dateien angepasst werden:
+
+  1. functions/backendVariables.js
+     - SHEET_ID (Spreadsheet-Datenbank)
+     - SCORER_SERVICE_URL (Cloud Run Service /set-active Endpoint)
+
+  2. scorer-service/config.js
+     - SHEET_ID (Spreadsheet-Datenbank)
+     - SCOREBOARD_FUNCTION_URL (Cloud Function getScoreboardCourts)
+       Live: https://europe-west3-e-piber.cloudfunctions.net/getScoreboardCourts
+       Dev:  https://europe-west3-firsttest-3de07.cloudfunctions.net/getScoreboardCourts
+
+  3. public/JS/SDK.js
+     - firebaseConfig (Firebase-Projekt Konfiguration)
+     - SCORER_WS_URL (WebSocket-URL des Cloud Run Service)
+
+  Cloud Run Service URLs (projektabhängig):
+     Live: scorer-service-931335143958.europe-west3.run.app
+     Dev:  scorer-service-974090002261.europe-west3.run.app
+
+  Google Spreadsheet Service Account E-Mails:
+     Live: 931335143958-compute@developer.gserviceaccount.com
+     Dev:  974090002261-compute@developer.gserviceaccount.com
+
+- BUILD: APP_VERSION in global.js auf 1.24.1 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================

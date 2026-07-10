@@ -2,13 +2,13 @@ import {onCall} from "firebase-functions/v2/https";
 import {initializeApp, getApps} from "firebase-admin/app";
 import {getFirestore} from "firebase-admin/firestore";
 import {ScoreboardCourts} from "../globalBackendVariables.js";
+import {SCORER_SERVICE_URL} from "../backendVariables.js";
 
 if (!getApps().length) {
   initializeApp();
 }
 const db = getFirestore();
 const STATE_DOC = "scoreboard/courts";
-const SCORER_SERVICE_URL = "https://scorer-service-974090002261.europe-west3.run.app/set-active";
 
 // Initialer Seed: Testdaten aus globalBackendVariables schreiben falls leer
 async function ensureDefaults() {
