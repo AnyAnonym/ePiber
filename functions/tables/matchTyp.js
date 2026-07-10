@@ -10,7 +10,7 @@ export async function readMatchTypData(sheets) {
   return res.data.values || [];
 }
 
-export const readMatchTyp = onCall(async () => {
+export const readMatchTyp = onCall({region: "europe-west3"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readMatchTypData(sheets);

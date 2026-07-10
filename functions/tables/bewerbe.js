@@ -10,7 +10,7 @@ export async function readBewerbeData(sheets) {
   return res.data.values || [];
 }
 
-export const readBewerbe = onCall(async () => {
+export const readBewerbe = onCall({region: "europe-west3"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readBewerbeData(sheets);

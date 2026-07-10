@@ -80,7 +80,9 @@ async function loadNextMatches() {
     const idx = (label) => header.indexOf(label);
     const idIdx = idx("id");
     const i1 = idx("spielerid1");
+    const i2 = idx("spielerid2");
     const i3 = idx("spielerid3");
+    const i4 = idx("spielerid4");
     const d = idx("zeitpunktmatch");
     const bewerbIdIdx = idx("bewerbid");
     const rasterIdx = idx("rasterpaarung");
@@ -91,11 +93,13 @@ async function loadNextMatches() {
         const ts = dateToTs(row[d]);
         const matchId = idIdx >= 0 ? String(row[idIdx] || "").trim() : "";
         const pid1 = String(row[i1] || "").trim();
+        const pid2 = i2 >= 0 ? String(row[i2] || "").trim() : "";
         const pid3 = String(row[i3] || "").trim();
+        const pid4 = i4 >= 0 ? String(row[i4] || "").trim() : "";
         const bewerbId = bewerbIdIdx >= 0 ? String(row[bewerbIdIdx] || "").trim() : "";
         const dateTimeRaw = d >= 0 ? String(row[d] || "").trim() : "";
         const rasterRaw = rasterIdx >= 0 ? String(row[rasterIdx] || "").trim() : "";
-        return { matchId, pid1, pid3, bewerbId, dateTimeRaw, rasterRaw, ts };
+        return { matchId, pid1, pid2, pid3, pid4, bewerbId, dateTimeRaw, rasterRaw, ts };
       })
       .sort((a, b) => {
         if (a.ts && b.ts) return a.ts - b.ts;
@@ -247,23 +251,30 @@ async function openPlatzOverlay(court) {
   // Optionen 2-9: nächste 8 preMatches
   nextMatches.forEach((match) => {
     const homeName = playerMap.get(match.pid1) || match.pid1;
+    const homeName2 = match.pid2 ? (playerMap.get(match.pid2) || match.pid2) : "";
     const guestName = playerMap.get(match.pid3) || match.pid3;
+    const guestName2 = match.pid4 ? (playerMap.get(match.pid4) || match.pid4) : "";
     const bewerbName = bewerbMap.get(match.bewerbId) || "";
     const dateTime = parseSheetDate(match.dateTimeRaw);
     const runde = parseRunde(match.rasterRaw);
+
+    const homeDisplay = homeName2 ? `${homeName} / ${homeName2}` : homeName;
+    const guestDisplay = guestName2 ? `${guestName} / ${guestName2}` : guestName;
+    const homeBackend = homeName2 ? `${homeName} / ${homeName2}` : homeName;
+    const guestBackend = guestName2 ? `${guestName} / ${guestName2}` : guestName;
 
     const infoParts = [dateTime, bewerbName, runde].filter(Boolean);
     const btn = document.createElement("button");
     btn.className = "platz-overlay-option";
     btn.innerHTML = `
-      <span class="platz-overlay-paarung">${homeName} vs. ${guestName}</span>
+      <span class="platz-overlay-paarung">${homeDisplay} vs. ${guestDisplay}</span>
       <span class="platz-overlay-bewerb">${infoParts.join(" | ")}</span>
     `;
     btn.addEventListener("click", () => {
       list.querySelectorAll(".platz-overlay-option").forEach((b) => b.classList.remove("selected"));
       btn.classList.add("selected");
       isIndividual = false;
-      selectedData = { matchId: match.matchId, homePlayer: homeName, guestPlayer: guestName, bewerb: bewerbName, dateTime, runde };
+      selectedData = { matchId: match.matchId, homePlayer: homeBackend, guestPlayer: guestBackend, bewerb: bewerbName, dateTime, runde };
     });
     list.appendChild(btn);
   });

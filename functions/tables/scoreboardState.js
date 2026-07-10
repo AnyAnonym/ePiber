@@ -8,6 +8,7 @@ if (!getApps().length) {
 }
 const db = getFirestore();
 const STATE_DOC = "scoreboard/courts";
+const SCORER_SERVICE_URL = "https://scorer-service-974090002261.europe-west3.run.app/set-active";
 
 // Initialer Seed: Testdaten aus globalBackendVariables schreiben falls leer
 async function ensureDefaults() {
@@ -17,7 +18,26 @@ async function ensureDefaults() {
   }
 }
 
-export const setScoreboardCourt = onCall({invoker: "public"}, async (request) => {
+// Aktiv-Status an Cloud Run Service senden
+async function notifyScorerService() {
+  try {
+    const snap = await db.doc(STATE_DOC).get();
+    const data = snap.data() || {};
+    const courts = {
+      "1": (data["1"] && data["1"].aktiv) || 0,
+      "2": (data["2"] && data["2"].aktiv) || 0,
+    };
+    await fetch(SCORER_SERVICE_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({courts}),
+    });
+  } catch {
+    // silent — Service evtl. nicht erreichbar
+  }
+}
+
+export const setScoreboardCourt = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   const {court, matchId, bewerb, homePlayer, guestPlayer, dateTime, aktiv, runde} = request.data || {};
   if (!court || (court !== "1" && court !== "2")) {
     return {success: false, error: "court muss '1' oder '2' sein"};
@@ -34,14 +54,17 @@ export const setScoreboardCourt = onCall({invoker: "public"}, async (request) =>
   try {
     await db.doc(STATE_DOC).update(payload);
   } catch {
-    // Dokument existiert noch nicht → set statt update
     await ensureDefaults();
     await db.doc(STATE_DOC).update(payload);
   }
+
+  // Signal an Cloud Run Service senden
+  await notifyScorerService();
+
   return {success: true};
 });
 
-export const getScoreboardCourts = onCall({invoker: "public"}, async () => {
+export const getScoreboardCourts = onCall({region: "europe-west3", invoker: "public"}, async () => {
   const snap = await db.doc(STATE_DOC).get();
   if (!snap.exists) {
     await ensureDefaults();

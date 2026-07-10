@@ -1,4 +1,4 @@
-import { functions } from "./SDK.js";
+import { functions, SCORER_WS_URL } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 
@@ -8,8 +8,6 @@ const readPlayersList = httpsCallable(functions, "readPlayersList");
 const readBewerbe = httpsCallable(functions, "readBewerbe");
 const getScoreboardCourts = httpsCallable(functions, "getScoreboardCourts");
 
-const COURT_URL = 'https://scorer-tennis.b-cdn.net/json/24.voll.json';
-const COURT_POLL = 1000;
 const MATCHES_POLL = 5000;
 const SCOREBOARD_POLL = 1000;
 
@@ -130,10 +128,12 @@ function buildPlayersHtml(p1, p2, p3, p4, p1badge, p2badge, p3badge, p4badge, wi
   const cls2 = winner === 2 ? "ae-winner" : winner === 1 ? "ae-loser" : "";
   const isDouble = p2 || p4;
   if (isDouble) {
+    const team1 = p2 ? `${p1} ${p1badge} / ${p2} ${p2badge}` : `${p1} ${p1badge}`;
+    const team2 = p4 ? `${p3} ${p3badge} / ${p4} ${p4badge}` : `${p3} ${p3badge}`;
     return `<div class="ae-players">
-      <div class="ae-team ${cls1}">${p1} ${p1badge}${p2 ? '<br>' + p2 + ' ' + p2badge : ''}</div>
+      <div class="ae-team ${cls1}">${team1}</div>
       <div class="ae-separator">-</div>
-      <div class="ae-team ${cls2}">${p3} ${p3badge}${p4 ? '<br>' + p4 + ' ' + p4badge : ''}</div>
+      <div class="ae-team ${cls2}">${team2}</div>
     </div>`;
   }
   return `<div class="ae-players">
@@ -300,10 +300,31 @@ function buildRasterMap(values, targetMap, idCol, rasterCol) {
   });
 }
 
-// ── Court data (JSON – nur Sätze/Punkte, gesteuert durch aktiv-Status) ──
+// ── Hilfsfunktionen DOM ──
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val || '-';
+}
+
+function setPlayerName(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const name = val || '-';
+  if (name.includes(" / ")) {
+    const parts = name.split(" / ");
+    el.innerHTML = parts.map((p) => `<div>${p.trim()}</div>`).join("");
+  } else {
+    el.textContent = name;
+  }
+}
+
+// ── Court data (Live-Scores ausschließlich via WebSocket) ──
 
 let courtActive = { "1": false, "2": false };
-let courtPollingRunning = false;
+let courtWs = null;
+let courtWsConnected = false;
+const RECONNECT_DELAY = 3000;
 
 function updateCourt(court) {
   const p = court.platz;
@@ -320,34 +341,94 @@ function updateCourt(court) {
   setText(prefix + '-g-p',  court.punktegast);
 }
 
-function setText(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = val || '-';
+function handleCourtData(data) {
+  if (data && Array.isArray(data.courts)) {
+    data.courts.forEach(updateCourt);
+  }
 }
 
-async function pollCourt() {
+// ── Overlay für WebSocket-Fehler ──
+
+function showWsOverlay() {
+  let overlay = document.getElementById("ws-error-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ws-error-overlay";
+    overlay.className = "ws-error-overlay";
+    overlay.innerHTML = '<div class="ws-error-text">Live-Scores nicht verfügbar<br><span class="ws-error-sub">Verbindung wird wiederhergestellt...</span></div>';
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.remove("hidden");
+}
+
+function hideWsOverlay() {
+  const overlay = document.getElementById("ws-error-overlay");
+  if (overlay) overlay.classList.add("hidden");
+}
+
+// ── WebSocket-Verbindung ──
+
+function connectCourtWs() {
+  if (!SCORER_WS_URL) return;
+  if (courtWs) return;
+
   try {
-    const res = await fetch(COURT_URL, { cache: 'no-store' });
-    const data = await res.json();
-    if (data && Array.isArray(data.courts)) {
-      data.courts.forEach(updateCourt);
-    }
+    courtWs = new WebSocket(SCORER_WS_URL);
   } catch (err) {
-    // silent
+    showWsOverlay();
+    setTimeout(connectCourtWs, RECONNECT_DELAY);
+    return;
   }
-  // Nur weiter pollen wenn mindestens ein Platz aktiv ist
-  if (courtActive["1"] || courtActive["2"]) {
-    courtPollingRunning = true;
-    setTimeout(pollCourt, COURT_POLL);
-  } else {
-    courtPollingRunning = false;
-  }
+
+  courtWs.onopen = () => {
+    courtWsConnected = true;
+    hideWsOverlay();
+  };
+
+  courtWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "scores") {
+        handleCourtData(msg.data);
+      }
+    } catch (err) {
+      // silent
+    }
+  };
+
+  courtWs.onclose = () => {
+    courtWsConnected = false;
+    courtWs = null;
+    if (courtActive["1"] || courtActive["2"]) {
+      showWsOverlay();
+      setTimeout(connectCourtWs, RECONNECT_DELAY);
+    }
+  };
+
+  courtWs.onerror = () => {
+    // onclose wird danach aufgerufen
+  };
 }
 
-function startCourtPollingIfNeeded() {
-  if (!courtPollingRunning && (courtActive["1"] || courtActive["2"])) {
-    courtPollingRunning = true;
-    pollCourt();
+function disconnectCourtWs() {
+  if (courtWs) {
+    const ws = courtWs;
+    courtWs = null;
+    courtWsConnected = false;
+    ws.close();
+  }
+  hideWsOverlay();
+}
+
+// ── Start/Stop basierend auf aktiv-Status ──
+
+function startCourtIfNeeded() {
+  if (courtActive["1"] || courtActive["2"]) {
+    if (!courtWsConnected && !courtWs) {
+      connectCourtWs();
+    }
+  } else {
+    disconnectCourtWs();
   }
 }
 
@@ -357,8 +438,8 @@ function startCourtPollingIfNeeded() {
 function updateScoreboardCourt(courtKey, courtData) {
   if (courtKey !== '1' && courtKey !== '2') return;
   const prefix = 'p' + courtKey;
-  setText(prefix + '-name-h', courtData.homePlayer);
-  setText(prefix + '-name-g', courtData.guestPlayer);
+  setPlayerName(prefix + '-name-h', courtData.homePlayer);
+  setPlayerName(prefix + '-name-g', courtData.guestPlayer);
   setText(prefix + '-datetime', courtData.dateTime);
 
   // Bewerb + Runde zusammensetzen
@@ -394,8 +475,8 @@ async function pollScoreboard() {
   } catch (err) {
     // silent
   }
-  // Court-Polling starten/stoppen basierend auf aktiv-Status
-  startCourtPollingIfNeeded();
+  // Court WebSocket starten/stoppen basierend auf aktiv-Status
+  startCourtIfNeeded();
   setTimeout(pollScoreboard, SCOREBOARD_POLL);
 }
 
@@ -404,9 +485,10 @@ async function pollScoreboard() {
 await loadPlayers();
 await loadBewerbe();
 
-// Erster Durchlauf: Scoreboard + Court immer initial laden (für Layout),
-// danach steuert aktiv-Status ob Court weiter pollt
-await Promise.all([pollScoreboard(), pollCourt(), pollMatches(), pollPreMatches()]);
+// Erster Durchlauf: Scoreboard laden (setzt aktiv-Status + startet WebSocket),
+// dann Matches und PreMatches parallel
+await pollScoreboard();
+await Promise.all([pollMatches(), pollPreMatches()]);
 
 const loader = document.getElementById("scoreboard-loader");
 const content = document.getElementById("scoreboard-content");

@@ -1504,5 +1504,187 @@ matches (Spalte N hinzugefügt):
 
 - BUILD: APP_VERSION in global.js auf 1.23.5 aktualisiert
 
+
+===============================================================================
+26. CHANGELOG – WebSocket-Architektur, RoundRobin, Region-Migration (v1.24.0)
+===============================================================================
+
+2026-07-10:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+- NEUE Spreadsheet-Tabs erforderlich: "ScoreLog" (Timestamp, PlatzNr, Score)
+
+- ARCHITEKTUR: Live-Scores über WebSocket statt Frontend-Polling
+  * Neuer Cloud Run Service (scorer-service/) in europe-west3
+    – Node.js WebSocket-Server pollt zentral die externe JSON-Ressource
+    – Pusht Score-Änderungen an alle verbundenen Clients
+    – Polling nur aktiv wenn mindestens ein Platz aktiviert ist
+  * Cloud Function (setScoreboardCourt) sendet HTTP-Signal an Cloud Run
+    Service bei Änderung des aktiv-Status
+  * Cloud Run Service liest beim Start den initialen aktiv-Status aus
+    Firestore via getScoreboardCourts Cloud Function
+  * Frontend (scoreboardPolling.js): pollCourt() komplett durch WebSocket
+    ersetzt, kein direktes CDN-Polling mehr
+  * Overlay "Live-Scores nicht verfügbar" bei WebSocket-Verbindungsfehler,
+    auto-reconnect alle 3 Sekunden, Overlay verschwindet bei Reconnect
+  * scorer-service/config.js: zentrale Konfigurationsdatei für
+    SHEET_ID, COURT_URL und SCOREBOARD_FUNCTION_URL
+
+- FEATURE: ScoreLog in Google Spreadsheet
+  * Cloud Run Service schreibt bei jeder Score-Änderung pro Platz einen
+    Eintrag in das Tab "ScoreLog" (Timestamp, PlatzNr, Score)
+  * Score-Format: Satz1/Satz2/Satz3/Punkte (z.B. "6-0/1-2/2-0/40-30")
+  * Timestamp in Wiener Zeitzone (Europe/Vienna), automatisch Sommer-/Winterzeit
+  * Google Sheets API über Default Credentials des Cloud Run Service Accounts
+
+- FEATURE: RoundRobin-Bewerbsart (bewerbsartId=7)
+  * Neue Seite: RoundRobin.html + RoundRobin.css + RoundRobin.js
+  * Bewerbskarte auf Bewerbe-Seite navigiert zu RoundRobin.html?id=...
+    wenn Bewerb gestartet, sonst zu entryList.html wenn EntryList offen
+  * Gruppentabellen nebeneinander (Flex-Wrap), responsive unter 500px
+    und über 1500px
+  * Doppel-Unterstützung: Spieler 1/2 als Team, getrennt mit " / "
+  * Statistik: Siege, Sätze W-L, Games W-L, sortiert nach Rang
+  * Hervorhebung der Top-Ränge via Spezifikum-Spalte aus Bewerbsart
+    (z.B. "(1|2)" → Rang 1-2 fett+grün)
+  * Paarungsliste unter jeder Gruppe, sortiert nach Spieldatum
+  * Gewinner fett, Verlierer dezent bei gespielten Paarungen
+  * Responsive: <500px Namen untereinander, >1500px größere Schrift,
+    Tabellen-Namen untereinander, Paarungen einzeilig mit " - " Trenner
+
+- FEATURE: Doppel-Unterstützung im Navigator-Overlay
+  * SpielerID2 und SpielerID4 werden aus preMatches geladen
+  * Overlay zeigt "Spieler1 / Spieler2 vs. Spieler3 / Spieler4"
+  * Backend erhält Doppelnamen als "Name1 / Name2"
+
+- FEATURE: Doppel-Anzeige am Scoreboard
+  * Spielernamen bei Doppel untereinander im selben Div
+  * setPlayerName() erkennt " / " und rendert als separate Divs
+  * Seitenpanel: Doppel einzeilig "Name1 / Name2 - Name3 / Name4"
+
+- FEATURE: EntryList um ID-Spalte erweitert
+  * Neue Spalte "ID" (SpielerID) zwischen # und Name
+
+- FEATURE: Matches-Tabelle Ignorieren-Spalte
+  * Backend (readMatchesList) filtert Zeilen mit ignorieren="1" heraus
+  * Ermöglicht Vorbereitung von Matches die noch nicht sichtbar sein sollen
+
+- STYLE: bewerbeList.js Zeitprüfung auf Uhrzeit erweitert
+  * parseSheetDate erkennt YYMMDD-HHMM und YYYYMMDD-HHMM
+  * Bewerbs-Klickbarkeit sekundengenau statt nur tagesbasiert
+  * Bewerb zwischen Entry-Deadline und Bewerbsbeginn nicht klickbar
+
+- STYLE: Scoreboard Padding bei Scores reduziert
+  * Desktop: padding 4px statt 16px bei Score-Zellen
+  * Handy <1000px: Score-Zellen 40px/60px Breite, minimales Padding
+
+- INFRASTRUKTUR: Migration von us-central1 nach europe-west3
+  * Alle 26 Cloud Functions auf region: "europe-west3" umgestellt
+  * Frontend SDK.js: getFunctions(app, "europe-west3")
+  * Cloud Run Service in europe-west3 (Frankfurt)
+  * scorer-service SCOREBOARD_FUNCTION_URL auf europe-west3 angepasst
+  * Reduzierte Latenz für Clients in Österreich (~10-20ms statt ~100-150ms)
+
+- INFRASTRUKTUR: Cache-Busting für Monitor-iframe
+  * monitorPolling.js: Timestamp-Parameter an iframe-URL angehängt
+  * Verhindert Browser-Cache für iframe-Inhalte nach Deploy
+
+- BUILD: APP_VERSION in global.js auf 1.24.0 aktualisiert
+
+
+DEPLOY-ANLEITUNG
+----------------
+Folgende Schritte in PowerShell ausführen:
+
+1. Umgebungsvariable setzen (Timeout für Functions-Deploy):
+   $env:FUNCTIONS_DISCOVERY_TIMEOUT = 120
+
+2. Firebase Functions deployen (europe-west3):
+   firebase deploy --only functions
+
+3. Firebase Hosting deployen (Frontend):
+   firebase deploy --only hosting
+
+4. Firestore Rules + Indexes deployen:
+   firebase deploy --only firestore
+
+5. Alles auf einmal deployen:
+   firebase deploy
+
+6. Cloud Run Service deployen (scorer-service):
+   cd scorer-service
+   gcloud run deploy scorer-service --source . --region europe-west3 --allow-unauthenticated
+   cd ..
+
+7. Alte Functions in us-central1 löschen (einmalig nach Migration):
+   gcloud functions list --region us-central1
+   gcloud functions delete FUNCTION_NAME --region us-central1
+
+8. Alten Cloud Run Service in us-central1 löschen (einmalig):
+   gcloud run services delete scorer-service --region us-central1
+
+HINWEISE:
+- Vor dem Deploy prüfen: scorer-service/config.js (SHEET_ID für Live/Dev)
+- Vor dem Deploy prüfen: functions/backendVariables.js (SHEET_ID für Live/Dev)
+- Cloud Run Health Check: https://scorer-service-974090002261.europe-west3.run.app/health
+- Cloud Run Status:       https://scorer-service-974090002261.europe-west3.run.app/status
+- Cloud Run Logs:         Google Cloud Console → Cloud Run → scorer-service → Logs
+- Firebase Functions Logs: firebase functions:log
+
+
+CLOUD RUN SERVICE – ERSTEINRICHTUNG
+------------------------------------
+Der Cloud Run Service "scorer-service" wurde wie folgt erstmalig eingerichtet:
+
+Voraussetzungen:
+- Google Cloud SDK (gcloud CLI) installiert und eingeloggt
+  Installation: https://cloud.google.com/sdk/docs/install
+  Login: gcloud auth login
+  Projekt setzen: gcloud config set project e-piber
+
+Projektstruktur (scorer-service/):
+  scorer-service/
+  ├── server.js        → Node.js WebSocket-Server + JSON-Polling + ScoreLog
+  ├── config.js        → Konfiguration (SHEET_ID, COURT_URL, FUNCTION_URL)
+  ├── package.json     → Dependencies (ws, googleapis)
+  └── Dockerfile       → Container-Image für Cloud Run
+
+Erstmaliges Deployment:
+  cd scorer-service
+  gcloud run deploy scorer-service \
+    --source . \
+    --region europe-west3 \
+    --allow-unauthenticated \
+    --min-instances 1
+
+  Ergebnis: Service URL wird ausgegeben, z.B.:
+  https://scorer-service-974090002261.europe-west3.run.app
+
+Instanz-Konfiguration:
+  - min-instances: 1 (Service läuft dauerhaft, WebSocket-Verbindungen bleiben stabil)
+  - max-instances: 1 (nur eine Instanz nötig, hält State im Speicher)
+  - Manuell in Cloud Console eingestellt:
+    Google Cloud Console → Cloud Run → scorer-service → Bearbeiten → Instanzen
+
+Cleanup-Policy:
+  - Container-Images älter als 1 Tag werden automatisch gelöscht
+  - Wurde beim ersten Deploy in europe-west3 konfiguriert
+
+Google Spreadsheet Berechtigung:
+  - Der Cloud Run Service Account benötigt Schreibzugriff auf die Spreadsheet
+  - Service Account E-Mail: 974090002261-compute@developer.gserviceaccount.com
+  - Diese E-Mail in der Google Spreadsheet als "Bearbeiter" freigeben
+  - Betrifft sowohl Live- als auch Developer-Spreadsheet
+
+URLs die im Code referenziert werden:
+  - SDK.js (Frontend):        SCORER_WS_URL = "wss://scorer-service-974090002261.europe-west3.run.app"
+  - scoreboardState.js (CF):  SCORER_SERVICE_URL = "https://scorer-service-974090002261.europe-west3.run.app/set-active"
+  - server.js (Cloud Run):    SCOREBOARD_FUNCTION_URL aus config.js
+
+Testseite:
+  - public/scorer-test.html ermöglicht Vergleich zwischen direktem CDN-Polling
+    und WebSocket-Verbindung zum Cloud Run Service
+  - WebSocket-URL konfigurierbar, auto-reconnect bei Verbindungsabbruch
+
 ENDE DES PROTOKOLLS
 ================================================================================

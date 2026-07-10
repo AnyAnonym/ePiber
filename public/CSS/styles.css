@@ -515,7 +515,8 @@ main {
 }
 
 main:has(#rankingSection.full-width-section),
-main:has(#bracketSection.full-width-section) {
+main:has(#bracketSection.full-width-section),
+main:has(#roundRobinContainer) {
   grid-template-columns: 1fr;
 }
 

@@ -6,7 +6,7 @@ import {createMatchData} from "../tables/matches.js";
 import {swapRanksData} from "../tables/rlPlatzierung.js";
 import {logEntry, buildPlayerMap, buildBewerbMap, fmtPlayer, fmtBewerb} from "../tables/logging.js";
 
-export const setPreMatchResult = onCall(async (request) => {
+export const setPreMatchResult = onCall({region: "europe-west3"}, async (request) => {
   try {
     const {row, satz1, satz2, satz3, userId} = request.data || {};
     if (!row || !satz1 || !satz2 || !userId) {

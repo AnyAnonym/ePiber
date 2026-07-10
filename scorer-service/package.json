@@ -1,0 +1,13 @@
+{
+  "name": "scorer-service",
+  "version": "1.0.0",
+  "description": "WebSocket service for live tennis scores",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "googleapis": "^171.4.0",
+    "ws": "^8.18.0"
+  }
+}

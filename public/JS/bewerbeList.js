@@ -10,17 +10,34 @@ function parseSheetDate(raw) {
   const rawStr = String(raw).trim();
   if (!rawStr) return null;
 
-  const match8 = rawStr.match(/^(\d{4})(\d{2})(\d{2})(?:-(\d{2})(\d{2}))?$/);
-  if (match8) {
-    const [, yyyy, mm, dd] = match8;
-    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+  // YYYYMMDD-HHMM
+  const match8t = rawStr.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (match8t) {
+    const [, yyyy, mm, dd, hh, mi] = match8t;
+    return new Date(+yyyy, +mm - 1, +dd, +hh, +mi);
   }
 
-  const match6 = rawStr.match(/^(\d{2})(\d{2})(\d{2})(?:-(\d{2})(\d{2}))?$/);
+  // YYYYMMDD
+  const match8 = rawStr.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (match8) {
+    const [, yyyy, mm, dd] = match8;
+    return new Date(+yyyy, +mm - 1, +dd);
+  }
+
+  // YYMMDD-HHMM
+  const match6t = rawStr.match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (match6t) {
+    const [, yy, mm, dd, hh, mi] = match6t;
+    const yyyy = parseInt(yy, 10) >= 50 ? 1900 + +yy : 2000 + +yy;
+    return new Date(yyyy, +mm - 1, +dd, +hh, +mi);
+  }
+
+  // YYMMDD
+  const match6 = rawStr.match(/^(\d{2})(\d{2})(\d{2})$/);
   if (match6) {
     const [, yy, mm, dd] = match6;
-    const yyyy = parseInt(yy, 10) >= 50 ? "19" + yy : "20" + yy;
-    return new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+    const yyyy = parseInt(yy, 10) >= 50 ? 1900 + +yy : 2000 + +yy;
+    return new Date(yyyy, +mm - 1, +dd);
   }
 
   return null;
@@ -41,7 +58,9 @@ function formatSheetDate(raw) {
 
 function createCard(b, _isUpcoming) {
   const card = document.createElement("div");
-  const isRangliste = String(b.bewerbsartId).trim() === "2";
+  const bewerbsartId = String(b.bewerbsartId).trim();
+  const isRangliste = bewerbsartId === "2";
+  const isRoundRobin = bewerbsartId === "7";
 
   card.className = "bewerb-card";
 
@@ -68,17 +87,37 @@ function createCard(b, _isUpcoming) {
     </div>
   `;
 
-  if (b.entryListAvailable === "1" && !isRangliste) {
+  // RoundRobin oder andere Bewerbe mit EntryList (nicht Rangliste)
+  if (!isRangliste && (isRoundRobin || b.entryListAvailable === "1")) {
     const userId = localStorage.getItem("currentUserId");
+    const now = new Date();
     const endDate = parseSheetDate(b.bewerbsende);
-    const isEnded = endDate ? endDate < new Date() : false;
+    const isEnded = endDate ? endDate < now : false;
     const deadline = parseSheetDate(b.entrydeadline);
-    const isPastDeadline = deadline ? deadline < new Date() : false;
-    const entryStart = parseSheetDate(b.entrystart);
-    const isBeforeStart = entryStart ? entryStart > new Date() : false;
-    const target = isPastDeadline ? `bewerbsRaster.html?id=${b.id}` : `entryList.html?id=${b.id}`;
+    const isPastDeadline = deadline ? deadline < now : false;
+    const entryStartDate = parseSheetDate(b.entrystart);
+    const isBeforeEntryStart = entryStartDate ? entryStartDate > now : false;
+    const bewerbStart = parseSheetDate(b.bewerbsbeginn);
+    const hasStarted = bewerbStart ? bewerbStart <= now : false;
 
-    if (userId && !isEnded && !isBeforeStart) {
+    // Zielseite bestimmen + Klickbarkeit
+    let target = null;
+    const isEntryOpen = !isBeforeEntryStart && !isPastDeadline;
+
+    if (hasStarted && !isEnded) {
+      // Bewerb läuft → zur Bewerbsseite
+      if (isRoundRobin) {
+        target = `RoundRobin.html?id=${b.id}`;
+      } else {
+        target = `bewerbsRaster.html?id=${b.id}`;
+      }
+    } else if (isEntryOpen) {
+      // Bewerb hat noch nicht begonnen, aber EntryList ist offen
+      target = `entryList.html?id=${b.id}`;
+    }
+    // Sonst: EntryList zu + Bewerb noch nicht gestartet → nicht klickbar
+
+    if (userId && target) {
       card.classList.add("clickable");
       card.addEventListener("click", () => {
         window.location.href = target;
@@ -195,7 +234,6 @@ async function loadBewerbe() {
     const filtered = bewerbe.filter((b) => String(b.id).trim() !== "1");
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     const active = [];
     const upcoming = [];

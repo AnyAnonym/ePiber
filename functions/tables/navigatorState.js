@@ -10,7 +10,7 @@ const db = getFirestore();
 const STATE_DOC = "navigator/state";
 const SCROLL_DOC = "navigator/scroll";
 
-export const setNavigatorTarget = onCall({invoker: "public"}, async (request) => {
+export const setNavigatorTarget = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   const {path, status} = request.data || {};
   if (!path) return {success: false, error: "path erforderlich"};
   const payload = {
@@ -28,14 +28,14 @@ export const setNavigatorTarget = onCall({invoker: "public"}, async (request) =>
   return {success: true};
 });
 
-export const getNavigatorTarget = onCall({invoker: "public"}, async () => {
+export const getNavigatorTarget = onCall({region: "europe-west3", invoker: "public"}, async () => {
   const snap = await db.doc(STATE_DOC).get();
   if (!snap.exists) return {success: true, path: "", status: ""};
   const data = snap.data();
   return {success: true, path: data.target || "", status: data.status || ""};
 });
 
-export const setNavigatorScroll = onCall({invoker: "public"}, async (request) => {
+export const setNavigatorScroll = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   const {amount} = request.data || {};
   if (typeof amount !== "number") return {success: false, error: "amount (number) erforderlich"};
   await db.doc(SCROLL_DOC).set({amount, ts: Date.now()});
@@ -48,7 +48,7 @@ export const setNavigatorScroll = onCall({invoker: "public"}, async (request) =>
   return {success: true};
 });
 
-export const getNavigatorScroll = onCall({invoker: "public"}, async () => {
+export const getNavigatorScroll = onCall({region: "europe-west3", invoker: "public"}, async () => {
   const snap = await db.doc(SCROLL_DOC).get();
   if (!snap.exists) return {success: true, amount: 0, ts: 0};
   const data = snap.data();

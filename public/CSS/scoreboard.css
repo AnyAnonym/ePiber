@@ -35,6 +35,33 @@
   color: var(--muted);
 }
 
+/* ── WebSocket-Fehler Overlay ── */
+.ws-error-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 8000;
+  transition: opacity 0.4s ease;
+}
+.ws-error-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.ws-error-text {
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+.ws-error-sub {
+  font-size: 1rem;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
 /* ── Content (hidden until loaded) ── */
 #scoreboard-content {
   display: none;
@@ -136,7 +163,7 @@
 }
 .platz-scores .platz-cell {
   width: 60px;
-  padding: 16px 8px;
+  padding: 4px 4px;
   font-size: 5rem;
 }
 .platz-scores .platz-cell:last-child {
@@ -279,9 +306,15 @@
   }
   .platz-cell.label {
     font-size: 1.3rem;
+    padding: 1px 2px;
   }
   .platz-scores .platz-cell {
     font-size: 1.3rem;
+    padding: 2px 2px;
+    width: 40px;
+  }
+  .platz-scores .platz-cell:last-child {
+    width: 60px;
   }
   .platz-vs {
     font-size: 1rem;

@@ -236,7 +236,7 @@ async function loadEntries() {
     table.className = "players-table";
 
     const thead = document.createElement("thead");
-    thead.innerHTML = "<tr><th>#</th><th>Name</th><th>Eingetragen am</th></tr>";
+    thead.innerHTML = "<tr><th>#</th><th>ID</th><th>Name</th><th>Eingetragen am</th></tr>";
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
@@ -245,6 +245,7 @@ async function loadEntries() {
       if (entry.gebuehrBezahlt) tr.classList.add("entry-paid");
       tr.innerHTML = `
         <td>${idx + 1}</td>
+        <td>${entry.personenId}</td>
         <td>${entry.name || "Unbekannt"}</td>
         <td>${formatStoredDate(entry.datum)}</td>
       `;

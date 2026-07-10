@@ -10,11 +10,23 @@ export async function readMatchesData(sheets) {
   return res.data.values || [];
 }
 
-export const readMatchesList = onCall(async () => {
+export const readMatchesList = onCall({region: "europe-west3"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readMatchesData(sheets);
-    return {success: true, values};
+    if (values.length < 2) return {success: true, values};
+
+    const header = values[0].map((h) => h.trim().toLowerCase());
+    const ignIdx = header.indexOf("ignorieren");
+
+    if (ignIdx === -1) return {success: true, values};
+
+    const filtered = values.slice(1).filter((row) => {
+      const val = String(row[ignIdx] || "").trim();
+      return val !== "1";
+    });
+
+    return {success: true, values: [values[0], ...filtered]};
   } catch (err) {
     console.error("Fehler in readMatchesList:", err);
     return {success: false, error: err.message};
@@ -100,7 +112,7 @@ export async function readMatchRestrictionsData(sheets, {bewerbId} = {}) {
   };
 }
 
-export const readMatchRestrictions = onCall(async (request) => {
+export const readMatchRestrictions = onCall({region: "europe-west3"}, async (request) => {
   try {
     const sheets = await getSheetsClient(true);
     const bewerbId = request.data?.bewerbId ? String(request.data.bewerbId).trim() : null;

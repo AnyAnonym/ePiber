@@ -49,7 +49,8 @@ async function poll() {
       if (/^OL-/i.test(path)) return;
       currentTarget = path;
       pendingTarget = path;
-      const suffix = path.includes("?") ? "&monitor=1" : "?monitor=1";
+      const cacheBust = "&_t=" + Date.now();
+      const suffix = path.includes("?") ? "&monitor=1" + cacheBust : "?monitor=1" + cacheBust;
       frame.src = path + suffix;
       overlay.classList.add("hidden");
     } else if (!path) {
