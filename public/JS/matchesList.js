@@ -38,6 +38,21 @@ function formatSetScore(raw) {
   });
 }
 
+function parseRunde(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim().toUpperCase();
+  const roundMatch = s.match(/^(R\d+|AF|VF|HF|F|G\d+)/);
+  if (!roundMatch) return "";
+  const code = roundMatch[1];
+  if (/^R(\d+)$/.test(code)) return code.replace(/^R/, "") + ".Runde";
+  if (code === "AF") return "Achtelfinale";
+  if (code === "VF") return "Viertelfinale";
+  if (code === "HF") return "Halbfinale";
+  if (code === "F") return "Finale";
+  if (/^G(\d+)$/.test(code)) return code.replace(/^G/, "") + ".Gruppe";
+  return code;
+}
+
 async function main() {
   const container = document.getElementById("matches-container");
   if (!container) return;
@@ -98,6 +113,7 @@ async function main() {
     const d = idx("zeitpunkt");
     const gewinnerIdx = idx("gewinner");
     const bewerbIdIdx = idx("bewerbid");
+    const rasterIdx = idx("rasterpaarung");
 
     function dateToTs(raw) {
       if (!raw) return Infinity;
@@ -120,6 +136,7 @@ async function main() {
         const ergebnisRaw = row[ergebnisIdx] || "";
         const sets = ergebnisRaw ? ergebnisRaw.split("/").map((s) => formatSetScore(s)) : [];
         const bewerbId = bewerbIdIdx !== -1 ? String(row[bewerbIdIdx] || "").trim() : "";
+        const runde = rasterIdx !== -1 ? parseRunde(row[rasterIdx]) : "";
 
         return {
           date: parseSheetDate(row[d]),
@@ -145,6 +162,7 @@ async function main() {
           sets,
           ergebnis: ergebnisRaw.split("/").map((s) => formatSetScore(s)).join("/"),
           bewerbName: bewerbMap.get(bewerbId) || "",
+          runde,
         };
       });
 
@@ -172,11 +190,12 @@ async function main() {
       const ret1 = retTeam === "team1" ? "ret" : null;
       const ret2 = retTeam === "team2" ? "ret" : null;
 
+      const metaParts = [m.bewerbName, m.runde].filter(Boolean).join(" | ");
       return `
         <div class="match-card">
           <div class="match-meta-row">
             <span class="match-date">${m.date}</span>
-            ${m.bewerbName ? `<div class="match-meta-right"><span class="badge-bewerb">Bewerb: ${m.bewerbName}</span></div>` : ""}
+            ${metaParts ? `<div class="match-meta-right"><span class="badge-bewerb">${metaParts}</span></div>` : ""}
           </div>
           <div class="match-content">
             <div class="team${team1Won ? " team-winner" : ""}">

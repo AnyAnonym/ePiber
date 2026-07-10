@@ -3,13 +3,22 @@
 /* -------------------------------------------------- */
 
 #roundRobinContainer {
-  padding: 16px 0;
+  padding: 8px 0;
   width: 100%;
+}
+
+#roundRobinHeading {
+  text-align: center;
+  margin: 0 0 8px 0;
 }
 
 @media (max-width: 499px) {
   #roundRobinContainer {
     padding: 4px 0;
+  }
+  #roundRobinHeading {
+    margin: 0 0 4px 0;
+    font-size: 1.1rem;
   }
 }
 
@@ -18,7 +27,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 16px;
+  gap: 10px;
   align-items: flex-start;
 }
 
@@ -117,7 +126,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   padding: 4px 0;
   border-bottom: 1px solid #f0f0f0;
 }
@@ -213,7 +222,7 @@
   .rr-pairing {
     flex-wrap: wrap;
     gap: 2px;
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     padding: 4px 0;
   }
 
@@ -287,7 +296,7 @@
   }
 
   .rr-pairing {
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     padding: 8px 0;
   }
 

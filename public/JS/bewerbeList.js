@@ -87,8 +87,8 @@ function createCard(b, _isUpcoming) {
     </div>
   `;
 
-  // RoundRobin oder andere Bewerbe mit EntryList (nicht Rangliste)
-  if (!isRangliste && (isRoundRobin || b.entryListAvailable === "1")) {
+  // Alle Bewerbe außer Rangliste: Klick-Logik
+  if (!isRangliste) {
     const userId = localStorage.getItem("currentUserId");
     const now = new Date();
     const endDate = parseSheetDate(b.bewerbsende);
@@ -102,7 +102,7 @@ function createCard(b, _isUpcoming) {
 
     // Zielseite bestimmen + Klickbarkeit
     let target = null;
-    const isEntryOpen = !isBeforeEntryStart && !isPastDeadline;
+    const isEntryOpen = !isBeforeEntryStart && !isPastDeadline && hasEntryList;
 
     if (hasStarted && !isEnded) {
       // Bewerb läuft → zur Bewerbsseite
@@ -115,7 +115,6 @@ function createCard(b, _isUpcoming) {
       // Bewerb hat noch nicht begonnen, aber EntryList ist offen
       target = `entryList.html?id=${b.id}`;
     }
-    // Sonst: EntryList zu + Bewerb noch nicht gestartet → nicht klickbar
 
     if (userId && target) {
       card.classList.add("clickable");

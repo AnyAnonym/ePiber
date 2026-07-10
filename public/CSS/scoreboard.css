@@ -157,6 +157,11 @@
   font-size: 5.5rem;
   padding: 2px 2px;
 }
+.platz-cell.label.platz-cell-double {
+  font-size: 3.3rem;
+  padding: 0 2px;
+  line-height: 1.1;
+}
 .platz-scores {
   display: flex;
   gap: 8px;
@@ -307,6 +312,11 @@
   .platz-cell.label {
     font-size: 1.3rem;
     padding: 1px 2px;
+  }
+  .platz-cell.label.platz-cell-double {
+    font-size: 0.78rem;
+    padding: 0 2px;
+    line-height: 1.1;
   }
   .platz-scores .platz-cell {
     font-size: 1.3rem;

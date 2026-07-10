@@ -1731,5 +1731,65 @@ Testseite:
 
 - BUILD: APP_VERSION in global.js auf 1.24.1 aktualisiert
 
+
+===============================================================================
+28. CHANGELOG – Bewerbsraster Doppel, Matches, Scoreboard-Fixes (v1.24.2)
+===============================================================================
+
+2026-07-10:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- FEATURE: Doppel-Unterstützung im Bewerbsraster (bewerbsRaster.js)
+  * SpielerID2 und SpielerID4 werden in processRows mitgelesen
+  * Doppelnamen als "Spieler1 / Spieler2" in einer Zeile angezeigt
+  * Dynamische Spaltenbreite: misst breitesten Namen + Score + Mindestabstand
+    – Berechnung: maxNameWidth + maxScoreWidth + padding(28px) + gap(12px)
+    – Min 200px, Max 600px, gilt einheitlich pro Runde/Spalte
+  * Verbindungslinien werden erst nach Breitenberechnung gezeichnet
+    (doppeltes requestAnimationFrame)
+
+- FEATURE: Ergebnisse im Bewerbsraster rechtsbündig
+  * .pscore: text-align right, font-variant-numeric tabular-nums
+  * Ziffern stehen sauber untereinander durch gleiche Ziffernbreite
+
+- FEATURE: Runde/Rasterpaarung auf Matches-Seite (matchesList.js)
+  * Spalte rasterpaarung wird ausgelesen und mit parseRunde() geparst
+  * Anzeige: "Bewerbsname | Runde" (z.B. "VM 2026 | 1.Runde")
+  * "Bewerb:" Prefix entfernt
+
+- FEATURE: RoundRobin Paarungslayout-Parameter
+  * URL-Parameter paarungslayout (0-5) steuert Datumsanzeige bei Paarungen
+  * 0=Datum+Uhrzeit alle, 1=nur Uhrzeit alle, 2=ohne alle
+  * 3=gespielte Datum+Uhrzeit, 4=gespielte nur Uhrzeit, 5=gespielte ohne
+  * Bei 3/4/5: offene Spiele zeigen IMMER Datum+Uhrzeit
+  * Paarungen-Schriftgröße um 15% reduziert (0.72rem statt 0.85rem)
+
+- FEATURE: RoundRobin Heading zentriert + Abstände optimiert
+  * Bewerbsname zentriert statt linksbündig
+  * main-Margin auf 8px reduziert (statt 32px)
+  * main-Padding auf 8px reduziert (statt 16px)
+  * Container-Padding und Gruppen-Gap reduziert
+
+- STYLE: Matches-Seite Doppelspieler gleicher Stil
+  * .player.sub: color var(--fg) statt var(--muted), font-style normal
+  * Beide Spieler haben identischen Stil (schwarz, nicht kursiv)
+
+- STYLE: Scoreboard Doppel-Namensanzeige kompakter
+  * .platz-cell-double: font-size 3.3rem (60% von 5.5rem)
+  * line-height 1.1, padding 0 — Namen stehen eng zusammen
+  * Responsive <1000px: 0.78rem
+
+- BUGFIX: Bewerbe-Klickbarkeit für alle Bewerbsarten
+  * Bedingung von "nur RoundRobin oder EntryList" auf "alle außer Rangliste"
+  * Bewerbe ohne EntryList (z.B. bewerbsartId 8) sind klickbar wenn gestartet
+  * EntryList-Prüfung nur wenn hasEntryList gesetzt
+
+- BUGFIX: Scoreboard nächste Spiele zeigt Einzel mit fehlendem Gegner
+  * Filter akzeptiert leeren Spieler 3 (noch nicht eingetragen)
+  * BYE-Spiele werden weiterhin herausgefiltert
+
+- BUILD: APP_VERSION in global.js auf 1.24.2 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================

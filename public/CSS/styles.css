@@ -518,6 +518,8 @@ main:has(#rankingSection.full-width-section),
 main:has(#bracketSection.full-width-section),
 main:has(#roundRobinContainer) {
   grid-template-columns: 1fr;
+  margin: 8px auto;
+  padding: 0 8px;
 }
 
 section,
@@ -977,8 +979,8 @@ input[type="date"] {
 }
 
 .player.sub {
-  color: var(--muted);
-  font-style: italic;
+  color: var(--fg);
+  font-style: normal;
 }
 
 .team-winner .player {
@@ -1760,6 +1762,8 @@ input[type="date"] {
   font-weight: 600;
   color: #555;
   flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .bracket-player.winner {
   background: #e8f5e9;

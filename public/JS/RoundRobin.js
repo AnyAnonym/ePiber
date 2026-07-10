@@ -73,6 +73,31 @@ function dateToTs(raw) {
   return new Date(yyyy, parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(mi)).getTime();
 }
 
+// Paarungslayout:
+// 0 = Datum + Uhrzeit (alle)
+// 1 = nur Uhrzeit (alle)
+// 2 = ohne Datum/Uhrzeit (alle)
+// 3 = gespielte: Datum + Uhrzeit, offene: immer Datum + Uhrzeit
+// 4 = gespielte: nur Uhrzeit, offene: immer Datum + Uhrzeit
+// 5 = gespielte: ohne Datum/Uhrzeit, offene: immer Datum + Uhrzeit
+function formatPairingDate(datumRaw, played, paarungslayout) {
+  const pl = parseInt(paarungslayout) || 0;
+
+  if (!datumRaw) return "";
+  const m = String(datumRaw).trim().match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+  if (!m) return "";
+  const [, , mm, dd, hh, mi] = m;
+  const fullDate = `${dd}.${mm}. - ${hh}:${mi}`;
+  const timeOnly = `${hh}:${mi}`;
+
+  // Offene Spiele: bei 3/4/5 immer Datum + Uhrzeit
+  if (!played && pl >= 3 && pl <= 5) return fullDate;
+
+  if (pl === 2 || pl === 5) return "";
+  if (pl === 1 || pl === 4) return timeOnly;
+  return fullDate;
+}
+
 // ── Spieler aus preMatches und matches sammeln (inkl. Doppel) ──
 
 function collectPlayers(data, header, bewerbId) {
@@ -202,6 +227,7 @@ function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, p
         team2,
         ergebnis: ergebnis || (isPlayed ? "—" : ""),
         played: isPlayed && !!ergebnis,
+        datumRaw: datum,
         datum: parseSheetDate(datum),
         datumTs: dateToTs(datum),
         winner,
@@ -217,7 +243,7 @@ function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, p
 
 // ── Render ──
 
-export async function renderRoundRobin(bewerbId, container) {
+export async function renderRoundRobin(bewerbId, container, paarungslayout) {
   container.innerHTML = "<p class='loading-text'>Lade Gruppen...</p>";
 
   try {
@@ -371,8 +397,9 @@ export async function renderRoundRobin(bewerbId, container) {
           const cls = p.played ? "rr-pairing played" : "rr-pairing open";
           const t1cls = p.winner === 1 ? "rr-pairing-winner" : p.winner === 2 ? "rr-pairing-loser" : "";
           const t2cls = p.winner === 2 ? "rr-pairing-winner" : p.winner === 1 ? "rr-pairing-loser" : "";
+          const datumDisplay = formatPairingDate(p.datumRaw, p.played, paarungslayout);
           html += `<div class="${cls}">`;
-          if (p.datum) html += `<span class="rr-pairing-date">${p.datum}</span>`;
+          if (datumDisplay) html += `<span class="rr-pairing-date">${datumDisplay}</span>`;
           html += `<span class="rr-pairing-teams"><span class="${t1cls}">${p.team1}</span> <span class="rr-pairing-sep">-</span> <span class="${t2cls}">${p.team2}</span></span>`;
           if (p.ergebnis) html += `<span class="rr-pairing-result">${p.ergebnis}</span>`;
           html += `</div>`;
@@ -414,12 +441,13 @@ async function loadBewerbName(bewerbId) {
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
+const PAARUNGSLAYOUT = params.get("paarungslayout") || "0";
 
 if (BEWERB_ID) {
   const container = document.getElementById("roundRobinContainer");
   if (container) {
     loadBewerbName(BEWERB_ID);
-    renderRoundRobin(BEWERB_ID, container);
+    renderRoundRobin(BEWERB_ID, container, PAARUNGSLAYOUT);
   }
 } else {
   const container = document.getElementById("roundRobinContainer");

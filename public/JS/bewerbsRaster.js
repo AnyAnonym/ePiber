@@ -73,7 +73,9 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
     const h = header.map((c) => String(c).trim().toLowerCase());
     const bwIdx = h.indexOf("bewerbid");
     const p1Idx = h.indexOf("spielerid1");
+    const p2Idx = h.indexOf("spielerid2");
     const p3Idx = h.indexOf("spielerid3");
+    const p4Idx = h.indexOf("spielerid4");
     const rtIdx = h.indexOf("rasterpaarung");
     const ergebnisIdx = isMatch ? h.indexOf("ergebnis") : -1;
     const gewinnerIdx = isMatch ? h.indexOf("gewinner") : -1;
@@ -85,11 +87,13 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
       const key = p.roundKey + "-" + p.match;
 
       const pid1 = parsePlayerId(row[p1Idx]);
+      const pid2 = p2Idx >= 0 ? parsePlayerId(row[p2Idx]) : { cleanId: "", special: null, pre: false, gesetzt: false };
       const pid3 = parsePlayerId(row[p3Idx]);
+      const pid4 = p4Idx >= 0 ? parsePlayerId(row[p4Idx]) : { cleanId: "", special: null, pre: false, gesetzt: false };
 
       const entry = {
-        top: { id: pid1.cleanId, name: null, special: pid1.special, pre: pid1.pre, gesetzt: pid1.gesetzt },
-        bottom: { id: pid3.cleanId, name: null, special: pid3.special, pre: pid3.pre, gesetzt: pid3.gesetzt },
+        top: { id: pid1.cleanId, partnerId: pid2.cleanId, name: null, partnerName: null, special: pid1.special, pre: pid1.pre, gesetzt: pid1.gesetzt },
+        bottom: { id: pid3.cleanId, partnerId: pid4.cleanId, name: null, partnerName: null, special: pid3.special, pre: pid3.pre, gesetzt: pid3.gesetzt },
         result: null,
         winner: null,
       };
@@ -119,7 +123,9 @@ function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1Co
   Object.values(slotMap).forEach((e) => {
     const resolve = (id) => /^BYE$/i.test(id) ? "BYE" : /^PRE$/i.test(id) ? null : (playerMap.get(id) || null);
     if (e.top.id) e.top.name = resolve(e.top.id);
+    if (e.top.partnerId) e.top.partnerName = resolve(e.top.partnerId);
     if (e.bottom.id) e.bottom.name = resolve(e.bottom.id);
+    if (e.bottom.partnerId) e.bottom.partnerName = resolve(e.bottom.partnerId);
   });
 
   let r1Count = 0;
@@ -310,12 +316,17 @@ function renderBracket(rounds) {
 
         if (isWinner) el.classList.add("winner");
 
+        // Doppel: Name + Partner
+        const displayName = slot.partnerName
+          ? `${slot.name} / ${slot.partnerName}`
+          : (slot.name || "—");
+
         if (match.result && slot.name) {
           const score = match.result.map((s) => slot._side === "left" ? s.left : s.right).join(" | ");
           const hasRet = match.result.some((s) => s.special && (slot._side === "left" ? s.retOnLeft : !s.retOnLeft));
-          el.innerHTML = `<span class="pname">${slot.name}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}${slot.gesetzt ? " " + badgeHtml("gesetzt") : ""}`;
+          el.innerHTML = `<span class="pname">${displayName}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}${slot.gesetzt ? " " + badgeHtml("gesetzt") : ""}`;
         } else {
-          el.innerHTML = (slot.name || "—") + (slot.name ? " " + badgeHtml(slot.special) : "") + (slot.gesetzt ? " " + badgeHtml("gesetzt") : "");
+          el.innerHTML = (slot.name ? displayName : "—") + (slot.name ? " " + badgeHtml(slot.special) : "") + (slot.gesetzt ? " " + badgeHtml("gesetzt") : "");
           if (!slot.name) el.classList.add("bye");
         }
 
@@ -338,7 +349,42 @@ function renderBracket(rounds) {
   bracketDiv.appendChild(grid);
   container.appendChild(bracketDiv);
 
-  addConnectors(grid, rounds);
+  // Spaltenbreite dynamisch berechnen basierend auf Inhalt
+  requestAnimationFrame(() => {
+    let maxNameWidth = 0;
+    let maxScoreWidth = 0;
+    const padding = 28; // 14px padding links + 14px rechts
+    const minGap = 12;  // Mindestabstand zwischen Name und Score
+
+    grid.querySelectorAll(".bracket-player").forEach((el) => {
+      const nameEl = el.querySelector(".pname");
+      const scoreEl = el.querySelector(".pscore");
+      if (nameEl) {
+        const w = nameEl.scrollWidth;
+        if (w > maxNameWidth) maxNameWidth = w;
+      }
+      if (scoreEl) {
+        const w = scoreEl.scrollWidth;
+        if (w > maxScoreWidth) maxScoreWidth = w;
+      }
+      // Auch Spieler ohne Ergebnis berücksichtigen
+      if (!nameEl && !scoreEl) {
+        const w = el.scrollWidth;
+        if (w > maxNameWidth) maxNameWidth = w;
+      }
+    });
+
+    const colWidth = Math.max(200, Math.min(maxNameWidth + maxScoreWidth + padding + minGap, 600));
+    grid.querySelectorAll(".bracket-match").forEach((el) => {
+      el.style.width = colWidth + "px";
+    });
+    grid.style.gridTemplateColumns = `repeat(var(--cols, 4), ${colWidth}px)`;
+
+    // Connectors erst nach Breitenberechnung zeichnen
+    requestAnimationFrame(() => {
+      addConnectors(grid, rounds);
+    });
+  });
 }
 
 let cachedRounds = null;

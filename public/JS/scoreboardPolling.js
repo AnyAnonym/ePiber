@@ -215,7 +215,7 @@ function renderPreMatches(values) {
   const rasterIdx = idx("rasterpaarung");
 
   const all = values.slice(1)
-    .filter((row) => row && row[i1] && !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3])))
+    .filter((row) => row && row[i1] && !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3] || "")))
     .map((row) => ({ row, ts: dateToTs(row[d]) }))
     .sort((a, b) => {
       if (a.ts && b.ts) return a.ts - b.ts;
@@ -313,8 +313,10 @@ function setPlayerName(id, val) {
   const name = val || '-';
   if (name.includes(" / ")) {
     const parts = name.split(" / ");
+    el.classList.add("platz-cell-double");
     el.innerHTML = parts.map((p) => `<div>${p.trim()}</div>`).join("");
   } else {
+    el.classList.remove("platz-cell-double");
     el.textContent = name;
   }
 }
