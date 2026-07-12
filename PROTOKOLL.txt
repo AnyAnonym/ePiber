@@ -1819,5 +1819,97 @@ Testseite:
 
 - BUILD: APP_VERSION in global.js auf 1.24.3 aktualisiert
 
+
+===============================================================================
+30. CHANGELOG – Aufstiegslogik, MatchID-Anzeige, preMatches-Runde (v1.24.4)
+===============================================================================
+
+2026-07-11:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- FEATURE: Neue Aufstiegs-/Abstiegslogik für RoundRobin (RoundRobin.js)
+  * Ersetzt die alte parseSpezifikum/highlightRange Logik komplett
+  * Eigener austauschbarer Code-Block "Aufstiegs-/Abstiegslogik"
+  * Neue Kodierung in Spalte Spezifikum der Bewerbsart-Tabelle:
+    – Format: <Rang><Farbe>(<Anzahl>) getrennt durch "/"
+    – Rang: Ziffer (1,2,3...) = Tabellenrang in der Gruppe
+    – Farbe: G = Grün (Aufsteiger), R = Rot (Absteiger, noch nicht impl.)
+    – Anzahl: A = Alle dieses Rangs, oder Zahl = nur die besten X
+    – Bsp: "1G(A)/2G(A)/3G(1)" = Alle Ersten+Zweiten grün, bester Dritter grün
+  * parsePromotion() parst die Kodierung in Regel-Array
+  * determinePromotedPlayers() ermittelt gruppenübergreifend die Aufsteiger
+    – Bei Zahl statt "A": Vergleich aller Spieler dieses Rangs über Gruppen
+    – Sortierung: 1. Siege, 2. Satzdifferenz, 3. Gamedifferenz
+  * Promoted Spieler werden in der Gruppentabelle grün hervorgehoben (rr-highlight)
+
+- FEATURE: MatchID-Anzeige am Scoreboard
+  * Neben Datum/Uhrzeit in Klammern die MatchID (z.B. "03.07. - 18:00 (99)")
+  * Nur wenn eine MatchID vorhanden ist (nicht bei Individual)
+
+- FEATURE: MatchID im Navigator-Overlay bei Spielzuweisung
+  * Nach der Paarung in Klammern (z.B. "Max Müller vs. Hans Huber (99)")
+
+- FEATURE: MatchID bei RoundRobin-Paarungen
+  * Bei offenen (nicht gespielten) Paarungen: MatchID in Klammern nach Namen
+  * Bei gespielten Paarungen: keine MatchID
+
+- FEATURE: Runde/Rasterpaarung auf preMatches-Seite (preMatchesList.js)
+  * Spalte rasterpaarung wird ausgelesen und mit parseRunde() geparst
+  * Anzeige: "Bewerbsname | Runde" (z.B. "VM 2026 | 1.Gruppe")
+
+- BUILD: APP_VERSION in global.js auf 1.24.4 aktualisiert
+
+
+===============================================================================
+31. CHANGELOG – Ignorieren-Filter, MatchID-Bereinigung, Fixes (v1.24.5)
+===============================================================================
+
+2026-07-12:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- FEATURE: Ignorieren-Spalte für preMatches (Backend)
+  * readPreMatches filtert Zeilen mit ignorieren="1" heraus
+  * Analog zu readMatchesList — wirkt auf alle Frontends
+    (preMatches.html, Scoreboard, Navigator, RoundRobin)
+
+- FEATURE: Navigator-Profile (navigatorList.js)
+  * Neue Spalte "Profil" in der Navigator-Tabelle
+  * URL-Parameter profil=ID filtert Buttons nach Profil
+  * Default: Profil 1 wenn kein Parameter angegeben
+  * Bsp: navigator.html?profil=2 lädt nur Buttons mit Profil 2
+
+- FEATURE: RoundRobin erkennt Bewerbsart über Spalte "RoundRobin"
+  * bewerbeList.js prüft roundRobin-Flag aus Bewerbsart-Tabelle
+  * Nicht mehr hardcoded auf bewerbsartId=7
+  * Alle Bewerbsarten mit RoundRobin=1 navigieren zu RoundRobin.html
+
+- FEATURE: RoundRobin Gruppen-Grid statt Flex-Layout
+  * CSS Grid mit berechenbarer Spaltenanzahl (--rr-cols)
+  * 1 Gruppe → 1 Spalte, 2-4 → 2, 5-9 → 3, 10+ → 4
+  * Ungerade Gruppenanzahl: letzte Gruppe gleiche Breite wie darüber
+  * Responsive <500px: immer 1 Spalte
+
+- FEATURE: RoundRobin Paarungen-Deduplizierung
+  * Paarungen die in preMatches UND matches stehen werden dedupliziert
+  * Matches-Version (mit Ergebnis) hat Vorrang
+
+- STYLE: Bewerbsraster Trennstrich zwischen Spielern
+  * Von 1px solid #e6e6e6 auf 2px solid #666 (fett, dunkel)
+  * Passt zur Umrandung der Match-Boxen
+
+- STYLE: MatchID-Anzeige entfernt
+  * Scoreboard: keine MatchID mehr neben Datum/Uhrzeit
+  * RoundRobin Paarungen: keine MatchID mehr bei offenen Spielen
+  * Navigator Spielzuweisungs-Overlay: keine MatchID mehr neben Paarung
+
+- BUGFIX: Scoreboard zeigt Matches mit fehlendem Gegner
+  * Filter für renderMatches und renderPreMatches überarbeitet
+  * Leerer/fehlender Spieler 3 wird akzeptiert (nicht als BYE gewertet)
+  * BYE-Spiele werden weiterhin herausgefiltert
+
+- BUILD: APP_VERSION in global.js auf 1.24.5 aktualisiert
+
 ENDE DES PROTOKOLLS
 ================================================================================

@@ -15,7 +15,19 @@ export const readPreMatches = onCall({region: "europe-west3"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readPreMatchesData(sheets);
-    return {success: true, values};
+    if (values.length < 2) return {success: true, values};
+
+    const header = values[0].map((h) => h.trim().toLowerCase());
+    const ignIdx = header.indexOf("ignorieren");
+
+    if (ignIdx === -1) return {success: true, values};
+
+    const filtered = values.slice(1).filter((row) => {
+      const val = String(row[ignIdx] || "").trim();
+      return val !== "1";
+    });
+
+    return {success: true, values: [values[0], ...filtered]};
   } catch (err) {
     console.error("Fehler in readPreMatches:", err);
     return {success: false, error: err.message};

@@ -157,7 +157,12 @@ function renderMatches(values) {
   const rasterIdx = idx("rasterpaarung");
 
   const all = values.slice(1)
-    .filter((row) => row && row[i1] && !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3])))
+    .filter((row) => {
+      if (!row || !row[i1]) return false;
+      if (/^BYE$/i.test(String(row[i1]))) return false;
+      if (row[i3] && /^BYE$/i.test(String(row[i3]))) return false;
+      return true;
+    })
     .sort((a, b) => dateToTs(b[d]) - dateToTs(a[d]))
     .slice(0, 6);
 
@@ -215,7 +220,12 @@ function renderPreMatches(values) {
   const rasterIdx = idx("rasterpaarung");
 
   const all = values.slice(1)
-    .filter((row) => row && row[i1] && !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3] || "")))
+    .filter((row) => {
+      if (!row || !row[i1]) return false;
+      if (/^BYE$/i.test(String(row[i1]))) return false;
+      if (row[i3] && /^BYE$/i.test(String(row[i3]))) return false;
+      return true;
+    })
     .map((row) => ({ row, ts: dateToTs(row[d]) }))
     .sort((a, b) => {
       if (a.ts && b.ts) return a.ts - b.ts;

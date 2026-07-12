@@ -34,6 +34,21 @@ function parsePlayerId(raw) {
   return { cleanId, special: wo ? "wo" : null };
 }
 
+function parseRunde(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim().toUpperCase();
+  const roundMatch = s.match(/^(R\d+|AF|VF|HF|F|G\d+)/);
+  if (!roundMatch) return "";
+  const code = roundMatch[1];
+  if (/^R(\d+)$/.test(code)) return code.replace(/^R/, "") + ".Runde";
+  if (code === "AF") return "Achtelfinale";
+  if (code === "VF") return "Viertelfinale";
+  if (code === "HF") return "Halbfinale";
+  if (code === "F") return "Finale";
+  if (/^G(\d+)$/.test(code)) return code.replace(/^G/, "") + ".Gruppe";
+  return code;
+}
+
 function badgeHtml(type) {
   if (type === "wo") return ' <span class="badge badge-wo">w.o.</span>';
   if (type === "ret") return ' <span class="badge badge-wo">ret.</span>';
@@ -293,6 +308,7 @@ async function loadPreMatches() {
     const d = preHeader.indexOf("zeitpunktmatch");
     const zeitpunktForderungIdx = preHeader.indexOf("zeitpunktforderung");
     const bewerbIdIdx = preHeader.indexOf("bewerbid");
+    const rasterIdx = preHeader.indexOf("rasterpaarung");
     const st = preHeader.indexOf("status");
     const er = preHeader.indexOf("ergebnis");
 
@@ -357,6 +373,7 @@ async function loadPreMatches() {
       const zeitpunktForderungRaw = zeitpunktForderungIdx !== -1 ? String(row[zeitpunktForderungIdx] || "") : "";
       const status = st !== -1 ? (row[st] || "offen") : "offen";
       const ergebnis = er !== -1 ? formatErgebnis(row[er] || "") : "";
+      const runde = rasterIdx !== -1 ? parseRunde(row[rasterIdx]) : "";
       const isForMe = userId ? [pid1.cleanId, pid2.cleanId, pid3.cleanId, pid4.cleanId].includes(userId) : false;
 
       preMatches.push({
@@ -378,6 +395,7 @@ async function loadPreMatches() {
         bewerbsartId: bewerbInfo.bewerbsartId || "",
         bewerbsart: bewerbsartName,
         bewerbBezeichnung: bewerbInfo.bezeichnung || "",
+        runde,
         zeitpunktForderung: parseSheetDate(zeitpunktForderungRaw),
         status,
         ergebnis,
@@ -396,6 +414,7 @@ async function loadPreMatches() {
       const statusBadge = getStatusBadge(match.status, match.ergebnis);
       const actionButton = getActionButton(match, userId);
       const bewerbName = escapeHtml(match.bewerbBezeichnung || match.bewerbsart || "");
+      const bewerbDisplay = [bewerbName, match.runde].filter(Boolean).join(" | ");
       const isRangliste = match.bewerbsartId === "2";
       const forderungsHtml = isRangliste && match.zeitpunktForderung
         ? `<div class="match-forderung">Forderungs Datum: ${escapeHtml(match.zeitpunktForderung)}</div>`
@@ -408,7 +427,7 @@ async function loadPreMatches() {
             <span class="match-date">Spiel Datum: ${match.datum || "Datum nicht festgelegt"}</span>
             <div class="match-meta-right">
               <div class="match-header">
-                <span class="badge-bewerb">Bewerb: ${bewerbName}</span>
+                <span class="badge-bewerb">${bewerbDisplay}</span>
               </div>
               ${statusBadge}
             </div>

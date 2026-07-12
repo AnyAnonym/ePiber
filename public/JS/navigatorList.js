@@ -105,7 +105,7 @@ async function loadNextMatches() {
         if (a.ts && b.ts) return a.ts - b.ts;
         return a.ts ? -1 : b.ts ? 1 : 0;
       })
-      .slice(0, 8);
+      .slice(0, 20);
   } catch (err) {
     // silent
   }
@@ -430,6 +430,9 @@ async function openAktivierungOverlay() {
 
 // ── Navigator laden ──
 
+const navParams = new URLSearchParams(window.location.search);
+const NAV_PROFIL = navParams.get("profil") || "1";
+
 async function loadNavigator() {
   const container = document.getElementById("navigator-container");
   if (!container) return;
@@ -451,6 +454,7 @@ async function loadNavigator() {
     const header = values[0].map((h) => String(h).trim().toLowerCase());
     const nameIdx = header.indexOf("name");
     const zielIdx = header.indexOf("ziel");
+    const profilIdx = header.indexOf("profil");
     if (nameIdx === -1) {
       container.innerHTML = "<p>Spalte Name fehlt.</p>";
       return;
@@ -460,8 +464,9 @@ async function loadNavigator() {
       .map((row) => ({
         name: String(row[nameIdx] || "").trim(),
         ziel: zielIdx >= 0 ? String(row[zielIdx] || "").trim() : "",
+        profil: profilIdx >= 0 ? String(row[profilIdx] || "1").trim() : "1",
       }))
-      .filter((r) => r.name);
+      .filter((r) => r.name && r.profil === NAV_PROFIL);
 
     container.innerHTML = "";
 

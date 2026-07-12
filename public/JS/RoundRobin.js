@@ -21,12 +21,71 @@ function parsePlayerId(raw) {
   return String(raw || "").trim().replace(/\[w\.o\.\]/gi, "").replace(/\[ret\]/gi, "").trim();
 }
 
-function parseSpezifikum(raw) {
-  if (!raw) return null;
-  const m = String(raw).match(/\((\d+)\|(\d+)\)/);
-  if (!m) return null;
-  return { from: parseInt(m[1], 10), to: parseInt(m[2], 10) };
+// ── Aufstiegs-/Abstiegslogik (austauschbar) ──
+// Kodierung: "<Rang><Farbe>(<Anzahl>)" getrennt durch "/"
+// Rang: Ziffer (1,2,3...) = Tabellenrang in der Gruppe
+// Farbe: G = Grün (Aufsteiger), R = Rot (Absteiger) [R noch nicht implementiert]
+// Anzahl: A = Alle dieses Rangs, oder Zahl = nur die besten X dieses Rangs
+// Bsp: "1G(A)/2G(A)/3G(1)" = Alle Ersten+Zweiten grün, bester Dritter grün
+// Vergleich "Beste": 1. Siege, 2. Satzdifferenz, 3. Gamedifferenz
+
+function parsePromotion(raw) {
+  if (!raw) return [];
+  const rules = [];
+  const parts = String(raw).trim().split("/").filter(Boolean);
+  parts.forEach((part) => {
+    const m = part.match(/^(\d+)([GR])\((\w+)\)$/i);
+    if (!m) return;
+    const rang = parseInt(m[1], 10);
+    const color = m[2].toUpperCase();
+    const countRaw = m[3].toUpperCase();
+    const count = countRaw === "A" ? Infinity : parseInt(countRaw, 10);
+    if (!isNaN(rang) && !isNaN(count)) {
+      rules.push({ rang, color, count });
+    }
+  });
+  return rules;
 }
+
+function determinePromotedPlayers(sortedGroupRows, promotionRules) {
+  // sortedGroupRows: Array von { gNum, rows: [{ id, siege, saetzeW, saetzeL, gamesW, gamesL, ... }] }
+  // Returns: Set von player-IDs die promoted (grün) sind
+  const promoted = new Set();
+
+  promotionRules.forEach((rule) => {
+    if (rule.color !== "G") return; // Nur Grün vorerst
+
+    // Alle Spieler mit diesem Rang aus allen Gruppen sammeln
+    const candidates = [];
+    sortedGroupRows.forEach(({ rows }) => {
+      const rang = rule.rang;
+      if (rang <= rows.length) {
+        const player = rows[rang - 1];
+        candidates.push(player);
+      }
+    });
+
+    if (rule.count === Infinity || rule.count >= candidates.length) {
+      // Alle dieses Rangs aufsteigen
+      candidates.forEach((p) => promoted.add(p.id));
+    } else {
+      // Nur die besten X: sortieren nach Siege → Satzdiff → Gamediff
+      candidates.sort((a, b) => {
+        if (b.siege !== a.siege) return b.siege - a.siege;
+        const satzdiffA = a.saetzeW - a.saetzeL;
+        const satzdiffB = b.saetzeW - b.saetzeL;
+        if (satzdiffB !== satzdiffA) return satzdiffB - satzdiffA;
+        return (b.gamesW - b.gamesL) - (a.gamesW - a.gamesL);
+      });
+      for (let i = 0; i < rule.count && i < candidates.length; i++) {
+        promoted.add(candidates[i].id);
+      }
+    }
+  });
+
+  return promoted;
+}
+// ── Ende Aufstiegs-/Abstiegslogik ──
 
 function parseResult(val) {
   if (!val) return null;
@@ -198,6 +257,7 @@ function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, p
     const p4Idx = h.indexOf("spielerid4");
     const erIdx = h.indexOf("ergebnis");
     const gwIdx = h.indexOf("gewinner");
+    const idIdx = h.indexOf("id");
     const dIdx = h.indexOf(isPlayed ? "zeitpunkt" : "zeitpunktmatch");
 
     data.forEach((row) => {
@@ -212,6 +272,7 @@ function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, p
       const ergebnis = erIdx >= 0 ? String(row[erIdx] || "").trim() : "";
       const datum = dIdx >= 0 ? String(row[dIdx] || "").trim() : "";
       const winnerId = gwIdx >= 0 ? String(row[gwIdx] || "").trim() : "";
+      const matchId = idIdx >= 0 ? String(row[idIdx] || "").trim() : "";
 
       const team1 = formatTeamName(id1, id2, playerMap);
       const team2 = formatTeamName(id3, id4, playerMap);
@@ -225,6 +286,7 @@ function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, p
         group: g,
         team1,
         team2,
+        matchId,
         ergebnis: ergebnis || (isPlayed ? "—" : ""),
         played: isPlayed && !!ergebnis,
         datumRaw: datum,
@@ -238,7 +300,27 @@ function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, p
   extract(preData, preHeader, false);
   extract(matchData, matchHeader, true);
 
-  return pairings;
+  // Deduplizieren: wenn eine Paarung in matches UND preMatches ist,
+  // nur die matches-Version behalten (hat Ergebnis/Gewinner)
+  const deduped = [];
+  const matchKeys = new Set();
+  // Matches zuerst: identifiziert durch Gruppe + Spieler1 + Spieler3
+  pairings.forEach((p) => {
+    if (p.played || p.ergebnis === "—") {
+      const key = `${p.group}:${p.team1}:${p.team2}`;
+      matchKeys.add(key);
+      deduped.push(p);
+    }
+  });
+  // PreMatches nur wenn nicht schon als Match vorhanden
+  pairings.forEach((p) => {
+    if (!p.played && p.ergebnis !== "—") {
+      const key = `${p.group}:${p.team1}:${p.team2}`;
+      if (!matchKeys.has(key)) deduped.push(p);
+    }
+  });
+
+  return deduped;
 }
 
 // ── Render ──
@@ -275,8 +357,8 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
       });
     }
 
-    // Spezifikum aus Bewerbsart ermitteln
-    let highlightRange = null;
+    // Spezifikum aus Bewerbsart ermitteln (Aufstiegs-/Abstiegsregeln)
+    let promotionRules = [];
     if (bewerbValues.length > 1 && bewerbsartValues.length > 1) {
       const bh = bewerbValues[0].map((h) => h.trim().toLowerCase());
       const bIdIdx = bh.indexOf("id");
@@ -289,7 +371,7 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
         const aSpezIdx = ash.indexOf("spezifikum");
         if (aSpezIdx >= 0) {
           const baRow = bewerbsartValues.slice(1).find((r) => String(r[aIdIdx] || "").trim() === baId);
-          if (baRow) highlightRange = parseSpezifikum(baRow[aSpezIdx]);
+          if (baRow) promotionRules = parsePromotion(baRow[aSpezIdx]);
         }
       }
     }
@@ -341,9 +423,8 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
       bewerbId, playerMap,
     );
 
-    // ── HTML: Gruppentabellen ──
-    let html = '<div class="rr-groups">';
-
+    // ── Gruppen-Rows aufbauen und sortieren ──
+    const allGroupRows = [];
     sortedGroups.forEach(([gNum, ids]) => {
       const rows = ids.map((id) => {
         const s = stats[id] || { siege: 0, saetzeW: 0, saetzeL: 0, gamesW: 0, gamesL: 0 };
@@ -360,6 +441,25 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
         return (b.gamesW - b.gamesL) - (a.gamesW - a.gamesL);
       });
 
+      allGroupRows.push({ gNum, rows });
+    });
+
+    // ── Aufsteiger ermitteln (Aufstiegs-/Abstiegslogik) ──
+    const promotedPlayers = determinePromotedPlayers(allGroupRows, promotionRules);
+
+    // ── HTML: Gruppentabellen ──
+    // Raster berechnen: max 2 Spalten bei <= 4 Gruppen, max 3 bei > 4
+    const groupCount = allGroupRows.length;
+    let cols = 2;
+    if (groupCount === 1) cols = 1;
+    else if (groupCount <= 4) cols = 2;
+    else if (groupCount <= 9) cols = 3;
+    else cols = 4;
+
+    let html = `<div class="rr-groups" style="--rr-cols: ${cols}">`;
+
+    allGroupRows.forEach(({ gNum, rows }) => {
+
       html += `<div class="rr-group-card">`;
       html += `<div class="rr-group-title">Gruppe ${gNum}</div>`;
       html += `<table class="rr-table">`;
@@ -371,8 +471,8 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
 
       rows.forEach((r, idx) => {
         const rang = idx + 1;
-        const isHighlighted = highlightRange && rang >= highlightRange.from && rang <= highlightRange.to;
-        const cls = isHighlighted ? ' class="rr-highlight"' : "";
+        const isPromoted = promotedPlayers.has(r.id);
+        const cls = isPromoted ? ' class="rr-highlight"' : "";
         const teamName = formatTeamName(r.id, r.partner, playerMap);
         html += `<tr${cls}>`;
         html += `<td class="rr-center">${rang}</td>`;

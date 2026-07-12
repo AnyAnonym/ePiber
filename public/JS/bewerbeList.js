@@ -60,7 +60,7 @@ function createCard(b, _isUpcoming) {
   const card = document.createElement("div");
   const bewerbsartId = String(b.bewerbsartId).trim();
   const isRangliste = bewerbsartId === "2";
-  const isRoundRobin = bewerbsartId === "7";
+  const isRoundRobin = b.roundRobin === "1";
 
   card.className = "bewerb-card";
 
@@ -195,12 +195,14 @@ async function loadBewerbe() {
       const baIdIdx = baHeader.indexOf("id");
       const baEntryIdx = baHeader.indexOf("entrylistavailable");
       const baBezIdx = baHeader.indexOf("bezeichnung");
+      const baRRIdx = baHeader.indexOf("roundrobin");
       bewerbsartValues.slice(1).forEach((r) => {
         const id = String(r[baIdIdx] || "").trim();
         if (id) {
           baMap.set(id, {
             bezeichnung: String(r[baBezIdx] || "").trim(),
             entryListAvailable: baEntryIdx !== -1 ? String(r[baEntryIdx] || "0").trim() : "0",
+            roundRobin: baRRIdx !== -1 ? String(r[baRRIdx] || "0").trim() : "0",
           });
         }
       });
@@ -227,6 +229,7 @@ async function loadBewerbe() {
         bewerbsbeginn: row[bStartIdx] || "",
         bewerbsende: row[bEndIdx] || "",
         entryListAvailable: baInfo.entryListAvailable || "0",
+        roundRobin: baInfo.roundRobin || "0",
       };
     });
 

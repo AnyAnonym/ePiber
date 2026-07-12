@@ -24,23 +24,19 @@
 
 /* ── Gruppen-Layout ── */
 .rr-groups {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(var(--rr-cols, 2), 1fr);
   gap: 10px;
-  align-items: flex-start;
+  align-items: start;
 }
 
 .rr-group-card {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   border: 2px solid var(--accent);
   border-radius: 12px;
   padding: 16px;
-  min-width: 480px;
-  flex: 1 1 0;
   background: #fff;
-  vertical-align: top;
 }
 
 .rr-group-title {
@@ -182,13 +178,12 @@
 /* ================================================== */
 @media (max-width: 499px) {
   .rr-groups {
+    grid-template-columns: 1fr !important;
     padding: 0;
     gap: 8px;
-    justify-content: center;
   }
 
   .rr-group-card {
-    min-width: unset;
     width: 100%;
     padding: 6px;
     border-radius: 8px;
@@ -257,8 +252,6 @@
 /* ================================================== */
 @media (min-width: 1501px) {
   .rr-group-card {
-    min-width: 700px;
-    max-width: unset;
     padding: 24px;
   }
 
