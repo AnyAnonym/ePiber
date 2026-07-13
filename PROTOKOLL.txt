@@ -1911,5 +1911,162 @@ Testseite:
 
 - BUILD: APP_VERSION in global.js auf 1.24.5 aktualisiert
 
+
+===============================================================================
+32. CHANGELOG – Retry-Logik, Lade-Overlay, Ignorieren-Filter (v1.24.6)
+===============================================================================
+
+2026-07-12:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- FEATURE: Zentrale Retry-Logik und Lade-Overlay (loadingHelper.js)
+  * Neue Datei: public/JS/loadingHelper.js
+  * callWithRetry(fn, args, opts): Cloud Function Calls mit automatischem Retry
+    – Max 3 Versuche (konfigurierbar: RETRY_MAX_ATTEMPTS)
+    – 10 Sekunden Pause zwischen Versuchen (konfigurierbar: RETRY_BASE_DELAY_MS)
+    – Prüft success-Flag der Response
+    – Loggt Warnungen bei Retry in Console
+  * showLoadingOverlay(text): Transparentes Overlay mit Spinner + Text
+  * hideLoadingOverlay(): Overlay mit Fade-Out entfernen
+  * showErrorOverlay(message, reloadFn): Fehler-Overlay mit "Erneut laden" Button
+  * CSS in styles.css: .loading-overlay, .loading-spinner, .loading-error-icon,
+    .loading-retry-btn mit Animationen und Hover-Effekten
+
+- FEATURE: Retry + Overlay in allen Datenseiten eingebaut
+  * bewerbeList.js: readBewerbe + readBewerbsart mit Retry
+  * matchesList.js: readMatchesList + readPlayersList + readBewerbe mit Retry
+  * preMatchesList.js: readPreMatches mit Retry
+  * bewerbsRaster.js: alle 5 parallelen Calls mit Retry
+  * RoundRobin.js: alle 5 parallelen Calls mit Retry
+  * entryList.js: readEntryList + readPlayersList + readRlPlatzierung +
+    readBewerbe mit Retry
+  * Bei Fehler nach 3 Versuchen: Fehler-Overlay mit "Erneut laden" Button
+  * User kann manuell neu laden ohne Seite zu refreshen
+
+- FEATURE: Ignorieren-Spalte für preMatches (Backend)
+  * readPreMatches filtert Zeilen mit ignorieren="1" heraus
+  * Analog zu readMatchesList — wirkt auf alle Frontends
+
+- FEATURE: Navigator 20 Partien im Spielzuweisungs-Overlay
+  * Von 8 auf 20 nächste Partien erhöht
+
+- BUILD: APP_VERSION in global.js auf 1.24.6 aktualisiert
+
+
+===============================================================================
+33. CHANGELOG – Zentraler Datenservice, Architektur-Umbau (v1.25.0)
+===============================================================================
+
+2026-07-13:
+-----------
+- TABELLENSTRUKTUR: Neue Spalten in Spreadsheet-Tabellen
+  * preMatches: Spalte "Ignorieren" hinzugefügt (Wert "1" = Zeile wird
+    bei Lesezugriffen herausgefiltert)
+  * matches: Spalte "Ignorieren" bereits vorhanden (seit v1.24.5)
+  * Navigator: Spalte "Profil" hinzugefügt (Gruppierung der Buttons)
+  * Bewerbsart: Spalte "RoundRobin" wird für Erkennung ausgewertet
+  * Bewerbsart: Spalte "Spezifikum" neue Kodierung für Aufstiegslogik
+
+- ARCHITEKTUR: Scorer-Service komplett umgebaut (scorer-service/)
+  * Neue modulare Struktur:
+    – config.js: Zentrale Konfiguration (Sheet-ID, URLs, Polling-Intervalle,
+      Tabellen-Kategorien)
+    – dataStore.js: Reiner In-Memory-Speicher für alle Spreadsheet-Tabellen.
+      Getter/Setter, keine Logik, keine Filterung.
+    – dataPoller.js: Tick-basiertes Google Sheets API Polling.
+      Grundtakt 5 Sekunden, Kategorien fast (10s) und slow (30s).
+      Tabellen-Zuordnung:
+        fast: preMatches, matches, rlPlatzierung, entryList
+        slow: players, bewerbe, bewerbsart, matchTyp, navigator
+      Tick-Counter: nur aktive Kategorien werden gepollt (Kommunikationsschonung).
+      Initiales Laden aller Tabellen beim Service-Start.
+    – courtPoller.js: Court-Score Polling (externe JSON-Ressource, 2s Intervall)
+      + ScoreLog in Spreadsheet. Aus server.js ausgelagert.
+    – dataProvider.js: WebSocket-Daten-Handler.
+      Vordefinierte Endpoints: players, bewerbe, bewerbsart, preMatches,
+      matches, matchTyp, rlPlatzierung, navigator, entryList, roundRobin,
+      bracket, scoreboard.
+      Filterung (ignorieren-Spalte, bewerbId, profil) geschieht hier.
+      Datenverschneidungen (Merge mehrerer Tabellen) geschehen hier.
+      Push von Score-Updates an alle verbundenen Clients.
+    – server.js: Schlank — nur HTTP-Server (health, status, set-active)
+      + Orchestrierung der Module.
+  * WebSocket-Protokoll:
+    Request:  { type: "request", id, endpoint, params }
+    Response: { type: "response", id, endpoint, data }
+    Push:     { type: "scores", data }
+  * Status-Endpoint (/status) erweitert:
+    – Liste aller verbundenen Clients (ID, Verbindungszeit, letzter Request)
+    – Anzahl verbundener Clients
+    – Daten-Polling Status (Tick-Count, Running, pro Tabelle lastUpdate/pollCount/rowCount)
+    – Court-Polling Status (aktiv, Platz-Status, pollCount, pushCount)
+
+- ARCHITEKTUR: Frontend auf WebSocket-Daten-Client umgestellt
+  * Neue Datei: public/JS/dataClient.js
+    – Zentrale WebSocket-Verbindung zum Scorer-Service
+    – createEndpoint(name): erzeugt Funktion mit httpsCallable-kompatiblem Interface
+    – request(endpoint, params): sendet Request, wartet auf Response (Promise)
+    – setOnScoreChange(callback): für Score-Push Empfang
+    – Auto-Connect + Auto-Reconnect (3s Delay)
+    – Request-Timeout: 15 Sekunden
+  * Umgestellte Dateien (Lesezugriffe über dataClient statt Cloud Functions):
+    – bewerbeList.js: readBewerbe, readBewerbsart
+    – matchesList.js: readMatchesList, readPlayersList, readBewerbe
+    – preMatchesList.js: readPreMatches, readPlayersList, readBewerbe, readBewerbsart
+    – bewerbsRaster.js: alle 5 Lese-Calls
+    – RoundRobin.js: alle 5 Lese-Calls
+    – entryList.js: readEntryList, readPlayersList, readBewerbe, readRlPlatzierung
+    – scoreboardPolling.js: readMatchesList, readPreMatches, readPlayersList, readBewerbe
+      + Court-Scores über dataClient Score-Push (statt eigener WebSocket)
+    – navigatorList.js: readNavigator, readPreMatches, readPlayersList, readBewerbe
+  * Schreib-Calls bleiben bei Firebase Cloud Functions (httpsCallable):
+    – setPreMatchResult, setMatchDate, addEntryList, removeEntryList
+    – setNavigatorTarget, getNavigatorTarget, setScoreboardCourt, getScoreboardCourts
+    – verifyUserLogin, resetPassword, addMatch, withdrawFromRanking
+
+- FEATURE: Login robuster gemacht (modals.js)
+  * readPlayerDetails über dataClient statt Cloud Function (kein Cold Start)
+  * Login-Verifizierung und Profil-Daten parallel geladen (Promise.all)
+  * Session-Wiederherstellung beim Seitenstart: wenn isLoggedIn=true aber
+    currentUserId fehlt → Profil-Daten automatisch nachladen + Seite reload
+  * Spinner im Anmelde-Button während Login-Vorgang
+  * "Passwort vergessen" Button: dezent unter Anmelde-Button zentriert,
+    kleiner (0.8rem), unterstrichen, Hover in Accent-Farbe
+
+- FEATURE: dataClient.js Verbindungswartelogik verbessert
+  * request() wartet bis zu 10 Sekunden auf WebSocket-Verbindung
+  * Prüft alle 200ms ob verbunden statt einmaligem 2s-Timeout
+  * Verhindert fehlgeschlagene Requests bei langsamem Verbindungsaufbau
+
+- BUGFIX: Login/Session userId wurde nie gesetzt (modals.js)
+  * Spalte in Personen-Tabelle heißt "e-mail" (mit Bindestrich), nicht "email"
+  * Login-Code und Session-Wiederherstellung suchen jetzt nach beiden Varianten
+  * Behebt: Bewerbe waren nach Login ausgegraut/nicht klickbar
+
+- STYLE: Ranglisten-Sidebar entfernt
+  * rankingSidebar.js Script-Tag aus 6 HTML-Dateien entfernt:
+    Bewerbe.html, index.html, matches.html, players.html, preMatches.html,
+    rangliste.html
+  * sidebar-container Divs bleiben (leer, stören nicht)
+  * rankingSidebar.js Datei bleibt im Projekt (ggf. spätere Nutzung)
+
+- BUILD: APP_VERSION in global.js auf 1.25.0 aktualisiert
+- BUILD: Dockerfile aktualisiert (alle neuen JS-Dateien)
+
+DEPLOY-REIHENFOLGE für v1.25.0:
+  1. gcloud Projekt prüfen/setzen:
+     gcloud config get project
+     gcloud config set project e-piber   (Live)
+     gcloud config set project firsttest-3de07   (Dev)
+  2. Cloud Run Service deployen (neue Architektur):
+     cd scorer-service
+     gcloud run deploy scorer-service --source . --region europe-west3 --allow-unauthenticated
+     cd ..
+  3. Firebase Hosting deployen (dataClient.js + umgestellte JS-Dateien):
+     firebase deploy --only hosting
+  4. Prüfen: /health und /status des Cloud Run Service
+  5. Cloud Functions müssen NICHT neu deployed werden (Schreib-Calls unverändert)
+
 ENDE DES PROTOKOLLS
 ================================================================================

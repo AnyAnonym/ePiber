@@ -1,13 +1,16 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
+import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
-const readEntryList   = httpsCallable(functions, "readEntryList");
-const readPlayersList = httpsCallable(functions, "readPlayersList");
+const readEntryList     = createEndpoint("entryList");
+const readPlayersList   = createEndpoint("players");
+const readBewerbe       = createEndpoint("bewerbe");
+const readRlPlatzierung = createEndpoint("rlPlatzierung");
+// Schreib-Calls bleiben bei Cloud Functions
 const addEntryList    = httpsCallable(functions, "addEntryList");
 const removeEntryList = httpsCallable(functions, "removeEntryList");
-const readBewerbe     = httpsCallable(functions, "readBewerbe");
-const readRlPlatzierung = httpsCallable(functions, "readRlPlatzierung");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
@@ -152,19 +155,21 @@ async function loadEntries() {
   const container = document.getElementById("entryListContainer");
   if (!container) return;
 
-  container.innerHTML = "<p class='loading-text'>Lade Einträge...</p>";
+  container.innerHTML = "";
+  showLoadingOverlay("Lade Einträge...");
 
   if (!BEWERB_ID) {
+    hideLoadingOverlay();
     container.innerHTML = "<p>Keine Bewerb-ID übergeben.</p>";
     return;
   }
 
   try {
     const [entryRes, playerRes, rlRes, bewerbeRes] = await Promise.all([
-      readEntryList({ bewerbId: BEWERB_ID }),
-      readPlayersList(),
-      readRlPlatzierung(),
-      readBewerbe(),
+      callWithRetry(readEntryList, { bewerbId: BEWERB_ID }),
+      callWithRetry(readPlayersList),
+      callWithRetry(readRlPlatzierung),
+      callWithRetry(readBewerbe),
     ]);
 
     if (!entryRes.data?.success) throw new Error("Fehler beim Laden");
@@ -306,9 +311,10 @@ async function loadEntries() {
 
     container.innerHTML = "";
     container.appendChild(table);
+    hideLoadingOverlay();
   } catch (err) {
     console.error("Fehler beim Laden der Einträge:", err);
-    container.innerHTML = `<p>Fehler: ${err.message}</p>`;
+    showErrorOverlay("Fehler beim Laden der Einträge", loadEntries);
   }
 }
 

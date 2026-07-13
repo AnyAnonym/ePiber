@@ -1,5 +1,5 @@
-import {functions} from "./SDK.js";
-import {httpsCallable} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
+import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
 window.addEventListener("load", main);
 
@@ -56,17 +56,18 @@ function parseRunde(raw) {
 async function main() {
   const container = document.getElementById("matches-container");
   if (!container) return;
-  container.innerHTML = "<p>Lade Matches...</p>";
+  container.innerHTML = "";
+  showLoadingOverlay("Lade Matches...");
 
   try {
-    const readMatchesList = httpsCallable(functions, "readMatchesList");
-    const readPlayersList = httpsCallable(functions, "readPlayersList");
-    const readBewerbe = httpsCallable(functions, "readBewerbe");
+    const readMatchesList = createEndpoint("matches");
+    const readPlayersList = createEndpoint("players");
+    const readBewerbe = createEndpoint("bewerbe");
 
     const [matchesRes, playersRes, bewerbeRes] = await Promise.all([
-      readMatchesList(),
-      readPlayersList(),
-      readBewerbe(),
+      callWithRetry(readMatchesList),
+      callWithRetry(readPlayersList),
+      callWithRetry(readBewerbe),
     ]);
 
     if (!matchesRes.data?.success) throw new Error(matchesRes.data?.error || "Fehler beim Laden der Matches");
@@ -215,8 +216,9 @@ async function main() {
       `;
     }).join("");
 
+    hideLoadingOverlay();
   } catch (err) {
     console.error("Fehler in main():", err);
-    container.innerHTML = `<p style="color:red">Fehler beim Laden der Matches: ${err.message}</p>`;
+    showErrorOverlay("Fehler beim Laden der Matches", main);
   }
 }

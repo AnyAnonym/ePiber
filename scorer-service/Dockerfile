@@ -7,6 +7,10 @@ RUN npm install --production
 
 COPY server.js .
 COPY config.js .
+COPY dataStore.js .
+COPY dataPoller.js .
+COPY courtPoller.js .
+COPY dataProvider.js .
 
 EXPOSE 8080
 

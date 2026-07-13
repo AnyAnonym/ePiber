@@ -1,5 +1,7 @@
 import {functions} from "./SDK.js";
 import {httpsCallable} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
+import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
 const setPreMatchResultFn = httpsCallable(functions, "setPreMatchResult");
 const setMatchDateFn = httpsCallable(functions, "setMatchDate");
@@ -229,9 +231,9 @@ let cachedBewerbsartMap = null;
 async function loadMaps() {
   if (cachedPlayerMap) return;
 
-  const readPlayersList = httpsCallable(functions, "readPlayersList");
-  const readBewerbe = httpsCallable(functions, "readBewerbe");
-  const readBewerbsart = httpsCallable(functions, "readBewerbsart");
+  const readPlayersList = createEndpoint("players");
+  const readBewerbe = createEndpoint("bewerbe");
+  const readBewerbsart = createEndpoint("bewerbsart");
 
   const [playersRes, bewerbeRes, bewerbsartRes] = await Promise.all([
     readPlayersList(),
@@ -285,11 +287,12 @@ async function loadPreMatches() {
   if (!container) return;
 
   const userId = localStorage.getItem("currentUserId") || null;
-  container.innerHTML = "<p class='loading-text'>Lade offene Matches...</p>";
+  container.innerHTML = "";
+  showLoadingOverlay("Lade offene Matches...");
 
   try {
-    const readPreMatches = httpsCallable(functions, "readPreMatches");
-    const result = await readPreMatches();
+    const readPreMatches = createEndpoint("preMatches");
+    const result = await callWithRetry(readPreMatches);
     if (!result.data?.success) throw new Error(result.data?.error || "Fehler beim Laden");
 
     const preValues = result.data.values || [];
@@ -465,9 +468,10 @@ async function loadPreMatches() {
       });
     });
 
+    hideLoadingOverlay();
   } catch (err) {
     console.error("Fehler beim Laden:", err);
-    container.innerHTML = `<p>Fehler beim Laden der offenen Matches: ${err.message}</p>`;
+    showErrorOverlay("Fehler beim Laden der offenen Matches", loadPreMatches);
   }
 }
 

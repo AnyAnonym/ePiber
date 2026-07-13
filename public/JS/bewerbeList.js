@@ -1,9 +1,8 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
+import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
-const readBewerbe = httpsCallable(functions, "readBewerbe");
-const readBewerbsart = httpsCallable(functions, "readBewerbsart");
+const readBewerbe = createEndpoint("bewerbe");
+const readBewerbsart = createEndpoint("bewerbsart");
 
 function parseSheetDate(raw) {
   if (!raw) return null;
@@ -173,12 +172,13 @@ async function loadBewerbe() {
   const container = document.getElementById("bewerbe-container");
   if (!container) return;
 
-  container.innerHTML = "<p class='loading-text'>Lade Bewerbe...</p>";
+  container.innerHTML = "";
+  showLoadingOverlay("Lade Bewerbe...");
 
   try {
     const [bewerbRes, bewerbsartRes] = await Promise.all([
-      readBewerbe(),
-      readBewerbsart(),
+      callWithRetry(readBewerbe),
+      callWithRetry(readBewerbsart),
     ]);
 
     const bewerbValues = bewerbRes.data?.values || [];
@@ -277,9 +277,10 @@ async function loadBewerbe() {
     if (active.length === 0 && upcoming.length === 0 && finished.length === 0) {
       container.innerHTML = "<p>Keine Bewerbe gefunden.</p>";
     }
+    hideLoadingOverlay();
   } catch (err) {
     console.error("Fehler beim Laden:", err);
-    container.innerHTML = `<p>Fehler: ${err.message}</p>`;
+    showErrorOverlay("Fehler beim Laden der Bewerbe", loadBewerbe);
   }
 }
 

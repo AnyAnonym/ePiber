@@ -1,12 +1,11 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
+import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
-const readPreMatches   = httpsCallable(functions, "readPreMatches");
-const readMatchesList  = httpsCallable(functions, "readMatchesList");
-const readPlayersList  = httpsCallable(functions, "readPlayersList");
-const readBewerbe      = httpsCallable(functions, "readBewerbe");
-const readBewerbsart   = httpsCallable(functions, "readBewerbsart");
+const readPreMatches   = createEndpoint("preMatches");
+const readMatchesList  = createEndpoint("matches");
+const readPlayersList  = createEndpoint("players");
+const readBewerbe      = createEndpoint("bewerbe");
+const readBewerbsart   = createEndpoint("bewerbsart");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
@@ -400,15 +399,16 @@ async function loadBracket() {
     return;
   }
 
-  if (container) container.innerHTML = "<p class='loading-text'>Lade Raster...</p>";
+  if (container) container.innerHTML = "";
+  showLoadingOverlay("Lade Turnierraster...");
 
   try {
     const [bewerbRes, bewbsRes, preRes, matchRes, playerRes] = await Promise.all([
-      readBewerbe(),
-      readBewerbsart(),
-      readPreMatches(),
-      readMatchesList(),
-      readPlayersList(),
+      callWithRetry(readBewerbe),
+      callWithRetry(readBewerbsart),
+      callWithRetry(readPreMatches),
+      callWithRetry(readMatchesList),
+      callWithRetry(readPlayersList),
     ]);
 
     const bewerbValues = bewerbRes.data?.values || [];
@@ -524,9 +524,10 @@ async function loadBracket() {
       info.appendChild(btnRow);
     }
 
+    hideLoadingOverlay();
   } catch (err) {
     console.error("Fehler beim Laden des Turnierrasters:", err);
-    if (container) container.innerHTML = `<p>Fehler: ${err.message}</p>`;
+    showErrorOverlay("Fehler beim Laden des Turnierrasters", loadBracket);
   }
 }
 

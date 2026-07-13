@@ -1,13 +1,16 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
 
-const readNavigator = httpsCallable(functions, "readNavigator");
+// Lese-Calls über dataClient (WebSocket)
+const readNavigator = createEndpoint("navigator");
+const readPreMatches = createEndpoint("preMatches");
+const readPlayersList = createEndpoint("players");
+const readBewerbe = createEndpoint("bewerbe");
+// Schreib-Calls bleiben bei Cloud Functions
 const setNavigatorTarget = httpsCallable(functions, "setNavigatorTarget");
 const getNavigatorTarget = httpsCallable(functions, "getNavigatorTarget");
-const readPreMatches = httpsCallable(functions, "readPreMatches");
-const readPlayersList = httpsCallable(functions, "readPlayersList");
-const readBewerbe = httpsCallable(functions, "readBewerbe");
 const setScoreboardCourt = httpsCallable(functions, "setScoreboardCourt");
 const getScoreboardCourts = httpsCallable(functions, "getScoreboardCourts");
 

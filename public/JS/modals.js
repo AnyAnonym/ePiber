@@ -1,7 +1,8 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
 
-const readPlayerDetails = httpsCallable(functions, "readPlayerDetails");
+const readPlayerDetails = createEndpoint("players");
 
 //-------------------------------------------------------
 // Toast Notification (Replaces Alert)
@@ -229,43 +230,59 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
   console.log("Login attempt (hashed):", { email, passwordHash });
 
   submitBtn.disabled = true;
-  submitBtn.textContent = "Anmelden...";
+  submitBtn.innerHTML = '<span class="btn-spinner"></span> Anmelden...';
 
-  const verifyFn = httpsCallable(functions, "verifyUserLogin");
-  const result = await verifyFn({ email, passwordHash });
-  const res = result.data;
+  try {
+    const verifyFn = httpsCallable(functions, "verifyUserLogin");
 
-  if (res.success && res.valid) {
-    submitBtn.textContent = "Erfolgreich!";
+    // Login-Verifizierung und Profil-Daten parallel laden
+    const [result, profileData] = await Promise.all([
+      verifyFn({ email, passwordHash }),
+      readPlayerDetails(),
+    ]);
+    const res = result.data;
 
-    localStorage.setItem("loggedInEmail", email);
-    localStorage.setItem("currentUserEmail", email);
-    localStorage.setItem("isLoggedIn", "true");
+    if (res.success && res.valid) {
+      submitBtn.innerHTML = 'Erfolgreich!';
 
-    try {
-      const profileData = await readPlayerDetails();
-      const players = profileData.data?.players || [];
-      const currentPlayer = players.find(
-        (p) => p.email.trim().toLowerCase() === email.trim().toLowerCase()
-      );
-      if (currentPlayer) {
-        localStorage.setItem("currentUserName", currentPlayer.fullName || "");
-        localStorage.setItem("currentUserId", currentPlayer.id || "");
+      localStorage.setItem("loggedInEmail", email);
+      localStorage.setItem("currentUserEmail", email);
+      localStorage.setItem("isLoggedIn", "true");
+
+      // Profil-Daten auswerten (bereits geladen)
+      const players = profileData.data?.values || profileData.data?.players || [];
+      if (players.length > 1) {
+        const header = players[0].map((h) => String(h || "").trim().toLowerCase());
+        const idIdx = header.indexOf("id");
+        const emailIdx = header.indexOf("e-mail") !== -1 ? header.indexOf("e-mail") : header.indexOf("email");
+        const fnIdx = header.indexOf("vorname");
+        const lnIdx = header.indexOf("nachname");
+        const found = players.slice(1).find(
+          (r) => String(r[emailIdx] || "").trim().toLowerCase() === email.trim().toLowerCase()
+        );
+        if (found && found[idIdx]) {
+          const fullName = [found[fnIdx] || "", found[lnIdx] || ""].map((s) => String(s).trim()).filter(Boolean).join(" ");
+          localStorage.setItem("currentUserName", fullName);
+          localStorage.setItem("currentUserId", String(found[idIdx]));
+        }
       }
-    } catch (err) {
-      console.warn("Profil-Daten nach Login nicht geladen:", err);
+
+      setTimeout(() => window.location.reload(), 300);
+
+    } else if (res.success && !res.valid) {
+      showToast("Falsches Passwort!", "error");
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = 'Anmelden';
+    } else {
+      showToast("Fehler: " + (res.error ?? res.message), "error");
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = 'Anmelden';
     }
-
-    setTimeout(() => window.location.reload(), 500);
-
-  } else if (res.success && !res.valid) {
-    showToast("Falsches Passwort!", "error");
+  } catch (err) {
+    console.error("Login Fehler:", err);
+    showToast("Fehler beim Anmelden: " + err.message, "error");
     submitBtn.disabled = false;
-    submitBtn.textContent = "Anmelden";
-  } else {
-    showToast("Fehler: " + (res.error ?? res.message), "error");
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Anmelden";
+    submitBtn.innerHTML = 'Anmelden';
   }
 });
 
@@ -500,6 +517,39 @@ window.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".loggedOut").forEach((el) => {
       el.style.display = "none";
     });
+
+    // Wenn eingeloggt aber currentUserId fehlt → Profil-Daten nachladen
+    const userId = localStorage.getItem("currentUserId");
+    if (!userId) {
+      const email = localStorage.getItem("currentUserEmail") || localStorage.getItem("loggedInEmail");
+      if (email) {
+        (async () => {
+          try {
+            const profileData = await readPlayerDetails();
+            const players = profileData.data?.values || profileData.data?.players || [];
+            if (players.length > 1) {
+              const header = players[0].map((h) => String(h || "").trim().toLowerCase());
+              const idIdx = header.indexOf("id");
+              const emailIdx = header.indexOf("e-mail") !== -1 ? header.indexOf("e-mail") : header.indexOf("email");
+              const fnIdx = header.indexOf("vorname");
+              const lnIdx = header.indexOf("nachname");
+              const found = players.slice(1).find(
+                (r) => String(r[emailIdx] || "").trim().toLowerCase() === email.trim().toLowerCase()
+              );
+              if (found && found[idIdx]) {
+                const fullName = [found[fnIdx] || "", found[lnIdx] || ""].map((s) => String(s).trim()).filter(Boolean).join(" ");
+                localStorage.setItem("currentUserName", fullName);
+                localStorage.setItem("currentUserId", String(found[idIdx]));
+                console.log("Session wiederhergestellt: userId=" + found[idIdx]);
+                window.location.reload();
+              }
+            }
+          } catch (err) {
+            console.warn("Session-Wiederherstellung fehlgeschlagen:", err);
+          }
+        })();
+      }
+    }
   }
 
   // Desktop Profile Button

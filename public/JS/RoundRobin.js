@@ -1,12 +1,11 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
+import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
-const readPreMatches  = httpsCallable(functions, "readPreMatches");
-const readMatchesList = httpsCallable(functions, "readMatchesList");
-const readPlayersList = httpsCallable(functions, "readPlayersList");
-const readBewerbe     = httpsCallable(functions, "readBewerbe");
-const readBewerbsart  = httpsCallable(functions, "readBewerbsart");
+const readPreMatches  = createEndpoint("preMatches");
+const readMatchesList = createEndpoint("matches");
+const readPlayersList = createEndpoint("players");
+const readBewerbe     = createEndpoint("bewerbe");
+const readBewerbsart  = createEndpoint("bewerbsart");
 
 // ── Hilfsfunktionen ──
 
@@ -326,15 +325,16 @@ function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, p
 // ── Render ──
 
 export async function renderRoundRobin(bewerbId, container, paarungslayout) {
-  container.innerHTML = "<p class='loading-text'>Lade Gruppen...</p>";
+  container.innerHTML = "";
+  showLoadingOverlay("Lade Gruppen...");
 
   try {
     const [preRes, matchRes, playerRes, bewerbRes, bewerbsartRes] = await Promise.all([
-      readPreMatches(),
-      readMatchesList(),
-      readPlayersList(),
-      readBewerbe(),
-      readBewerbsart(),
+      callWithRetry(readPreMatches),
+      callWithRetry(readMatchesList),
+      callWithRetry(readPlayersList),
+      callWithRetry(readBewerbe),
+      callWithRetry(readBewerbsart),
     ]);
 
     const preValues = preRes.data?.values || [];
@@ -512,9 +512,10 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
 
     html += "</div>";
     container.innerHTML = html;
+    hideLoadingOverlay();
   } catch (err) {
     console.error("RoundRobin Fehler:", err);
-    container.innerHTML = "<p>Fehler beim Laden der Gruppen.</p>";
+    showErrorOverlay("Fehler beim Laden der Gruppen", () => renderRoundRobin(bewerbId, container, paarungslayout));
   }
 }
 

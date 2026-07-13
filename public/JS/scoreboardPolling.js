@@ -1,11 +1,13 @@
-import { functions, SCORER_WS_URL } from "./SDK.js";
+import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint, setOnScoreChange, isConnected } from "./dataClient.js";
 
-const readMatchesList = httpsCallable(functions, "readMatchesList");
-const readPreMatches = httpsCallable(functions, "readPreMatches");
-const readPlayersList = httpsCallable(functions, "readPlayersList");
-const readBewerbe = httpsCallable(functions, "readBewerbe");
+const readMatchesList = createEndpoint("matches");
+const readPreMatches = createEndpoint("preMatches");
+const readPlayersList = createEndpoint("players");
+const readBewerbe = createEndpoint("bewerbe");
+// Schreib-Call bleibt bei Cloud Functions
 const getScoreboardCourts = httpsCallable(functions, "getScoreboardCourts");
 
 const MATCHES_POLL = 5000;
@@ -331,12 +333,9 @@ function setPlayerName(id, val) {
   }
 }
 
-// ── Court data (Live-Scores ausschließlich via WebSocket) ──
+// ── Court data (Live-Scores via dataClient WebSocket) ──
 
 let courtActive = { "1": false, "2": false };
-let courtWs = null;
-let courtWsConnected = false;
-const RECONNECT_DELAY = 3000;
 
 function updateCourt(court) {
   const p = court.platz;
@@ -359,90 +358,8 @@ function handleCourtData(data) {
   }
 }
 
-// ── Overlay für WebSocket-Fehler ──
-
-function showWsOverlay() {
-  let overlay = document.getElementById("ws-error-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "ws-error-overlay";
-    overlay.className = "ws-error-overlay";
-    overlay.innerHTML = '<div class="ws-error-text">Live-Scores nicht verfügbar<br><span class="ws-error-sub">Verbindung wird wiederhergestellt...</span></div>';
-    document.body.appendChild(overlay);
-  }
-  overlay.classList.remove("hidden");
-}
-
-function hideWsOverlay() {
-  const overlay = document.getElementById("ws-error-overlay");
-  if (overlay) overlay.classList.add("hidden");
-}
-
-// ── WebSocket-Verbindung ──
-
-function connectCourtWs() {
-  if (!SCORER_WS_URL) return;
-  if (courtWs) return;
-
-  try {
-    courtWs = new WebSocket(SCORER_WS_URL);
-  } catch (err) {
-    showWsOverlay();
-    setTimeout(connectCourtWs, RECONNECT_DELAY);
-    return;
-  }
-
-  courtWs.onopen = () => {
-    courtWsConnected = true;
-    hideWsOverlay();
-  };
-
-  courtWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      if (msg.type === "scores") {
-        handleCourtData(msg.data);
-      }
-    } catch (err) {
-      // silent
-    }
-  };
-
-  courtWs.onclose = () => {
-    courtWsConnected = false;
-    courtWs = null;
-    if (courtActive["1"] || courtActive["2"]) {
-      showWsOverlay();
-      setTimeout(connectCourtWs, RECONNECT_DELAY);
-    }
-  };
-
-  courtWs.onerror = () => {
-    // onclose wird danach aufgerufen
-  };
-}
-
-function disconnectCourtWs() {
-  if (courtWs) {
-    const ws = courtWs;
-    courtWs = null;
-    courtWsConnected = false;
-    ws.close();
-  }
-  hideWsOverlay();
-}
-
-// ── Start/Stop basierend auf aktiv-Status ──
-
-function startCourtIfNeeded() {
-  if (courtActive["1"] || courtActive["2"]) {
-    if (!courtWsConnected && !courtWs) {
-      connectCourtWs();
-    }
-  } else {
-    disconnectCourtWs();
-  }
-}
+// Score-Push über dataClient empfangen
+setOnScoreChange(handleCourtData);
 
 // ── Scoreboard state (Spielernamen + Bewerb + aktiv-Status aus Firestore) ──
 // Wird IMMER gepollt, unabhängig vom aktiv-Status
@@ -487,8 +404,6 @@ async function pollScoreboard() {
   } catch (err) {
     // silent
   }
-  // Court WebSocket starten/stoppen basierend auf aktiv-Status
-  startCourtIfNeeded();
   setTimeout(pollScoreboard, SCOREBOARD_POLL);
 }
 
