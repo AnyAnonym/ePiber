@@ -103,8 +103,8 @@ function createCard(b, _isUpcoming) {
     let target = null;
     const isEntryOpen = !isBeforeEntryStart && !isPastDeadline && hasEntryList;
 
-    if (hasStarted && !isEnded) {
-      // Bewerb läuft → zur Bewerbsseite
+    if (hasStarted) {
+      // Bewerb läuft oder beendet → zur Bewerbsseite (Ergebnisse ansehen)
       if (isRoundRobin) {
         target = `RoundRobin.html?id=${b.id}`;
       } else {

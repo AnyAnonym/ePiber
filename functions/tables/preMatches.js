@@ -11,7 +11,7 @@ export async function readPreMatchesData(sheets) {
   return res.data.values || [];
 }
 
-export const readPreMatches = onCall({region: "europe-west3"}, async () => {
+export const readPreMatches = onCall({region: "europe-west3", invoker: "public"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readPreMatchesData(sheets);
@@ -66,7 +66,7 @@ export async function updatePreMatchDateData(sheets, row, datum) {
   });
 }
 
-export const setMatchDate = onCall({region: "europe-west3"}, async (request) => {
+export const setMatchDate = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const {row, datum} = request.data || {};
     if (!row || !datum) return {success: false, error: "row und datum sind erforderlich"};

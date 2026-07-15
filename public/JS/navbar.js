@@ -37,10 +37,6 @@ function renderHeader() {
     </div>
 
     <nav class="auth-nav desktop-auth">
-      <a href="#" id="notificationBell" class="loggedIn notification-bell" style="position: relative; text-decoration: none;">
-        🔔
-        <span id="notificationBadge" style="display: none; position: absolute; top: -5px; right: -5px; background: red; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center;"></span>
-      </a>
       <a href="#" id="openLogin" class="loggedOut">Anmelden</a>
       <a href="#" id="profileButton" class="loggedIn">Profil</a>
       <a href="#" id="signOutButton" class="loggedIn">Abmelden</a>
@@ -57,7 +53,6 @@ function renderMobileNav() {
   <div id="mobileNavModal" class="modal hidden">
     <div class="modal-content mobile-nav-content">
       <span class="close">&times;</span>
-      <a href="#" id="notificationBellMobile" class="loggedIn notification-bell mobile-bell">🔔</a>
       <nav class="mobile-auth-section">
         <a href="#" id="openLoginMobile" class="loggedOut">Anmelden</a>
         <a href="#" id="profileButtonMobile" class="loggedIn">Profil</a>
@@ -106,27 +101,6 @@ function initNavigation() {
         }
       });
     });
-
-    const notificationBell = document.getElementById("notificationBell");
-    if (notificationBell) {
-      notificationBell.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (typeof window.openNotificationModal === "function") {
-          window.openNotificationModal();
-        }
-      });
-    }
-
-    const notificationBellMobile = document.getElementById("notificationBellMobile");
-    if (notificationBellMobile) {
-      notificationBellMobile.addEventListener("click", (e) => {
-        e.preventDefault();
-        mobileNavModal.classList.add("hidden");
-        if (typeof window.openNotificationModal === "function") {
-          window.openNotificationModal();
-        }
-      });
-    }
 
     const openLoginMobile = document.getElementById("openLoginMobile");
     if (openLoginMobile) {

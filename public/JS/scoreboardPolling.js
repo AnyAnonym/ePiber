@@ -1,7 +1,7 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
-import { createEndpoint, setOnScoreChange, isConnected } from "./dataClient.js";
+import { createEndpoint, setOnScoreChange, isConnected, request } from "./dataClient.js";
 
 const readMatchesList = createEndpoint("matches");
 const readPreMatches = createEndpoint("preMatches");
@@ -416,6 +416,16 @@ await loadBewerbe();
 // dann Matches und PreMatches parallel
 await pollScoreboard();
 await Promise.all([pollMatches(), pollPreMatches()]);
+
+// Initiale Scores aktiv vom Service laden (nicht auf Push warten)
+try {
+  const scoresRes = await request("courtScores");
+  if (scoresRes?.success && scoresRes.data) {
+    handleCourtData(scoresRes.data);
+  }
+} catch (err) {
+  // silent — Scores kommen dann beim nächsten Push
+}
 
 const loader = document.getElementById("scoreboard-loader");
 const content = document.getElementById("scoreboard-content");

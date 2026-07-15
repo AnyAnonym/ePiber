@@ -10,7 +10,7 @@ export async function readNavigatorData(sheets) {
   return res.data.values || [];
 }
 
-export const readNavigator = onCall({region: "europe-west3"}, async () => {
+export const readNavigator = onCall({region: "europe-west3", invoker: "public"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readNavigatorData(sheets);

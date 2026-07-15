@@ -10,7 +10,7 @@ export async function readMatchesData(sheets) {
   return res.data.values || [];
 }
 
-export const readMatchesList = onCall({region: "europe-west3"}, async () => {
+export const readMatchesList = onCall({region: "europe-west3", invoker: "public"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readMatchesData(sheets);
@@ -112,7 +112,7 @@ export async function readMatchRestrictionsData(sheets, {bewerbId} = {}) {
   };
 }
 
-export const readMatchRestrictions = onCall({region: "europe-west3"}, async (request) => {
+export const readMatchRestrictions = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const sheets = await getSheetsClient(true);
     const bewerbId = request.data?.bewerbId ? String(request.data.bewerbId).trim() : null;

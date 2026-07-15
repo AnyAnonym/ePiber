@@ -22,7 +22,7 @@ export async function withdrawFromRankingData(sheets, {reason, currentRank, bewe
   return {message: "Erfolgreich gespeichert"};
 }
 
-export const withdrawFromRanking = onCall({region: "europe-west3"}, async (request) => {
+export const withdrawFromRanking = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const reason = request.data?.reason ? String(request.data.reason).trim() : "";
     const currentRank = request.data?.rank ? String(request.data.rank).trim() : "?";

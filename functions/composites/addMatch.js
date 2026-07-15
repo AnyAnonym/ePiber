@@ -6,7 +6,7 @@ import {readPreMatchesData, createPreMatchData, getNextPreMatchId} from "../tabl
 import {readMatchRestrictionsData} from "../tables/matches.js";
 import {logEntry, buildMap, buildBewerbMap, fmtPlayer, fmtBewerb} from "../tables/logging.js";
 
-export const addMatch = onCall({region: "europe-west3"}, async (request) => {
+export const addMatch = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const {
       player1Id,

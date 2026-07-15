@@ -172,6 +172,11 @@ const endpoints = {
       bewerbValues: bewerbe,
     };
   },
+
+  courtScores(params) {
+    const lastData = courtPoller.getLastData();
+    return { success: true, data: lastData };
+  },
 };
 
 // ── WebSocket-Handler ──
@@ -179,6 +184,14 @@ const endpoints = {
 function handleMessage(ws, raw) {
   try {
     const msg = JSON.parse(raw);
+
+    // Pong vom Client → Client ist noch da
+    if (msg.type === "pong") {
+      const info = clients.get(ws);
+      if (info) info.lastPong = Date.now();
+      return;
+    }
+
     if (msg.type === "request" && msg.endpoint) {
       const handler = endpoints[msg.endpoint];
       if (!handler) {
@@ -245,7 +258,7 @@ function init(server) {
 
   wss.on("connection", (ws) => {
     clientIdCounter++;
-    const info = { id: clientIdCounter, connectedAt: new Date().toISOString(), lastRequest: null };
+    const info = { id: clientIdCounter, connectedAt: new Date().toISOString(), lastRequest: null, lastPong: Date.now() };
     clients.set(ws, info);
     console.log(`dataProvider: Client #${info.id} verbunden. Total: ${clients.size}`);
 
@@ -271,7 +284,28 @@ function init(server) {
   // Court-Score Push registrieren
   courtPoller.setOnScoreChange(onScoreChange);
 
-  console.log("dataProvider: WebSocket-Server initialisiert");
+  // Ping alle 30 Sekunden an alle Clients → hält Verbindung offen
+  const PING_INTERVAL = 30000;
+  const DEAD_CLIENT_TIMEOUT = 90000; // 3x Ping ohne Pong → tot
+
+  setInterval(() => {
+    const now = Date.now();
+    clients.forEach((info, ws) => {
+      // Tote Clients entfernen (kein Pong seit 90s)
+      if (now - info.lastPong > DEAD_CLIENT_TIMEOUT) {
+        console.log(`dataProvider: Client #${info.id} tot (kein Pong). Entfernt.`);
+        ws.terminate();
+        clients.delete(ws);
+        return;
+      }
+      // Ping senden
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    });
+  }, PING_INTERVAL);
+
+  console.log("dataProvider: WebSocket-Server initialisiert (Ping alle 30s)");
 }
 
 module.exports = { init, getStatus, broadcastToAll, getClientList };

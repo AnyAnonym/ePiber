@@ -48,9 +48,12 @@ export const setScoreboardCourt = onCall({region: "europe-west3", invoker: "publ
     [`${court}.homePlayer`]: homePlayer || "",
     [`${court}.guestPlayer`]: guestPlayer || "",
     [`${court}.dateTime`]: dateTime || "",
-    [`${court}.aktiv`]: typeof aktiv === "number" ? aktiv : 0,
     [`${court}.runde`]: runde || "",
   };
+  // aktiv nur setzen wenn explizit übergeben (nicht bei Spielerzuweisung)
+  if (typeof aktiv === "number") {
+    payload[`${court}.aktiv`] = aktiv;
+  }
   try {
     await db.doc(STATE_DOC).update(payload);
   } catch {

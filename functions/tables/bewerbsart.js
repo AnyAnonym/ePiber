@@ -10,7 +10,7 @@ export async function readBewerbsartData(sheets) {
   return res.data.values || [];
 }
 
-export const readBewerbsart = onCall({region: "europe-west3"}, async () => {
+export const readBewerbsart = onCall({region: "europe-west3", invoker: "public"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readBewerbsartData(sheets);

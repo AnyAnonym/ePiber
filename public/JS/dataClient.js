@@ -41,6 +41,14 @@ function connect() {
     try {
       const msg = JSON.parse(event.data);
 
+      // Ping vom Server → Pong antworten (KeepAlive)
+      if (msg.type === "ping") {
+        if (ws && ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ type: "pong" }));
+        }
+        return;
+      }
+
       // Score-Push
       if (msg.type === "scores" && onScoreChange) {
         onScoreChange(msg.data);

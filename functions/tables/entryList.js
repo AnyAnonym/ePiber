@@ -11,7 +11,7 @@ export async function readEntryListData(sheets) {
   return res.data.values || [];
 }
 
-export const readEntryList = onCall({region: "europe-west3"}, async (request) => {
+export const readEntryList = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const bewerbId = request.data?.bewerbId ? String(request.data.bewerbId).trim() : null;
     if (!bewerbId) return {success: false, error: "BewerbID erforderlich"};
@@ -230,7 +230,7 @@ export async function addEntryListData(sheets, {bewerbId, personenId, datum}) {
   return {id: nextId};
 }
 
-export const addEntryList = onCall({region: "europe-west3"}, async (request) => {
+export const addEntryList = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const sheets = await getSheetsClient(false);
     const result = await addEntryListData(sheets, request.data);
@@ -285,7 +285,7 @@ export async function removeEntryListData(sheets, {bewerbId, personenId}) {
   });
 }
 
-export const removeEntryList = onCall({region: "europe-west3"}, async (request) => {
+export const removeEntryList = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const sheets = await getSheetsClient(false);
     await removeEntryListData(sheets, request.data);

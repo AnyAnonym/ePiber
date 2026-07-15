@@ -1,13 +1,14 @@
 import { functions } from "./SDK.js";
 import { httpsCallable } from
   "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
 
-const readRlPlatzierung     = httpsCallable(functions, "readRlPlatzierung");
-const readPlayersList       = httpsCallable(functions, "readPlayersList");
-const readPlayerDetails     = httpsCallable(functions, "readPlayerDetails");
-const readPreMatches        = httpsCallable(functions, "readPreMatches");
+const readRlPlatzierung     = createEndpoint("rlPlatzierung");
+const readPlayersList       = createEndpoint("players");
+const readPlayerDetails     = createEndpoint("players");
+const readPreMatches        = createEndpoint("preMatches");
 const readMatchRestrictions = httpsCallable(functions, "readMatchRestrictions");
-const readBewerbe           = httpsCallable(functions, "readBewerbe");
+const readBewerbe           = createEndpoint("bewerbe");
 
 const params    = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id")
@@ -105,19 +106,28 @@ async function fetchMyState(rankedList) {
   if (!email) return null;
 
   const res = await readPlayerDetails();
-  const { success, players = [] } = res?.data || {};
-  if (!success) return null;
+  const values = res?.data?.values || [];
+  if (values.length < 2) return null;
 
-  const me = players.find(
-    (p) => (p.email || "").trim().toLowerCase() === email.trim().toLowerCase()
+  const header = values[0].map((h) => String(h || "").trim().toLowerCase());
+  const idIdx = header.indexOf("id");
+  const emailIdx = header.indexOf("e-mail") !== -1 ? header.indexOf("e-mail") : header.indexOf("email");
+  const fnIdx = header.indexOf("vorname");
+  const lnIdx = header.indexOf("nachname");
+
+  const meRow = values.slice(1).find(
+    (r) => String(r[emailIdx] || "").trim().toLowerCase() === email.trim().toLowerCase()
   );
-  if (!me) return null;
+  if (!meRow) return null;
 
-  if (me.id) localStorage.setItem("currentUserId", String(me.id));
+  const meId = String(meRow[idIdx] || "").trim();
+  const meFullName = [meRow[fnIdx] || "", meRow[lnIdx] || ""].map((s) => String(s).trim()).filter(Boolean).join(" ");
 
-  const myPlayerId = String(me.id).trim();
+  if (meId) localStorage.setItem("currentUserId", meId);
+
+  const myPlayerId = meId;
   const myEntry    = rankedList.find(
-    (p) => p.name.trim().toLowerCase() === (me.fullName || "").trim().toLowerCase()
+    (p) => p.name.trim().toLowerCase() === meFullName.trim().toLowerCase()
   );
 
   return myEntry

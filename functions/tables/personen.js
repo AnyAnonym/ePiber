@@ -11,7 +11,7 @@ export async function readPlayersData(sheets) {
   return res.data.values || [];
 }
 
-export const readPlayersList = onCall({region: "europe-west3"}, async () => {
+export const readPlayersList = onCall({region: "europe-west3", invoker: "public"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const values = await readPlayersData(sheets);
@@ -52,7 +52,7 @@ export async function readPlayerDetailsData(sheets) {
   }));
 }
 
-export const readPlayerDetails = onCall({region: "europe-west3"}, async () => {
+export const readPlayerDetails = onCall({region: "europe-west3", invoker: "public"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
     const players = await readPlayerDetailsData(sheets);
@@ -78,7 +78,7 @@ export async function verifyUserLoginData(sheets, {email, passwordHash}) {
   return {valid: storedHash === passwordHash};
 }
 
-export const verifyUserLogin = onCall({region: "europe-west3"}, async (request) => {
+export const verifyUserLogin = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const sheets = await getSheetsClient(true);
     const result = await verifyUserLoginData(sheets, request.data);
@@ -126,7 +126,7 @@ export async function resetPasswordData(sheets, {email, passwordHash}) {
   return {message: "Passwort erfolgreich zurückgesetzt."};
 }
 
-export const resetPassword = onCall({region: "europe-west3"}, async (request) => {
+export const resetPassword = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const sheets = await getSheetsClient(false);
     const result = await resetPasswordData(sheets, request.data);

@@ -2068,5 +2068,90 @@ DEPLOY-REIHENFOLGE für v1.25.0:
   4. Prüfen: /health und /status des Cloud Run Service
   5. Cloud Functions müssen NICHT neu deployed werden (Schreib-Calls unverändert)
 
+
+===============================================================================
+34. CHANGELOG – Bugfixes, UI-Verbesserungen, Permissions (v1.25.1)
+===============================================================================
+
+2026-07-14:
+-----------
+- Keine Änderungen an der Tabellen-/Spaltenstruktur der Spreadsheet-Datenbank.
+
+- BUGFIX: Cloud Functions Permission Denied auf Live-System
+  * Alle 26 Cloud Functions um invoker: "public" erweitert
+  * Vorher fehlte es bei 20 Functions (nur navigatorState + scoreboardState hatten es)
+  * 2nd Gen Functions erfordern explizit invoker: "public" für unauthentifizierte Aufrufe
+  * Betraf Login (verifyUserLogin) und alle Schreib-/Lese-Calls
+
+- BUGFIX: Login e-mail Spaltenname
+  * Spalte in Personen-Tabelle heißt "e-mail" (mit Bindestrich)
+  * Login und Session-Wiederherstellung suchen nach "e-mail" und "email" als Fallback
+
+- BUGFIX: Spielerzuweisung deaktivierte Platz implizit
+  * setScoreboardCourt setzte aktiv=0 wenn kein aktiv-Parameter mitgesendet wurde
+  * Jetzt wird aktiv nur überschrieben wenn explizit als Zahl übergeben
+  * Spielerzuweisung ändert den Aktivstatus nicht mehr
+
+- BUGFIX: Scoreboard zeigte initial nur Nullen bei Scores
+  * Scores kamen nur über WebSocket-Push, nicht beim Seitenaufruf
+  * Neuer Endpoint "courtScores" im dataProvider: gibt letzten Score-Stand zurück
+  * Scoreboard lädt nach Init aktiv die aktuellen Scores per request("courtScores")
+  * Unabhängig davon ob courtPoller gerade aktiv pollt
+
+- BUGFIX: Beendete Bewerbe nicht klickbar
+  * Bedingung von "hasStarted && !isEnded" auf "hasStarted" geändert
+  * Beendete Bewerbe navigieren zu bewerbsRaster.html / RoundRobin.html
+  * Ermöglicht Ergebnis-Ansicht nach Bewerbsende
+
+- FEATURE: rangliste.js auf dataClient umgestellt
+  * Lese-Calls (readRlPlatzierung, readPlayersList, readPreMatches, readBewerbe)
+    über WebSocket statt Cloud Functions
+  * readPlayerDetails Datenformat angepasst (values-Array statt players-Array)
+  * readMatchRestrictions bleibt bei Cloud Functions
+
+- FEATURE: Notification-Glocke entfernt
+  * Glocken-Icon aus Desktop- und Mobile-Navigation entfernt (navbar.js)
+  * Gesamter Notification-Code aus modals.js entfernt (~130 Zeilen):
+    getMyChallenges, loadChallenges, updateNotificationBadge,
+    openNotificationModal, closeNotificationModal
+  * Wird später an anderer Stelle reintegriert
+
+- FEATURE: Ranglisten-Sidebar entfernt
+  * rankingSidebar.js Script-Tag aus 6 HTML-Dateien entfernt
+
+- FEATURE: KeepAlive Ping/Pong für WebSocket-Verbindung
+  * Server sendet alle 30 Sekunden { type: "ping" } an alle Clients
+  * Client antwortet mit { type: "pong" }
+  * Tote Clients (kein Pong nach 90s) werden entfernt
+  * Verhindert Cloud Run Timeout auf WebSocket-Verbindungen
+
+- STYLE: Matches-Seite überarbeitet (matches.html + styles.css)
+  * Header: "Gespielte Matches" zentriert
+  * sidebar-container aus HTML entfernt
+  * main: volle Breite (grid-template-columns: 1fr), minimale Margins/Padding
+  * section: padding 8px statt 20px
+  * match-card: kompakter (padding 8px 12px, border-radius 12px)
+  * match-meta-row: flex-wrap für responsive Umbruch des Bewerb-Badges
+  * match-content: margin-top 4px statt 28px
+  * Mobile <600px: Meta-Row vertikal (Datum oben, Bewerb darunter linksbündig)
+  * body: overflow-x hidden gegen horizontales Scrollen
+  * .team: min-width 0 statt 120px, overflow hidden
+  * .player: overflow hidden, text-overflow ellipsis
+
+- BUILD: APP_VERSION in global.js auf 1.25.1 aktualisiert
+
+DEPLOY-REIHENFOLGE für v1.25.1:
+  1. gcloud Projekt setzen:
+     gcloud config set project e-piber
+  2. Cloud Run Service deployen (neuer courtScores Endpoint + KeepAlive):
+     cd scorer-service
+     gcloud run deploy scorer-service --source . --region europe-west3 --allow-unauthenticated
+     cd ..
+  3. Firebase Functions deployen (invoker: "public" + aktiv-Fix):
+     $env:FUNCTIONS_DISCOVERY_TIMEOUT = 120
+     firebase deploy --only functions
+  4. Firebase Hosting deployen:
+     firebase deploy --only hosting
+
 ENDE DES PROTOKOLLS
 ================================================================================

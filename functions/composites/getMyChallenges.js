@@ -4,7 +4,7 @@ import {getSheetsClient} from "../config.js";
 import {readPlayersData} from "../tables/personen.js";
 import {readPreMatchesData} from "../tables/preMatches.js";
 
-export const getMyChallenges = onCall({region: "europe-west3"}, async (request) => {
+export const getMyChallenges = onCall({region: "europe-west3", invoker: "public"}, async (request) => {
   try {
     const {userId} = request.data || {};
     if (!userId) return {success: false, error: "userId fehlt"};
