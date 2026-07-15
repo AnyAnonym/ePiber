@@ -1,0 +1,118 @@
+================================================================================
+Seiten.txt — Dokumentation der HTML-Seiten
+================================================================================
+Stand: v2.0.0
+
+
+================================================================================
+SEITE: Matches1.html
+================================================================================
+
+── Funktion ──
+
+Zentrale Übersichtsseite für ALLE Matches (offen + gespielt).
+Datenquelle: Tabelle "Matches1" im Google Spreadsheet.
+Ersetzt die bisherigen separaten Ansichten (matches.html + preMatches.html).
+
+Kernfunktionen:
+  - Anzeige aller Matches mit Filterung und Sortierung
+  - Drei Grundkategorien: Gespielt (A), Nicht gespielt (B), Alle (C)
+  - Optionale Filter kombinierbar
+  - Responsive Darstellung (Desktop, Tablet, Handy)
+
+Datenfelder pro Match-Eintrag:
+  - Spieldatum (MatchDate)
+  - Forderungsdatum (ForderungDate, falls vorhanden)
+  - Bewerb + Bewerbsrunde im grünen Badge (z.B. "VM 2026 | Achtelfinale")
+  - Spielpaarung: Spieler1 [/Spieler2] vs. Spieler3 [/Spieler4]
+  - Badges: [wo] → "w.o.", [ret] → "ret."
+  - BYE-Matches werden komplett herausgefiltert (nicht angezeigt)
+  - Ergebnis (bei gespielten Matches)
+
+Gewinner-Ermittlung:
+  Wird aus dem Ergebnis berechnet (nicht aus der Datenbank).
+  Logik: Sätze zählen, wer mehr Sätze gewonnen hat = Gewinner.
+
+── Grundauswahl (A/B/C) ──
+
+  A) Gespielte Matches — Ergebnis vorhanden ODER [wo] (Standard-Auswahl)
+  B) Nicht gespielte Matches — kein Ergebnis und kein [wo]
+  C) Alle Matches
+
+  Sonderfälle:
+  - BYE-Matches werden komplett herausgefiltert (keine Kategorie)
+  - [wo]-Matches gelten als gespielt auch ohne Ergebnis
+
+── Optionale Filter ──
+
+  Alle Filter sind standardmäßig AUS. Können einzeln ein-/ausgeschaltet werden.
+
+  1) Forderung ohne Datum
+     Zeigt Spiele die ein ForderungDate haben aber kein MatchDate.
+
+  2) Nach Bewerb
+     Dropdown mit allen Bewerben. Filtert nach BewerbID.
+
+  3) Nach Spieler
+     Suchfeld/Dropdown. Zeigt nur Matches an denen der Spieler beteiligt ist.
+
+  4) Nach Datumsbereich
+     Von-Bis Datumseingabe.
+     Schnellauswahl-Buttons: ±1 Monat, ±3 Monate, ±12 Monate
+     (befüllen automatisch Von/Bis relativ zum aktuellen Datum).
+     Matches ohne Datum werden bei aktivem Datumsfilter ausgeblendet.
+
+  5) Fehlender Spielpartner
+     Zeigt Matches bei denen mindestens ein Spieler fehlt
+     (Spieler1ID oder Spieler3ID leer).
+
+── Sortierung ──
+
+  Gespielt (A):
+    - Neuestes Spiel oben (MatchDate absteigend)
+
+  Nicht gespielt (B):
+    - Nächstes Spiel oben (MatchDate aufsteigend)
+    - Matches ohne Datum ganz unten, sortiert nach Bewerb (alphabetisch)
+
+  Alle (C):
+    - Gespielte zuerst (neuestes oben), dann offene (nächstes oben)
+
+── Layout ──
+
+  Desktop (>768px):
+    ┌──────────────────────────────────────────┐
+    │  Navbar                                  │
+    ├──────────────────────────────────────────┤
+    │  [A] [B] [C]     ← Grundauswahl         │
+    │  ┌─ Filter ─────────────────────────┐    │
+    │  │ □ Forderung o. Datum             │    │
+    │  │ □ Bewerb: [Dropdown]             │    │
+    │  │ □ Spieler: [Suchfeld]            │    │
+    │  │ □ Zeitraum: [Von] [Bis] [+3M]...│    │
+    │  │ □ Fehlender Spielpartner         │    │
+    │  └──────────────────────────────────┘    │
+    │                                          │
+    │  ┌─ Match-Card ────────────────────┐     │
+    │  │ Datum    Bewerb | Runde         │     │
+    │  │ Spieler1 vs. Spieler3  Ergebnis │     │
+    │  └─────────────────────────────────┘     │
+    │  ┌─ Match-Card ────────────────────┐     │
+    │  │ ...                             │     │
+    │  └─────────────────────────────────┘     │
+    │                                          │
+    ├──────────────────────────────────────────┤
+    │  Footer                                  │
+    └──────────────────────────────────────────┘
+
+  Mobil (<768px):
+    - Grundauswahl: 3 Buttons nebeneinander (volle Breite)
+    - Filter: eingeklappt, per Button ausklappbar
+    - Match-Cards: volle Breite, kompakter
+    - Datum + Bewerb untereinander statt nebeneinander
+
+── Dateien ──
+
+  HTML:  public/Matches1.html
+  JS:    public/JS/Matches1.js
+  CSS:   public/CSS/Matches1.css

@@ -2153,5 +2153,238 @@ DEPLOY-REIHENFOLGE für v1.25.1:
   4. Firebase Hosting deployen:
      firebase deploy --only hosting
 
+
+===============================================================================
+35. CHANGELOG – Matches1-Zusammenführung, Major-Refactoring (v2.0.0)
+===============================================================================
+
+2026-07-15:
+-----------
+- TABELLENSTRUKTUR: Tabellen preMatches + matches → Matches1 zusammengeführt
+  * Neue Spaltenbezeichnungen:
+    SpielerID1-4 → Spieler1ID-4ID
+    Zeitpunkt/ZeitpunktMatch → MatchDate
+    ZeitpunktForderung → ForderungDate
+    RasterPaarung → BewerbRunde
+    Ignorieren → Ignore
+  * Spalte "Gewinner" entfällt — wird aus Ergebnis berechnet
+  * Spalte "Status" entfällt — implizit über Ergebnis (vorhanden=gespielt)
+  * Neue Spalten: Dauer, PTN-Wertung, Bemerkung (reserviert)
+
+- FEATURE: Zentrale Gewinner-Ermittlung aus Ergebnis
+  * determineWinnerFromResult() in matches.js (Backend)
+  * determineWinner() in Matches1.js, scoreboardPolling.js etc. (Frontend)
+  * Satzanalyse: Spieler1-Seite = linke Zahl, Spieler3-Seite = rechte Zahl
+
+- FEATURE: Neue Seite Matches1.html — zentrale Match-Übersicht
+  * Drei Grundkategorien: Gespielt (A), Offen (B), Alle (C)
+  * 5 optionale kombinierbare Filter:
+    1. Forderung ohne Spieldatum
+    2. Nach Bewerb (Dropdown)
+    3. Nach Spieler (Dropdown)
+    4. Nach Datumsbereich (Von-Bis + Preset-Buttons ±3M/±12M)
+    5. Fehlender Spielpartner
+  * Sortierung: Gespielt=neuestes oben, Offen=nächstes oben, ohne Datum=unten
+  * Responsive: Filter einklappbar, Cards kompakt auf Mobil
+  * Dateien: Matches1.html, Matches1.js, Matches1.css
+
+- REFACTORING: 20 Dateien auf neue Spaltennamen umgestellt
+  * Backend: matches.js, preMatches.js, addMatch.js, setPreMatchResult.js,
+    getMyChallenges.js
+  * scorer-service: config.js (1 Tabelle statt 2), dataProvider.js
+    (matches1 Endpoint + Kompatibilitäts-Endpoints preMatches/matches)
+  * Frontend: bewerbsRaster.js, matchesList.js, preMatchesList.js,
+    navigatorList.js, rangliste.js, RoundRobin.js, scoreboardPolling.js,
+    modals.js (forderungDate statt zeitpunktForderung)
+
+- FEATURE: Schutz-/Sperrzeit-Logik korrigiert (matches.js)
+  * Neues Match überschreibt alten Status (neuestes Match zählt)
+  * Sieg hebt Sperrzeit auf, Niederlage hebt Schutzzeit auf
+  * Gewinner wird aus Ergebnis berechnet statt aus DB-Spalte
+
+- DOKU: Neue Dokumentationsdateien
+  * DB.txt: Alle Spreadsheet-Tabellen mit Spalten dokumentiert
+  * Seiten.txt: Seitendokumentation (Funktion + Layout)
+
+- BUILD: APP_VERSION auf 2.0.0 (Major wegen Tabellenstruktur-Änderung)
+
+DEPLOY-REIHENFOLGE für v2.0.0:
+  WICHTIG: Spreadsheet muss ZUERST umgebaut werden!
+  1. Google Spreadsheet: Tabelle "Matches1" mit neuen Spalten anlegen,
+     Daten aus preMatches + matches zusammenführen
+  2. gcloud Projekt setzen
+  3. Cloud Run Service deployen:
+     cd scorer-service
+     gcloud run deploy scorer-service --source . --region europe-west3 --allow-unauthenticated
+     cd ..
+  4. Firebase Functions deployen:
+     $env:FUNCTIONS_DISCOVERY_TIMEOUT = 120
+     firebase deploy --only functions
+  5. Firebase Hosting deployen:
+     firebase deploy --only hosting
+  6. Testen: /health und /status prüfen, alle Seiten durchklicken
+
+
+===============================================================================
+36. CHANGELOG – Bugfixes Matches1, Doku-Update (v2.0.1)
+===============================================================================
+
+2026-07-15:
+-----------
+
+- BUGFIX: Spaltenname BewerbRunde falsch referenziert
+  * Code suchte nach "bewerbsrunde" statt "bewerbrunde" (ohne "s")
+  * 11 Stellen in 7 Frontend-Dateien korrigiert:
+    bewerbsRaster.js, Matches1.js, matchesList.js, navigatorList.js,
+    preMatchesList.js, RoundRobin.js, scoreboardPolling.js
+
+- BUGFIX: [wo]-Matches als gespielt behandeln (Matches1.js)
+  * Matches mit [wo] bei einem Spieler gelten als gespielt (Kategorie A)
+  * Auch ohne Ergebnis in der Ergebnis-Spalte
+
+- BUGFIX: BYE-Matches komplett herausgefiltert (Matches1.js)
+  * BYE-Matches erscheinen in keiner Kategorie (weder gespielt noch offen)
+
+- BUGFIX: Datumsfilter schließt Matches ohne Datum aus (Matches1.js)
+  * Bei aktivem Datumsfilter werden nur Matches mit MatchDate angezeigt
+
+- FEATURE: Datum-Presets ±1M hinzugefügt (Matches1.html)
+  * Neue Preset-Buttons -1M und +1M neben ±3M und ±12M
+
+- DOKU: DB.txt aktualisiert
+  * [wo]-Logik bei Spieler1-4ID dokumentiert
+  * Ergebnis: Bei [wo]-Matches kein Ergebnis nötig
+  * BYE-Filterung dokumentiert
+  * Match-Status um [wo]-Regel erweitert
+  * Code-Hinweis: Spaltennamen lowercase ("bewerbrunde" nicht "bewerbsrunde")
+
+- DOKU: Seiten.txt aktualisiert
+  * Grundauswahl: [wo] und BYE Sonderfälle dokumentiert
+  * Filter 4: Presets ±1M/±3M/±12M, Matches ohne Datum ausgeblendet
+  * Badge-Anzeige: "Bewerbsname | Runde" im grünen Badge
+
+- BUILD: APP_VERSION auf 2.0.1
+
+
+===============================================================================
+37. CHANGELOG – Firebase Functions eliminiert, Cloud Run only (v2.1.0)
+===============================================================================
+
+2026-07-16:
+-----------
+
+- ARCHITEKTUR: Firebase Cloud Functions komplett durch Cloud Run Service ersetzt
+  * ALLE Lese- UND Schreib-Operationen laufen jetzt über den Cloud Run Service
+  * Firebase Functions werden nicht mehr benötigt (können gelöscht werden)
+  * Firebase SDK (httpsCallable) komplett aus dem Frontend entfernt
+  * Firestore komplett durch In-Memory State ersetzt
+
+- FEATURE: stateStore.js — In-Memory State (ersetzt Firestore)
+  * Neue Datei: scorer-service/stateStore.js
+  * Scoreboard Courts: Platzbelegung, Aktiv-Status
+  * Navigator Target: Aktuelles Navigationsziel + Status
+  * Navigator Scroll: Scroll-Betrag + Timestamp
+  * Bei Server-Neustart: Defaults (Plätze inaktiv, Navigator leer)
+
+- FEATURE: Schreib-Endpoints im dataProvider.js
+  * verifyUserLogin: Prüft Login gegen dataStore (kein Sheets-API-Call)
+  * resetPassword: Schreibt neues Passwort in Spreadsheet
+  * setMatchDate: Setzt Spieldatum in Matches1
+  * setPreMatchResult: Schreibt Ergebnis in Matches1
+  * addMatch: Legt neues Match in Matches1 an
+  * addEntryList / removeEntryList: EntryList Einträge
+  * withdrawFromRanking: Logging-Eintrag
+
+- FEATURE: State-Endpoints im dataProvider.js (ersetzt Firestore)
+  * getScoreboardCourts / setScoreboardCourt
+  * getNavigatorTarget / setNavigatorTarget
+  * getNavigatorScroll / setNavigatorScroll
+  * setScoreboardCourt steuert direkt den courtPoller Aktiv-Status
+
+- FEATURE: readMatchRestrictions als dataProvider-Endpoint
+  * Schutz-/Sperrzeit-Berechnung aus dataStore statt Cloud Function
+  * Sofortige Antwort aus Cache statt Sheets-API-Call
+
+- FEATURE: getMyChallenges als dataProvider-Endpoint
+  * Offene Forderungen aus dataStore statt Cloud Function
+
+- REFACTORING: Frontend komplett auf dataClient umgestellt
+  * 10 Dateien: Alle httpsCallable-Aufrufe durch createEndpoint ersetzt
+  * import { functions } und import { httpsCallable } entfernt
+  * Betroffene Dateien: entryList.js, modals.js, monitorPolling.js,
+    navigatorList.js, navigatorScroll.js, preMatchesList.js,
+    rangliste.js, scoreboardPolling.js, playerList.js, rankingSidebar.js
+
+- BUGFIX: [wo]/[ret] Regex in allen parsePlayerId-Funktionen
+  * Regex erweitert: /\[w\.?o\.?\]/ matcht sowohl [w.o.] als auch [wo]
+  * 5 Dateien: Matches1.js, scoreboardPolling.js, bewerbsRaster.js,
+    preMatchesList.js, RoundRobin.js
+
+- BUGFIX: [ret] in bewerbsRaster nicht erkannt
+  * parsePlayerId erkennt jetzt [ret] und entfernt es aus der ID
+  * Gewinner bei [ret]: Gegner gewinnt (grüne Markierung)
+  * Gewinner bei BYE: Spieler gegen BYE gewinnt automatisch (grün)
+
+- BUGFIX: Scoreboard [wo]-Matches in "Nächste Spiele"
+  * [wo] und [ret] Matches werden aus "Nächste Spiele" herausgefiltert
+
+- BUGFIX: RoundRobin Spiele-Zählung inkl. offene Matches
+  * buildStats überspringt Matches ohne Ergebnis
+  * Nur gespielte Matches werden in Spiele/Siege/Sätze gezählt
+
+- BUGFIX: Rangliste alle gelb (status-Spalte fehlt)
+  * fetchBusyIds und myChallengeOpponents prüfen jetzt Ergebnis-Spalte
+    statt der nicht mehr existierenden Status-Spalte
+
+- BUGFIX: bewerbsRaster ret-Badge nach Ergebnis statt neben Name
+  * Alle Badges (ret, wo, gesetzt) jetzt innerhalb des pname-Spans
+
+- STYLE: Matches1 Spielerfilter nach Nachname sortiert, nur aktive Spieler
+
+- BUILD: APP_VERSION auf 2.1.0
+- BUILD: Dockerfile: stateStore.js hinzugefügt
+- BUILD: server.js: Firestore/SCOREBOARD_FUNCTION_URL Referenzen entfernt
+
+DEPLOY-REIHENFOLGE für v2.1.0:
+  1. Cloud Run Service deployen (enthält jetzt ALLES):
+     cd scorer-service
+     gcloud run deploy scorer-service --source . --region europe-west3 --allow-unauthenticated
+     cd ..
+  2. Firebase Hosting deployen:
+     firebase deploy --only hosting
+  3. Firebase Functions sind NICHT mehr nötig
+     Optional: Alle Cloud Functions löschen um Kosten zu sparen
+     gcloud functions list --regions europe-west3
+      gcloud functions delete FUNCTION_NAME --region europe-west3
+
+
+===============================================================================
+38. CHANGELOG – Firebase komplett entfernt, Navigator-Fix (v2.1.1)
+===============================================================================
+
+2026-07-16:
+-----------
+
+- REFACTORING: SDK.js auf Minimum reduziert
+  * Firebase App, Analytics, Functions Imports komplett entfernt
+  * SDK.js enthält nur noch: export const SCORER_WS_URL
+  * Keine Firebase-Abhängigkeiten mehr im Frontend
+
+- BUGFIX: Navigator Spielerauswahl zeigte alle Matches statt nur offene
+  * loadNextMatches in navigatorList.js filtert jetzt nach offenen Matches
+  * Nur Matches ohne Ergebnis, ohne [wo], ohne [ret], ohne BYE
+  * Ergebnis-Spalte wird im Header-Lookup mitgelesen
+
+- BUGFIX: players.html ERR_CONNECTION_REFUSED
+  * SDK.js lud Firebase SDK → versuchte Verbindung zu Firebase → schlug fehl
+  * Behoben durch Entfernung aller Firebase-Imports aus SDK.js
+
+- BUILD: APP_VERSION auf 2.1.1
+
+DEPLOY-REIHENFOLGE für v2.1.1:
+  1. Cloud Run Service: Kein neuer Deploy nötig (keine Server-Änderungen)
+  2. Firebase Hosting deployen:
+     firebase deploy --only hosting
+
 ENDE DES PROTOKOLLS
 ================================================================================

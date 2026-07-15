@@ -30,10 +30,10 @@ export const getMyChallenges = onCall({region: "europe-west3", invoker: "public"
     });
 
     const preHeader = preValues[0].map((h) => h.trim().toLowerCase());
-    const i1 = preHeader.indexOf("spielerid1");
-    const i2 = preHeader.indexOf("spielerid2");
-    const i3 = preHeader.indexOf("spielerid3");
-    const d = preHeader.indexOf("zeitpunktmatch");
+    const i1 = preHeader.indexOf("spieler1id");
+    const i2 = preHeader.indexOf("spieler2id");
+    const i3 = preHeader.indexOf("spieler3id");
+    const d = preHeader.indexOf("matchdate");
 
     const challenges = [];
     preValues.slice(1).forEach((row, rowIndex) => {

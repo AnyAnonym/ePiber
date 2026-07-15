@@ -1,0 +1,198 @@
+================================================================================
+DB.txt — Dokumentation Persistenzlayer (Google Spreadsheet)
+================================================================================
+Stand: v2.0.0
+
+Diese Datei dokumentiert alle Tabellen (Tabs) in der Google Spreadsheet
+Datenbank und deren Spalten.
+
+================================================================================
+TABELLE: Matches1
+================================================================================
+Zusammenführung der ehemaligen Tabellen "preMatches" und "matches".
+Enthält alle Matches (offen + gespielt) in einer Tabelle.
+
+Spalten:
+--------
+| Spalte         | Beschreibung                                              |
+|----------------|-----------------------------------------------------------|
+| Ignore         | Leer=aktiv, "1"=Datensatz wird bei Anzeigen/Berechnungen |
+|                | ignoriert. Zum Vorab-Anlegen von Spielen.                 |
+| ID             | Eindeutige Match-ID                                       |
+| MatchDate      | Spiel-Zeitpunkt. Format: YYMMDD-HHMM (z.B. 260518-1700  |
+|                | = 18.Mai.2026 17:00)                                      |
+| ForderungDate  | Zeitpunkt der Forderung. Gleiches Format wie MatchDate.   |
+| Dauer          | (reserviert) Spieldauer — wird noch nicht verwendet       |
+| BewerbID       | ID des zugehörigen Bewerbs                                |
+| BewerbRunde    | Runden-Kodierung:                                         |
+|                |   R1=1.Runde, R2=2.Runde, R3=3.Runde                     |
+|                |   AF=Achtelfinale, VF=Viertelfinale                       |
+|                |   HF=Halbfinale, F=Finale                                 |
+|                |   Kombiniert mit Partie: AF-P3 = 3.Partie Achtelfinale    |
+|                |   Gruppen: G1=1.Gruppe, G2=2.Gruppe usw.                  |
+| MatchtypID     | Matchtyp-ID für Nicht-Bewerbsspiele.                      |
+|                | Bei Bewerbsspielen implizit über BewerbID.                |
+| Spieler1ID     | ID Spieler 1 (Einzel: Gegner von Spieler3,               |
+|                | Doppel: Partner von Spieler2).                            |
+|                | Zusätze: [wo]=walkover, [ret]=retired, BYE=Freilos       |
+|                | [wo] = Match gilt als gespielt (auch ohne Ergebnis)       |
+| Spieler2ID     | ID Spieler 2 (nur Doppel, Partner von Spieler1)           |
+| Spieler3ID     | ID Spieler 3 (Einzel: Gegner von Spieler1,               |
+|                | Doppel: Partner von Spieler4).                            |
+|                | Zusätze: [wo], [ret], BYE                                 |
+|                | [wo] = Match gilt als gespielt (auch ohne Ergebnis)       |
+| Spieler4ID     | ID Spieler 4 (nur Doppel, Partner von Spieler3)           |
+| Ergebnis       | Spielergebnis. Format: 6-3/6-4 (Sätze durch / getrennt)  |
+|                | Tiebreak in Klammern: 7-6(5)/6-4                          |
+|                | Bei [wo]-Matches ist kein Ergebnis nötig.                 |
+| PTN-Wertung    | (reserviert) Spielstärkenberechnung                       |
+| Bemerkung      | Freitext für Bemerkungen                                  |
+
+Gewinner-Ermittlung:
+  Wird NICHT in der Tabelle gespeichert, sondern aus dem Ergebnis berechnet.
+  Logik: Gewonnene Sätze zählen. Wer mehr Sätze gewonnen hat = Gewinner.
+  Spieler1-Seite = linke Zahl jedes Satzes, Spieler3-Seite = rechte Zahl.
+
+Ignorieren-Logik:
+  Zeilen mit Ignore="1" werden vom Backend herausgefiltert und erscheinen
+  nicht auf Scoreboard, RoundRobin, Bewerbsraster, Matches-Ansicht etc.
+  BYE-Matches (Spieler1ID oder Spieler3ID = "BYE") werden komplett
+  herausgefiltert — sie sind weder offen noch gespielt.
+
+Match-Status (implizit):
+  - Kein Ergebnis und kein [wo] = offenes Match
+  - Mit Ergebnis = gespieltes Match
+  - [wo] bei einem Spieler = gespieltes Match (auch ohne Ergebnis)
+  - Kein MatchDate = Datum noch nicht festgelegt
+
+Code-Hinweis:
+  Spaltennamen werden im Code lowercase verglichen.
+  BewerbRunde → "bewerbrunde" (NICHT "bewerbsrunde")
+  Spieler1ID → "spieler1id" etc.
+
+
+================================================================================
+TABELLE: Personen
+================================================================================
+Spieler-Stammdaten.
+
+Spalten:
+--------
+| Spalte    | Beschreibung                    |
+|-----------|---------------------------------|
+| ID        | Eindeutige Spieler-ID           |
+| Vorname   | Vorname                         |
+| Nachname  | Nachname                        |
+| E-Mail    | E-Mail-Adresse (Login)          |
+| Passwort  | Passwort-Hash                   |
+| Telefon   | Telefonnummer                   |
+| Geschlecht| 1=männlich, 2=weiblich          |
+
+
+================================================================================
+TABELLE: Bewerb
+================================================================================
+Alle Bewerbe/Turniere.
+
+Spalten:
+--------
+| Spalte         | Beschreibung                                   |
+|----------------|------------------------------------------------|
+| ID             | Eindeutige Bewerb-ID                           |
+| BewerbsartID   | Referenz auf Bewerbsart-Tabelle                |
+| MatchtypID Standard | Standard-Matchtyp für diesen Bewerb       |
+| Bezeichnung    | Name des Bewerbs                               |
+| Entrystart     | Beginn Eintragungsfrist (YYMMDD oder YYMMDD-HHMM) |
+| Entrydeadline  | Ende Eintragungsfrist                          |
+| Bewerbsbeginn  | Start des Bewerbs                              |
+| Bewerbsende    | Ende des Bewerbs                               |
+| Geschlecht     | 1=Männer, 2=Frauen, 1,2=Mixed                  |
+| Alterskategorie| z.B. 0+=alle, 60+=Senioren                     |
+
+
+================================================================================
+TABELLE: Bewerbsart
+================================================================================
+Typen von Bewerben.
+
+Spalten:
+--------
+| Spalte            | Beschreibung                                |
+|-------------------|---------------------------------------------|
+| ID                | Eindeutige Bewerbsart-ID                    |
+| Bezeichnung       | Name (z.B. "Rangliste", "KO-Turnier")      |
+| EntryListAvailable| "1" = Bewerb hat eine Eintragungsliste      |
+| Rasterfunktion    | Spieleranzahl für Turnierraster (z.B. 4,8,16)|
+| RoundRobin        | "1" = Gruppenspiel-Format                   |
+| Spezifikum        | Aufstiegsregeln z.B. "1G(A)/2G(A)/3G(1)"   |
+
+
+================================================================================
+TABELLE: EntryList
+================================================================================
+Eintragungslisten für Bewerbe.
+
+Spalten:
+--------
+| Spalte          | Beschreibung                          |
+|-----------------|---------------------------------------|
+| ID              | Eindeutige Eintrags-ID                |
+| BewerbID        | Zugehöriger Bewerb                    |
+| PersonenID      | Spieler-ID                            |
+| Datum           | Eintragungszeitpunkt                  |
+| GebuehrBezahlt  | Zeitstempel wenn Gebühr bezahlt       |
+
+
+================================================================================
+TABELLE: RL-Platzierung
+================================================================================
+Ranglistenpositionen der Spieler.
+
+Spalten:
+--------
+| Spalte    | Beschreibung                    |
+|-----------|---------------------------------|
+| BewerbID  | Zugehörige Rangliste            |
+| Rang      | Position in der Rangliste       |
+| PersonID  | Spieler-ID                      |
+
+
+================================================================================
+TABELLE: Navigator
+================================================================================
+Buttons für die Navigator-App.
+
+Spalten:
+--------
+| Spalte  | Beschreibung                                    |
+|---------|-------------------------------------------------|
+| ID      | Eindeutige ID                                   |
+| Name    | Button-Beschriftung                              |
+| Ziel    | URL oder Overlay-Befehl (OL-Platz-1, OL-Platz-2,|
+|         | OL-Platzaktivierung, OL-Ergebnis)               |
+| Profil  | Profil-Gruppierung (Default: 1)                  |
+
+
+================================================================================
+TABELLE: MatchTyp
+================================================================================
+Matchtypen (z.B. Einzel, Doppel, Freundschaftsspiel).
+
+Spalten: ID, Bezeichnung
+
+
+================================================================================
+TABELLE: Logging
+================================================================================
+Automatische Log-Einträge von Cloud Functions.
+
+Spalten: Timestamp, Source, Entry (ohne Header)
+
+
+================================================================================
+TABELLE: ScoreLog
+================================================================================
+Live-Score-Protokoll vom Cloud Run Service.
+
+Spalten: Timestamp, PlatzNr, Score (ohne Header)
+Score-Format: Satz1/Satz2/Satz3/Punkte (z.B. 6-0/1-2/2-0/40-30)

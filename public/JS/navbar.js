@@ -3,8 +3,7 @@ const currentPath = window.location.pathname.split("/").pop() || "index.html";
 const pages = [
   { file: "index.html", label: "Dashboard" },
   { file: "players.html", label: "Spieler" },
-  { file: "matches.html", label: "Matches" },
-  { file: "preMatches.html", label: "offene Matches" },
+  { file: "Matches1.html", label: "Matches" },
   { file: "Bewerbe.html", label: "Bewerbe" },
   { file: "scoreboard.html", label: "Scoreboard" },
 ];
@@ -20,13 +19,7 @@ function renderHeader() {
     <nav id="mainNav" class="main-nav desktop-nav">
       <a href="index.html" class="${currentPath === 'index.html' ? 'active' : ''}">Dashboard</a>
       <a href="players.html" class="${currentPath === 'players.html' ? 'active' : ''}" data-auth="required">Spieler</a>
-      <div class="dropdown">
-        <a href="matches.html" class="dropbtn">Matches ▾</a>
-        <div class="dropdown-content">
-          <a href="matches.html" class="${currentPath === 'matches.html' ? 'active' : ''}" onclick="event.stopPropagation()">Matches</a>
-          <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}" onclick="event.stopPropagation()">offene Matches</a>
-        </div>
-      </div>
+      <a href="Matches1.html" class="${currentPath === 'Matches1.html' ? 'active' : ''}">Matches</a>
         <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
         <a href="scoreboard.html" class="${currentPath === 'scoreboard.html' ? 'active' : ''}">Scoreboard</a>
     </nav>
@@ -61,8 +54,7 @@ function renderMobileNav() {
       <nav class="mobile-nav-links">
         <a href="index.html" class="${currentPath === 'index.html' ? 'active' : ''}">Dashboard</a>
         <a href="players.html" class="${currentPath === 'players.html' ? 'active' : ''}" data-auth="required">Spieler</a>
-        <a href="matches.html" class="${currentPath === 'matches.html' ? 'active' : ''}">Matches</a>
-        <a href="preMatches.html" class="${currentPath === 'preMatches.html' ? 'active' : ''}">offene Matches</a>
+        <a href="Matches1.html" class="${currentPath === 'Matches1.html' ? 'active' : ''}">Matches</a>
         <a href="Bewerbe.html" class="${currentPath === 'Bewerbe.html' ? 'active' : ''}">Bewerbe</a>
         <a href="scoreboard.html" class="${currentPath === 'scoreboard.html' ? 'active' : ''}">Scoreboard</a>
       </nav>

@@ -20,11 +20,11 @@ export const setPreMatchResult = onCall({region: "europe-west3", invoker: "publi
     }
 
     const preHeader = preValues[0].map((h) => h.trim().toLowerCase());
-    const i1 = preHeader.indexOf("spielerid1");
-    const i2 = preHeader.indexOf("spielerid2");
-    const i3 = preHeader.indexOf("spielerid3");
-    const i4 = preHeader.indexOf("spielerid4");
-    const d = preHeader.indexOf("zeitpunktmatch");
+    const i1 = preHeader.indexOf("spieler1id");
+    const i2 = preHeader.indexOf("spieler2id");
+    const i3 = preHeader.indexOf("spieler3id");
+    const i4 = preHeader.indexOf("spieler4id");
+    const d = preHeader.indexOf("matchdate");
     const er = preHeader.indexOf("ergebnis");
 
     const matchRow = preValues[row - 1];

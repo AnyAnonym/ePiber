@@ -1,21 +1,15 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 import { createEndpoint, setOnScoreChange, isConnected, request } from "./dataClient.js";
 
-const readMatchesList = createEndpoint("matches");
-const readPreMatches = createEndpoint("preMatches");
-const readPlayersList = createEndpoint("players");
-const readBewerbe = createEndpoint("bewerbe");
-// Schreib-Call bleibt bei Cloud Functions
-const getScoreboardCourts = httpsCallable(functions, "getScoreboardCourts");
+const readMatches1        = createEndpoint("matches1");
+const readPlayersList     = createEndpoint("players");
+const readBewerbe         = createEndpoint("bewerbe");
+const getScoreboardCourts = createEndpoint("getScoreboardCourts");
 
 const MATCHES_POLL = 5000;
 const SCOREBOARD_POLL = 1000;
 
 let playerMap = new Map();
 let bewerbMap = new Map();
-let preMatchRasterMap = new Map();
 let matchRasterMap = new Map();
 
 async function loadPlayers() {
@@ -79,9 +73,9 @@ function dateToTs(raw) {
 
 function parsePlayerId(raw) {
   const s = String(raw || "").trim();
-  const wo = /\[w\.o\.\]/i.test(s);
+  const wo = /\[w\.?o\.?\]/i.test(s);
   const ret = /\[ret\]/i.test(s);
-  const cleanId = s.replace(/\[w\.o\.\]/gi, "").replace(/\[ret\]/gi, "").trim();
+  const cleanId = s.replace(/\[w\.?o\.?\]/gi, "").replace(/\[ret\]/gi, "").trim();
   const special = wo ? "wo" : ret ? "ret" : null;
   return { cleanId, special };
 }
@@ -149,20 +143,26 @@ function renderMatches(values) {
 
   const header = values[0].map((h) => h.trim().toLowerCase());
   const idx = (label) => header.indexOf(label);
-  const i1 = idx("spielerid1");
-  const i3 = idx("spielerid3");
-  const i2 = idx("spielerid2");
-  const i4 = idx("spielerid4");
+  const i1 = idx("spieler1id");
+  const i3 = idx("spieler3id");
+  const i2 = idx("spieler2id");
+  const i4 = idx("spieler4id");
   const ergebnisIdx = idx("ergebnis");
-  const d = idx("zeitpunkt");
+  const d = idx("matchdate");
   const bewerbIdIdx = idx("bewerbid");
-  const rasterIdx = idx("rasterpaarung");
+  const rasterIdx = idx("bewerbrunde");
 
   const all = values.slice(1)
     .filter((row) => {
       if (!row || !row[i1]) return false;
       if (/^BYE$/i.test(String(row[i1]))) return false;
       if (row[i3] && /^BYE$/i.test(String(row[i3]))) return false;
+      // Nur gespielte Matches (mit Ergebnis oder [wo])
+      const erg = ergebnisIdx >= 0 ? String(row[ergebnisIdx] || "").trim() : "";
+      const p1raw = String(row[i1] || "").trim();
+      const p3raw = String(row[i3] || "").trim();
+      const hasWo = /\[w\.?o\.?\]/i.test(p1raw) || /\[w\.?o\.?\]/i.test(p3raw);
+      if (!erg && !hasWo) return false;
       return true;
     })
     .sort((a, b) => dateToTs(b[d]) - dateToTs(a[d]))
@@ -192,7 +192,12 @@ function renderMatches(values) {
     const hdr = headerParts.join(" | ");
 
     const ergebnis = String(row[ergebnisIdx] || "").replace(/\((\d+)\)/g, '').trim();
-    const winner = determineWinner(row[ergebnisIdx]);
+    let winner = determineWinner(row[ergebnisIdx]);
+    // [wo]-Logik: wer wo gibt, verliert
+    if (!winner) {
+      if (pid1.special === "wo") winner = 2;
+      else if (pid3.special === "wo") winner = 1;
+    }
     const playersHtml = buildPlayersHtml(p1, p2, p3, p4, badgeHtml(pid1.special), badgeHtml(pid2.special), badgeHtml(pid3.special), badgeHtml(pid4.special), winner);
 
     return `<div class="archived-entry">
@@ -213,19 +218,27 @@ function renderPreMatches(values) {
 
   const header = values[0].map((h) => h.trim().toLowerCase());
   const idx = (label) => header.indexOf(label);
-  const i1 = idx("spielerid1");
-  const i3 = idx("spielerid3");
-  const i2 = idx("spielerid2");
-  const i4 = idx("spielerid4");
-  const d = idx("zeitpunktmatch");
+  const i1 = idx("spieler1id");
+  const i3 = idx("spieler3id");
+  const i2 = idx("spieler2id");
+  const i4 = idx("spieler4id");
+  const ergebnisIdx = idx("ergebnis");
+  const d = idx("matchdate");
   const bewerbIdIdx = idx("bewerbid");
-  const rasterIdx = idx("rasterpaarung");
+  const rasterIdx = idx("bewerbrunde");
 
   const all = values.slice(1)
     .filter((row) => {
       if (!row || !row[i1]) return false;
       if (/^BYE$/i.test(String(row[i1]))) return false;
       if (row[i3] && /^BYE$/i.test(String(row[i3]))) return false;
+      // Nur offene Matches (ohne Ergebnis und ohne [wo]/[ret])
+      const erg = ergebnisIdx >= 0 ? String(row[ergebnisIdx] || "").trim() : "";
+      if (erg) return false;
+      const p1raw = String(row[i1] || "");
+      const p3raw = String(row[i3] || "");
+      if (/\[w\.?o\.?\]/i.test(p1raw) || /\[w\.?o\.?\]/i.test(p3raw)) return false;
+      if (/\[ret\]/i.test(p1raw) || /\[ret\]/i.test(p3raw)) return false;
       return true;
     })
     .map((row) => ({ row, ts: dateToTs(row[d]) }))
@@ -271,32 +284,19 @@ function renderPreMatches(values) {
   el.innerHTML = titleHtml + lines.join("");
 }
 
-async function pollMatches() {
+async function pollAllMatches() {
   try {
-    const res = await readMatchesList();
+    const res = await readMatches1();
     const { success, values } = res.data;
     if (success && Array.isArray(values) && values.length >= 2) {
-      buildRasterMap(values, matchRasterMap, "id", "rasterpaarung");
+      buildRasterMap(values, matchRasterMap, "id", "bewerbrunde");
       renderMatches(values);
-    }
-  } catch (err) {
-    // silent
-  }
-  setTimeout(pollMatches, MATCHES_POLL);
-}
-
-async function pollPreMatches() {
-  try {
-    const res = await readPreMatches();
-    const { success, values } = res.data;
-    if (success && Array.isArray(values) && values.length >= 2) {
-      buildRasterMap(values, preMatchRasterMap, "id", "rasterpaarung");
       renderPreMatches(values);
     }
   } catch (err) {
     // silent
   }
-  setTimeout(pollPreMatches, MATCHES_POLL);
+  setTimeout(pollAllMatches, MATCHES_POLL);
 }
 
 function buildRasterMap(values, targetMap, idCol, rasterCol) {
@@ -375,7 +375,7 @@ function updateScoreboardCourt(courtKey, courtData) {
   // Runde aus Firestore, oder per matchId aus preMatch/Match-Daten nachschlagen
   let runde = courtData.runde || "";
   if (!runde && courtData.matchId) {
-    const rasterRaw = preMatchRasterMap.get(courtData.matchId) || matchRasterMap.get(courtData.matchId) || "";
+    const rasterRaw = matchRasterMap.get(courtData.matchId) || "";
     runde = parseRunde(rasterRaw);
   }
   const bewerbParts = [courtData.bewerb, runde].filter(Boolean);
@@ -415,7 +415,7 @@ await loadBewerbe();
 // Erster Durchlauf: Scoreboard laden (setzt aktiv-Status + startet WebSocket),
 // dann Matches und PreMatches parallel
 await pollScoreboard();
-await Promise.all([pollMatches(), pollPreMatches()]);
+await pollAllMatches();
 
 // Initiale Scores aktiv vom Service laden (nicht auf Push warten)
 try {

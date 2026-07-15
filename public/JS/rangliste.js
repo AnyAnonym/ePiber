@@ -1,13 +1,10 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 import { createEndpoint } from "./dataClient.js";
 
 const readRlPlatzierung     = createEndpoint("rlPlatzierung");
 const readPlayersList       = createEndpoint("players");
 const readPlayerDetails     = createEndpoint("players");
 const readPreMatches        = createEndpoint("preMatches");
-const readMatchRestrictions = httpsCallable(functions, "readMatchRestrictions");
+const readMatchRestrictions = createEndpoint("readMatchRestrictions");
 const readBewerbe           = createEndpoint("bewerbe");
 
 const params    = new URLSearchParams(window.location.search);
@@ -55,12 +52,12 @@ async function fetchBusyIds() {
   if (!success || values.length < 2) return { busyIds: new Set(), preMatches: [] };
 
   const header = values[0].map((h) => h.trim().toLowerCase());
-  const statusIdx = header.indexOf("status");
   const bewerbIdx = header.indexOf("bewerbid");
-  const p1Idx = header.indexOf("spielerid1");
-  const p2Idx = header.indexOf("spielerid2");
-  const p3Idx = header.indexOf("spielerid3");
-  const p4Idx = header.indexOf("spielerid4");
+  const ergebnisIdx = header.indexOf("ergebnis");
+  const p1Idx = header.indexOf("spieler1id");
+  const p2Idx = header.indexOf("spieler2id");
+  const p3Idx = header.indexOf("spieler3id");
+  const p4Idx = header.indexOf("spieler4id");
 
   const busyIds = new Set();
   values.slice(1).forEach((row) => {
@@ -68,11 +65,12 @@ async function fetchBusyIds() {
       const rowBewerb = String(row[bewerbIdx] || "").trim();
       if (rowBewerb !== BEWERB_ID) return;
     }
-    const st = String(row[statusIdx] || "offen").trim().toLowerCase();
-    if (st === "offen" || st === "bestaetigt") {
+    // Offen = kein Ergebnis
+    const ergebnis = ergebnisIdx !== -1 ? String(row[ergebnisIdx] || "").trim() : "";
+    if (!ergebnis) {
       [row[p1Idx], row[p2Idx], row[p3Idx], row[p4Idx]]
         .filter(Boolean)
-        .forEach((id) => busyIds.add(String(id).trim()));
+        .forEach((id) => busyIds.add(String(id).trim().replace(/\[.*?\]/g, "").trim()));
     }
   });
   return { busyIds, preMatches: values };
@@ -235,16 +233,17 @@ async function applyAllRules(container, pyramid, rankedList) {
   const myChallengeOpponents = new Set();
   if (myPlayerId && busyData.preMatches.length >= 2) {
     const pmHeader = busyData.preMatches[0].map((h) => h.trim().toLowerCase());
-    const pmP1Idx = pmHeader.indexOf("spielerid1");
-    const pmP2Idx = pmHeader.indexOf("spielerid2");
-    const pmP3Idx = pmHeader.indexOf("spielerid3");
-    const pmP4Idx = pmHeader.indexOf("spielerid4");
-    const pmStatusIdx = pmHeader.indexOf("status");
+    const pmP1Idx = pmHeader.indexOf("spieler1id");
+    const pmP2Idx = pmHeader.indexOf("spieler2id");
+    const pmP3Idx = pmHeader.indexOf("spieler3id");
+    const pmP4Idx = pmHeader.indexOf("spieler4id");
+    const pmErgebnisIdx = pmHeader.indexOf("ergebnis");
     const pmBewerbIdx = pmHeader.indexOf("bewerbid");
     busyData.preMatches.slice(1).forEach((row) => {
       if (pmBewerbIdx !== -1 && String(row[pmBewerbIdx] || "").trim() !== BEWERB_ID) return;
-      const st = String(row[pmStatusIdx] || "offen").trim().toLowerCase();
-      if (st !== "offen" && st !== "bestaetigt") return;
+      // Offen = kein Ergebnis
+      const ergebnis = pmErgebnisIdx !== -1 ? String(row[pmErgebnisIdx] || "").trim() : "";
+      if (ergebnis) return; // Gespielt → nicht relevant für Gegner-Analyse
       const players = [pmP1Idx, pmP2Idx, pmP3Idx, pmP4Idx]
         .map((idx) => (idx !== -1 ? String(row[idx] || "").trim() : ""))
         .filter(Boolean);

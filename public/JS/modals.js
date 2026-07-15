@@ -1,5 +1,3 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 import { createEndpoint } from "./dataClient.js";
 
 const readPlayerDetails = createEndpoint("players");
@@ -157,7 +155,7 @@ document.getElementById("withdrawForm").addEventListener("submit", async (e) => 
   }
 
   try {
-    const withdrawFunc = httpsCallable(functions, "withdrawFromRanking");
+    const withdrawFunc = createEndpoint("withdrawFromRanking");
     const result = await withdrawFunc({
       reason,
       rank: localStorage.getItem("currentRank") || "?",
@@ -233,7 +231,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
   submitBtn.innerHTML = '<span class="btn-spinner"></span> Anmelden...';
 
   try {
-    const verifyFn = httpsCallable(functions, "verifyUserLogin");
+    const verifyFn = createEndpoint("verifyUserLogin");
 
     // Login-Verifizierung und Profil-Daten parallel laden
     const [result, profileData] = await Promise.all([
@@ -325,7 +323,7 @@ document.getElementById("forgotPasswordForm").addEventListener("submit", async (
   submitBtn.disabled = true;
   submitBtn.textContent = "Wird gespeichert...";
 
-  const resetPasswordFn = httpsCallable(functions, "resetPassword");
+  const resetPasswordFn = createEndpoint("resetPassword");
   try {
     const result = await resetPasswordFn({ email, passwordHash });
     const res = result.data;
@@ -460,9 +458,9 @@ window.openProfileModal = async (profileOptions = {}) => {
           const dd = String(now.getDate()).padStart(2, "0");
           const hh = String(now.getHours()).padStart(2, "0");
           const mi = String(now.getMinutes()).padStart(2, "0");
-          const zeitpunktForderung = `${yy}${mm}${dd}-${hh}${mi}`;
+          const forderungDate = `${yy}${mm}${dd}-${hh}${mi}`;
 
-          const addMatchFn = httpsCallable(functions, "addMatch");
+          const addMatchFn = createEndpoint("addMatch");
 
           challengeBtn.disabled = true;
           challengeBtn.textContent = "Sende...";
@@ -473,7 +471,7 @@ window.openProfileModal = async (profileOptions = {}) => {
             player1Id: player1Id,
             player3: player3Name,
             player3Id: player3Id,
-            zeitpunktForderung,
+            forderungDate,
             bewerbId: window.currentBewerbId || "2",
           });
 
@@ -602,7 +600,7 @@ if (isRanglistePage && matchModal) {
       player1Id: player1IdInput.value.trim(),
       player3: player3Input.value.trim(),
       player3Id: player3IdInput.value.trim(),
-      zeitpunktForderung: zeitpunkt,
+      forderungDate: zeitpunkt,
       bewerbId: matchModal.dataset.bewerbId || "2",
     };
 
@@ -613,7 +611,7 @@ if (isRanglistePage && matchModal) {
     console.log("Matchanfrage gesendet:", matchData);
 
     try {
-      const addMatchFn = httpsCallable(functions, "addMatch");
+      const addMatchFn = createEndpoint("addMatch");
       const result = await addMatchFn(matchData);
       const data = result.data;
 

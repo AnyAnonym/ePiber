@@ -5,7 +5,7 @@
 // ══════════════════════════════════════════════════════
 
 const http = require("http");
-const { PORT, SCOREBOARD_FUNCTION_URL } = require("./config.js");
+const { PORT } = require("./config.js");
 const dataPoller = require("./dataPoller.js");
 const courtPoller = require("./courtPoller.js");
 const dataProvider = require("./dataProvider.js");
@@ -76,30 +76,6 @@ const server = http.createServer((req, res) => {
   res.end("Scorer WebSocket Service running. Connect via ws://");
 });
 
-// ── Initialer Aktiv-Status aus Firestore laden ──
-
-async function fetchInitialCourtStatus() {
-  try {
-    console.log("Lade initialen Court-Status...");
-    const res = await fetch(SCOREBOARD_FUNCTION_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: {} }),
-    });
-    const result = await res.json();
-    const courts = result?.result?.courts || {};
-
-    const active = {};
-    if (courts["1"]) active["1"] = courts["1"].aktiv === 1;
-    if (courts["2"]) active["2"] = courts["2"].aktiv === 1;
-
-    courtPoller.setCourtActive(active);
-    console.log(`Initialer Court-Status: Platz1=${active["1"] || false}, Platz2=${active["2"] || false}`);
-  } catch (err) {
-    console.error("Court-Status laden fehlgeschlagen:", err.message);
-  }
-}
-
 // ── Start ──
 
 async function startup() {
@@ -116,8 +92,8 @@ async function startup() {
   // 3. Daten-Polling starten
   dataPoller.start();
 
-  // 4. Court-Status laden und Court-Polling ggf. starten
-  await fetchInitialCourtStatus();
+  // 4. Court-Status: bei Neustart sind beide Plätze inaktiv (In-Memory default)
+  console.log("Court-Status: beide Plätze inaktiv (Neustart)");
 
   // 5. HTTP-Server starten
   server.listen(PORT, () => {

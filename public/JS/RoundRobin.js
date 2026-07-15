@@ -1,7 +1,8 @@
 import { createEndpoint } from "./dataClient.js";
 import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
-const readPreMatches  = createEndpoint("preMatches");
+// preMatches endpoint beibehalten für Kompatibilität, wird aber nicht mehr verwendet
+// const readPreMatches  = createEndpoint("preMatches");
 const readMatchesList = createEndpoint("matches");
 const readPlayersList = createEndpoint("players");
 const readBewerbe     = createEndpoint("bewerbe");
@@ -17,7 +18,7 @@ function parseGroup(val) {
 }
 
 function parsePlayerId(raw) {
-  return String(raw || "").trim().replace(/\[w\.o\.\]/gi, "").replace(/\[ret\]/gi, "").trim();
+  return String(raw || "").trim().replace(/\[w\.?o\.?\]/gi, "").replace(/\[ret\]/gi, "").trim();
 }
 
 // ── Aufstiegs-/Abstiegslogik (austauschbar) ──
@@ -161,11 +162,11 @@ function formatPairingDate(datumRaw, played, paarungslayout) {
 function collectPlayers(data, header, bewerbId) {
   const h = header.map((c) => String(c).trim().toLowerCase());
   const bwIdx = h.indexOf("bewerbid");
-  const rtIdx = h.indexOf("rasterpaarung");
-  const p1Idx = h.indexOf("spielerid1");
-  const p2Idx = h.indexOf("spielerid2");
-  const p3Idx = h.indexOf("spielerid3");
-  const p4Idx = h.indexOf("spielerid4");
+  const rtIdx = h.indexOf("bewerbrunde");
+  const p1Idx = h.indexOf("spieler1id");
+  const p2Idx = h.indexOf("spieler2id");
+  const p3Idx = h.indexOf("spieler3id");
+  const p4Idx = h.indexOf("spieler4id");
 
   const entries = [];
   data.forEach((row) => {
@@ -190,11 +191,11 @@ function collectPlayers(data, header, bewerbId) {
 function buildStats(matchData, matchHeader, bewerbId) {
   const h = matchHeader.map((c) => String(c).trim().toLowerCase());
   const bwIdx = h.indexOf("bewerbid");
-  const p1Idx = h.indexOf("spielerid1");
-  const p2Idx = h.indexOf("spielerid2");
-  const p3Idx = h.indexOf("spielerid3");
-  const p4Idx = h.indexOf("spielerid4");
-  const gwIdx = h.indexOf("gewinner");
+  const p1Idx = h.indexOf("spieler1id");
+  const p2Idx = h.indexOf("spieler2id");
+  const p3Idx = h.indexOf("spieler3id");
+  const p4Idx = h.indexOf("spieler4id");
+  // gewinner wird nicht mehr verwendet (aus Ergebnis berechnet)
   const ergebnisIdx = h.indexOf("ergebnis");
 
   const stats = {};
@@ -207,9 +208,17 @@ function buildStats(matchData, matchHeader, bewerbId) {
     const id2 = p2Idx >= 0 ? parsePlayerId(row[p2Idx]) : "";
     const id3 = p3Idx >= 0 ? parsePlayerId(row[p3Idx]) : "";
     const id4 = p4Idx >= 0 ? parsePlayerId(row[p4Idx]) : "";
-    const winner = gwIdx !== -1 ? String(row[gwIdx] || "").trim() : "";
     const rawResult = ergebnisIdx !== -1 ? String(row[ergebnisIdx] || "").trim() : "";
     const sets = parseResult(rawResult);
+
+    // Gewinner aus Ergebnis berechnen
+    let winner = "";
+    if (sets) {
+      let setsLeft = 0, setsRight = 0;
+      sets.forEach((s) => { if (s.left > s.right) setsLeft++; else if (s.right > s.left) setsRight++; });
+      if (setsLeft > setsRight) winner = id1;
+      else if (setsRight > setsLeft) winner = id3;
+    }
 
     // Für Einzel: key = id1/id3; für Doppel: key = id1 (Hauptspieler)
     const teams = [
@@ -219,6 +228,7 @@ function buildStats(matchData, matchHeader, bewerbId) {
 
     teams.forEach(({ key, oppKey, oppPartner, side }) => {
       if (!key) return;
+      if (!rawResult) return; // Nur gespielte Matches zählen
       if (!stats[key]) stats[key] = { siege: 0, saetzeW: 0, saetzeL: 0, gamesW: 0, gamesL: 0 };
       if (winner === key) stats[key].siege++;
       if (sets) {
@@ -243,83 +253,70 @@ function buildStats(matchData, matchHeader, bewerbId) {
 
 // ── Paarungen sammeln (offen + gespielt) ──
 
-function collectPairings(preData, preHeader, matchData, matchHeader, bewerbId, playerMap) {
+function collectPairings(data, header, bewerbId, playerMap) {
   const pairings = [];
 
-  function extract(data, header, isPlayed) {
-    const h = header.map((c) => String(c).trim().toLowerCase());
-    const bwIdx = h.indexOf("bewerbid");
-    const rtIdx = h.indexOf("rasterpaarung");
-    const p1Idx = h.indexOf("spielerid1");
-    const p2Idx = h.indexOf("spielerid2");
-    const p3Idx = h.indexOf("spielerid3");
-    const p4Idx = h.indexOf("spielerid4");
-    const erIdx = h.indexOf("ergebnis");
-    const gwIdx = h.indexOf("gewinner");
-    const idIdx = h.indexOf("id");
-    const dIdx = h.indexOf(isPlayed ? "zeitpunkt" : "zeitpunktmatch");
+  const h = header.map((c) => String(c).trim().toLowerCase());
+  const bwIdx = h.indexOf("bewerbid");
+  const rtIdx = h.indexOf("bewerbrunde");
+  const p1Idx = h.indexOf("spieler1id");
+  const p2Idx = h.indexOf("spieler2id");
+  const p3Idx = h.indexOf("spieler3id");
+  const p4Idx = h.indexOf("spieler4id");
+  const erIdx = h.indexOf("ergebnis");
+  const idIdx = h.indexOf("id");
+  const dIdx = h.indexOf("matchdate");
 
-    data.forEach((row) => {
-      if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(bewerbId).trim()) return;
-      const g = parseGroup(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
-      if (g === null) return;
+  data.forEach((row) => {
+    if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(bewerbId).trim()) return;
+    const g = parseGroup(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
+    if (g === null) return;
 
-      const id1 = parsePlayerId(row[p1Idx]);
-      const id2 = p2Idx >= 0 ? parsePlayerId(row[p2Idx]) : "";
-      const id3 = p3Idx >= 0 ? parsePlayerId(row[p3Idx]) : "";
-      const id4 = p4Idx >= 0 ? parsePlayerId(row[p4Idx]) : "";
-      const ergebnis = erIdx >= 0 ? String(row[erIdx] || "").trim() : "";
-      const datum = dIdx >= 0 ? String(row[dIdx] || "").trim() : "";
-      const winnerId = gwIdx >= 0 ? String(row[gwIdx] || "").trim() : "";
-      const matchId = idIdx >= 0 ? String(row[idIdx] || "").trim() : "";
+    const id1 = parsePlayerId(row[p1Idx]);
+    const id2 = p2Idx >= 0 ? parsePlayerId(row[p2Idx]) : "";
+    const id3 = p3Idx >= 0 ? parsePlayerId(row[p3Idx]) : "";
+    const id4 = p4Idx >= 0 ? parsePlayerId(row[p4Idx]) : "";
+    const ergebnis = erIdx >= 0 ? String(row[erIdx] || "").trim() : "";
+    const datum = dIdx >= 0 ? String(row[dIdx] || "").trim() : "";
+    const matchId = idIdx >= 0 ? String(row[idIdx] || "").trim() : "";
 
-      const team1 = formatTeamName(id1, id2, playerMap);
-      const team2 = formatTeamName(id3, id4, playerMap);
+    // Gewinner aus Ergebnis berechnen
+    let winnerId = "";
+    if (ergebnis) {
+      const resultSets = parseResult(ergebnis);
+      if (resultSets) {
+        let sL = 0, sR = 0;
+        resultSets.forEach((s) => { if (s.left > s.right) sL++; else if (s.right > s.left) sR++; });
+        if (sL > sR) winnerId = id1;
+        else if (sR > sL) winnerId = id3;
+      }
+    }
 
-      // winner: 1 = Team1 gewinnt, 2 = Team2 gewinnt, 0 = kein Gewinner
-      let winner = 0;
-      if (winnerId === id1) winner = 1;
-      else if (winnerId === id3) winner = 2;
+    const team1 = formatTeamName(id1, id2, playerMap);
+    const team2 = formatTeamName(id3, id4, playerMap);
 
-      pairings.push({
-        group: g,
-        team1,
-        team2,
-        matchId,
-        ergebnis: ergebnis || (isPlayed ? "—" : ""),
-        played: isPlayed && !!ergebnis,
-        datumRaw: datum,
-        datum: parseSheetDate(datum),
-        datumTs: dateToTs(datum),
-        winner,
-      });
+    const isPlayed = !!ergebnis;
+
+    // winner: 1 = Team1 gewinnt, 2 = Team2 gewinnt, 0 = kein Gewinner
+    let winner = 0;
+    if (winnerId === id1) winner = 1;
+    else if (winnerId === id3) winner = 2;
+
+    pairings.push({
+      group: g,
+      team1,
+      team2,
+      matchId,
+      ergebnis: ergebnis || "",
+      played: isPlayed,
+      datumRaw: datum,
+      datum: parseSheetDate(datum),
+      datumTs: dateToTs(datum),
+      winner,
     });
-  }
-
-  extract(preData, preHeader, false);
-  extract(matchData, matchHeader, true);
-
-  // Deduplizieren: wenn eine Paarung in matches UND preMatches ist,
-  // nur die matches-Version behalten (hat Ergebnis/Gewinner)
-  const deduped = [];
-  const matchKeys = new Set();
-  // Matches zuerst: identifiziert durch Gruppe + Spieler1 + Spieler3
-  pairings.forEach((p) => {
-    if (p.played || p.ergebnis === "—") {
-      const key = `${p.group}:${p.team1}:${p.team2}`;
-      matchKeys.add(key);
-      deduped.push(p);
-    }
-  });
-  // PreMatches nur wenn nicht schon als Match vorhanden
-  pairings.forEach((p) => {
-    if (!p.played && p.ergebnis !== "—") {
-      const key = `${p.group}:${p.team1}:${p.team2}`;
-      if (!matchKeys.has(key)) deduped.push(p);
-    }
   });
 
-  return deduped;
+  return pairings;
 }
 
 // ── Render ──
@@ -329,15 +326,13 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
   showLoadingOverlay("Lade Gruppen...");
 
   try {
-    const [preRes, matchRes, playerRes, bewerbRes, bewerbsartRes] = await Promise.all([
-      callWithRetry(readPreMatches),
+    const [matchRes, playerRes, bewerbRes, bewerbsartRes] = await Promise.all([
       callWithRetry(readMatchesList),
       callWithRetry(readPlayersList),
       callWithRetry(readBewerbe),
       callWithRetry(readBewerbsart),
     ]);
 
-    const preValues = preRes.data?.values || [];
     const matchValues = matchRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
     const bewerbValues = bewerbRes.data?.values || [];
@@ -376,14 +371,10 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
       }
     }
 
-    const preHeader = preValues[0] || [];
     const matchHeader = matchValues[0] || [];
 
-    // Spieler sammeln (inkl. Doppelpartner)
-    const all = [
-      ...collectPlayers(preValues.slice(1), preHeader, bewerbId),
-      ...collectPlayers(matchValues.slice(1), matchHeader, bewerbId),
-    ];
+    // Spieler sammeln (inkl. Doppelpartner) — nur noch ein Array
+    const all = collectPlayers(matchValues.slice(1), matchHeader, bewerbId);
 
     // Deduplizieren — key = Hauptspieler-ID pro Gruppe
     const seen = new Set();
@@ -416,9 +407,8 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
     // Statistik
     const { stats, playerMatches } = buildStats(matchValues.slice(1), matchHeader, bewerbId);
 
-    // Paarungen
+    // Paarungen — nur noch ein Array (Matches1)
     const pairings = collectPairings(
-      preValues.slice(1), preHeader,
       matchValues.slice(1), matchHeader,
       bewerbId, playerMap,
     );

@@ -1,10 +1,8 @@
-import {functions} from "./SDK.js";
-import {httpsCallable} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 import { createEndpoint } from "./dataClient.js";
 import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
-const setPreMatchResultFn = httpsCallable(functions, "setPreMatchResult");
-const setMatchDateFn = httpsCallable(functions, "setMatchDate");
+const setPreMatchResultFn = createEndpoint("setPreMatchResult");
+const setMatchDateFn      = createEndpoint("setMatchDate");
 
 function parseSheetDate(raw) {
   if (!raw) return "";
@@ -31,8 +29,8 @@ function formatErgebnis(raw) {
 
 function parsePlayerId(raw) {
   const s = String(raw || "").trim();
-  const wo = /\[w\.o\.\]/.test(s);
-  const cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  const wo = /\[w\.?o\.?\]/i.test(s);
+  const cleanId = s.replace(/\[w\.?o\.?\]/gi, "").trim();
   return { cleanId, special: wo ? "wo" : null };
 }
 
@@ -304,15 +302,15 @@ async function loadPreMatches() {
     await loadMaps();
 
     const preHeader = preValues[0].map((h) => h.trim().toLowerCase());
-    const i1 = preHeader.indexOf("spielerid1");
-    const i2 = preHeader.indexOf("spielerid2");
-    const i3 = preHeader.indexOf("spielerid3");
-    const i4 = preHeader.indexOf("spielerid4");
-    const d = preHeader.indexOf("zeitpunktmatch");
-    const zeitpunktForderungIdx = preHeader.indexOf("zeitpunktforderung");
+    const i1 = preHeader.indexOf("spieler1id");
+    const i2 = preHeader.indexOf("spieler2id");
+    const i3 = preHeader.indexOf("spieler3id");
+    const i4 = preHeader.indexOf("spieler4id");
+    const d = preHeader.indexOf("matchdate");
+    const zeitpunktForderungIdx = preHeader.indexOf("forderungdate");
     const bewerbIdIdx = preHeader.indexOf("bewerbid");
-    const rasterIdx = preHeader.indexOf("rasterpaarung");
-    const st = preHeader.indexOf("status");
+    const rasterIdx = preHeader.indexOf("bewerbrunde");
+    // status wird nicht mehr als Spalte verwendet
     const er = preHeader.indexOf("ergebnis");
 
     function dateToTs(raw) {
@@ -374,7 +372,7 @@ async function loadPreMatches() {
       const bewerbInfo = cachedBewerbMap.get(bewerbId) || {};
       const bewerbsartName = cachedBewerbsartMap.get(bewerbInfo.bewerbsartId || "") || "";
       const zeitpunktForderungRaw = zeitpunktForderungIdx !== -1 ? String(row[zeitpunktForderungIdx] || "") : "";
-      const status = st !== -1 ? (row[st] || "offen") : "offen";
+      const status = "offen"; // status-Spalte entfernt, Default "offen"
       const ergebnis = er !== -1 ? formatErgebnis(row[er] || "") : "";
       const runde = rasterIdx !== -1 ? parseRunde(row[rasterIdx]) : "";
       const isForMe = userId ? [pid1.cleanId, pid2.cleanId, pid3.cleanId, pid4.cleanId].includes(userId) : false;

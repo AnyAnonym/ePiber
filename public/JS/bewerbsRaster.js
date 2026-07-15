@@ -1,7 +1,8 @@
 import { createEndpoint } from "./dataClient.js";
 import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
-const readPreMatches   = createEndpoint("preMatches");
+// preMatches endpoint beibehalten für Kompatibilität, wird aber nicht mehr verwendet
+// const readPreMatches   = createEndpoint("preMatches");
 const readMatchesList  = createEndpoint("matches");
 const readPlayersList  = createEndpoint("players");
 const readBewerbe      = createEndpoint("bewerbe");
@@ -17,12 +18,12 @@ const ROUND_DISPLAY = {
 
 function parsePlayerId(raw) {
   const s = String(raw || "").trim();
-  const wo = /\[w\.o\.\]/.test(s);
+  const wo = /\[w\.?o\.?\]/i.test(s);
+  const ret = /\[ret\]/i.test(s);
   const gesetzt = /\[gesetzt\]/i.test(s);
-  let cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
-  cleanId = cleanId.replace(/\[gesetzt\]/gi, "").trim();
+  let cleanId = s.replace(/\[w\.?o\.?\]/gi, "").replace(/\[ret\]/gi, "").replace(/\[gesetzt\]/gi, "").trim();
   const pre = /^PRE$/i.test(cleanId);
-  return { cleanId, special: wo ? "wo" : null, pre, gesetzt };
+  return { cleanId, special: wo ? "wo" : ret ? "ret" : null, pre, gesetzt };
 }
 
 function badgeHtml(type) {
@@ -65,59 +66,76 @@ function parseResult(val) {
   return sets;
 }
 
-function buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1CountConfigPlayers) {
+function buildRounds(matchData, matchHeader, playerMap, r1CountConfigPlayers) {
   const slotMap = {};
 
-  function processRows(data, header, isMatch) {
-    const h = header.map((c) => String(c).trim().toLowerCase());
-    const bwIdx = h.indexOf("bewerbid");
-    const p1Idx = h.indexOf("spielerid1");
-    const p2Idx = h.indexOf("spielerid2");
-    const p3Idx = h.indexOf("spielerid3");
-    const p4Idx = h.indexOf("spielerid4");
-    const rtIdx = h.indexOf("rasterpaarung");
-    const ergebnisIdx = isMatch ? h.indexOf("ergebnis") : -1;
-    const gewinnerIdx = isMatch ? h.indexOf("gewinner") : -1;
+  const h = matchHeader.map((c) => String(c).trim().toLowerCase());
+  const bwIdx = h.indexOf("bewerbid");
+  const p1Idx = h.indexOf("spieler1id");
+  const p2Idx = h.indexOf("spieler2id");
+  const p3Idx = h.indexOf("spieler3id");
+  const p4Idx = h.indexOf("spieler4id");
+  const rtIdx = h.indexOf("bewerbrunde");
+  const ergebnisIdx = h.indexOf("ergebnis");
 
-    data.forEach((row) => {
-      if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
-      const p = parseRaster(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
-      if (!p) return;
-      const key = p.roundKey + "-" + p.match;
+  matchData.forEach((row) => {
+    if (bwIdx >= 0 && String(row[bwIdx] || "").trim() !== String(BEWERB_ID).trim()) return;
+    const p = parseRaster(rtIdx >= 0 ? String(row[rtIdx] || "").trim() : "");
+    if (!p) return;
+    const key = p.roundKey + "-" + p.match;
 
-      const pid1 = parsePlayerId(row[p1Idx]);
-      const pid2 = p2Idx >= 0 ? parsePlayerId(row[p2Idx]) : { cleanId: "", special: null, pre: false, gesetzt: false };
-      const pid3 = parsePlayerId(row[p3Idx]);
-      const pid4 = p4Idx >= 0 ? parsePlayerId(row[p4Idx]) : { cleanId: "", special: null, pre: false, gesetzt: false };
+    const pid1 = parsePlayerId(row[p1Idx]);
+    const pid2 = p2Idx >= 0 ? parsePlayerId(row[p2Idx]) : { cleanId: "", special: null, pre: false, gesetzt: false };
+    const pid3 = parsePlayerId(row[p3Idx]);
+    const pid4 = p4Idx >= 0 ? parsePlayerId(row[p4Idx]) : { cleanId: "", special: null, pre: false, gesetzt: false };
 
-      const entry = {
-        top: { id: pid1.cleanId, partnerId: pid2.cleanId, name: null, partnerName: null, special: pid1.special, pre: pid1.pre, gesetzt: pid1.gesetzt },
-        bottom: { id: pid3.cleanId, partnerId: pid4.cleanId, name: null, partnerName: null, special: pid3.special, pre: pid3.pre, gesetzt: pid3.gesetzt },
-        result: null,
-        winner: null,
-      };
+    const rawResult = ergebnisIdx >= 0 ? String(row[ergebnisIdx] || "").trim() : "";
+    const hasResult = !!rawResult;
 
-      if (isMatch) {
-        const rawResult = String(row[ergebnisIdx] || "").trim();
-        entry.result = parseResult(rawResult);
-        entry.winner = String(row[gewinnerIdx] || "").trim();
-        // Preserve gesetzt from preMatches if not set in matches
-        const existing = slotMap[key];
-        if (existing) {
-          if (!pid1.gesetzt && existing.top.gesetzt) entry.top.gesetzt = true;
-          if (!pid3.gesetzt && existing.bottom.gesetzt) entry.bottom.gesetzt = true;
-        }
+    const entry = {
+      top: { id: pid1.cleanId, partnerId: pid2.cleanId, name: null, partnerName: null, special: pid1.special, pre: pid1.pre, gesetzt: pid1.gesetzt },
+      bottom: { id: pid3.cleanId, partnerId: pid4.cleanId, name: null, partnerName: null, special: pid3.special, pre: pid3.pre, gesetzt: pid3.gesetzt },
+      result: null,
+      winner: null,
+    };
+
+    if (hasResult) {
+      entry.result = parseResult(rawResult);
+      entry.winner = "";
+      if (entry.result) {
+        let setsTop = 0, setsBot = 0;
+        entry.result.forEach((s) => {
+          if (s.special === "ret") { if (s.retOnLeft) setsBot++; else setsTop++; }
+          else if (s.left > s.right) setsTop++;
+          else if (s.right > s.left) setsBot++;
+        });
+        if (setsTop > setsBot) entry.winner = pid1.cleanId;
+        else if (setsBot > setsTop) entry.winner = pid3.cleanId;
       }
+    }
+    // [wo]/[ret]-Logik: wer wo/ret gibt, verliert (auch ohne Ergebnis)
+    if (!entry.winner) {
+      if (pid1.special === "wo" || pid1.special === "ret") entry.winner = pid3.cleanId;
+      else if (pid3.special === "wo" || pid3.special === "ret") entry.winner = pid1.cleanId;
+    }
+    // BYE-Logik: Spieler gegen BYE gewinnt automatisch
+    if (!entry.winner) {
+      if (/^BYE$/i.test(pid1.cleanId) && pid3.cleanId) entry.winner = pid3.cleanId;
+      else if (/^BYE$/i.test(pid3.cleanId) && pid1.cleanId) entry.winner = pid1.cleanId;
+    }
 
-      const existing = slotMap[key];
-      if (!existing || isMatch) {
-        slotMap[key] = entry;
-      }
-    });
-  }
+    // Preserve gesetzt from existing entry if not set in this row
+    const existing = slotMap[key];
+    if (existing) {
+      if (!pid1.gesetzt && existing.top.gesetzt) entry.top.gesetzt = true;
+      if (!pid3.gesetzt && existing.bottom.gesetzt) entry.bottom.gesetzt = true;
+    }
 
-  processRows(preData, preHeader, false);
-  processRows(matchData, matchHeader, true);
+    const hasSpecial = !!(pid1.special || pid3.special || /^BYE$/i.test(pid1.cleanId) || /^BYE$/i.test(pid3.cleanId));
+    if (!existing || hasResult || hasSpecial) {
+      slotMap[key] = entry;
+    }
+  });
 
   Object.values(slotMap).forEach((e) => {
     const resolve = (id) => /^BYE$/i.test(id) ? "BYE" : /^PRE$/i.test(id) ? null : (playerMap.get(id) || null);
@@ -301,7 +319,7 @@ function renderBracket(rounds) {
       md.style.gridRow = row;
       match._el = md;
 
-      if (match.result) md.classList.add("has-result");
+      if (match.result || match.winner) md.classList.add("has-result");
 
       [match.top, match.bottom].forEach((slot, sIdx) => {
         const el = document.createElement("div");
@@ -323,10 +341,12 @@ function renderBracket(rounds) {
         if (match.result && slot.name) {
           const score = match.result.map((s) => slot._side === "left" ? s.left : s.right).join(" | ");
           const hasRet = match.result.some((s) => s.special && (slot._side === "left" ? s.retOnLeft : !s.retOnLeft));
-          el.innerHTML = `<span class="pname">${displayName}</span> <span class="pscore">${score}</span>${hasRet ? " " + badgeHtml("ret") : ""}${slot.gesetzt ? " " + badgeHtml("gesetzt") : ""}`;
+          const nameBadges = [hasRet ? badgeHtml("ret") : "", slot.special ? badgeHtml(slot.special) : "", slot.gesetzt ? badgeHtml("gesetzt") : ""].filter(Boolean).join(" ");
+          el.innerHTML = `<span class="pname">${displayName} ${nameBadges}</span> <span class="pscore">${score}</span>`;
         } else {
-          el.innerHTML = (slot.name ? displayName : "—") + (slot.name ? " " + badgeHtml(slot.special) : "") + (slot.gesetzt ? " " + badgeHtml("gesetzt") : "");
-          if (!slot.name) el.classList.add("bye");
+          const badges = [badgeHtml(slot.special), slot.gesetzt ? badgeHtml("gesetzt") : ""].filter(Boolean).join(" ");
+          el.innerHTML = (slot.name ? displayName : "—") + (badges ? " " + badges : "");
+          if (!slot.name && !slot.special) el.classList.add("bye");
         }
 
         if (slotId) {
@@ -403,17 +423,15 @@ async function loadBracket() {
   showLoadingOverlay("Lade Turnierraster...");
 
   try {
-    const [bewerbRes, bewbsRes, preRes, matchRes, playerRes] = await Promise.all([
+    const [bewerbRes, bewbsRes, matchRes, playerRes] = await Promise.all([
       callWithRetry(readBewerbe),
       callWithRetry(readBewerbsart),
-      callWithRetry(readPreMatches),
       callWithRetry(readMatchesList),
       callWithRetry(readPlayersList),
     ]);
 
     const bewerbValues = bewerbRes.data?.values || [];
     const bewbsValues = bewbsRes.data?.values || [];
-    const preValues = preRes.data?.values || [];
     const matchValues = matchRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
 
@@ -469,12 +487,10 @@ async function loadBracket() {
       });
     }
 
-    const preHeader = preValues[0] || [];
-    const preData = preValues.slice(1);
     const matchHeader = matchValues[0] || [];
     const matchData = matchValues.slice(1);
 
-    const rounds = buildRounds(preData, preHeader, matchData, matchHeader, playerMap, r1CountConfigPlayers);
+    const rounds = buildRounds(matchData, matchHeader, playerMap, r1CountConfigPlayers);
     cachedRounds = rounds;
     cachedR1Count = r1CountConfigPlayers;
     cachedBewerbName = bewerbName;

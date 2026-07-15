@@ -5,8 +5,8 @@ window.addEventListener("load", main);
 
 function parsePlayerId(raw) {
   const s = String(raw || "").trim();
-  const wo = /\[w\.o\.\]/.test(s);
-  const cleanId = s.replace(/\[w\.o\.\]/gi, "").trim();
+  const wo = /\[w\.?o\.?\]/.test(s);
+  const cleanId = s.replace(/\[w\.?o\.?\]/gi, "").trim();
   return { cleanId, special: wo ? "wo" : null };
 }
 
@@ -106,15 +106,15 @@ async function main() {
 
     const header = matchesValues[0].map((h) => h.trim().toLowerCase());
     const idx = (label) => header.findIndex((v) => v.includes(label));
-    const i1 = idx("spielerid1");
-    const i3 = idx("spielerid3");
-    const i2 = idx("spielerid2");
-    const i4 = idx("spielerid4");
+    const i1 = idx("spieler1id");
+    const i3 = idx("spieler3id");
+    const i2 = idx("spieler2id");
+    const i4 = idx("spieler4id");
     const ergebnisIdx = idx("ergebnis");
-    const d = idx("zeitpunkt");
-    const gewinnerIdx = idx("gewinner");
+    const d = idx("matchdate");
+    // gewinner wird nicht mehr verwendet (aus Ergebnis berechnet)
     const bewerbIdIdx = idx("bewerbid");
-    const rasterIdx = idx("rasterpaarung");
+    const rasterIdx = idx("bewerbrunde");
 
     function dateToTs(raw) {
       if (!raw) return Infinity;
@@ -159,7 +159,23 @@ async function main() {
             pid3.special,
             pid4.special,
           ],
-          winnerId: gewinnerIdx !== -1 ? String(row[gewinnerIdx] || "").trim() : "",
+          winnerId: (() => {
+            // Gewinner aus Ergebnis berechnen
+            if (!ergebnisRaw) return "";
+            const rawSets = ergebnisRaw.split("/").filter(Boolean);
+            let wins1 = 0, wins2 = 0;
+            rawSets.forEach((s) => {
+              const clean = s.replace(/\(\d+\)/g, "").replace(/\[ret\]/gi, "").trim();
+              const parts = clean.split("-").map(Number);
+              if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                if (parts[0] > parts[1]) wins1++;
+                else if (parts[1] > parts[0]) wins2++;
+              }
+            });
+            if (wins1 > wins2) return pid1.cleanId;
+            if (wins2 > wins1) return pid3.cleanId;
+            return "";
+          })(),
           sets,
           ergebnis: ergebnisRaw.split("/").map((s) => formatSetScore(s)).join("/"),
           bewerbName: bewerbMap.get(bewerbId) || "",

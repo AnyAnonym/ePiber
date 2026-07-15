@@ -1,5 +1,6 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
+
+const readPlayersList = createEndpoint("players");
 
 function formatTelefon(val) {
   if (!val || String(val).trim() === "") return "---";
@@ -10,8 +11,7 @@ async function main() {
   try {
     console.log("⏳ Spieler werden geladen...");
 
-    const getPlayers = httpsCallable(functions, "readPlayersList");
-    const result = await getPlayers();
+    const result = await readPlayersList();
 
     const data = result.data?.values;
     if (!data) throw new Error("Backend lieferte keine gültigen Daten!");

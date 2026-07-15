@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASKÖ Piberbach – Matches - Übersicht</title>
+  <link rel="stylesheet" href="./CSS/styles.css" />
+  <link rel="stylesheet" href="./CSS/Matches1.css" />
+</head>
+<body>
+
+  <div id="header-container"></div>
+  <div id="mobile-nav-container"></div>
+
+  <main>
+    <section>
+      <h2 style="text-align:center;">Matches - Übersicht</h2>
+
+      <div id="matches1-controls">
+        <div class="m1-category-bar">
+          <button class="m1-cat-btn active" data-cat="played">Gespielt</button>
+          <button class="m1-cat-btn" data-cat="open">Offen</button>
+          <button class="m1-cat-btn" data-cat="all">Alle</button>
+        </div>
+
+        <button class="m1-filter-toggle" id="filterToggle">Filter ▾</button>
+
+        <div class="m1-filters hidden" id="filterPanel">
+          <label class="m1-filter-row">
+            <input type="checkbox" id="filterForderung" />
+            Forderung ohne Spieldatum
+          </label>
+          <label class="m1-filter-row">
+            <input type="checkbox" id="filterBewerb" />
+            Bewerb:
+            <select id="filterBewerbSelect" disabled><option value="">Alle</option></select>
+          </label>
+          <label class="m1-filter-row">
+            <input type="checkbox" id="filterSpieler" />
+            Spieler:
+            <select id="filterSpielerSelect" disabled><option value="">Alle</option></select>
+          </label>
+          <label class="m1-filter-row">
+            <input type="checkbox" id="filterDatum" />
+            Zeitraum:
+          </label>
+          <div class="m1-datum-row hidden" id="datumRow">
+            <input type="date" id="datumVon" />
+            <span>bis</span>
+            <input type="date" id="datumBis" />
+            <div class="m1-datum-presets">
+              <button class="m1-preset" data-months="-1">-1M</button>
+              <button class="m1-preset" data-months="-3">-3M</button>
+              <button class="m1-preset" data-months="-12">-12M</button>
+              <button class="m1-preset" data-months="1">+1M</button>
+              <button class="m1-preset" data-months="3">+3M</button>
+              <button class="m1-preset" data-months="12">+12M</button>
+            </div>
+          </div>
+          <label class="m1-filter-row">
+            <input type="checkbox" id="filterMissing" />
+            Fehlender Spielpartner
+          </label>
+        </div>
+      </div>
+
+      <div id="matches1-count"></div>
+      <div id="matches1-container"></div>
+    </section>
+  </main>
+
+  <div id="footer-container"></div>
+
+  <script type="module" src="JS/SDK.js"></script>
+  <script type="module" src="JS/modals.js"></script>
+  <script type="module" src="JS/navbar.js"></script>
+  <script type="module" src="JS/Matches1.js"></script>
+  <script src="JS/global.js"></script>
+  <script src="JS/clock.js"></script>
+  <script src="JS/footer.js"></script>
+
+</body>
+</html>

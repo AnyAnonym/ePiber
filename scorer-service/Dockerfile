@@ -11,6 +11,7 @@ COPY dataStore.js .
 COPY dataPoller.js .
 COPY courtPoller.js .
 COPY dataProvider.js .
+COPY stateStore.js .
 
 EXPOSE 8080
 

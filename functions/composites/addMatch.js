@@ -49,19 +49,18 @@ export const addMatch = onCall({region: "europe-west3", invoker: "public"}, asyn
     const preValues = await readPreMatchesData(sheets);
     if (preValues.length > 1) {
       const preHeader = preValues[0].map((h) => h.trim().toLowerCase());
-      const i1 = preHeader.indexOf("spielerid1");
-      const i2 = preHeader.indexOf("spielerid2");
-      const i3 = preHeader.indexOf("spielerid3");
-      const i4 = preHeader.indexOf("spielerid4");
-      const st = preHeader.indexOf("status");
+      const i1 = preHeader.indexOf("spieler1id");
+      const i2 = preHeader.indexOf("spieler2id");
+      const i3 = preHeader.indexOf("spieler3id");
+      const i4 = preHeader.indexOf("spieler4id");
       const bIdx = preHeader.indexOf("bewerbid");
 
       for (let i = 1; i < preValues.length; i++) {
         const row = preValues[i];
         const rowBewerb = bIdx !== -1 ? String(row[bIdx] || "").trim() : "";
         if (rowBewerb !== resolvedBewerbId) continue;
-        const rowStatus = String(row[st] || "offen").trim().toLowerCase();
-        if (rowStatus === "offen" || rowStatus === "bestaetigt") {
+        // PreMatch-Zeilen ohne Ergebnis gelten als offen
+        {
           const existing = [
             String(row[i1] || "").trim(),
             String(row[i2] || "").trim(),
@@ -102,19 +101,19 @@ export const addMatch = onCall({region: "europe-west3", invoker: "public"}, asyn
       }
     }
 
-    let zeitpunktForderung = request.data.zeitpunktForderung;
-    if (!zeitpunktForderung) {
+    let forderungDate = request.data.forderungDate;
+    if (!forderungDate) {
       const jetzt = new Date();
       const yy = String(jetzt.getFullYear()).slice(2);
       const mm = String(jetzt.getMonth() + 1).padStart(2, "0");
       const dd = String(jetzt.getDate()).padStart(2, "0");
       const hh = String(jetzt.getHours()).padStart(2, "0");
       const mi = String(jetzt.getMinutes()).padStart(2, "0");
-      zeitpunktForderung = `${yy}${mm}${dd}-${hh}${mi}`;
+      forderungDate = `${yy}${mm}${dd}-${hh}${mi}`;
     }
 
     const newId = await getNextPreMatchId(sheets);
-    const result = await createPreMatchData(sheets, {newId, zeitpunktForderung, bewerbId: resolvedBewerbId, p1id, p2id, p3id, p4id});
+    const result = await createPreMatchData(sheets, {newId, forderungDate, bewerbId: resolvedBewerbId, p1id, p2id, p3id, p4id});
     const pmap = buildMap(playersValues, "id", "vorname", "nachname");
     const bmap = await buildBewerbMap(sheets);
     logEntry({sheets, source: "addMatch", entry: `Neue Forderung: ${fmtPlayer(p1id, pmap)} vs ${fmtPlayer(p3id, pmap)} (Bewerb ${fmtBewerb(resolvedBewerbId, bmap)})`});

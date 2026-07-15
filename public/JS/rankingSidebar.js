@@ -1,8 +1,7 @@
-import {functions} from "./SDK.js";
-import {httpsCallable} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
 
-const readRlPlatzierung = httpsCallable(functions, "readRlPlatzierung");
-const readPlayersList = httpsCallable(functions, "readPlayersList");
+const readRlPlatzierung = createEndpoint("rlPlatzierung");
+const readPlayersList   = createEndpoint("players");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id") || document.getElementById("rankingContainer")?.dataset.bewerbId || "2";

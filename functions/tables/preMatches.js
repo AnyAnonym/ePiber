@@ -2,23 +2,21 @@
 import {onCall} from "firebase-functions/v2/https";
 import {SHEET_ID, getSheetsClient} from "../config.js";
 import {logEntry} from "./logging.js";
+import {readMatches1Data} from "./matches.js";
 
+// readPreMatches leitet jetzt auf Matches1 um (Kompatibilität)
 export async function readPreMatchesData(sheets) {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: "preMatches",
-  });
-  return res.data.values || [];
+  return readMatches1Data(sheets);
 }
 
 export const readPreMatches = onCall({region: "europe-west3", invoker: "public"}, async () => {
   try {
     const sheets = await getSheetsClient(true);
-    const values = await readPreMatchesData(sheets);
+    const values = await readMatches1Data(sheets);
     if (values.length < 2) return {success: true, values};
 
     const header = values[0].map((h) => h.trim().toLowerCase());
-    const ignIdx = header.indexOf("ignorieren");
+    const ignIdx = header.indexOf("ignore");
 
     if (ignIdx === -1) return {success: true, values};
 
@@ -34,22 +32,25 @@ export const readPreMatches = onCall({region: "europe-west3", invoker: "public"}
   }
 });
 
-export async function createPreMatchData(sheets, {newId, zeitpunktForderung, bewerbId, p1id, p2id, p3id, p4id}) {
+export async function createPreMatchData(sheets, {newId, forderungDate, bewerbId, p1id, p2id, p3id, p4id}) {
+  // Matches1 Spaltenreihenfolge: Ignore, ID, MatchDate, ForderungDate, Dauer, BewerbID, BewerbRunde, MatchtypID, Spieler1ID, Spieler2ID, Spieler3ID, Spieler4ID, Ergebnis, PTN-Wertung, Bemerkung
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: "preMatches",
+    range: "Matches1",
     valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [[newId, "", zeitpunktForderung, bewerbId, "", p1id, p2id, p3id, p4id, "offen"]],
+      values: [["", newId, "", forderungDate || "", "", bewerbId, "", "", p1id, p2id || "", p3id, p4id || "", "", "", ""]],
     },
   });
   return {updates: res.data.updates};
 }
 
 export async function getNextPreMatchId(sheets) {
-  const values = await readPreMatchesData(sheets);
+  const values = await readMatches1Data(sheets);
+  if (values.length < 2) return 1;
   const header = values[0].map((h) => h.trim().toLowerCase());
   const idIdx = header.indexOf("id");
+  if (idIdx === -1) return 1;
   const numericIds = values.slice(1)
       .map((r) => parseFloat(r[idIdx]))
       .filter((n) => !isNaN(n) && n > 0);
@@ -57,10 +58,11 @@ export async function getNextPreMatchId(sheets) {
 }
 
 export async function updatePreMatchDateData(sheets, row, datum) {
-  const cellB = `preMatches!B${row}`;
+  // MatchDate ist Spalte C (3. Spalte) in Matches1
+  const cellC = `Matches1!C${row}`;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: cellB,
+    range: cellC,
     valueInputOption: "USER_ENTERED",
     requestBody: {values: [[datum]]},
   });
@@ -85,9 +87,9 @@ export async function deletePreMatchRowData(sheets, row) {
   const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: SHEET_ID,
   });
-  const preSheet = spreadsheet.data.sheets.find((s) => s.properties.title === "preMatches");
-  if (!preSheet) throw new Error("Tabelle preMatches nicht gefunden");
-  const sheetId = preSheet.properties.sheetId;
+  const matchSheet = spreadsheet.data.sheets.find((s) => s.properties.title === "Matches1");
+  if (!matchSheet) throw new Error("Tabelle Matches1 nicht gefunden");
+  const sheetId = matchSheet.properties.sheetId;
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SHEET_ID,
@@ -109,8 +111,8 @@ export async function deletePreMatchRowData(sheets, row) {
 export async function clearPreMatchRowData(sheets, row) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `preMatches!A${row}:J${row}`,
+    range: `Matches1!A${row}:O${row}`,
     valueInputOption: "USER_ENTERED",
-    requestBody: {values: [["", "", "", "", "", "", "", "", "", ""]]},
+    requestBody: {values: [["", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]]},
   });
 }

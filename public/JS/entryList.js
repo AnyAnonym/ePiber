@@ -1,6 +1,3 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 import { createEndpoint } from "./dataClient.js";
 import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 
@@ -8,9 +5,8 @@ const readEntryList     = createEndpoint("entryList");
 const readPlayersList   = createEndpoint("players");
 const readBewerbe       = createEndpoint("bewerbe");
 const readRlPlatzierung = createEndpoint("rlPlatzierung");
-// Schreib-Calls bleiben bei Cloud Functions
-const addEntryList    = httpsCallable(functions, "addEntryList");
-const removeEntryList = httpsCallable(functions, "removeEntryList");
+const addEntryList      = createEndpoint("addEntryList");
+const removeEntryList   = createEndpoint("removeEntryList");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");

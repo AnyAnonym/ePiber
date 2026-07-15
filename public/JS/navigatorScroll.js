@@ -1,8 +1,6 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
 
-const setNavigatorScroll = httpsCallable(functions, "setNavigatorScroll");
+const setNavigatorScroll = createEndpoint("setNavigatorScroll");
 const SCROLL_AMOUNT = 300;
 
 document.getElementById("scroll-up").addEventListener("click", async () => {

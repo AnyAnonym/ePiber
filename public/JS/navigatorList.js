@@ -1,18 +1,13 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
 import { createEndpoint } from "./dataClient.js";
 
-// Lese-Calls über dataClient (WebSocket)
-const readNavigator = createEndpoint("navigator");
-const readPreMatches = createEndpoint("preMatches");
-const readPlayersList = createEndpoint("players");
-const readBewerbe = createEndpoint("bewerbe");
-// Schreib-Calls bleiben bei Cloud Functions
-const setNavigatorTarget = httpsCallable(functions, "setNavigatorTarget");
-const getNavigatorTarget = httpsCallable(functions, "getNavigatorTarget");
-const setScoreboardCourt = httpsCallable(functions, "setScoreboardCourt");
-const getScoreboardCourts = httpsCallable(functions, "getScoreboardCourts");
+const readNavigator      = createEndpoint("navigator");
+const readPreMatches     = createEndpoint("preMatches");
+const readPlayersList    = createEndpoint("players");
+const readBewerbe        = createEndpoint("bewerbe");
+const setNavigatorTarget = createEndpoint("setNavigatorTarget");
+const getNavigatorTarget = createEndpoint("getNavigatorTarget");
+const setScoreboardCourt = createEndpoint("setScoreboardCourt");
+const getScoreboardCourts = createEndpoint("getScoreboardCourts");
 
 let currentActiveBtn = null;
 let pendingBtn = null;
@@ -82,16 +77,28 @@ async function loadNextMatches() {
     const header = values[0].map((h) => h.trim().toLowerCase());
     const idx = (label) => header.indexOf(label);
     const idIdx = idx("id");
-    const i1 = idx("spielerid1");
-    const i2 = idx("spielerid2");
-    const i3 = idx("spielerid3");
-    const i4 = idx("spielerid4");
-    const d = idx("zeitpunktmatch");
+    const i1 = idx("spieler1id");
+    const i2 = idx("spieler2id");
+    const i3 = idx("spieler3id");
+    const i4 = idx("spieler4id");
+    const d = idx("matchdate");
+    const ergebnisIdx = idx("ergebnis");
     const bewerbIdIdx = idx("bewerbid");
-    const rasterIdx = idx("rasterpaarung");
+    const rasterIdx = idx("bewerbrunde");
 
     nextMatches = values.slice(1)
-      .filter((row) => row && row[i1] && !/^BYE$/i.test(String(row[i1])) && !/^BYE$/i.test(String(row[i3])))
+      .filter((row) => {
+        if (!row || !row[i1]) return false;
+        if (/^BYE$/i.test(String(row[i1])) || /^BYE$/i.test(String(row[i3] || ""))) return false;
+        // Nur offene Matches (ohne Ergebnis, ohne [wo]/[ret])
+        const erg = ergebnisIdx >= 0 ? String(row[ergebnisIdx] || "").trim() : "";
+        if (erg) return false;
+        const p1raw = String(row[i1] || "");
+        const p3raw = String(row[i3] || "");
+        if (/\[w\.?o\.?\]/i.test(p1raw) || /\[w\.?o\.?\]/i.test(p3raw)) return false;
+        if (/\[ret\]/i.test(p1raw) || /\[ret\]/i.test(p3raw)) return false;
+        return true;
+      })
       .map((row) => {
         const ts = dateToTs(row[d]);
         const matchId = idIdx >= 0 ? String(row[idIdx] || "").trim() : "";

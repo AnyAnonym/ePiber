@@ -1,0 +1,289 @@
+/* ── Matches1 Styles ── */
+
+/* Breite begrenzen */
+main:has(#matches1-container) {
+  max-width: 100vw;
+  width: 100%;
+  padding: 0 4px;
+  margin: 4px auto;
+  box-sizing: border-box;
+}
+
+main:has(#matches1-container) section {
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+#matches1-controls {
+  margin-bottom: 8px;
+  max-width: 100%;
+}
+
+.m1-category-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.m1-cat-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.m1-cat-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.m1-cat-btn:hover:not(.active) {
+  background: #eef3fc;
+}
+
+.m1-filter-toggle {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--table-border);
+  border-radius: 6px;
+  background: #f9f9f9;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  color: var(--muted);
+}
+
+.m1-filters {
+  border: 1px solid var(--table-border);
+  border-radius: 8px;
+  padding: 8px;
+  margin-top: 4px;
+  background: #fafafa;
+}
+
+.m1-filters.hidden {
+  display: none;
+}
+
+.m1-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 0.85rem;
+}
+
+.m1-filter-row select {
+  flex: 1;
+  padding: 4px;
+  border: 1px solid var(--table-border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.m1-datum-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 0 4px 24px;
+}
+
+.m1-datum-row.hidden {
+  display: none;
+}
+
+.m1-datum-row input[type="date"] {
+  padding: 4px;
+  border: 1px solid var(--table-border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.m1-datum-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.m1-preset {
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.m1-preset:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+#matches1-count {
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 4px 0;
+}
+
+#matches1-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* ── Match Card ── */
+.m1-card {
+  background: #fff;
+  border: 1px solid var(--table-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  overflow: hidden;
+}
+
+.m1-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-bottom: 2px;
+}
+
+.m1-date {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.m1-forderung {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.m1-bewerb {
+  background: #d4edda;
+  color: #155724;
+  border-radius: 12px;
+  padding: 1px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.m1-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.m1-players {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.m1-team {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.m1-player {
+  font-weight: 500;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m1-team.winner .m1-player {
+  font-weight: 700;
+}
+
+.m1-vs {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.m1-result {
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 60px;
+}
+
+.badge-wo, .badge-ret {
+  font-size: 0.65rem;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.badge-wo {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.badge-ret {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .m1-category-bar {
+    gap: 2px;
+  }
+  .m1-cat-btn {
+    padding: 6px 8px;
+    font-size: 0.8rem;
+  }
+  .m1-card {
+    padding: 4px 6px;
+  }
+  .m1-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .m1-content {
+    flex-direction: row;
+    align-items: center;
+  }
+  .m1-players {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+  .m1-player {
+    font-size: 0.8rem;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+  .m1-vs {
+    font-size: 0.7rem;
+  }
+  .m1-result {
+    font-size: 0.8rem;
+    min-width: 50px;
+    align-self: center;
+  }
+}

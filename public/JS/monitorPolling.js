@@ -1,11 +1,9 @@
-import { functions } from "./SDK.js";
-import { httpsCallable } from
-  "https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js";
+import { createEndpoint } from "./dataClient.js";
 
-const getNavigatorTarget = httpsCallable(functions, "getNavigatorTarget");
-const setNavigatorTarget = httpsCallable(functions, "setNavigatorTarget");
-const getNavigatorScroll = httpsCallable(functions, "getNavigatorScroll");
-const setNavigatorScroll = httpsCallable(functions, "setNavigatorScroll");
+const getNavigatorTarget = createEndpoint("getNavigatorTarget");
+const setNavigatorTarget = createEndpoint("setNavigatorTarget");
+const getNavigatorScroll = createEndpoint("getNavigatorScroll");
+const setNavigatorScroll = createEndpoint("setNavigatorScroll");
 const frame = document.getElementById("monitor-frame");
 const overlay = document.getElementById("monitor-overlay");
 
