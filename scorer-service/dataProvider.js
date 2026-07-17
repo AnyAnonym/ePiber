@@ -257,7 +257,7 @@ const endpoints = {
     if (values.length < 2) return {success: true, valid: false};
     const header = getHeader(values);
     const emailIdx = getHeaderIdx(header, "e-mail") !== -1 ? getHeaderIdx(header, "e-mail") : getHeaderIdx(header, "email");
-    const pwIdx = getHeaderIdx(header, "passwort");
+    const pwIdx = getHeaderIdx(header, "passwdhash");
     if (emailIdx === -1 || pwIdx === -1) return {success: true, valid: false};
     const row = values.slice(1).find((r) =>
       String(r[emailIdx] || "").trim().toLowerCase() === email.trim().toLowerCase());
@@ -275,14 +275,26 @@ const endpoints = {
       if (values.length < 2) return {success: false, error: "Keine Spieler"};
       const header = getHeader(values);
       const emailIdx = getHeaderIdx(header, "e-mail") !== -1 ? getHeaderIdx(header, "e-mail") : getHeaderIdx(header, "email");
-      const pwIdx = getHeaderIdx(header, "passwort");
+      const pwIdx = getHeaderIdx(header, "passwdhash");
+      const kvIdx = getHeaderIdx(header, "kennwortvergessen");
       if (emailIdx === -1 || pwIdx === -1) return {success: false, error: "Spalte nicht gefunden"};
       for (let i = 1; i < values.length; i++) {
         if (String(values[i][emailIdx] || "").trim().toLowerCase() === email.trim().toLowerCase()) {
-          const cellRange = `Personen!${String.fromCharCode(65 + pwIdx)}${i + 1}`;
+          // Prüfen ob Kennwort-Vergessen freigegeben ist
+          if (kvIdx === -1 || String(values[i][kvIdx] || "").trim().toLowerCase() !== "x") {
+            return {success: false, error: "Bitte bei Administrator Freigabe einholen"};
+          }
+          // Passwort setzen
+          const pwCell = `Personen!${String.fromCharCode(65 + pwIdx)}${i + 1}`;
           await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID, range: cellRange,
+            spreadsheetId: SHEET_ID, range: pwCell,
             valueInputOption: "USER_ENTERED", requestBody: {values: [[passwordHash]]},
+          });
+          // "x" aus KennwortVergessen löschen
+          const kvCell = `Personen!${String.fromCharCode(65 + kvIdx)}${i + 1}`;
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID, range: kvCell,
+            valueInputOption: "USER_ENTERED", requestBody: {values: [[""]]},
           });
           return {success: true};
         }

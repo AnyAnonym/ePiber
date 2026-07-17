@@ -2386,5 +2386,44 @@ DEPLOY-REIHENFOLGE für v2.1.1:
   2. Firebase Hosting deployen:
      firebase deploy --only hosting
 
+
+===============================================================================
+39. CHANGELOG – Bewerbe-Sortierung, Passwort-Freigabe, Fixes (v2.1.2)
+===============================================================================
+
+2026-07-16:
+-----------
+
+- FEATURE: Bewerbe-Sortierung nach SortOrder + Datum (bewerbeList.js)
+  * Neue Spalte "SortOrder" in Bewerb-Tabelle wird ausgelesen
+  * Sortierung: SortOrder aufsteigend (kleinste oben), dann Datum
+  * Aktive Bewerbe: nach Bewerbsende (frühestes oben)
+  * Bevorstehende: nach Bewerbsbeginn (nächster Start oben)
+  * Beendete: nach Bewerbsende (frühestes oben)
+  * Bewerbe ohne SortOrder werden nach den nummerierten angereiht
+
+- FEATURE: Passwort-Vergessen mit Administrator-Freigabe (dataProvider.js)
+  * resetPassword prüft Spalte "kennwortvergessen" in Personen-Tabelle
+  * Nur wenn "x" eingetragen → Passwort-Änderung erlaubt
+  * Sonst Fehlermeldung: "Bitte bei Administrator Freigabe einholen"
+  * Nach erfolgreicher Änderung wird "x" automatisch gelöscht (einmalig)
+
+- FEATURE: Matches1.html Filter-Reihenfolge geändert
+  * 1. Spieler, 2. Bewerb, 3. Zeitraum, 4. Fehlender Spielpartner,
+    5. Forderung ohne Spieldatum
+
+- BUGFIX: Spaltenname "passwdhash" statt "passwort" (dataProvider.js)
+  * verifyUserLogin und resetPassword suchten nach falscher Spalte
+
+- BUILD: APP_VERSION auf 2.1.2
+
+DEPLOY-REIHENFOLGE für v2.1.2:
+  1. Cloud Run Service deployen (Passwort-Freigabe):
+     cd scorer-service
+     gcloud run deploy scorer-service --source . --region europe-west3 --allow-unauthenticated
+     cd ..
+  2. Firebase Hosting deployen:
+     firebase deploy --only hosting
+
 ENDE DES PROTOKOLLS
 ================================================================================

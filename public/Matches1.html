@@ -27,18 +27,14 @@
 
         <div class="m1-filters hidden" id="filterPanel">
           <label class="m1-filter-row">
-            <input type="checkbox" id="filterForderung" />
-            Forderung ohne Spieldatum
+            <input type="checkbox" id="filterSpieler" />
+            Spieler:
+            <select id="filterSpielerSelect" disabled><option value="">Alle</option></select>
           </label>
           <label class="m1-filter-row">
             <input type="checkbox" id="filterBewerb" />
             Bewerb:
             <select id="filterBewerbSelect" disabled><option value="">Alle</option></select>
-          </label>
-          <label class="m1-filter-row">
-            <input type="checkbox" id="filterSpieler" />
-            Spieler:
-            <select id="filterSpielerSelect" disabled><option value="">Alle</option></select>
           </label>
           <label class="m1-filter-row">
             <input type="checkbox" id="filterDatum" />
@@ -60,6 +56,10 @@
           <label class="m1-filter-row">
             <input type="checkbox" id="filterMissing" />
             Fehlender Spielpartner
+          </label>
+          <label class="m1-filter-row">
+            <input type="checkbox" id="filterForderung" />
+            Forderung ohne Spieldatum
           </label>
         </div>
       </div>

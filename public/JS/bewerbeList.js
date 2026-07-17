@@ -216,10 +216,13 @@ async function loadBewerbe() {
     const bEntryDeadlineIdx = bHeader.indexOf("entrydeadline");
     const bStartIdx = bHeader.indexOf("bewerbsbeginn");
     const bEndIdx = bHeader.indexOf("bewerbsende");
+    const bSortIdx = bHeader.indexOf("sortorder");
 
     const bewerbe = bewerbValues.slice(1).map((row) => {
       const bewerbsartId = String(row[bBewerbsartIdx] || "").trim();
       const baInfo = baMap.get(bewerbsartId) || {};
+      const sortOrderRaw = bSortIdx >= 0 ? String(row[bSortIdx] || "").trim() : "";
+      const sortOrder = sortOrderRaw !== "" ? parseInt(sortOrderRaw, 10) : Infinity;
       return {
         id: row[bIdIdx] || "",
         bewerbsartId,
@@ -230,6 +233,7 @@ async function loadBewerbe() {
         bewerbsende: row[bEndIdx] || "",
         entryListAvailable: baInfo.entryListAvailable || "0",
         roundRobin: baInfo.roundRobin || "0",
+        sortOrder,
       };
     });
 
@@ -247,6 +251,22 @@ async function loadBewerbe() {
       else if (cat === "upcoming") upcoming.push(b);
       else if (cat === "finished") finished.push(b);
     });
+
+    // Sortierung pro Kategorie
+    function sortByOrder(a, b, datumField) {
+      // 1. SortOrder: kleinste zuerst, Infinity (kein Wert) nach unten
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      // 2. Bei gleichem SortOrder (oder beide ohne): nach Datum
+      const da = parseSheetDate(a[datumField]);
+      const db = parseSheetDate(b[datumField]);
+      const ta = da ? da.getTime() : Infinity;
+      const tb = db ? db.getTime() : Infinity;
+      return ta - tb;
+    }
+
+    active.sort((a, b) => sortByOrder(a, b, "bewerbsende"));
+    upcoming.sort((a, b) => sortByOrder(a, b, "bewerbsbeginn"));
+    finished.sort((a, b) => sortByOrder(a, b, "bewerbsende"));
 
     container.innerHTML = "";
 
