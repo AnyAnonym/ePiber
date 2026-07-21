@@ -2425,5 +2425,91 @@ DEPLOY-REIHENFOLGE für v2.1.2:
   2. Firebase Hosting deployen:
      firebase deploy --only hosting
 
+
+===============================================================================
+40. CHANGELOG – Migration Self-Hosted: Google Cloud → Arch Linux + Caddy (v3.0.0)
+===============================================================================
+
+2026-07-21:
+-----------
+- ARCHITEKTUR: Komplette Migration von Google Cloud/Firebase auf eigenen Server
+  * Hosting: Firebase Hosting → Caddy Webserver (Arch Linux)
+  * Backend: Google Cloud Run → Node.js direkt auf dem Server (systemd)
+  * Firestore: Bereits seit v2.1.0 nicht mehr in Verwendung
+  * Firebase Cloud Functions: Bereits seit v2.1.0 nicht mehr in Verwendung
+  * Google Sheets API bleibt als Datenbank (über Service-Account-Key)
+  * BunnyCDN Court-Scores bleiben unverändert (externe Ressource)
+
+- ARCHITEKTUR: Neue Projektstruktur mit 3 Verzeichnissen
+  * Frontend/  — Statische Dateien die Caddy ausliefert (HTML, JS, CSS)
+  * Backend/   — Node.js scorer-service (server.js + Module)
+  * Project/   — Dokumentation, Server-Konfigvorlagen, Systemd-Services
+  * Alte Verzeichnisse entfernt: public/, scorer-service/, functions/
+
+- ARCHITEKTUR: 3 Systeme auf einem Server
+  * Live (piber):  epiber.at (HTTPS, Port 443) — Backend Port 8080
+  * Test PAJ:      epiber.at:8081 (HTTP)       — Backend Port 8083
+  * Test PK:       epiber.at:8082 (HTTP)       — Backend Port 8084
+  * Jedes System hat eigene Frontend/, Backend/, Project/ Verzeichnisse
+  * Server-Pfade: /srv/http/ePiber/{piber,paj,pk}/
+
+- REFACTORING: Backend config.js liest aus Umgebungsvariablen
+  * SHEET_ID, PORT, COURT_URL aus process.env
+  * SCOREBOARD_FUNCTION_URL entfernt (Firebase-Relikt)
+  * Pro System eigene .env-Datei (nicht im Git)
+
+- REFACTORING: Frontend SDK.js nur noch WebSocket-URL
+  * export const SCORER_WS_URL — pro System unterschiedlich
+  * Live: wss://epiber.at/ws
+  * PAJ:  ws://epiber.at:8081/ws
+  * PK:   ws://epiber.at:8082/ws
+
+- FEATURE: Caddy Webserver mit automatischem TLS
+  * Live-System: Automatisches Let's Encrypt Zertifikat
+  * Testsysteme: Plain HTTP (kein TLS nötig)
+  * WebSocket-Proxy /ws → localhost Backend
+  * Backend-Endpoints /health, /status, /set-active durchgereicht
+  * Cache-Control: no-cache für alle Frontend-Dateien
+
+- FEATURE: Systemd-Services für alle 3 Backend-Instanzen
+  * epiber-piber.service (Live, Port 8080)
+  * epiber-paj.service (PAJ, Port 8083)
+  * epiber-pk.service (PK, Port 8084)
+  * EnvironmentFile für .env pro System
+  * Restart=always mit 5s Delay
+
+- ENTFERNT: Alle Firebase/Google Cloud Abhängigkeiten
+  * firebase.json, firestore.rules, firestore.indexes.json
+  * functions/ (Cloud Functions, seit v2.1.0 obsolet)
+  * Root package.json/package-lock.json (war nur für Firebase)
+  * Dockerfile (kein Docker, Node.js direkt)
+  * SCOREBOARD_FUNCTION_URL aus config.js
+
+- KONFIGURATION: Pro System manuell zu erstellen (nicht im Git)
+  * Backend/.env             — SHEET_ID, PORT, Credentials-Pfad
+  * Backend/service-account.json — Google Service Account Key
+  * Frontend/JS/SDK.js       — WebSocket-URL
+  * Vorlagen im Git: .env.example, SDK.js.example
+
+- DOKU: Project/SERVER-SETUP.txt — Komplette Einrichtungsanleitung
+  * Paketinstallation, Benutzer, Verzeichnisse
+  * Git-Workflow, Konfigurationsdateien
+  * Caddy, Systemd, Firewall, DNS
+  * Deployment-Workflow, Status-Prüfung
+
+- BUILD: APP_VERSION auf 3.0.0 (Major wegen Infrastruktur-Wechsel)
+
+DEPLOY-REIHENFOLGE für v3.0.0:
+  1. Am Server: Git-Repository klonen in /srv/http/ePiber/{piber,paj,pk}
+  2. Pro System: Backend/.env und Frontend/JS/SDK.js erstellen
+  3. Pro System: service-account.json ins Backend/ legen
+  4. Pro System: cd Backend && npm install --production
+  5. Caddyfile nach /etc/caddy/Caddyfile kopieren
+  6. Systemd-Services nach /etc/systemd/system/ kopieren
+  7. systemctl daemon-reload
+  8. systemctl enable --now caddy epiber-piber epiber-paj epiber-pk
+  9. Testen: curl https://epiber.at/health
+
+
 ENDE DES PROTOKOLLS
 ================================================================================

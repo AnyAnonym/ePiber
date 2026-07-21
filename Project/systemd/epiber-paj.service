@@ -1,0 +1,20 @@
+# ══════════════════════════════════════════════════════
+# Systemd Service: ePiber Scorer-Service (PAJ Test)
+# Datei: /etc/systemd/system/epiber-paj.service
+# ══════════════════════════════════════════════════════
+
+[Unit]
+Description=ePiber Scorer-Service (Test - PAJ)
+After=network.target
+
+[Service]
+Type=simple
+User=piber
+WorkingDirectory=/srv/http/ePiber/paj/Backend
+EnvironmentFile=/srv/http/ePiber/paj/Backend/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

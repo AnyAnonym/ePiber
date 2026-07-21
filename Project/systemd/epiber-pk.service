@@ -1,0 +1,20 @@
+# ══════════════════════════════════════════════════════
+# Systemd Service: ePiber Scorer-Service (PK Test)
+# Datei: /etc/systemd/system/epiber-pk.service
+# ══════════════════════════════════════════════════════
+
+[Unit]
+Description=ePiber Scorer-Service (Test - PK)
+After=network.target
+
+[Service]
+Type=simple
+User=piber
+WorkingDirectory=/srv/http/ePiber/pk/Backend
+EnvironmentFile=/srv/http/ePiber/pk/Backend/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

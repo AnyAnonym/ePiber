@@ -1,0 +1,92 @@
+# ══════════════════════════════════════════════════════
+# Caddy Konfiguration für ePiber
+# Datei: /etc/caddy/Caddyfile
+# ══════════════════════════════════════════════════════
+#
+# 3 Systeme:
+#   epiber.at       → Live (piber)   Backend Port 8080   HTTPS (automatisch)
+#   epiber.at:8081  → Test PAJ       Backend Port 8083   HTTP (kein TLS)
+#   epiber.at:8082  → Test PK        Backend Port 8084   HTTP (kein TLS)
+#
+# Live: Caddy holt sich automatisch ein Let's Encrypt Zertifikat
+#       weil ein Domainname angegeben ist.
+# Test: Kein TLS — sind interne Testsysteme.
+# ══════════════════════════════════════════════════════
+
+
+# ── Livesystem (epiber.at, HTTPS Port 443) ──
+
+epiber.at {
+	# WebSocket-Proxy zum Backend
+	handle /ws {
+		reverse_proxy localhost:8080
+	}
+
+	# Backend HTTP-Endpoints (health, status, set-active)
+	handle /health {
+		reverse_proxy localhost:8080
+	}
+	handle /status {
+		reverse_proxy localhost:8080
+	}
+	handle /set-active {
+		reverse_proxy localhost:8080
+	}
+
+	# Statische Frontend-Dateien
+	handle {
+		root * /srv/http/ePiber/piber/Frontend
+		file_server
+		header Cache-Control "no-cache"
+	}
+}
+
+
+# ── Testsystem PAJ (http://epiber.at:8081) ──
+
+http://epiber.at:8081 {
+	handle /ws {
+		reverse_proxy localhost:8083
+	}
+
+	handle /health {
+		reverse_proxy localhost:8083
+	}
+	handle /status {
+		reverse_proxy localhost:8083
+	}
+	handle /set-active {
+		reverse_proxy localhost:8083
+	}
+
+	handle {
+		root * /srv/http/ePiber/paj/Frontend
+		file_server
+		header Cache-Control "no-cache"
+	}
+}
+
+
+# ── Testsystem PK (http://epiber.at:8082) ──
+
+http://epiber.at:8082 {
+	handle /ws {
+		reverse_proxy localhost:8084
+	}
+
+	handle /health {
+		reverse_proxy localhost:8084
+	}
+	handle /status {
+		reverse_proxy localhost:8084
+	}
+	handle /set-active {
+		reverse_proxy localhost:8084
+	}
+
+	handle {
+		root * /srv/http/ePiber/pk/Frontend
+		file_server
+		header Cache-Control "no-cache"
+	}
+}

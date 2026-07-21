@@ -1,0 +1,20 @@
+# ══════════════════════════════════════════════════════
+# Systemd Service: ePiber Scorer-Service (LIVE)
+# Datei: /etc/systemd/system/epiber-piber.service
+# ══════════════════════════════════════════════════════
+
+[Unit]
+Description=ePiber Scorer-Service (Live - piber)
+After=network.target
+
+[Service]
+Type=simple
+User=piber
+WorkingDirectory=/srv/http/ePiber/piber/Backend
+EnvironmentFile=/srv/http/ePiber/piber/Backend/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

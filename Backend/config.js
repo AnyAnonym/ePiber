@@ -1,17 +1,16 @@
 // ══════════════════════════════════════════════════════
 // Scorer-Service Konfiguration
-// Hier ändern für Live/Developer-System
+// Umgebungsspezifische Werte werden aus Umgebungs-
+// variablen gelesen (z.B. aus .env via systemd)
 // ══════════════════════════════════════════════════════
 
 // ── Spreadsheet ──
-const SHEET_ID = "1E1CYezDcScIBvH9ebjN0hOkvttTdA6PFIgYKDMaeE04";
+// Wird pro System (piber/paj/pk) über Umgebungsvariable gesetzt
+const SHEET_ID = process.env.SHEET_ID || "SHEET_ID_NICHT_GESETZT";
 
 // ── Court Scores (externe JSON-Ressource) ──
-const COURT_URL = "https://scorer-tennis.b-cdn.net/json/24.voll.json";
+const COURT_URL = process.env.COURT_URL || "https://scorer-tennis.b-cdn.net/json/24.voll.json";
 const COURT_POLL_INTERVAL = 2000;
-
-// ── Firebase Cloud Functions ──
-const SCOREBOARD_FUNCTION_URL = "https://europe-west3-e-piber.cloudfunctions.net/getScoreboardCourts";
 
 // ── Server ──
 const PORT = process.env.PORT || 8080;
@@ -37,7 +36,6 @@ module.exports = {
   SHEET_ID,
   COURT_URL,
   COURT_POLL_INTERVAL,
-  SCOREBOARD_FUNCTION_URL,
   PORT,
   POLL_BASE_INTERVAL,
   POLL_FAST_MULTIPLIER,

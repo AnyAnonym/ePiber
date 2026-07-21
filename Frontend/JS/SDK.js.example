@@ -1,0 +1,10 @@
+// ══════════════════════════════════════════════════════
+// SDK.js — Umgebungskonfiguration (NICHT einchecken!)
+// Kopiere diese Datei als SDK.js und passe die URL an.
+// ══════════════════════════════════════════════════════
+//
+// Live:  wss://epiber.at/ws       (HTTPS → wss://)
+// PAJ:   ws://epiber.at:8081/ws   (HTTP  → ws://)
+// PK:    ws://epiber.at:8082/ws   (HTTP  → ws://)
+//
+export const SCORER_WS_URL = "wss://epiber.at/ws";
