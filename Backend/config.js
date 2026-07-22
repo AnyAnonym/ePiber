@@ -6,10 +6,10 @@
 
 // ── Spreadsheet ──
 // Wird pro System (piber/paj/pk) über Umgebungsvariable gesetzt
-const SHEET_ID = process.env.SHEET_ID || "SHEET_ID_NICHT_GESETZT";
+const SHEET_ID = process.env.SHEET_ID;
 
 // ── Court Scores (externe JSON-Ressource) ──
-const COURT_URL = process.env.COURT_URL || "https://scorer-tennis.b-cdn.net/json/24.voll.json";
+const COURT_URL = process.env.COURT_URL;
 const COURT_POLL_INTERVAL = 2000;
 
 // ── Server ──

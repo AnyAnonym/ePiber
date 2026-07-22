@@ -5,7 +5,7 @@
   footerContainer.innerHTML = `
   <footer class="footer">
     <div id="clock" class="footer-clock"></div>
-    |&emsp;© ASKÖ Piberbach – Tennis&emsp;|&emsp;v${window.APP_VERSION}
+    |&emsp;© ASKÖ Piberbach – Tennis&emsp;|&emsp;<span id="footer-version">v${window.APP_VERSION}</span>
   </footer>
   `;
 

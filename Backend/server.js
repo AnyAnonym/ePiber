@@ -6,6 +6,7 @@
 
 const http = require("http");
 const { PORT } = require("./config.js");
+const { version: APP_VERSION } = require("./package.json");
 const dataPoller = require("./dataPoller.js");
 const courtPoller = require("./courtPoller.js");
 const dataProvider = require("./dataProvider.js");
@@ -29,11 +30,19 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({
       status: "ok",
+      version: APP_VERSION,
       dataReady: dataStore.isReady(),
       court: courtPoller.getStatus(),
       provider: { clientCount: dataProvider.getStatus().clientCount },
       poller: { running: dataPoller.getStatus().running, tickCount: dataPoller.getStatus().tickCount },
     }));
+    return;
+  }
+
+  // Version (nur Versionsnummer)
+  if (req.url === "/version") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ version: APP_VERSION }));
     return;
   }
 
@@ -80,7 +89,7 @@ const server = http.createServer((req, res) => {
 
 async function startup() {
   console.log("═══════════════════════════════════════");
-  console.log("  Scorer-Service startet...");
+  console.log(`  Scorer-Service v${APP_VERSION} startet...`);
   console.log("═══════════════════════════════════════");
 
   // 1. Spreadsheet-Daten initial laden

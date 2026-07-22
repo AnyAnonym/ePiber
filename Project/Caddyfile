@@ -22,11 +22,14 @@ epiber.at {
 		reverse_proxy localhost:8080
 	}
 
-	# Backend HTTP-Endpoints (health, status, set-active)
+	# Backend HTTP-Endpoints (health, status, version, set-active)
 	handle /health {
 		reverse_proxy localhost:8080
 	}
 	handle /status {
+		reverse_proxy localhost:8080
+	}
+	handle /version {
 		reverse_proxy localhost:8080
 	}
 	handle /set-active {
@@ -55,6 +58,9 @@ http://epiber.at:8081 {
 	handle /status {
 		reverse_proxy localhost:8083
 	}
+	handle /version {
+		reverse_proxy localhost:8083
+	}
 	handle /set-active {
 		reverse_proxy localhost:8083
 	}
@@ -78,6 +84,9 @@ http://epiber.at:8082 {
 		reverse_proxy localhost:8084
 	}
 	handle /status {
+		reverse_proxy localhost:8084
+	}
+	handle /version {
 		reverse_proxy localhost:8084
 	}
 	handle /set-active {

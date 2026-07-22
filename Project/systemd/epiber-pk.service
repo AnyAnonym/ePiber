@@ -1,10 +1,10 @@
 # ══════════════════════════════════════════════════════
-# Systemd Service: ePiber Scorer-Service (PK Test)
+# Systemd Service: ePiber Backendserver (PK Test)
 # Datei: /etc/systemd/system/epiber-pk.service
 # ══════════════════════════════════════════════════════
 
 [Unit]
-Description=ePiber Scorer-Service (Test - PK)
+Description=ePiber Backendserver (Test - PK)
 After=network.target
 
 [Service]

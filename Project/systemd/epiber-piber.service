@@ -1,10 +1,10 @@
 # ══════════════════════════════════════════════════════
-# Systemd Service: ePiber Scorer-Service (LIVE)
+# Systemd Service: ePiber Backendserver (LIVE-System)
 # Datei: /etc/systemd/system/epiber-piber.service
 # ══════════════════════════════════════════════════════
 
 [Unit]
-Description=ePiber Scorer-Service (Live - piber)
+Description=ePiber Backendserver (Live - piber)
 After=network.target
 
 [Service]

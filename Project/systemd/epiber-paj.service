@@ -1,10 +1,10 @@
 # ══════════════════════════════════════════════════════
-# Systemd Service: ePiber Scorer-Service (PAJ Test)
+# Systemd Service: ePiber Backendserver (PAJ Test)
 # Datei: /etc/systemd/system/epiber-paj.service
 # ══════════════════════════════════════════════════════
 
 [Unit]
-Description=ePiber Scorer-Service (Test - PAJ)
+Description=ePiber Backendserver (Test - PAJ)
 After=network.target
 
 [Service]

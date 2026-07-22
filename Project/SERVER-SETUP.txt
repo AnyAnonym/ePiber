@@ -2,13 +2,14 @@
 SERVER-SETUP-ANLEITUNG — ePiber Self-Hosted (Arch Linux + Caddy)
 ================================================================================
 Erstellt: 21.07.2026
+Letzte Änderung: 22.07.2026
 
 
 ================================================================================
 1. NEUE PROJEKTSTRUKTUR
 ================================================================================
 
-Repository-Root (Git):
+Repository-Root (R:\ lokal, /srv/http/ePiber/<system>/ am Server):
 ├── Frontend/                    # Caddy liefert aus (statische Dateien)
 │   ├── index.html
 │   ├── Bewerbe.html
@@ -28,7 +29,7 @@ Repository-Root (Git):
 │   │   ├── SDK.js               ← NICHT im Git! (pro System unterschiedlich)
 │   │   ├── SDK.js.example       ← Vorlage im Git
 │   │   ├── dataClient.js
-│   │   ├── global.js
+│   │   ├── global.js            ← lädt APP_VERSION vom Backend per fetch
 │   │   ├── clock.js
 │   │   ├── footer.js
 │   │   ├── navbar.js
@@ -42,15 +43,14 @@ Repository-Root (Git):
 │       └── scoreboard.css
 │
 ├── Backend/                     # Node.js scorer-service
-│   ├── server.js
-│   ├── config.js                ← liest aus Umgebungsvariablen
+│   ├── server.js                ← HTTP-Endpoints: /health, /status, /version, /set-active
+│   ├── config.js                ← liest SHEET_ID, PORT, COURT_URL aus Umgebungsvariablen
 │   ├── dataStore.js
 │   ├── dataPoller.js
 │   ├── courtPoller.js
 │   ├── dataProvider.js
 │   ├── stateStore.js
-│   ├── package.json
-│   ├── Dockerfile               ← optional, falls Docker gewünscht
+│   ├── package.json             ← Zentrale Versionsnummer (einzige Stelle!)
 │   ├── .env.example             ← Vorlage im Git
 │   └── .env                     ← NICHT im Git! (pro System unterschiedlich)
 │
@@ -59,6 +59,7 @@ Repository-Root (Git):
 │   ├── DB.txt
 │   ├── Seiten.txt
 │   ├── README.md
+│   ├── SERVER-SETUP.txt         ← Diese Datei
 │   ├── copilot-instructions.md
 │   ├── Caddyfile                ← Vorlage für /etc/caddy/Caddyfile
 │   ├── systemd/
@@ -72,7 +73,25 @@ Repository-Root (Git):
 
 
 ================================================================================
-2. SERVER-VERZEICHNISSTRUKTUR
+2. VERSIONIERUNG
+================================================================================
+
+Die Versionsnummer wird an EINER einzigen Stelle gepflegt:
+
+  Backend/package.json → "version": "3.0.0"
+
+Das Backend stellt sie über den HTTP-Endpoint /version bereit:
+
+  GET /version → {"version":"3.0.0"}
+
+Das Frontend (global.js) holt die Version per fetch("/version") und zeigt
+sie im Footer an. Kein Hardcoding im Frontend nötig.
+
+Versionsänderung: Nur Backend/package.json editieren, committen, deployen.
+
+
+================================================================================
+3. SERVER-VERZEICHNISSTRUKTUR
 ================================================================================
 
 /srv/http/ePiber/
@@ -93,34 +112,34 @@ Repository-Root (Git):
 
 
 ================================================================================
-3. PORT-ZUORDNUNG
+4. PORT-ZUORDNUNG
 ================================================================================
 
 System   | Caddy (extern) | Backend (intern) | WebSocket-URL
 ---------|----------------|------------------|---------------------------
 piber    | 443 (HTTPS)    | 8080             | wss://epiber.at/ws
-paj      | 8081           | 8083             | wss://epiber.at:8081/ws
-pk       | 8082           | 8084             | wss://epiber.at:8082/ws
+paj      | 8081 (HTTP)    | 8083             | ws://epiber.at:8081/ws
+pk       | 8082 (HTTP)    | 8084             | ws://epiber.at:8082/ws
 
 
 ================================================================================
-4. ERSTEINRICHTUNG AUF DEM SERVER
+5. ERSTEINRICHTUNG AUF DEM SERVER
 ================================================================================
 
-4.1 Pakete installieren
+5.1 Pakete installieren
 -----------------------
   pacman -S nodejs npm caddy git
 
-4.2 Benutzer anlegen
+5.2 Benutzer anlegen
 --------------------
   useradd -r -s /bin/nologin piber
 
-4.3 Verzeichnisse anlegen
+5.3 Verzeichnisse anlegen
 --------------------------
   mkdir -p /srv/http/ePiber/{piber,paj,pk}
   chown -R piber:piber /srv/http/ePiber
 
-4.4 Git-Repository klonen (3x)
+5.4 Git-Repository klonen (3x)
 -------------------------------
   cd /srv/http/ePiber/piber
   git clone <REPO_URL> .
@@ -131,13 +150,13 @@ pk       | 8082           | 8084             | wss://epiber.at:8082/ws
   cd /srv/http/ePiber/pk
   git clone <REPO_URL> .
 
-4.5 Backend Dependencies installieren (3x)
+5.5 Backend Dependencies installieren (3x)
 -------------------------------------------
   cd /srv/http/ePiber/piber/Backend && npm install --production
   cd /srv/http/ePiber/paj/Backend && npm install --production
   cd /srv/http/ePiber/pk/Backend && npm install --production
 
-4.6 Konfigurationsdateien erstellen (pro System!)
+5.6 Konfigurationsdateien erstellen (pro System!)
 --------------------------------------------------
 
   # --- LIVE (piber) ---
@@ -158,7 +177,7 @@ pk       | 8082           | 8084             | wss://epiber.at:8082/ws
   GOOGLE_APPLICATION_CREDENTIALS=/srv/http/ePiber/paj/Backend/service-account.json
 
   # Frontend/JS/SDK.js:
-  export const SCORER_WS_URL = "wss://epiber.at:8081/ws";
+  export const SCORER_WS_URL = "ws://epiber.at:8081/ws";
 
   # --- PK ---
   # Backend/.env:
@@ -168,9 +187,9 @@ pk       | 8082           | 8084             | wss://epiber.at:8082/ws
   GOOGLE_APPLICATION_CREDENTIALS=/srv/http/ePiber/pk/Backend/service-account.json
 
   # Frontend/JS/SDK.js:
-  export const SCORER_WS_URL = "wss://epiber.at:8082/ws";
+  export const SCORER_WS_URL = "ws://epiber.at:8082/ws";
 
-4.7 Google Service-Account-Key
+5.7 Google Service-Account-Key
 ------------------------------
   Den JSON-Key vom Google Cloud Projekt "e-piber" herunterladen:
     Google Cloud Console → IAM → Service Accounts → Keys → Add Key → JSON
@@ -183,12 +202,12 @@ pk       | 8082           | 8084             | wss://epiber.at:8082/ws
   WICHTIG: Der Service Account braucht Bearbeiter-Zugriff auf alle
   3 Google Spreadsheets!
 
-4.8 Caddyfile installieren
+5.8 Caddyfile installieren
 ---------------------------
   cp /srv/http/ePiber/piber/Project/Caddyfile /etc/caddy/Caddyfile
   systemctl enable --now caddy
 
-4.9 Systemd-Services installieren
+5.9 Systemd-Services installieren
 ----------------------------------
   cp /srv/http/ePiber/piber/Project/systemd/*.service /etc/systemd/system/
   systemctl daemon-reload
@@ -196,32 +215,34 @@ pk       | 8082           | 8084             | wss://epiber.at:8082/ws
   systemctl enable --now epiber-paj
   systemctl enable --now epiber-pk
 
-4.10 Firewall öffnen
+5.10 Firewall öffnen
 ---------------------
-  # Ports 443 (HTTPS), 8081, 8082 müssen offen sein
+  # Ports 443 (HTTPS), 80 (HTTP Redirect), 8081, 8082 müssen offen sein
   # Bei iptables:
+  iptables -A INPUT -p tcp --dport 80 -j ACCEPT
   iptables -A INPUT -p tcp --dport 443 -j ACCEPT
   iptables -A INPUT -p tcp --dport 8081 -j ACCEPT
   iptables -A INPUT -p tcp --dport 8082 -j ACCEPT
 
   # Bei firewalld:
+  firewall-cmd --permanent --add-port=80/tcp
   firewall-cmd --permanent --add-port=443/tcp
   firewall-cmd --permanent --add-port=8081/tcp
   firewall-cmd --permanent --add-port=8082/tcp
   firewall-cmd --reload
 
-4.11 DNS
+5.11 DNS
 --------
   A-Record: epiber.at → <Server-IP>
   (Caddy holt sich automatisch ein Let's Encrypt Zertifikat)
 
 
 ================================================================================
-5. DEPLOYMENT-WORKFLOW (nach Ersteinrichtung)
+6. DEPLOYMENT-WORKFLOW (nach Ersteinrichtung)
 ================================================================================
 
-Entwicklung:
-  1. Code ändern (auf Windows in R:\ePiber)
+Entwicklung (lokal auf Windows, R:\):
+  1. Code ändern
   2. git add + git commit + git push
 
 Server-Update:
@@ -246,7 +267,7 @@ Server-Update:
 
 
 ================================================================================
-6. KONFIGURATIONSDATEIEN-ÜBERSICHT (NICHT im Git)
+7. KONFIGURATIONSDATEIEN-ÜBERSICHT (NICHT im Git)
 ================================================================================
 
 Pro System unterschiedlich, müssen manuell erstellt werden:
@@ -261,7 +282,7 @@ Vorlagen im Git:
 
 
 ================================================================================
-7. STATUS PRÜFEN
+8. STATUS PRÜFEN
 ================================================================================
 
   # Systemd-Services
@@ -269,10 +290,14 @@ Vorlagen im Git:
   systemctl status epiber-paj
   systemctl status epiber-pk
 
-  # Backend Health-Check
+  # Backend Health-Check (inkl. Version)
   curl https://epiber.at/health
-  curl https://epiber.at:8081/health
-  curl https://epiber.at:8082/health
+  curl http://epiber.at:8081/health
+  curl http://epiber.at:8082/health
+
+  # Nur Versionsnummer
+  curl https://epiber.at/version
+  curl http://epiber.at:8081/version
 
   # Backend Detailstatus
   curl https://epiber.at/status
@@ -287,11 +312,11 @@ Vorlagen im Git:
 
 
 ================================================================================
-8. NICHT MEHR BENÖTIGTE DATEIEN (aus dem alten Projekt)
+9. NICHT MEHR BENÖTIGTE DATEIEN (aus dem alten Projekt)
 ================================================================================
 
-Die folgenden Dateien/Verzeichnisse aus dem alten Repository werden NICHT
-in die neue Struktur übernommen und können gelöscht werden:
+Die folgenden Dateien/Verzeichnisse aus dem alten Repository wurden bereits
+entfernt und sind nicht in der neuen Struktur enthalten:
 
   public/                        → ersetzt durch Frontend/
   scorer-service/                → ersetzt durch Backend/
@@ -299,7 +324,8 @@ in die neue Struktur übernommen und können gelöscht werden:
   firebase.json                  → Firebase Hosting Config (ersetzt durch Caddy)
   firestore.rules                → Firestore nicht mehr genutzt
   firestore.indexes.json         → Firestore nicht mehr genutzt
-  .firebaserc                    → Firebase Projektrefernez
+  .firebaserc                    → Firebase Projektreferenz
   package.json (Root)            → war nur für Firebase
   package-lock.json (Root)       → war nur für Firebase
+  Dockerfile                     → kein Docker, Node.js direkt
   .vs/                           → Visual Studio Dateien

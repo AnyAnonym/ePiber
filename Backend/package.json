@@ -1,7 +1,7 @@
 {
-  "name": "scorer-service",
-  "version": "1.0.0",
-  "description": "WebSocket service for live tennis scores",
+  "name": "epiber-backend",
+  "version": "3.0.1",
+  "description": "ePiber Tennis Dashboard — Backend (WebSocket + Google Sheets)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

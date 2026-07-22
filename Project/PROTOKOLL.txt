@@ -2468,7 +2468,7 @@ DEPLOY-REIHENFOLGE für v2.1.2:
   * Live-System: Automatisches Let's Encrypt Zertifikat
   * Testsysteme: Plain HTTP (kein TLS nötig)
   * WebSocket-Proxy /ws → localhost Backend
-  * Backend-Endpoints /health, /status, /set-active durchgereicht
+  * Backend-Endpoints /health, /status, /version, /set-active durchgereicht
   * Cache-Control: no-cache für alle Frontend-Dateien
 
 - FEATURE: Systemd-Services für alle 3 Backend-Instanzen
@@ -2499,6 +2499,20 @@ DEPLOY-REIHENFOLGE für v2.1.2:
 
 - BUILD: APP_VERSION auf 3.0.0 (Major wegen Infrastruktur-Wechsel)
 
+- FEATURE: Zentrale Versionierung über Backend/package.json
+  * Versionsnummer nur an einer Stelle gepflegt: Backend/package.json
+  * Neuer HTTP-Endpoint: GET /version → {"version":"3.0.0"}
+  * Backend server.js liest Version aus package.json beim Start
+  * Version auch im /health Endpoint und in der Startup-Log-Meldung
+  * Frontend global.js: Hardcoded APP_VERSION entfernt
+  * Frontend global.js: Holt Version per fetch("/version") vom Backend
+  * Frontend footer.js: Span mit id="footer-version" für nachträgliches Update
+  * Ablauf: Footer zeigt "v..." → fetch antwortet → Footer aktualisiert auf "v3.0.0"
+
+- REFACTORING: Lokales Repository von R:\ePiber nach R:\ verschoben
+  * Frontend/, Backend/, Project/ liegen direkt unter R:\
+  * Entwicklung: R:\ ist das Git-Arbeitsverzeichnis
+
 DEPLOY-REIHENFOLGE für v3.0.0:
   1. Am Server: Git-Repository klonen in /srv/http/ePiber/{piber,paj,pk}
   2. Pro System: Backend/.env und Frontend/JS/SDK.js erstellen
@@ -2509,6 +2523,22 @@ DEPLOY-REIHENFOLGE für v3.0.0:
   7. systemctl daemon-reload
   8. systemctl enable --now caddy epiber-piber epiber-paj epiber-pk
   9. Testen: curl https://epiber.at/health
+
+
+===============================================================================
+41. CHANGELOG – Bugfixes, Doku-Korrekturen (v3.0.1)
+===============================================================================
+
+2026-07-22:
+-----------
+- DOKU: SERVER-SETUP.txt aktualisiert
+  * Lokaler Pfad korrigiert: R:\ statt R:\ePiber
+  * Neues Kapitel "2. VERSIONIERUNG" — erklärt /version Endpoint
+  * PAJ/PK WebSocket-URLs auf ws:// korrigiert (HTTP, nicht HTTPS)
+  * /version Endpoint in Status-Prüfung aufgenommen
+  * Datum auf 22.07.2026 aktualisiert
+
+- BUILD: APP_VERSION auf 3.0.1
 
 
 ENDE DES PROTOKOLLS
