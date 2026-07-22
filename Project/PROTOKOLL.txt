@@ -2541,5 +2541,23 @@ DEPLOY-REIHENFOLGE für v3.0.0:
 - BUILD: APP_VERSION auf 3.0.1
 
 
+===============================================================================
+42. CHANGELOG – Systemwechsel Live/PAJ, Service-Account (v3.0.2)
+===============================================================================
+
+2026-07-22:
+-----------
+- CONFIG: Konfigurationsdateien für Systemwechsel Live ↔ PAJ angepasst
+  * Backend/.env: SHEET_ID und PORT für jeweiliges System
+  * Frontend/JS/SDK.js: WebSocket-URL für jeweiliges System
+
+- CONFIG: Google Service Account Key erstellt und eingerichtet
+  * Google Cloud Console → IAM → Service Accounts → Keys → JSON
+  * Datei als service-account.json in jedes Backend/-Verzeichnis am Server kopiert
+  * Service Account als Bearbeiter auf alle Spreadsheets freigegeben
+
+- BUILD: APP_VERSION auf 3.0.2
+
+
 ENDE DES PROTOKOLLS
 ================================================================================
