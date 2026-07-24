@@ -9,7 +9,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=piber
+User=paj
 WorkingDirectory=/srv/http/ePiber/paj/Backend
 EnvironmentFile=/srv/http/ePiber/paj/Backend/.env
 ExecStart=/usr/bin/node server.js
