@@ -244,6 +244,18 @@ pk       | 8082 (HTTP)    | 8084             | ws://epiber.at:8082/ws
 Entwicklung (lokal auf Windows, R:\):
   1. Code ändern
   2. git add + git commit + git push
+  3. für analyse:
+    git log     #ruft detailierte commit historie auf
+    git status  #zeigt aktuellen Zustand des Repositorys
+
+Merge:
+  1. Branch erstellen
+  2. Code ändern 
+  3. normal committen
+  4. git switch main (wenn man mergen will)
+  5. git merge --no-ff b70d74a85517598dfc275c4014b1387191bf18ed -m "3.0.10 | Test 6" 
+    die Zalen und Ziffern wurscht ist der hash des letzte committes des branches
+    der Text in den "" ist der commit Text/Überschrift 
 
 Server-Update:
   # Live-System
