@@ -35,5 +35,8 @@ desktop.ini
 .env
 .eslintcache
 
-# für PAJ
-epiberpaj-5032a34639bf.json
+# ── Sheet API Keys ──
+# PAJ
+epiberpaj-5032a34639bf.json     
+# PK
+epiberpk-e127db14e366.json
