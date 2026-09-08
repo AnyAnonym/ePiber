@@ -216,8 +216,12 @@ Verpflichtender Beginn jeder neuen Arbeit:
    `-x`-Entwicklungsstand angelegt werden soll. Ohne Bestaetigung wird die Aufgabe
    nicht umgesetzt.
 10. Ein Verzicht auf den `-x`-Stand ist nicht zulaessig. Die Rueckfrage dient der
-   notwendigen Freigabe fuer Versionierungs- und Dokumentationsdateien, nicht der
-   Wahl zwischen Arbeit mit oder ohne `-x`.
+    notwendigen Freigabe fuer Versionierungs- und Dokumentationsdateien, nicht der
+    Wahl zwischen Arbeit mit oder ohne `-x`.
+11. Wird eine Funktion oder Layoutaenderung versehentlich auf `main` begonnen,
+    sind die betroffenen Dateien vor weiterer Bearbeitung in einen neuen
+    Seitenbranch zu ueberfuehren. Erst danach darf der `-x`-Stand angelegt und
+    die Arbeit regelkonform fortgesetzt werden.
 11. Erst nach dem vollstaendig angelegten und geprueften `-x`-Stand beginnen die
    eigentlichen Aenderungen.
 

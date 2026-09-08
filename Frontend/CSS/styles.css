@@ -1592,8 +1592,7 @@ nav a.active {
 .competition-history-body {
   min-height: 0;
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: block;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1656,7 +1655,8 @@ nav a.active {
 }
 
 .competition-history-more {
-  margin-top: 0;
+  display: block;
+  margin: 16px auto 0;
 }
 
 @media (max-width: 600px) {

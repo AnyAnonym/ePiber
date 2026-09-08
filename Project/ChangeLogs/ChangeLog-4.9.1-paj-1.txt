@@ -6,3 +6,16 @@ Commit: 4.9.1-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.1-paj-1-1` gesetzt.
+
+[4.9.1-paj-1-2] - 2026-09-08
+Commit: 4.9.1-paj-1-2 | Historienbutton am Listenende platziert
+
+  Added
+  - [Frontend] Historienmodal der Bewerbe mit scrollbarem Button `Weitere Einträge laden` am Listenende versehen.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.1-paj-1-1-x` gesetzt.
+  - [Frontend] Historienbutton im Bewerbe-Modal bleibt erst nach dem Scrollen zum Listenende bedienbar.
+  - [Frontend] CSS des Historienmodals so angepasst, dass der Nachladebutton nicht mehr am sichtbaren unteren Rand klebt.
+  - [Tests] Browser-Test fuer das reale Scrollverhalten des Historienbuttons erweitert.
+  - [Dokumentation] Seiten- und Workflowdokumentation gegen direkte Fortsetzung einer versehentlich auf main begonnenen Aenderung ergaenzt.
