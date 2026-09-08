@@ -158,6 +158,14 @@ export function createEndpoint(name) {
     const ownBusy = new URLSearchParams(window.location.search).get("ownBusy") === "1";
     const noNotifications = new URLSearchParams(window.location.search).get("noNotifications") === "1";
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
+    if (name === "memberDirectory") {
+      const today = new Date();
+      const birthDate = String(today.getDate()).padStart(2, "0") + "." + String(today.getMonth() + 1).padStart(2, "0") + "." + (today.getFullYear() - 30);
+      return { data: { success: true, values: [
+        ["ID", "Vorname", "Nachname", "TelefonMobil", "E-Mail", "GeburtsDatum", "Aktiv"],
+        ["birthday-1", "Geburtstags", "Mitglied", "", "", birthDate, "1"],
+      ] } };
+    }
     if (name === "rlPlatzierung") return { data: { success: true, values: [
       ["BewerbID", "PersonID", "Rang"],
       ...Array.from({ length: 28 }, (_, index) => ["2", withdrawn || newcomer || ineligible ? "p" + (index + 1) : (index === 0 ? "player-1" : "p" + (index + 1)), String(index + 1)]),
@@ -314,6 +322,15 @@ function startServer() {
       response.end(source);
       return;
     }
+    if (pathname === "/JS/dashboard.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/dashboard.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
     if (pathname === "/test/authClient.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(authStub);
@@ -398,6 +415,30 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
         await context.close();
       }
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Dashboard zeigt aktuelle Geburtstage mit Alter und oeffnet das bestehende Profil", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player`, { waitUntil: "domcontentloaded" });
+    const birthday = page.locator("#birthdayList .birthday");
+    await birthday.waitFor({ state: "visible" });
+    assert.match(await birthday.textContent(), /Geburtstags Mitglied/);
+    assert.match(await birthday.textContent(), /wird heute 30 Jahre/);
+    await page.evaluate(() => {
+      window.openProfileModal = (options) => { window.__openedDashboardProfile = options; };
+    });
+    await birthday.click();
+    assert.deepEqual(await page.evaluate(() => window.__openedDashboardProfile), { playerId: "birthday-1" });
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

@@ -362,6 +362,25 @@ test("Anonyme Events benoetigen die explizite globale Freigabe", () => {
   assert.equal(logs[0].fields.actorId, "");
 });
 
+test("Dashboard-Geburtstagsfehler ist eine kontrollierte Browserdiagnose", () => {
+  const now = { value: 3500000 };
+  const { logs, service } = fixture(now);
+  service.updateSettings(settings(0));
+  const result = service.recordBatch({
+    identity: { id: "p2", name: "Peter Player", role: "player" },
+    sourceIp: "192.0.2.2",
+    body: {
+      appVersion: "4.3.0-test",
+      clientSessionId: "00000000-0000-4000-8000-000000000013",
+      pageType: "index",
+      events: [{ event: "dashboard_birthdays_load_failed", level: "error" }],
+    },
+  });
+  assert.deepEqual(result, { success: true, accepted: 1, dropped: 0 });
+  assert.equal(logs[0].fields.pageType, "index");
+  assert.equal(logs[0].fields.frontendEvent, "dashboard_birthdays_load_failed");
+});
+
 test("Info- und Debug-Sampling wird serverseitig erzwungen und Zielpersonen erhalten 100 Prozent", () => {
   const now = { value: 4000000 };
   const { logs, service } = fixture(now);

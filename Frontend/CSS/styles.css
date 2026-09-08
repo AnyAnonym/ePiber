@@ -1812,6 +1812,40 @@ footer {
   flex-wrap: wrap;
 }
 
+.footer-brand {
+  display: inline;
+}
+
+.footer-separator {
+  display: inline;
+}
+
+@media (max-width: 500px) {
+  .footer,
+  footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    text-align: center;
+  }
+
+  .footer-brand {
+    grid-row: 1;
+  }
+
+  .footer-clock {
+    grid-row: 2;
+  }
+
+  #footer-version {
+    grid-row: 3;
+  }
+
+  .footer-separator {
+    display: none;
+  }
+}
+
 /* -------------------------------------------------- */
 /*  TOAST NOTIFICATIONS (Replaces Alerts)             */
 /* -------------------------------------------------- */

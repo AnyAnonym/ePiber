@@ -6,19 +6,114 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ASKÖ Piberbach – Dashboard</title>
   <link rel="stylesheet" href="./CSS/styles.css" />
+  <link rel="stylesheet" href="./CSS/dashboard.css" />
 </head>
 
-<body>
+<body class="dashboard-page">
 
   <div id="header-container"></div>
   <div id="mobile-nav-container"></div>
 
-  <main>
-    <section>
-      <h2>Willkommen!</h2>
+  <main class="club-dashboard">
+    <section class="welcome" id="top" aria-labelledby="welcome-title">
+      <h1 id="welcome-title">Der Piber gr&uuml;&szlig;t</h1>
+      <img class="welcome-image" src="Images/dashboard/piber-gruesst.png" alt="Der Piber gr&uuml;&szlig;t" />
     </section>
 
-    <div id="sidebar-container"></div>
+    <section class="dashboard-section birthdays" aria-labelledby="birthdays-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Diese zwei Wochen</p>
+          <h2 id="birthdays-title">Geburtstage</h2>
+        </div>
+        <span class="section-icon" aria-hidden="true">*</span>
+      </div>
+      <div id="birthdayStatus" class="birthday-status" role="status" aria-live="polite">Geburtstage werden geladen...</div>
+      <div id="birthdayList" class="birthday-list" hidden></div>
+    </section>
+
+    <section class="dashboard-section appointments" id="termine" aria-labelledby="appointments-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Nicht verpassen</p>
+          <h2 id="appointments-title">N&auml;chste Termine</h2>
+        </div>
+      </div>
+      <div class="appointment-list">
+        <article class="appointment">
+          <time datetime="2026-09-30"><b>30</b><span>SEP</span></time>
+          <div><strong>Ranglisten Ende</strong></div>
+          <span class="appointment-kind">Spielbetrieb</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="dashboard-section highlights" aria-labelledby="highlights-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Applaus, Applaus</p>
+          <h2 id="highlights-title">Sportliche Highlights</h2>
+        </div>
+      </div>
+      <div class="highlight-list">
+        <article class="highlight highlight-champion">
+          <span class="highlight-symbol" aria-hidden="true">1</span>
+          <div><p class="highlight-type">Frauen &middot; Vereinsmeisterin</p><h3>Anita Pimminger</h3></div>
+        </article>
+        <article class="highlight highlight-runner-up">
+          <span class="highlight-symbol highlight-symbol-silver" aria-hidden="true">2</span>
+          <div><p class="highlight-type">Frauen &middot; Vizemeisterin</p><h3>Sabine Stocker</h3></div>
+        </article>
+        <article class="highlight highlight-champion">
+          <span class="highlight-symbol" aria-hidden="true">1</span>
+          <div><p class="highlight-type">Frauen Doppel &middot; Vereinsmeisterinnen</p><h3>Elke Hahn &amp; Monika Strau&szlig;</h3></div>
+        </article>
+        <article class="highlight highlight-runner-up">
+          <span class="highlight-symbol highlight-symbol-silver" aria-hidden="true">2</span>
+          <div><p class="highlight-type">Frauen Doppel &middot; Vizemeisterinnen</p><h3>Antonia Brandst&auml;tter &amp; Sabine Stocker</h3></div>
+        </article>
+        <article class="highlight highlight-champion">
+          <span class="highlight-symbol" aria-hidden="true">1</span>
+          <div><p class="highlight-type">M&auml;nner Einzel A &middot; Vereinsmeister</p><h3>Tobias N&ouml;bauer</h3></div>
+        </article>
+        <article class="highlight highlight-runner-up">
+          <span class="highlight-symbol highlight-symbol-silver" aria-hidden="true">2</span>
+          <div><p class="highlight-type">M&auml;nner Einzel A &middot; Vizemeister</p><h3>Hannes Schimpelsberger</h3></div>
+        </article>
+        <article class="highlight highlight-champion">
+          <span class="highlight-symbol" aria-hidden="true">1</span>
+          <div><p class="highlight-type">M&auml;nner Einzel B &middot; Vereinsmeister</p><h3>Robert Mollner</h3></div>
+        </article>
+        <article class="highlight highlight-runner-up">
+          <span class="highlight-symbol highlight-symbol-silver" aria-hidden="true">2</span>
+          <div><p class="highlight-type">M&auml;nner Einzel B &middot; Vizemeister</p><h3>Patrick Schneeberger</h3></div>
+        </article>
+        <article class="highlight highlight-champion">
+          <span class="highlight-symbol" aria-hidden="true">1</span>
+          <div><p class="highlight-type">M&auml;nner 60+ A &middot; Vereinsmeister</p><h3>Johann Bender</h3></div>
+        </article>
+        <article class="highlight highlight-runner-up">
+          <span class="highlight-symbol highlight-symbol-silver" aria-hidden="true">2</span>
+          <div><p class="highlight-type">M&auml;nner 60+ A &middot; Vizemeister</p><h3>Reinhard Haider</h3></div>
+        </article>
+        <article class="highlight highlight-champion">
+          <span class="highlight-symbol" aria-hidden="true">1</span>
+          <div><p class="highlight-type">M&auml;nner 60+ B &middot; Vereinsmeister</p><h3>Ernst Pichler</h3></div>
+        </article>
+        <article class="highlight highlight-runner-up">
+          <span class="highlight-symbol highlight-symbol-silver" aria-hidden="true">2</span>
+          <div><p class="highlight-type">M&auml;nner 60+ B &middot; Vizemeister</p><h3>Manfred Stocker</h3></div>
+        </article>
+        <article class="highlight highlight-champion">
+          <span class="highlight-symbol" aria-hidden="true">1</span>
+          <div><p class="highlight-type">M&auml;nner Doppel &middot; Vereinsmeister</p><h3>&mdash;</h3></div>
+        </article>
+        <article class="highlight highlight-runner-up">
+          <span class="highlight-symbol highlight-symbol-silver" aria-hidden="true">2</span>
+          <div><p class="highlight-type">M&auml;nner Doppel &middot; Vizemeister</p><h3>&mdash;</h3></div>
+        </article>
+      </div>
+    </section>
   </main>
 
   <div id="footer-container"></div>
@@ -26,6 +121,7 @@
   <script type="module" src="JS/navbar.js"></script>
   <script type="module" src="JS/staticReady.js"></script>
   <script type="module" src="JS/modals.js"></script>
+  <script type="module" src="JS/dashboard.js"></script>
   <script src="JS/global.js"></script>
   <script src="JS/clock.js"></script>
   <script src="JS/footer.js"></script>
