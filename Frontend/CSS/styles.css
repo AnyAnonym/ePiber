@@ -1592,8 +1592,7 @@ nav a.active {
 .competition-history-body {
   min-height: 0;
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: block;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1656,7 +1655,8 @@ nav a.active {
 }
 
 .competition-history-more {
-  margin-top: 0;
+  display: block;
+  margin: 16px auto 0;
 }
 
 @media (max-width: 600px) {
@@ -1810,6 +1810,40 @@ footer {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.footer-brand {
+  display: inline;
+}
+
+.footer-separator {
+  display: inline;
+}
+
+@media (max-width: 500px) {
+  .footer,
+  footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    text-align: center;
+  }
+
+  .footer-brand {
+    grid-row: 1;
+  }
+
+  .footer-clock {
+    grid-row: 2;
+  }
+
+  #footer-version {
+    grid-row: 3;
+  }
+
+  .footer-separator {
+    display: none;
+  }
 }
 
 /* -------------------------------------------------- */

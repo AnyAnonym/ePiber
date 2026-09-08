@@ -261,12 +261,14 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
       };
     });
     assert.equal(initialButtonPosition.buttonOffsetTop > initialButtonPosition.bodyClientHeight, true);
-    await body.evaluate((bodyElement) => { bodyElement.scrollTop = bodyElement.scrollHeight; });
-    const buttonVisibleAfterScroll = await moreButton.evaluate((button) => {
-      const bodyElement = button.closest(".competition-history-body");
-      return button.offsetTop < bodyElement.scrollTop + bodyElement.clientHeight;
-    });
-    assert.equal(buttonVisibleAfterScroll, true);
+    await moreButton.evaluate((button) => button.scrollIntoView({ block: "end", inline: "nearest" }));
+    const bodyScrollAfterScroll = await body.evaluate((bodyElement) => ({
+      scrollTop: bodyElement.scrollTop,
+      scrollHeight: bodyElement.scrollHeight,
+      clientHeight: bodyElement.clientHeight,
+    }));
+    assert.equal(bodyScrollAfterScroll.scrollTop > 0, true);
+    assert.equal(bodyScrollAfterScroll.scrollHeight > bodyScrollAfterScroll.clientHeight, true);
     await moreButton.click();
     assert.deepEqual(await page.evaluate(() => window.__historyCalls), [{}, { cursor: "global-page-2" }]);
     assert.deepEqual(await modal.locator(".competition-history-entry-competition").allTextContents(), ["Sommercup - Viertelfinale", "Rangliste", "Wintercup - Achtelfinale"]);

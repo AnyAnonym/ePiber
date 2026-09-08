@@ -76,6 +76,10 @@ vom Auftraggeber bestaetigt.
         mobilen Displays als auch auf entfernten grossen Anzeigen gut erfassbar
         sein. [Bestaetigt fuer das Live-Scoreboard]
 
+  Z-06  Das Dashboard soll als vorrangig mobil genutzter Einstiegspunkt das
+        aktuelle Vereinsleben mit persoenlichen und sportlichen Informationen
+        kompakt sichtbar machen, ohne ueberladen zu wirken. [Bestaetigt]
+
 
 ================================================================================
 4. BENUTZERGRUPPEN
@@ -208,6 +212,14 @@ Die sportliche Leitung entscheidet ueber Forderungen, die nicht innerhalb der
 vorgegebenen Fristen abgeschlossen werden. Ein eingetragenes Ranglistenergebnis
 vollzieht die regelbedingte Einreihung und Rangverschiebung automatisch; eine
 Fristueberschreitung erzeugt weiterhin keine automatische Wertung.
+
+5.10 Vereinsinformationen am Dashboard [Bestaetigt]
+
+Die Startseite begruesst Besucher mit einem Vereinsmotiv und stellt aktuelle
+Vereinsinformationen mobil priorisiert dar. Dazu gehoeren Geburtstage aktiver
+Mitglieder, der naechste Vereinstermin und sportliche Ehrungen fuer Vereins- und
+Vizemeister. Geburtstage mit erreichtem Alter und Profilzugang bleiben
+angemeldeten Benutzern vorbehalten.
 
 
 ================================================================================
@@ -355,6 +367,21 @@ Fristueberschreitung erzeugt weiterhin keine automatische Wertung.
         von zwoelf Kalendermonaten regelkonform zurueckkehren koennen. Eine beim
         Raushaengen laufende Sperrzeit bleibt bis zu ihrem urspruenglichen Ende
         erhalten; eine Schonzeit erlischt. [Bestaetigt]
+
+6.7 Vereinsdashboard
+
+  LF-60 Das Dashboard soll Begruessungsbild, Geburtstage, den naechsten
+        Vereinstermin und sportliche Ehrungen in einer mobil priorisierten,
+        responsiven Ansicht zusammenfassen. [Bestaetigt]
+
+  LF-61 Angemeldete Benutzer sollen Geburtstage aktiver Mitglieder von sieben
+        Tagen vor bis sieben Tagen nach dem aktuellen Datum sehen. Angezeigt
+        werden Name und am jeweiligen Geburtstag erreichtes Alter; der Eintrag
+        fuehrt in das bestehende Mitgliederprofil. [Bestaetigt]
+
+  LF-62 Vereinstermin sowie Vereins- und Vizemeisterinformationen duerfen vorerst
+        redaktionell statisch gepflegt werden. Noch offene Platzierungen werden
+        eindeutig mit einem Gedankenstrich gekennzeichnet. [Bestaetigt]
 
 
 ================================================================================

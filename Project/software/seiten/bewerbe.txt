@@ -47,6 +47,8 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   Historieneintraege zeigen Datum, Bewerb, optionale Runde, Titel, Ergebnis und
   `Eingetragen durch: <Akteur>` in gleicher Schriftgroesse. Das Datum ist schwarz
   und regulaer, der Titel schwarz und fett, alle anderen Zeilen sind regulaer.
+  Der Button `Weitere Einträge laden` sitzt erst am Ende der scrollbaren
+  Historienliste und wird erst nach dem Scrollen zum Listenende bedienbar.
   Runden werden ohne
   Paarungsnummer als etwa `Achtelfinale`, `Viertelfinale` oder `1. Gruppe`
   bezeichnet; Ranglisten zeigen grundsaetzlich keine Runde. Die Einzelhistorie

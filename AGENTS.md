@@ -51,6 +51,10 @@ moeglichst wenigen Datei- und Suchzugriffen.
     hinaus oder ist ihre Akzeptanz unklar, ist vor der Umsetzung eine Bestaetigung
     einzuholen. Die Verifikation muss neben der neuen Funktion auch unbeabsichtigte
     Aenderungen bestehender Darstellung und Bedienung abdecken.
+12. Neue fachliche, technische oder dokumentarische Aenderungen werden grundsaetzlich
+    nur im Seitenbranch begonnen und umgesetzt. Auf `main` darf eine Aenderung nur
+    dann beginnen, wenn der User dies ausdruecklich als direkte Main-Ausnahme
+    beauftragt; in allen anderen Faellen ist zuerst ein Seitenbranch anzulegen.
 
 ## Projekt
 

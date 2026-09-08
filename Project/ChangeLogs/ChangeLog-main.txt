@@ -1,12 +1,50 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.9.1
+Stand: 4.9.2
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[4.9.2] - 2026-09-08
+Commit: 4.9.2 | Vereinsdashboard als Startseite eingefuehrt
+Quelle: 4.9.1-paj-1
+
+  Added
+  - [Software] Responsives, mobil priorisiertes Vereinsdashboard mit rundem
+    Begruessungsbild, Geburtstagsbereich, naechstem Vereinstermin sowie goldenen
+    Vereinsmeister- und silbernen Vizemeisterkarten als neue Startseite
+    eingefuehrt.
+  - [Software] Angemeldete Benutzer sehen Geburtstage aktiver Mitglieder im
+    Fenster von sieben Tagen vor bis sieben Tagen nach dem aktuellen Datum samt
+    erreichtem Alter und Zugang zum bestehenden Profilmodal.
+  - [Observability] Kontrollierte Browserdiagnose
+    `dashboard_birthdays_load_failed` fuer `index` ohne Mitgliederdaten und
+    zugehoerigen Allowlist-Test aufgenommen.
+
+  Changed
+  - [Software] Geburtstage aktualisieren sich beim Start, bei Authwechsel,
+    Personeninvalidierung, erneut sichtbarer Seite und lokalem Tageswechsel;
+    Anmeldung, Laden, leere Treffer und Fehler werden sichtbar unterschieden.
+  - [Software] Begruessungsbild fuer mobile Auslieferung auf 600 mal 600 Pixel
+    und rund 480 KB optimiert; Vereinstermin und Meisterschaftsergebnisse bleiben
+    vorerst statisch gepflegt, offene Maenner-Doppelplaetze sind markiert.
+  - [Software] Gemeinsamer Footer ordnet Brand, Uhr und Version auf schmalen
+    Displays in getrennten Zeilen an.
+  - [Software] Historienmodal der Bewerbe haelt den Nachladebutton am Ende der
+    scrollbaren Liste und macht ihn erst nach dem Scrollen zum Listenende
+    bedienbar.
+  - [Dokumentation] Fachkonzept und Seitendokumentation um Zweck, Zugriff,
+    Datenschutz, Aktualisierung, Fehlerzustaende und responsive Darstellung des
+    Vereinsdashboards erweitert.
+  - [Dokumentation] Workflowregeln verhindern den Beginn neuer Aenderungen direkt
+    auf `main`, sofern keine ausdrueckliche Main-Ausnahme vorliegt.
+
+  Removed
+  - [Repository] Temporaeres Branch-Changelog nach vollstaendiger Uebernahme in
+    Main-Changelog und permanente Dokumentation entfernt.
 
 [4.9.1] - 2026-09-07
 Commit: 4.9.1 | Bewerbe- und Ranglistenbedienung verbessert

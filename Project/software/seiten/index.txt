@@ -1,17 +1,35 @@
 ================================================================================
-Dashboard / Willkommensseite - Startseite der Anwendung
+Dashboard - Vereinsinformationen und Startseite der Anwendung
 ================================================================================
 -- Funktion und Dateien --
-  Zentrale Einstiegsseite mit Navbar, Willkommenstext und Footer.
+  Mobile-first-Einstiegsseite mit Navbar, Vereinsmotiv, Geburtstagen, naechstem
+  Vereinstermin, sportlichen Ehrungen und Footer.
   HTML: Frontend/index.html
-  JS:   navbar.js, staticReady.js sowie die gemeinsamen Module modals.js,
-        global.js, clock.js und footer.js
-  CSS:  Frontend/CSS/styles.css
+  JS:   dashboard.js, navbar.js, staticReady.js sowie die gemeinsamen Module
+        modals.js, global.js, clock.js und footer.js
+  CSS:  Frontend/CSS/styles.css, Frontend/CSS/dashboard.css
+  Bild: Frontend/Images/dashboard/piber-gruesst.png
 
 -- Daten und Zugriff --
-  Keine seitenspezifischen Fachdaten. navbar.js und modals.js beziehen Identitaet
-  und Rolle ausschliesslich aus der serverseitigen Cookie-Sitzung ueber
-  authClient.js; localStorage ist kein Berechtigungsnachweis. Die Auth-UI
+  Der Geburtstagsbereich liest nach erfolgreicher Anmeldung den bestehenden
+  Endpoint `memberDirectory`. Beruecksichtigt werden ausschliesslich aktive
+  Mitglieder mit gueltiger ID, Vorname, Nachname und Geburtsdatum, deren
+  Geburtstag inklusive in den Zeitraum von sieben Tagen vor bis sieben Tagen
+  nach dem aktuellen lokalen Kalendertag faellt. Jahreswechsel werden ueber den
+  zeitlich naechstgelegenen Geburtstag aus Vorjahr, aktuellem Jahr und Folgejahr
+  abgebildet. Die Anzeige nennt das am Geburtstag erreichte Alter und sortiert
+  chronologisch, bei gleichem Tag nach Nachname.
+
+  Anonyme Benutzer sehen statt Mitgliederdaten einen kurzen Hinweis samt
+  Anmeldebutton. Laden, leere Treffermenge und Fehler besitzen eigene sichtbare
+  Zustaende. Ein Geburtstagsklick oeffnet tastaturbedienbar den bestehenden
+  Profildialog fuer die Personen-ID. Geburtstagsdaten werden beim Seitenstart,
+  nach einem Identitaetswechsel, bei `players`-Invalidierung, beim erneuten
+  Sichtbarwerden der Seite und am lokalen Tageswechsel neu gebildet.
+
+  Navbar und Modale beziehen Identitaet und Rolle ausschliesslich aus der
+  serverseitigen Cookie-Sitzung ueber authClient.js; localStorage ist kein
+  Berechtigungsnachweis. Die Auth-UI
   unterscheidet Pruefung, angemeldet, anonym und nicht erreichbar. Spielerlink,
   Profil, Anmeldung und Abmeldung werden nach dem Sessionzustand dargestellt und
   bei Aenderungen auch tabuebergreifend aktualisiert. Die gemeinsame Desktop- und
@@ -57,10 +75,17 @@ Dashboard / Willkommensseite - Startseite der Anwendung
   veraltete Profilaufrufe bleiben ohne aktive Sitzung geschlossen.
 
 -- Layout und Bereitschaft --
-  Header, Main-Bereich, leerer Sidebar-Container und Footer; responsiv rutscht die
-  Sidebar unter den Hauptbereich. staticReady.js meldet im Monitorbetrieb nach
-  DOMContentLoaded `epiber-monitor-ready`; die statische Seite benoetigt keine
-  Fachdaten zum Ladeabschluss. Gemeinsame Modale bleiben im nach Safe-Areas
+  Der gruene Header bleibt die gemeinsame Desktop- und Mobilnavigation. Darunter
+  stehen die zentrierte Begruessung `Der Piber gruesst` und das runde
+  Begruessungsbild. Geburtstage und naechster Termin folgen mobil untereinander;
+  am Desktop stehen beide Karten nebeneinander. Die goldenen Vereinsmeister- und
+  silbernen Vizemeisterkarten folgen mobil einzeln untereinander und am Desktop
+  paarweise. Der gemeinsame Footer ordnet auf schmalen Displays Brand, Uhr und
+  Version in getrennten Zeilen an.
+
+  staticReady.js meldet im Monitorbetrieb nach DOMContentLoaded
+  `epiber-monitor-ready`; die Informationsbereiche blockieren die grundlegende
+  Seitenbereitschaft nicht. Gemeinsame Modale bleiben im nach Safe-Areas
   verfuegbaren Viewport horizontal und vertikal zentriert; zu hoher Inhalt scrollt
   innerhalb des Dialogs. Die mobile Navigation liegt als fixed Modal unabhaengig
   von der Dokumentposition zentriert im sichtbaren Viewport; Oeffnen und Schliessen
@@ -70,5 +95,11 @@ Dashboard / Willkommensseite - Startseite der Anwendung
   jeweiligen Link nicht berechtigt ist.
 
 -- Besonderheiten --
+  Vereinstermin und Vereinsmeisterschaftsergebnisse sind derzeit statisch in
+  `Frontend/index.html` gepflegt. Offene Maenner-Doppelplaetze erscheinen als
+  Gedankenstrich. Fehler beim Laden der Geburtstage erzeugen das kontrollierte
+  Browserereignis `dashboard_birthdays_load_failed` fuer den bekannten Seitentyp
+  `index`; die Diagnose enthaelt keine Mitgliederdaten.
+
   Keine URL-Parameter. rankingSidebar.js und SDK.js werden nicht mehr verwendet;
   die WebSocket-Verbindung wird bei Bedarf same-origin durch dataClient aufgebaut.
