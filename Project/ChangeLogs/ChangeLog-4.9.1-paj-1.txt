@@ -56,3 +56,10 @@ Commit: 4.9.1-paj-1-3 | Vereinsdashboard als Startseite eingefuehrt
     - Statische Pflege von Termin und Meisterschaftsergebnissen sowie Gedankenstriche fuer offene Plaetze als bekannte Abgrenzung nennen.
     - Kontrollierte Browserdiagnose `dashboard_birthdays_load_failed` fuer `index` ohne Mitgliederdaten dokumentieren.
     - Responsives gemeinsames Footerlayout mit Brand, Uhr und Version ergaenzen.
+
+[4.9.1-paj-1-4] - 2026-09-08
+Commit: 4.9.1-paj-1-4 | Dashboardbild fuer Mobilgeraete optimiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.1-paj-1-3-x` gesetzt.
+  - [Frontend] Begruessungsbild bei unveraendertem PNG-Pfad von 1254 auf 600 Pixel Kantenlaenge reduziert und dadurch von rund 2,3 MB auf rund 480 KB verkleinert.
