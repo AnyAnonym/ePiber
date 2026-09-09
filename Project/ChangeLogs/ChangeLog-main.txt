@@ -1,12 +1,25 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.9.2
+Stand: 4.9.4
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[4.9.4] - 2026-09-09
+Commit: 4.9.4 | Sportliche Highlights priorisiert
+Quelle: direkte Main-Ausnahme
+
+  Changed
+  - [Software] Sportliche Highlights auf der Startseite direkt unter Begruessung
+    und Vereinsbild verschoben; Geburtstage und naechster Termin folgen danach.
+    DOM-, Tastatur- und Screenreader-Reihenfolge stimmen dabei ueberein.
+  - [Dokumentation] Seitendokumentation an die neue mobile und Desktopreihenfolge
+    der Dashboardbereiche angepasst.
+  - [Tests] Statische Pruefungen, 12 Navbar-/Profil-Browsertests und die mobile
+    sowie Desktopdarstellung mit Chromium erfolgreich geprueft.
 
 [4.9.2] - 2026-09-08
 Commit: 4.9.2 | Vereinsdashboard als Startseite eingefuehrt

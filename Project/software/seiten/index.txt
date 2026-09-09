@@ -77,11 +77,12 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
 -- Layout und Bereitschaft --
   Der gruene Header bleibt die gemeinsame Desktop- und Mobilnavigation. Darunter
   stehen die zentrierte Begruessung `Der Piber gruesst` und das runde
-  Begruessungsbild. Geburtstage und naechster Termin folgen mobil untereinander;
-  am Desktop stehen beide Karten nebeneinander. Die goldenen Vereinsmeister- und
-  silbernen Vizemeisterkarten folgen mobil einzeln untereinander und am Desktop
-  paarweise. Der gemeinsame Footer ordnet auf schmalen Displays Brand, Uhr und
-  Version in getrennten Zeilen an.
+  Begruessungsbild. Direkt danach folgen die sportlichen Highlights: Die goldenen
+  Vereinsmeister- und silbernen Vizemeisterkarten stehen mobil einzeln
+  untereinander und am Desktop paarweise. Geburtstage und naechster Termin bilden
+  den Abschluss; mobil stehen sie untereinander, am Desktop nebeneinander. Der
+  gemeinsame Footer ordnet auf schmalen Displays Brand, Uhr und Version in
+  getrennten Zeilen an.
 
   staticReady.js meldet im Monitorbetrieb nach DOMContentLoaded
   `epiber-monitor-ready`; die Informationsbereiche blockieren die grundlegende
