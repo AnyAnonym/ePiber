@@ -3,12 +3,14 @@ const dataStore = require("./dataStore.js");
 const logger = require("./logger.js");
 const { AppError } = require("./errors.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
+const { reactionCatalog, reactionByKey } = require("./competitionHistoryReactionCatalog.js");
 
 const warnedInvalidNotifications = new Set();
 const RESULT_REPORT_TYPES = new Set(["result", "result_corrected", "result_cleared", "match_end_corrected"]);
 const CHALLENGE_REPORT_TYPES = new Set(["challenge", "challenge_confirmation"]);
 const DATE_CHANGE_REPORT_TYPES = new Set(["appointment_changed", "ranking_challenge_date_changed", "ranking_match_date_admin_changed", "match_end_corrected"]);
 const VIENNA_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" });
+const COMMENT_SEGMENTER = new Intl.Segmenter("de", { granularity: "grapheme" });
 
 function viennaDay(timestamp) {
   const parts = Object.fromEntries(VIENNA_DAY.formatToParts(new Date(timestamp)).filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value]));
@@ -445,12 +447,15 @@ class MessagingService {
     if (bewerbId && !competitions.has(bewerbId)) throw new AppError("COMPETITION_NOT_FOUND", "Bewerb wurde nicht gefunden", 404);
     this.enrichLegacyCompetitionAssignments();
     const page = this.repository.pageCompetitionHistory(bewerbId || null, { cursor, limit });
+    const interactions = this.repository.interactionSummaries(page.events.map(({ id }) => id), _principal.id);
     const rounds = this.matchRoundNames();
     return {
       success: true,
       competition: bewerbId
         ? { id: bewerbId, name: competitions.get(bewerbId) }
         : { id: "", name: "Alle Bewerbe" },
+      reactionCatalog: reactionCatalog.map(({ key, emoji, label, order, active }) => ({ key, emoji, label, order, active })),
+      revision: this.repository.historyInteractionRevision(),
       entries: page.events.map((event) => ({
         id: event.id,
         competitionId: event.competitionId,
@@ -463,8 +468,224 @@ class MessagingService {
         result: event.result,
         actorName: event.actorName,
         participants: event.participants.map(({ participantRole, displayName }) => ({ role: participantRole, name: displayName })),
+        interaction: this.projectInteraction(interactions.get(event.id)),
       })),
       nextCursor: page.nextCursor,
+    };
+  }
+
+  projectInteraction(summary = { commentCount: 0, reactionTotal: 0, reactions: [], myReaction: null }) {
+    const order = new Map(reactionCatalog.map((entry) => [entry.key, entry.order]));
+    return {
+      commentCount: summary.commentCount,
+      reactionTotal: summary.reactionTotal,
+      reactions: summary.reactions
+        .filter(({ key }) => reactionByKey.has(key))
+        .sort((left, right) => (order.get(left.key) || Number.MAX_SAFE_INTEGER) - (order.get(right.key) || Number.MAX_SAFE_INTEGER)),
+      myReaction: summary.myReaction,
+    };
+  }
+
+  normalizeComment(body) {
+    if (typeof body !== "string") throw new AppError("VALIDATION_ERROR", "Kommentar muss Text sein", 400);
+    const normalized = body.replace(/\r\n?/g, "\n").trim();
+    if (!normalized) throw new AppError("VALIDATION_ERROR", "Kommentar darf nicht leer sein", 400);
+    if ([...COMMENT_SEGMENTER.segment(normalized)].length > 1000 || Buffer.byteLength(normalized, "utf8") > 16000) {
+      throw new AppError("VALIDATION_ERROR", "Kommentar darf hoechstens 1000 Zeichen enthalten", 400);
+    }
+    if (/[^\P{Cc}\n\t]/u.test(normalized)) throw new AppError("VALIDATION_ERROR", "Kommentar enthaelt ungueltige Steuerzeichen", 400);
+    return normalized;
+  }
+
+  projectCommentReaction(summary = { reactionTotal: 0, reactions: [], myReaction: null }) {
+    const order = new Map(reactionCatalog.map((entry) => [entry.key, entry.order]));
+    return {
+      reactionTotal: summary.reactionTotal,
+      reactions: summary.reactions
+        .filter(({ key }) => reactionByKey.has(key))
+        .sort((left, right) => (order.get(left.key) || Number.MAX_SAFE_INTEGER) - (order.get(right.key) || Number.MAX_SAFE_INTEGER)),
+      myReaction: summary.myReaction,
+    };
+  }
+
+  projectComment(comment, principal, interaction) {
+    const admin = principal.role === "admin";
+    const mine = comment.authorId === principal.id;
+    const hidden = comment.status === "under_review" && !admin;
+    return {
+      id: comment.id,
+      eventId: comment.eventId,
+      authorName: comment.authorName,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      status: comment.status,
+      body: hidden ? "" : comment.body,
+      placeholder: hidden ? "Kommentar wird geprüft." : "",
+      mine,
+      canEdit: mine,
+      canDelete: mine || admin,
+      canModerate: admin,
+      canReact: !hidden,
+      interaction: hidden ? this.projectCommentReaction() : this.projectCommentReaction(interaction),
+    };
+  }
+
+  competitionHistoryComments(principal, { eventId, cursor = null, limit = 30 }) {
+    const page = this.repository.pageComments(eventId, { cursor, limit });
+    const reactions = this.repository.commentReactionSummaries(page.comments.map(({ id }) => id), principal.id);
+    return {
+      success: true,
+      eventId,
+      comments: page.comments.map((comment) => this.projectComment(comment, principal, reactions.get(comment.id))),
+      nextCursor: page.nextCursor,
+      revision: this.repository.historyInteractionRevision(),
+    };
+  }
+
+  competitionHistoryInteraction(principal, eventId) {
+    this.repository.requireInteractiveEvent(eventId);
+    const summary = this.repository.interactionSummaries([eventId], principal.id).get(eventId);
+    return { success: true, eventId, interaction: this.projectInteraction(summary), revision: this.repository.historyInteractionRevision() };
+  }
+
+  competitionHistoryCommentForEdit(principal, commentId) {
+    const comment = this.repository.getComment(commentId);
+    if (!comment) throw new AppError("COMPETITION_HISTORY_COMMENT_NOT_FOUND", "Kommentar wurde nicht gefunden", 404);
+    if (comment.authorId !== principal.id) throw new AppError("FORBIDDEN", "Nur der Autor darf den Kommentar bearbeiten", 403);
+    return { success: true, comment: { id: comment.id, eventId: comment.eventId, body: comment.body, status: comment.status } };
+  }
+
+  interactionCompleted(action, principal, fields, operation) {
+    const startedAt = this.now();
+    try {
+      const result = operation();
+      if (result.changed) {
+        this.publish("competition-history", {
+          revision: this.repository.historyInteractionRevision(),
+          eventId: result.eventId,
+          competitionId: result.competitionId,
+        });
+      }
+      this.log("info", "competition_history_interaction_persistence_completed", {
+        action,
+        actorId: principal.id,
+        eventId: result.eventId,
+        commentId: result.commentId || "",
+        reactionKey: result.myReaction || "",
+        changed: result.changed,
+        repeated: result.repeated,
+        durationMs: Math.max(0, this.now() - startedAt),
+        result: "success",
+      });
+      return result;
+    } catch (error) {
+      this.log("warn", "competition_history_interaction_persistence_completed", {
+        action,
+        actorId: principal.id,
+        eventId: fields.eventId || "",
+        commentId: fields.commentId || "",
+        reactionKey: fields.reactionKey || "",
+        durationMs: Math.max(0, this.now() - startedAt),
+        result: (error.status || 500) < 500 ? "rejected" : "failed",
+        errorCode: error.code || "COMPETITION_HISTORY_INTERACTION_FAILED",
+      });
+      throw error;
+    }
+  }
+
+  addCompetitionHistoryComment(principal, params) {
+    const result = this.interactionCompleted("comment_add", principal, params, () => {
+      const body = this.normalizeComment(params.body);
+      return this.repository.addComment({
+        userId: principal.id, userName: principal.name || principal.id, operationId: params.operationId, eventId: params.eventId, body,
+      });
+    });
+    return { ...result, comment: this.projectComment(this.repository.getComment(result.commentId), principal, this.repository.commentReactionSummaries([result.commentId], principal.id).get(result.commentId)) };
+  }
+
+  editCompetitionHistoryComment(principal, params) {
+    const result = this.interactionCompleted("comment_edit", principal, params, () => {
+      const body = this.normalizeComment(params.body);
+      return this.repository.editComment({
+        userId: principal.id, operationId: params.operationId, commentId: params.commentId, body,
+      });
+    });
+    return { ...result, comment: this.projectComment(this.repository.getComment(result.commentId), principal, this.repository.commentReactionSummaries([result.commentId], principal.id).get(result.commentId)) };
+  }
+
+  deleteCompetitionHistoryComment(principal, params) {
+    return this.interactionCompleted("comment_delete", principal, params, () => this.repository.deleteComment({
+      userId: principal.id, role: principal.role, operationId: params.operationId, commentId: params.commentId,
+    }));
+  }
+
+  moderateCompetitionHistoryComment(principal, params) {
+    return this.interactionCompleted("comment_moderate", principal, params, () => this.repository.moderateComment({
+      userId: principal.id, operationId: params.operationId, commentId: params.commentId, status: params.status,
+    }));
+  }
+
+  setCompetitionHistoryReaction(principal, params) {
+    const result = this.interactionCompleted("reaction_set", principal, params, () => {
+      if (params.reactionKey !== null) {
+        const reaction = reactionByKey.get(params.reactionKey);
+        if (!reaction?.active) throw new AppError("COMPETITION_HISTORY_REACTION_INVALID", "Reaktion ist nicht verfügbar", 400);
+      }
+      return this.repository.setReaction({
+        userId: principal.id,
+        userName: principal.name || principal.id,
+        operationId: params.operationId,
+        eventId: params.eventId,
+        reactionKey: params.reactionKey,
+      });
+    });
+    const summary = this.repository.interactionSummaries([params.eventId], principal.id).get(params.eventId);
+    return { ...result, interaction: this.projectInteraction(summary) };
+  }
+
+  competitionHistoryReactions(principal, eventId) {
+    const details = this.repository.reactionDetails(eventId);
+    return {
+      success: true,
+      eventId,
+      reactions: details.reactions.filter(({ key }) => reactionByKey.has(key)).map(({ key, userId, userName, createdAt }) => ({
+        key, userName, createdAt, mine: userId === principal.id,
+      })),
+      revision: this.repository.historyInteractionRevision(),
+    };
+  }
+
+  setCompetitionHistoryCommentReaction(principal, params) {
+    const result = this.interactionCompleted("comment_reaction_set", principal, params, () => {
+      if (params.reactionKey !== null) {
+        const reaction = reactionByKey.get(params.reactionKey);
+        if (!reaction?.active) throw new AppError("COMPETITION_HISTORY_REACTION_INVALID", "Reaktion ist nicht verfügbar", 400);
+      }
+      return this.repository.setCommentReaction({
+        userId: principal.id,
+        userName: principal.name || principal.id,
+        operationId: params.operationId,
+        commentId: params.commentId,
+        reactionKey: params.reactionKey,
+        allowUnderReview: principal.role === "admin",
+      });
+    });
+    const summary = this.repository.commentReactionSummaries([params.commentId], principal.id).get(params.commentId);
+    return { ...result, interaction: this.projectCommentReaction(summary) };
+  }
+
+  competitionHistoryCommentReactions(principal, commentId) {
+    const details = this.repository.commentReactionDetails(commentId);
+    if (details.comment.status === "under_review" && principal.role !== "admin") {
+      throw new AppError("COMPETITION_HISTORY_COMMENT_UNDER_REVIEW", "Kommentar wird geprüft", 403);
+    }
+    return {
+      success: true,
+      commentId,
+      reactions: details.reactions.filter(({ key }) => reactionByKey.has(key)).map(({ key, userId, userName, createdAt }) => ({
+        key, userName, createdAt, mine: userId === principal.id,
+      })),
+      revision: this.repository.historyInteractionRevision(),
     };
   }
 

@@ -1,0 +1,9 @@
+[
+  { "key": "thumbs_up", "emoji": "👍", "label": "Gefällt mir", "order": 10, "active": true },
+  { "key": "heart", "emoji": "❤️", "label": "Herz", "order": 20, "active": true },
+  { "key": "laugh", "emoji": "😂", "label": "Lachen", "order": 30, "active": true },
+  { "key": "surprised", "emoji": "😮", "label": "Überrascht", "order": 40, "active": true },
+  { "key": "sad", "emoji": "😢", "label": "Traurig", "order": 50, "active": true },
+  { "key": "applause", "emoji": "👏", "label": "Applaus", "order": 60, "active": true },
+  { "key": "flexed_biceps", "emoji": "💪", "label": "Stark", "order": 70, "active": true }
+]

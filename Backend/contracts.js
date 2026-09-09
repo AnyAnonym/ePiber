@@ -78,6 +78,10 @@ const rankPlan = (value) => {
 const rankingHour = (name) => text(name, { min: 11, max: 11, pattern: /^\d{6}-(?:[01]\d|2[0-3])00$/ });
 const rankingMinute = (name) => text(name, { min: 11, max: 11, pattern: /^\d{6}-(?:[01]\d|2[0-3])[0-5]\d$/ });
 const monitorWrite = (params) => objectShape(params, { operationId: operation, monitorId: id("monitorId") });
+const historyCommentText = text("body", { min: 1, max: 16000 });
+const historyReaction = (value) => value === null
+  ? null
+  : text("reactionKey", { max: 32, pattern: /^[a-z][a-z0-9_]*$/ })(value);
 const playerIds = (name) => (value) => {
   if (!Array.isArray(value) || value.length < 1 || value.length > 2) {
     throw new AppError("VALIDATION_ERROR", `${name} muss ein Array mit ein bis zwei IDs sein`);
@@ -138,6 +142,44 @@ const requestContracts = {
     bewerbId: optional(id("bewerbId")),
     cursor: optional(text("cursor", { max: 256, pattern: /^[A-Za-z0-9_-]+$/ })),
     limit: optional(integer("limit", { min: 1, max: 100 })),
+  }),
+  competitionHistoryComments: (params) => objectShape(params, {
+    eventId: id("eventId"),
+    cursor: optional(text("cursor", { max: 256, pattern: /^[A-Za-z0-9_-]+$/ })),
+    limit: optional(integer("limit", { min: 1, max: 100 })),
+  }),
+  competitionHistoryInteraction: (params) => objectShape(params, { eventId: id("eventId") }),
+  competitionHistoryCommentForEdit: (params) => objectShape(params, { commentId: id("commentId") }),
+  competitionHistoryReactions: (params) => objectShape(params, { eventId: id("eventId") }),
+  competitionHistoryCommentReactions: (params) => objectShape(params, { commentId: id("commentId") }),
+  addCompetitionHistoryComment: (params) => objectShape(params, {
+    operationId: operation,
+    eventId: id("eventId"),
+    body: historyCommentText,
+  }),
+  editCompetitionHistoryComment: (params) => objectShape(params, {
+    operationId: operation,
+    commentId: id("commentId"),
+    body: historyCommentText,
+  }),
+  deleteCompetitionHistoryComment: (params) => objectShape(params, {
+    operationId: operation,
+    commentId: id("commentId"),
+  }),
+  moderateCompetitionHistoryComment: (params) => objectShape(params, {
+    operationId: operation,
+    commentId: id("commentId"),
+    status: text("status", { max: 16, pattern: /^(visible|under_review)$/ }),
+  }),
+  setCompetitionHistoryReaction: (params) => objectShape(params, {
+    operationId: operation,
+    eventId: id("eventId"),
+    reactionKey: historyReaction,
+  }),
+  setCompetitionHistoryCommentReaction: (params) => objectShape(params, {
+    operationId: operation,
+    commentId: id("commentId"),
+    reactionKey: historyReaction,
   }),
   rankingChallengeState: (params) => objectShape(params, { bewerbId: id("bewerbId") }),
   operationStatus: (params) => objectShape(params, { operationId: operation }),

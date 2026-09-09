@@ -1,6 +1,6 @@
 {
   "name": "epiber-backend",
-  "version": "4.9.6",
+  "version": "4.9.7",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + Google Sheets)",
   "main": "server.js",
   "scripts": {
@@ -17,6 +17,8 @@
   },
   "packageManager": "npm@12.0.2",
   "dependencies": {
+    "emoji-picker-element": "1.29.1",
+    "emoji-picker-element-data": "1.8.0",
     "googleapis": "^171.4.0",
     "ws": "^8.18.0"
   },

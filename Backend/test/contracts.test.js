@@ -4,12 +4,12 @@ const { requestContracts, validateEndpointRequest, validateEndpointResponse } = 
 
 test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
   assert.deepEqual(Object.keys(requestContracts).sort(), [
-    "acknowledgeMessage", "addEntryList", "addMatch", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "competitionHistory", "courtAssign", "courtScores",
-    "courtSetActive", "entryList", "getScoreboardCourts", "matchResultSuggestion", "matches", "matches1",
-    "memberDirectory", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
+    "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
+    "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "matchResultSuggestion", "matches", "matches1",
+    "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
     "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myMessage", "myMessageSummary", "myMessages", "myProfile", "navigator", "normalizePerson", "operationStatus",
     "players", "preMatches", "publicProfile", "rankingChallengeState", "readMatchRestrictions", "reconcilePerson", "refreshSheetData", "removeEntryList", "rlPlatzierung",
-    "scoreboardSnapshot", "setMatchAppointment", "setMatchResult", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
+    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setMatchAppointment", "setMatchResult", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
   ]);
 });
 
@@ -158,6 +158,11 @@ test("Endpointvertraege normalisieren Parameter und lehnen unbekannte Felder ab"
     cursor: "YWxsAGV2ZW50LTE",
   });
   assert.throws(() => validateEndpointRequest("competitionHistory", { cursor: "ungueltig=" }), { code: "VALIDATION_ERROR" });
+  const operationId = "00000000-0000-4000-8000-000000000099";
+  assert.deepEqual(validateEndpointRequest("setCompetitionHistoryReaction", { operationId, eventId: "event-1", reactionKey: null }), { operationId, eventId: "event-1", reactionKey: null });
+  assert.deepEqual(validateEndpointRequest("setCompetitionHistoryCommentReaction", { operationId, commentId: "comment-1", reactionKey: "thumbs_up" }), { operationId, commentId: "comment-1", reactionKey: "thumbs_up" });
+  assert.deepEqual(validateEndpointRequest("addCompetitionHistoryComment", { operationId, eventId: "event-1", body: " Hallo " }), { operationId, eventId: "event-1", body: "Hallo" });
+  assert.throws(() => validateEndpointRequest("setCompetitionHistoryReaction", { operationId, eventId: "event-1", reactionKey: "👍" }), { code: "VALIDATION_ERROR" });
   assert.throws(
     () => validateEndpointRequest("players", { secret: true }),
     (error) => error.code === "VALIDATION_ERROR",

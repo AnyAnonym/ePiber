@@ -1,4 +1,4 @@
-import { createEndpoint, subscribeInvalidations } from "./dataClient.js";
+import { createEndpoint, getOperationId, releaseOperationId, subscribe, subscribeInvalidations } from "./dataClient.js";
 import { ready, subscribeAuth } from "./authClient.js";
 import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 import { signalMonitorReady, signalMonitorFailed } from "./monitorReady.js";
@@ -7,6 +7,17 @@ import { diagnostic } from "./diagnostics.js";
 const readBewerbe = createEndpoint("bewerbe");
 const readBewerbsart = createEndpoint("bewerbsart");
 const readCompetitionHistory = createEndpoint("competitionHistory");
+const readHistoryComments = createEndpoint("competitionHistoryComments");
+const readHistoryInteraction = createEndpoint("competitionHistoryInteraction");
+const readHistoryCommentForEdit = createEndpoint("competitionHistoryCommentForEdit");
+const readHistoryReactions = createEndpoint("competitionHistoryReactions");
+const readHistoryCommentReactions = createEndpoint("competitionHistoryCommentReactions");
+const addHistoryComment = createEndpoint("addCompetitionHistoryComment");
+const editHistoryComment = createEndpoint("editCompetitionHistoryComment");
+const deleteHistoryComment = createEndpoint("deleteCompetitionHistoryComment");
+const moderateHistoryComment = createEndpoint("moderateCompetitionHistoryComment");
+const setHistoryReaction = createEndpoint("setCompetitionHistoryReaction");
+const setHistoryCommentReaction = createEndpoint("setCompetitionHistoryCommentReaction");
 const ADMIN_RANKING_HISTORY_TYPES = new Set([
   "ranking_challenge_deleted",
   "ranking_challenge_date_changed",
@@ -27,7 +38,27 @@ const historyState = {
   nextCursor: null,
   loading: false,
   returnFocus: null,
+  reactionCatalog: [],
+  revision: 0,
 };
+const interactionState = {
+  eventId: null,
+  comments: [],
+  commentsNextCursor: null,
+  commentsLoading: false,
+  commentsGeneration: 0,
+  commentsRefreshPending: false,
+  commentsReturnFocus: null,
+  editorCommentId: null,
+  editorReturnFocus: null,
+  editorGeneration: 0,
+  reactionsReturnFocus: null,
+  reactionsGeneration: 0,
+  reactionTarget: null,
+  emojiPicker: null,
+  pendingPayloads: new Map(),
+};
+const UNCERTAIN_INTERACTION_ERRORS = new Set(["ACK_TIMEOUT", "CONNECTION_LOST", "REQUEST_TIMEOUT", "SHUTTING_DOWN", "TRANSPORT_FAILED", "WRITE_OUTCOME_UNKNOWN"]);
 
 function historyElement(id) {
   return document.getElementById(id);
@@ -49,6 +80,24 @@ function clearHistoryState() {
   historyState.entries = [];
   historyState.nextCursor = null;
   historyState.loading = false;
+  historyState.reactionCatalog = [];
+  historyState.revision = 0;
+  for (const id of ["history-comments-modal", "history-comment-editor-modal", "history-reactions-modal"]) {
+    const interactionModal = historyElement(id);
+    if (interactionModal) {
+      interactionModal.hidden = true;
+      interactionModal.inert = false;
+      interactionModal.removeAttribute("aria-hidden");
+    }
+  }
+  setModalCovered("competition-history-modal", false);
+  interactionState.eventId = null;
+  interactionState.comments = [];
+  interactionState.commentsNextCursor = null;
+  interactionState.commentsGeneration++;
+  interactionState.commentsLoading = false;
+  interactionState.commentsRefreshPending = false;
+  interactionState.reactionTarget = null;
   historyElement("competition-history-list")?.replaceChildren();
   if (historyElement("competition-history-title")) historyElement("competition-history-title").textContent = "Historie";
   if (historyElement("competition-history-competition-name")) historyElement("competition-history-competition-name").textContent = "";
@@ -108,6 +157,666 @@ function appendHistoryText(container, text, className) {
   container.appendChild(line);
 }
 
+function createInlineIcon(kind) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  const paths = kind === "comments"
+    ? ["M4 4.5h16v11H9l-5 4v-15Z"]
+    : ["M8.5 10h.01M15.5 10h.01M9 14c1.7 1.4 4.3 1.4 6 0", "M12 3a8 8 0 1 0 7.4 11", "M19 3v6M16 6h6"];
+  for (const value of paths) {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", value);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.8");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
+function historyEntry(eventId) {
+  return historyState.entries.find((entry) => String(entry.id) === String(eventId));
+}
+
+function reactionDefinition(key) {
+  return historyState.reactionCatalog.find((entry) => entry.key === key);
+}
+
+function formatInteractionTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Zeitpunkt unbekannt";
+  return new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function closeInteractionModal(id, returnFocusKey) {
+  const modal = historyElement(id);
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  const returnFocus = interactionState[returnFocusKey];
+  interactionState[returnFocusKey] = null;
+  if (returnFocus?.isConnected) returnFocus.focus();
+}
+
+function setModalCovered(id, covered) {
+  const modal = historyElement(id);
+  if (!modal) return;
+  modal.inert = covered;
+  if (covered) modal.setAttribute("aria-hidden", "true");
+  else modal.removeAttribute("aria-hidden");
+}
+
+function retainWritePayload(key, payload) {
+  const serialized = JSON.stringify(payload);
+  const pending = interactionState.pendingPayloads.get(key);
+  if (pending && pending !== serialized) {
+    const error = new Error("Bitte zuerst die zuvor gesendete Änderung unverändert wiederholen.");
+    error.code = "OPERATION_RETRY_PAYLOAD_REQUIRED";
+    throw error;
+  }
+  interactionState.pendingPayloads.set(key, serialized);
+}
+
+function releaseWritePayload(key, error = null) {
+  if (error?.code === "OPERATION_RETRY_PAYLOAD_REQUIRED") return;
+  releaseOperationId(key, error);
+  if (!error || !UNCERTAIN_INTERACTION_ERRORS.has(error.code)) interactionState.pendingPayloads.delete(key);
+}
+
+function closeReactionModal() {
+  interactionState.reactionsGeneration++;
+  interactionState.reactionTarget = null;
+  closeInteractionModal("history-reactions-modal", "reactionsReturnFocus");
+  historyElement("history-reactions-body")?.replaceChildren();
+  if (historyElement("history-reactions-status")) historyElement("history-reactions-status").textContent = "";
+  if (!historyElement("history-comments-modal")?.hidden) {
+    setModalCovered("history-comments-modal", false);
+    setModalCovered("competition-history-modal", true);
+  } else {
+    setModalCovered("competition-history-modal", false);
+  }
+}
+
+function closeCommentEditor() {
+  interactionState.editorGeneration++;
+  closeInteractionModal("history-comment-editor-modal", "editorReturnFocus");
+  interactionState.editorCommentId = null;
+  const picker = historyElement("history-comment-emoji-picker");
+  if (picker) picker.hidden = true;
+  const toggle = historyElement("history-comment-emoji-toggle");
+  if (toggle) toggle.setAttribute("aria-expanded", "false");
+  setModalCovered("history-comments-modal", false);
+}
+
+function closeCommentsModal() {
+  closeCommentEditor();
+  closeInteractionModal("history-comments-modal", "commentsReturnFocus");
+  interactionState.eventId = null;
+  interactionState.comments = [];
+  interactionState.commentsNextCursor = null;
+  interactionState.commentsGeneration++;
+  interactionState.commentsLoading = false;
+  interactionState.commentsRefreshPending = false;
+  historyElement("history-comments-list")?.replaceChildren();
+  setModalCovered("competition-history-modal", false);
+}
+
+function commentCharacterCount(value) {
+  return [...new Intl.Segmenter("de", { granularity: "grapheme" }).segment(value)].length;
+}
+
+function updateCommentCounter() {
+  const input = historyElement("history-comment-text");
+  const counter = historyElement("history-comment-counter");
+  if (!input || !counter) return;
+  const count = commentCharacterCount(input.value.trim());
+  counter.textContent = `${count} / 1000`;
+  counter.classList.toggle("is-over-limit", count > 1000);
+  historyElement("history-comment-editor-submit").disabled = count < 1 || count > 1000;
+}
+
+async function ensureFullEmojiPicker() {
+  const host = historyElement("history-comment-emoji-picker");
+  if (!host || interactionState.emojiPicker) return;
+  const [{ Picker }, { default: i18n }] = await Promise.all([
+    import("/api/emoji-picker/index.js"),
+    import("/api/emoji-picker/i18n/de.js"),
+  ]);
+  const picker = new Picker({ locale: "de", i18n, dataSource: "/api/emoji-picker/data/de.json" });
+  picker.classList.add("light");
+  picker.addEventListener("emoji-click", (event) => {
+    const input = historyElement("history-comment-text");
+    if (!input) return;
+    const emoji = String(event.detail?.unicode || "");
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    input.setRangeText(emoji, start, end, "end");
+    input.focus();
+    updateCommentCounter();
+  });
+  host.appendChild(picker);
+  interactionState.emojiPicker = picker;
+}
+
+async function toggleFullEmojiPicker() {
+  const host = historyElement("history-comment-emoji-picker");
+  const toggle = historyElement("history-comment-emoji-toggle");
+  if (!host || !toggle) return;
+  const opening = host.hidden;
+  if (opening) {
+    try {
+      await ensureFullEmojiPicker();
+    } catch (error) {
+      diagnostic.error("competition_history_comments_load_failed", error);
+      historyElement("history-comment-editor-status").textContent = "Emoji-Auswahl konnte nicht geladen werden.";
+      return;
+    }
+  }
+  host.hidden = !opening;
+  toggle.setAttribute("aria-expanded", String(opening));
+}
+
+async function refreshHistoryInteraction(eventId) {
+  const entry = historyEntry(eventId);
+  if (!entry) return;
+  try {
+    const response = await readHistoryInteraction({ eventId });
+    if (!response.data?.success) throw new Error("Interaktionen konnten nicht geladen werden.");
+    if (Number(response.data.revision) < historyState.revision) return Number(response.data.revision) || 0;
+    entry.interaction = response.data.interaction;
+    renderCompetitionHistory();
+    return Number(response.data.revision) || 0;
+  } catch (error) {
+    diagnostic.error("competition_history_load_failed", error);
+    throw error;
+  }
+}
+
+function renderComments() {
+  const list = historyElement("history-comments-list");
+  const more = historyElement("history-comments-more");
+  const status = historyElement("history-comments-status");
+  if (!list || !more || !status) return;
+  list.replaceChildren();
+  for (const comment of interactionState.comments) {
+    const item = document.createElement("li");
+    item.className = `history-comment${comment.mine ? " is-mine" : ""}${comment.status === "under_review" ? " is-under-review" : ""}`;
+    const heading = document.createElement("div");
+    heading.className = "history-comment-heading";
+    const author = document.createElement("span");
+    author.className = "history-comment-author";
+    author.textContent = comment.authorName;
+    const time = document.createElement("time");
+    time.dateTime = new Date(comment.createdAt).toISOString();
+    time.textContent = formatInteractionTime(comment.createdAt);
+    heading.append(author, time);
+    if (comment.updatedAt) {
+      const edited = document.createElement("span");
+      edited.textContent = "bearbeitet";
+      heading.appendChild(edited);
+    }
+    const body = document.createElement("p");
+    body.className = `history-comment-body${comment.placeholder ? " history-comment-placeholder" : ""}`;
+    body.textContent = comment.placeholder || comment.body;
+    item.append(heading, body);
+    appendCommentReactionActions(item, comment);
+    const actions = document.createElement("div");
+    actions.className = "history-comment-actions";
+    if (comment.canEdit) {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "Bearbeiten";
+      edit.addEventListener("click", () => openCommentEditor(comment, edit));
+      actions.appendChild(edit);
+    }
+    if (comment.canModerate) {
+      const moderate = document.createElement("button");
+      moderate.type = "button";
+      moderate.textContent = comment.status === "under_review" ? "Wieder freigeben" : "Vorläufig ausblenden";
+      moderate.addEventListener("click", () => changeCommentModeration(comment, moderate));
+      actions.appendChild(moderate);
+    }
+    if (comment.canDelete) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = comment.mine ? "Löschen" : "Endgültig löschen";
+      remove.addEventListener("click", () => removeComment(comment, remove));
+      actions.appendChild(remove);
+    }
+    if (actions.childElementCount) item.appendChild(actions);
+    list.appendChild(item);
+  }
+  status.textContent = interactionState.comments.length ? "" : "Noch keine Kommentare vorhanden.";
+  more.hidden = !interactionState.commentsNextCursor;
+  more.disabled = interactionState.commentsLoading;
+}
+
+async function loadComments({ older = false } = {}) {
+  if (!interactionState.eventId) return;
+  if (interactionState.commentsLoading) {
+    interactionState.commentsRefreshPending = true;
+    return;
+  }
+  const eventId = interactionState.eventId;
+  const generation = interactionState.commentsGeneration;
+  interactionState.commentsLoading = true;
+  historyElement("history-comments-status").textContent = older ? "Ältere Kommentare werden geladen..." : "Kommentare werden geladen...";
+  try {
+    const params = { eventId };
+    if (older && interactionState.commentsNextCursor) params.cursor = interactionState.commentsNextCursor;
+    const response = await readHistoryComments(params);
+    if (generation !== interactionState.commentsGeneration || eventId !== interactionState.eventId) return;
+    if (!response.data?.success) throw new Error("Kommentare konnten nicht geladen werden.");
+    interactionState.comments = older ? [...response.data.comments, ...interactionState.comments] : response.data.comments;
+    interactionState.commentsNextCursor = response.data.nextCursor || null;
+    renderComments();
+  } catch (error) {
+    if (generation !== interactionState.commentsGeneration || eventId !== interactionState.eventId) return;
+    diagnostic.error("competition_history_comments_load_failed", error);
+    historyElement("history-comments-status").textContent = "Kommentare konnten nicht geladen werden. Bitte erneut versuchen.";
+  } finally {
+    if (generation === interactionState.commentsGeneration && eventId === interactionState.eventId) {
+      interactionState.commentsLoading = false;
+      const more = historyElement("history-comments-more");
+      if (more) more.disabled = false;
+      if (interactionState.commentsRefreshPending) {
+        interactionState.commentsRefreshPending = false;
+        loadComments().catch(() => {});
+      }
+    }
+  }
+}
+
+function openComments(eventId, button) {
+  interactionState.eventId = eventId;
+  interactionState.comments = [];
+  interactionState.commentsNextCursor = null;
+  interactionState.commentsGeneration++;
+  interactionState.commentsLoading = false;
+  interactionState.commentsRefreshPending = false;
+  interactionState.commentsReturnFocus = button;
+  const modal = historyElement("history-comments-modal");
+  setModalCovered("competition-history-modal", true);
+  modal.hidden = false;
+  historyElement("history-comments-close")?.focus();
+  loadComments().catch(() => {});
+}
+
+async function openCommentEditor(comment, button) {
+  const generation = ++interactionState.editorGeneration;
+  const eventId = interactionState.eventId;
+  interactionState.editorCommentId = comment?.id || null;
+  interactionState.editorReturnFocus = button;
+  const input = historyElement("history-comment-text");
+  const status = historyElement("history-comment-editor-status");
+  historyElement("history-comment-editor-title").textContent = comment ? "Kommentar bearbeiten" : "Kommentar schreiben";
+  historyElement("history-comment-editor-submit").textContent = comment ? "Speichern" : "Senden";
+  input.value = comment?.body || "";
+  status.textContent = "";
+  if (comment && !comment.body) {
+    status.textContent = "Kommentar wird geladen...";
+    try {
+      const response = await readHistoryCommentForEdit({ commentId: comment.id });
+      if (generation !== interactionState.editorGeneration || eventId !== interactionState.eventId || historyElement("history-comments-modal")?.hidden) return;
+      input.value = response.data.comment.body;
+      status.textContent = "";
+    } catch (error) {
+      diagnostic.error("competition_history_comments_load_failed", error);
+      status.textContent = "Kommentar konnte nicht zum Bearbeiten geladen werden.";
+      return;
+    }
+  }
+  if (generation !== interactionState.editorGeneration || eventId !== interactionState.eventId || historyElement("history-comments-modal")?.hidden) return;
+  setModalCovered("history-comments-modal", true);
+  historyElement("history-comment-editor-modal").hidden = false;
+  updateCommentCounter();
+  input.focus();
+}
+
+async function submitComment() {
+  const input = historyElement("history-comment-text");
+  const submit = historyElement("history-comment-editor-submit");
+  const status = historyElement("history-comment-editor-status");
+  const body = input.value.trim();
+  const editing = interactionState.editorCommentId;
+  const key = editing ? `history-comment-edit:${editing}` : `history-comment-add:${interactionState.eventId}`;
+  submit.disabled = true;
+  status.textContent = editing ? "Änderung wird gespeichert..." : "Kommentar wird gesendet...";
+  try {
+    retainWritePayload(key, { body });
+    const endpoint = editing ? editHistoryComment : addHistoryComment;
+    const params = editing
+      ? { operationId: getOperationId(key), commentId: editing, body }
+      : { operationId: getOperationId(key), eventId: interactionState.eventId, body };
+    const response = await endpoint(params);
+    if (!response.data?.success) throw new Error("Kommentar konnte nicht gespeichert werden.");
+    releaseWritePayload(key);
+    closeCommentEditor();
+    await Promise.all([loadComments(), refreshHistoryInteraction(response.data.eventId)]);
+  } catch (error) {
+    releaseWritePayload(key, error);
+    diagnostic.error("competition_history_comment_write_failed", error);
+    status.textContent = error.code === "OPERATION_RETRY_PAYLOAD_REQUIRED"
+      ? error.message
+      : "Kommentar konnte nicht gespeichert werden. Bitte erneut versuchen.";
+  } finally {
+    updateCommentCounter();
+  }
+}
+
+async function removeComment(comment, button) {
+  if (!window.confirm("Kommentar endgültig löschen?")) return;
+  const key = `history-comment-delete:${comment.id}`;
+  button.disabled = true;
+  try {
+    retainWritePayload(key, { commentId: comment.id });
+    const response = await deleteHistoryComment({ operationId: getOperationId(key), commentId: comment.id });
+    releaseWritePayload(key);
+    await Promise.all([loadComments(), refreshHistoryInteraction(response.data.eventId)]);
+  } catch (error) {
+    releaseWritePayload(key, error);
+    diagnostic.error("competition_history_comment_write_failed", error);
+    historyElement("history-comments-status").textContent = "Kommentar konnte nicht gelöscht werden.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function changeCommentModeration(comment, button) {
+  const status = comment.status === "under_review" ? "visible" : "under_review";
+  const key = `history-comment-moderate:${comment.id}:${status}`;
+  button.disabled = true;
+  try {
+    retainWritePayload(key, { commentId: comment.id, status });
+    await moderateHistoryComment({ operationId: getOperationId(key), commentId: comment.id, status });
+    releaseWritePayload(key);
+    await loadComments();
+  } catch (error) {
+    releaseWritePayload(key, error);
+    diagnostic.error("competition_history_comment_write_failed", error);
+    historyElement("history-comments-status").textContent = "Moderationsstatus konnte nicht geändert werden.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function chooseReaction(eventId, reactionKey, button) {
+  const key = `history-reaction:${eventId}`;
+  button.disabled = true;
+  try {
+    retainWritePayload(key, { eventId, reactionKey });
+    const response = await setHistoryReaction({ operationId: getOperationId(key), eventId, reactionKey });
+    releaseWritePayload(key);
+    const entry = historyEntry(eventId);
+    if (entry) entry.interaction = response.data.interaction;
+    closeReactionModal();
+    renderCompetitionHistory();
+  } catch (error) {
+    releaseWritePayload(key, error);
+    diagnostic.error("competition_history_reaction_write_failed", error);
+    historyElement("history-reactions-status").textContent = error.code === "OPERATION_RETRY_PAYLOAD_REQUIRED"
+      ? error.message
+      : "Reaktion konnte nicht gespeichert werden.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function chooseCommentReaction(comment, reactionKey, button) {
+  const key = `history-comment-reaction:${comment.id}`;
+  button.disabled = true;
+  try {
+    retainWritePayload(key, { commentId: comment.id, reactionKey });
+    const response = await setHistoryCommentReaction({ operationId: getOperationId(key), commentId: comment.id, reactionKey });
+    releaseWritePayload(key);
+    const current = interactionState.comments.find(({ id }) => id === comment.id);
+    if (current) current.interaction = response.data.interaction;
+    closeReactionModal();
+    renderComments();
+  } catch (error) {
+    releaseWritePayload(key, error);
+    diagnostic.error("competition_history_comment_reaction_write_failed", error);
+    historyElement("history-reactions-status").textContent = error.code === "OPERATION_RETRY_PAYLOAD_REQUIRED"
+      ? error.message
+      : "Reaktion konnte nicht gespeichert werden.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openCommentReactionPicker(comment, button) {
+  interactionState.reactionsGeneration++;
+  interactionState.reactionTarget = { kind: "comment", id: comment.id };
+  interactionState.reactionsReturnFocus = button;
+  const modal = historyElement("history-reactions-modal");
+  setModalCovered("history-comments-modal", true);
+  const body = historyElement("history-reactions-body");
+  historyElement("history-reactions-title").textContent = "Reaktion auswählen";
+  historyElement("history-reactions-status").textContent = "";
+  body.replaceChildren();
+  const choices = document.createElement("div");
+  choices.className = "history-reaction-picker";
+  for (const reaction of historyState.reactionCatalog.filter(({ active }) => active)) {
+    const choice = document.createElement("button");
+    choice.type = "button";
+    choice.className = `history-reaction-choice${reaction.key === comment.interaction?.myReaction ? " is-mine" : ""}`;
+    choice.textContent = reaction.emoji;
+    choice.setAttribute("aria-label", `${reaction.label}${reaction.key === comment.interaction?.myReaction ? ", ausgewählt" : ""}`);
+    choice.addEventListener("click", () => chooseCommentReaction(comment, reaction.key, choice));
+    choices.appendChild(choice);
+  }
+  body.appendChild(choices);
+  modal.hidden = false;
+  historyElement("history-reactions-close")?.focus();
+}
+
+async function openCommentReactionDetails(comment, button) {
+  const generation = ++interactionState.reactionsGeneration;
+  interactionState.reactionTarget = { kind: "comment", id: comment.id };
+  interactionState.reactionsReturnFocus = button;
+  const modal = historyElement("history-reactions-modal");
+  setModalCovered("history-comments-modal", true);
+  const body = historyElement("history-reactions-body");
+  const status = historyElement("history-reactions-status");
+  historyElement("history-reactions-title").textContent = "Reaktionen";
+  body.replaceChildren();
+  status.textContent = "Reaktionen werden geladen...";
+  modal.hidden = false;
+  historyElement("history-reactions-close")?.focus();
+  try {
+    const response = await readHistoryCommentReactions({ commentId: comment.id });
+    if (generation !== interactionState.reactionsGeneration || interactionState.reactionTarget?.id !== comment.id || modal.hidden) return;
+    const list = document.createElement("ul");
+    list.className = "history-reactions-list";
+    for (const reaction of response.data.reactions) {
+      const definition = reactionDefinition(reaction.key);
+      if (!definition) continue;
+      const item = document.createElement("li");
+      item.className = "history-reaction-person";
+      const emoji = document.createElement("span");
+      emoji.className = "history-reaction-person-emoji";
+      emoji.textContent = definition.emoji;
+      const name = document.createElement("span");
+      name.className = "history-reaction-person-name";
+      name.textContent = reaction.userName;
+      item.append(emoji, name);
+      if (reaction.mine) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "history-secondary-action";
+        remove.textContent = "Entfernen";
+        remove.addEventListener("click", () => chooseCommentReaction(comment, null, remove));
+        item.appendChild(remove);
+      }
+      list.appendChild(item);
+    }
+    body.appendChild(list);
+    status.textContent = response.data.reactions.length ? "" : "Keine Reaktionen vorhanden.";
+  } catch (error) {
+    if (generation !== interactionState.reactionsGeneration || interactionState.reactionTarget?.id !== comment.id || modal.hidden) return;
+    diagnostic.error("competition_history_comment_reactions_load_failed", error);
+    status.textContent = "Reaktionen konnten nicht geladen werden.";
+  }
+}
+
+function appendCommentReactionActions(item, comment) {
+  if (!comment.canReact) return;
+  const interaction = comment.interaction || { reactionTotal: 0, reactions: [], myReaction: null };
+  const row = document.createElement("div");
+  row.className = "history-comment-reactions";
+  const reactions = document.createElement("span");
+  reactions.className = "history-reaction-summary";
+  for (const aggregate of interaction.reactions) {
+    const definition = reactionDefinition(aggregate.key);
+    if (!definition) continue;
+    const reaction = document.createElement("button");
+    reaction.type = "button";
+    reaction.className = `history-reaction-button${interaction.myReaction === aggregate.key ? " is-mine" : ""}`;
+    reaction.textContent = definition.emoji;
+    reaction.setAttribute("aria-label", `${definition.label}: Reagierende anzeigen`);
+    reaction.addEventListener("click", () => openCommentReactionDetails(comment, reaction));
+    reactions.appendChild(reaction);
+  }
+  const count = document.createElement("span");
+  count.className = "history-action-count";
+  count.textContent = String(interaction.reactionTotal);
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "history-reaction-add";
+  add.setAttribute("aria-label", interaction.myReaction ? "Reaktion wechseln" : "Reaktion hinzufügen");
+  add.appendChild(createInlineIcon("add-reaction"));
+  add.addEventListener("click", () => openCommentReactionPicker(comment, add));
+  reactions.append(count, add);
+  row.appendChild(reactions);
+  item.appendChild(row);
+}
+
+function openReactionPicker(eventId, button) {
+  interactionState.reactionsGeneration++;
+  interactionState.reactionTarget = { kind: "event", id: eventId };
+  interactionState.eventId = eventId;
+  interactionState.reactionsReturnFocus = button;
+  const modal = historyElement("history-reactions-modal");
+  setModalCovered("competition-history-modal", true);
+  const body = historyElement("history-reactions-body");
+  historyElement("history-reactions-title").textContent = "Reaktion auswählen";
+  historyElement("history-reactions-status").textContent = "";
+  body.replaceChildren();
+  const choices = document.createElement("div");
+  choices.className = "history-reaction-picker";
+  const myReaction = historyEntry(eventId)?.interaction?.myReaction;
+  for (const reaction of historyState.reactionCatalog.filter(({ active }) => active)) {
+    const choice = document.createElement("button");
+    choice.type = "button";
+    choice.className = `history-reaction-choice${reaction.key === myReaction ? " is-mine" : ""}`;
+    choice.textContent = reaction.emoji;
+    choice.setAttribute("aria-label", `${reaction.label}${reaction.key === myReaction ? ", ausgewählt" : ""}`);
+    choice.addEventListener("click", () => chooseReaction(eventId, reaction.key, choice));
+    choices.appendChild(choice);
+  }
+  body.appendChild(choices);
+  modal.hidden = false;
+  historyElement("history-reactions-close")?.focus();
+}
+
+async function openReactionDetails(eventId, button) {
+  const generation = ++interactionState.reactionsGeneration;
+  interactionState.reactionTarget = { kind: "event", id: eventId };
+  interactionState.eventId = eventId;
+  interactionState.reactionsReturnFocus = button;
+  const modal = historyElement("history-reactions-modal");
+  setModalCovered("competition-history-modal", true);
+  const body = historyElement("history-reactions-body");
+  const status = historyElement("history-reactions-status");
+  historyElement("history-reactions-title").textContent = "Reaktionen";
+  body.replaceChildren();
+  status.textContent = "Reaktionen werden geladen...";
+  modal.hidden = false;
+  historyElement("history-reactions-close")?.focus();
+  try {
+    const response = await readHistoryReactions({ eventId });
+    if (generation !== interactionState.reactionsGeneration || eventId !== interactionState.eventId || modal.hidden) return;
+    const list = document.createElement("ul");
+    list.className = "history-reactions-list";
+    for (const reaction of response.data.reactions) {
+      const definition = reactionDefinition(reaction.key);
+      if (!definition) continue;
+      const item = document.createElement("li");
+      item.className = "history-reaction-person";
+      const emoji = document.createElement("span");
+      emoji.className = "history-reaction-person-emoji";
+      emoji.textContent = definition.emoji;
+      const name = document.createElement("span");
+      name.className = "history-reaction-person-name";
+      name.textContent = reaction.userName;
+      item.append(emoji, name);
+      if (reaction.mine) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "history-secondary-action";
+        remove.textContent = "Entfernen";
+        remove.addEventListener("click", () => chooseReaction(eventId, null, remove));
+        item.appendChild(remove);
+      }
+      list.appendChild(item);
+    }
+    body.appendChild(list);
+    status.textContent = response.data.reactions.length ? "" : "Keine Reaktionen vorhanden.";
+  } catch (error) {
+    if (generation !== interactionState.reactionsGeneration || eventId !== interactionState.eventId || modal.hidden) return;
+    diagnostic.error("competition_history_reactions_load_failed", error);
+    status.textContent = "Reaktionen konnten nicht geladen werden.";
+  }
+}
+
+function appendInteractionActions(item, entry) {
+  if (!entry.id) return;
+  const interaction = entry.interaction || { commentCount: 0, reactionTotal: 0, reactions: [], myReaction: null };
+  const row = document.createElement("div");
+  row.className = "history-entry-actions";
+  const comments = document.createElement("span");
+  comments.className = "history-action-group";
+  const commentButton = document.createElement("button");
+  commentButton.type = "button";
+  commentButton.className = "history-action-button";
+  commentButton.setAttribute("aria-label", `Kommentare öffnen, ${interaction.commentCount} Kommentare`);
+  commentButton.appendChild(createInlineIcon("comments"));
+  commentButton.addEventListener("click", () => openComments(entry.id, commentButton));
+  const commentCount = document.createElement("span");
+  commentCount.className = "history-action-count";
+  commentCount.textContent = String(interaction.commentCount);
+  comments.append(commentButton, commentCount);
+  const reactions = document.createElement("span");
+  reactions.className = "history-reaction-summary";
+  for (const aggregate of interaction.reactions) {
+    const definition = reactionDefinition(aggregate.key);
+    if (!definition) continue;
+    const reaction = document.createElement("button");
+    reaction.type = "button";
+    reaction.className = `history-reaction-button${interaction.myReaction === aggregate.key ? " is-mine" : ""}`;
+    reaction.textContent = definition.emoji;
+    reaction.setAttribute("aria-label", `${definition.label}: Reagierende anzeigen`);
+    reaction.addEventListener("click", () => openReactionDetails(entry.id, reaction));
+    reactions.appendChild(reaction);
+  }
+  const reactionCount = document.createElement("span");
+  reactionCount.className = "history-action-count";
+  reactionCount.textContent = String(interaction.reactionTotal);
+  reactions.appendChild(reactionCount);
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "history-reaction-add";
+  add.setAttribute("aria-label", interaction.myReaction ? "Reaktion wechseln" : "Reaktion hinzufügen");
+  add.appendChild(createInlineIcon("add-reaction"));
+  add.addEventListener("click", () => openReactionPicker(entry.id, add));
+  reactions.appendChild(add);
+  row.append(comments, reactions);
+  item.appendChild(row);
+}
+
 function renderCompetitionHistory() {
   const list = historyElement("competition-history-list");
   const status = historyElement("competition-history-status");
@@ -150,6 +859,7 @@ function renderCompetitionHistory() {
     appendHistoryText(item, entry?.result ? `Ergebnis: ${entry.result}` : "", "competition-history-entry-result");
     const actor = entry?.actorName ?? entry?.actor;
     appendHistoryText(item, actor ? `Eingetragen durch: ${actor}` : "", "competition-history-entry-meta");
+    appendInteractionActions(item, entry);
     list.appendChild(item);
   }
 
@@ -176,6 +886,8 @@ async function loadCompetitionHistory({ append = false } = {}) {
     if (!response.data?.success) throw new Error(response.data?.error?.message || "Historie konnte nicht geladen werden.");
     const entries = historyEntries(response.data);
     const authoritativeName = String(response.data.competition?.name || "").trim();
+    if (Array.isArray(response.data.reactionCatalog)) historyState.reactionCatalog = response.data.reactionCatalog;
+    historyState.revision = Math.max(historyState.revision, Number(response.data.revision) || 0);
     if (!historyState.global && authoritativeName) {
       historyState.competitionName = authoritativeName;
       historyElement("competition-history-competition-name").textContent = authoritativeName;
@@ -225,18 +937,42 @@ function initializeCompetitionHistory() {
   historyElement("competition-history-more")?.addEventListener("click", () => loadCompetitionHistory({
     append: Boolean(historyState.entries.length && historyState.nextCursor),
   }));
+  historyElement("history-comments-close")?.addEventListener("click", closeCommentsModal);
+  historyElement("history-comments-more")?.addEventListener("click", () => loadComments({ older: true }));
+  historyElement("history-comment-add")?.addEventListener("click", (event) => openCommentEditor(null, event.currentTarget));
+  historyElement("history-comment-editor-close")?.addEventListener("click", closeCommentEditor);
+  historyElement("history-comment-editor-cancel")?.addEventListener("click", closeCommentEditor);
+  historyElement("history-comment-editor-submit")?.addEventListener("click", submitComment);
+  historyElement("history-comment-text")?.addEventListener("input", updateCommentCounter);
+  historyElement("history-comment-emoji-toggle")?.addEventListener("click", toggleFullEmojiPicker);
+  historyElement("history-reactions-close")?.addEventListener("click", closeReactionModal);
+  for (const [id, close] of [["history-comments-modal", closeCommentsModal], ["history-comment-editor-modal", closeCommentEditor], ["history-reactions-modal", closeReactionModal]]) {
+    historyElement(id)?.addEventListener("click", (event) => {
+      if (event.target === event.currentTarget) close();
+    });
+  }
   modal?.addEventListener("click", (event) => {
     if (event.target === modal) closeCompetitionHistory();
   });
   document.addEventListener("keydown", (event) => {
-    if (!modal || modal.hidden) return;
+    const openModal = [
+      historyElement("history-comment-editor-modal"),
+      historyElement("history-reactions-modal"),
+      historyElement("history-comments-modal"),
+      modal,
+    ].find((entry) => entry && !entry.hidden);
+    if (!openModal) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      closeCompetitionHistory();
+      if (openModal.id === "history-comment-editor-modal") closeCommentEditor();
+      else if (openModal.id === "history-reactions-modal") closeReactionModal();
+      else if (openModal.id === "history-comments-modal") closeCommentsModal();
+      else closeCompetitionHistory();
       return;
     }
     if (event.key !== "Tab") return;
-    const focusable = [...modal.querySelectorAll("button:not([hidden]):not(:disabled)")];
+    const focusable = [...openModal.querySelectorAll("button:not([hidden]):not(:disabled), textarea:not([hidden]):not(:disabled), input:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled), emoji-picker")]
+      .filter((element) => element.getClientRects().length);
     if (!focusable.length) return;
     const index = focusable.indexOf(document.activeElement);
     const nextIndex = event.shiftKey
@@ -253,6 +989,18 @@ function initializeCompetitionHistory() {
     setHistoryButtonsVisible(Boolean(identity));
   });
   ready.catch(() => setHistoryButtonsVisible(false));
+  subscribe("competition-history", (data) => {
+    const eventId = String(data?.eventId || "");
+    const revision = Number(data?.revision) || 0;
+    if (revision <= historyState.revision) return;
+    if (!historyState.open) return;
+    const eventIds = eventId ? [eventId] : [...new Set(historyState.entries.map(({ id }) => String(id || "")).filter(Boolean))];
+    Promise.all(eventIds.map((id) => refreshHistoryInteraction(id))).then(() => {
+      historyState.revision = Math.max(historyState.revision, revision);
+    }).catch(() => {});
+    if ((!eventId || interactionState.eventId === eventId) && !historyElement("history-comments-modal")?.hidden) loadComments().catch(() => {});
+    if ((!eventId || interactionState.eventId === eventId) && !historyElement("history-reactions-modal")?.hidden) closeReactionModal();
+  });
 }
 
 function scheduleCompetitionBoundary(competitions) {

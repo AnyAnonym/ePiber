@@ -44,6 +44,53 @@
     </div>
   </div>
 
+  <div id="history-comments-modal" class="competition-history-modal history-interaction-modal" role="dialog" aria-modal="true" aria-labelledby="history-comments-title" hidden>
+    <div class="competition-history-dialog history-comments-dialog" tabindex="-1">
+      <div class="competition-history-heading">
+        <h2 id="history-comments-title">Kommentare</h2>
+        <button id="history-comments-close" class="competition-history-close" type="button" aria-label="Kommentare schließen">&times;</button>
+      </div>
+      <div id="history-comments-status" class="competition-history-status" role="status" aria-live="polite"></div>
+      <div class="history-comments-body">
+        <button id="history-comments-more" class="competition-history-more" type="button" hidden>Ältere Kommentare laden</button>
+        <ul id="history-comments-list" class="history-comments-list"></ul>
+      </div>
+      <button id="history-comment-add" class="history-primary-action" type="button">Kommentar schreiben</button>
+    </div>
+  </div>
+
+  <div id="history-comment-editor-modal" class="competition-history-modal history-interaction-modal history-editor-modal" role="dialog" aria-modal="true" aria-labelledby="history-comment-editor-title" hidden>
+    <div class="history-editor-dialog" tabindex="-1">
+      <div class="competition-history-heading">
+        <h2 id="history-comment-editor-title">Kommentar schreiben</h2>
+        <button id="history-comment-editor-close" class="competition-history-close" type="button" aria-label="Kommentar-Editor schließen">&times;</button>
+      </div>
+      <label class="history-comment-label" for="history-comment-text">Kommentar</label>
+      <textarea id="history-comment-text" maxlength="16000" rows="6"></textarea>
+      <div class="history-comment-tools">
+        <button id="history-comment-emoji-toggle" class="history-secondary-action" type="button" aria-expanded="false">Emoji auswählen</button>
+        <span id="history-comment-counter">0 / 1000</span>
+      </div>
+      <div id="history-comment-emoji-picker" class="history-comment-emoji-picker" hidden></div>
+      <div id="history-comment-editor-status" class="competition-history-status" role="status" aria-live="polite"></div>
+      <div class="history-editor-actions">
+        <button id="history-comment-editor-cancel" class="history-secondary-action" type="button">Abbrechen</button>
+        <button id="history-comment-editor-submit" class="history-primary-action" type="button">Senden</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="history-reactions-modal" class="competition-history-modal history-interaction-modal history-reactions-modal" role="dialog" aria-modal="true" aria-labelledby="history-reactions-title" hidden>
+    <div class="history-reactions-dialog" tabindex="-1">
+      <div class="competition-history-heading">
+        <h2 id="history-reactions-title">Reaktionen</h2>
+        <button id="history-reactions-close" class="competition-history-close" type="button" aria-label="Reaktionen schließen">&times;</button>
+      </div>
+      <div id="history-reactions-status" class="competition-history-status" role="status" aria-live="polite"></div>
+      <div id="history-reactions-body" class="history-reactions-body"></div>
+    </div>
+  </div>
+
   <script type="module" src="JS/modals.js"></script>
   <script type="module" src="JS/navbar.js"></script>
   <script type="module" src="JS/bewerbeList.js"></script>

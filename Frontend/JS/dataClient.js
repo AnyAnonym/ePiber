@@ -142,6 +142,7 @@ const READ_ENDPOINTS = new Set([
   "players", "publicProfile", "bewerbe", "bewerbsart", "matches1", "preMatches", "matches",
   "rlPlatzierung", "entryList", "readMatchRestrictions", "withdrawnRankingPlayers", "getScoreboardCourts", "courtScores",
   "scoreboardSnapshot", "memberDirectory", "myProfile", "myMessageSummary", "myMessages", "myMessage", "competitionHistory",
+  "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryCommentForEdit", "competitionHistoryReactions", "competitionHistoryCommentReactions",
   "operationStatus", "navigator", "monitorList",
   "monitorTarget", "adminPeopleNormalization", "adminMemberReconciliation", "sheetDataStatus",
 ]);

@@ -149,21 +149,21 @@ test("Bewerbshistorienfehler akzeptiert nur kontrollierte Browserdiagnosefelder"
     appVersion: "4.7.0-test",
     clientSessionId: "00000000-0000-4000-8000-000000000021",
     pageType: "Bewerbe",
-    events: [{
-      event: "competition_history_load_failed",
+    events: ["competition_history_load_failed", "competition_history_comments_load_failed", "competition_history_comment_write_failed", "competition_history_reactions_load_failed", "competition_history_reaction_write_failed", "competition_history_comment_reactions_load_failed", "competition_history_comment_reaction_write_failed"].map((event) => ({
+      event,
       level: "error",
       timestamp: "2026-09-01T10:00:00.000Z",
       code: "REQUEST_TIMEOUT",
       supportId: "support-history-1",
-    }],
+    })),
   };
 
-  assert.deepEqual(service.recordBatch({ sourceIp: "203.0.113.9", identity: { id: "p2", name: "Peter Player", role: "player" }, body }), { success: true, accepted: 1, dropped: 0 });
+  assert.deepEqual(service.recordBatch({ sourceIp: "203.0.113.9", identity: { id: "p2", name: "Peter Player", role: "player" }, body }), { success: true, accepted: 7, dropped: 0 });
   assert.equal(logs[0].fields.frontendEvent, "competition_history_load_failed");
   assert.throws(() => service.recordBatch({
     sourceIp: "203.0.113.9",
     identity: { id: "p2", name: "Peter Player", role: "player" },
-    body: { ...body, events: [{ ...body.events[0], competitionName: "Privater Bewerb" }] },
+    body: { ...body, events: [{ ...body.events[0], commentText: "Privater Kommentar" }] },
   }), { code: "VALIDATION_ERROR" });
 });
 

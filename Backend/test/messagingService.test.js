@@ -182,6 +182,7 @@ test("Spieltermin erzeugt ein gemeinsames Bewerbsereignis und zwei persoenliche 
     result: "",
     actorName: "Peter Player",
     participants: [{ role: "participant", name: "Ada Admin" }, { role: "participant", name: "Peter Player" }],
+    interaction: { commentCount: 0, reactionTotal: 0, reactions: [], myReaction: null },
   });
   assert.equal(service.messages({ id: "p1" }, { limit: 10 }).messages[0].subject, "Spieltermin festgelegt mit Peter Player");
   assert.equal(service.message({ id: "p1" }, first.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Dein Match gegen Peter Player ist für den 05.09.2026, 18:00 Uhr geplant.");
@@ -699,5 +700,60 @@ test("Messaging-Reporting bleibt ohne Last-good-Grunddaten nicht bereit", () => 
   assert.throws(() => service.messagingReport({ fromMs: 0, toMs: 1, deployment: "paj" }), { code: "DATA_NOT_READY" });
   assert.deepEqual(logs.at(-1).fields.result, "failed");
   assert.equal(logs.at(-1).fields.errorCode, "DATA_NOT_READY");
+  repository.close();
+});
+
+test("Bewerbshistorien-Interaktionen projizieren Moderation und Reaktionsnamen rollenbezogen", () => {
+  dataStore.resetForTests();
+  dataStore.set("bewerbe", [["ID", "Bezeichnung", "BewerbsartID"], ["cup-1", "Testcup", "3"]], { source: "test" });
+  dataStore.set("matches1", [["ID", "BewerbID", "BewerbRunde"]], { source: "test" });
+  const repository = new MessagingRepository(":memory:", { now: (() => { let now = 1000; return () => now++; })() });
+  repository.init();
+  repository.ensureEvent({ id: "event-comments", competitionId: "cup-1", createdAt: 10, type: "test", source: "test", sourceId: "source", actorId: "p1", summary: "Ereignis" }, [{
+    userId: "p1", role: "participant", displayName: "Ada", messageId: "message-comments", type: "test", subject: "Test", body: "Privat", deliveries: [{ channel: "Inbox", status: "delivered" }],
+  }]);
+  const published = [];
+  const logs = [];
+  const service = new MessagingService({ repository, publish: (topic, data) => published.push({ topic, data }), log: (level, event, fields) => logs.push({ level, event, fields }) });
+  const player = { id: "p1", name: "Ada", role: "player" };
+  const other = { id: "p2", name: "Berta", role: "player" };
+  const admin = { id: "admin", name: "Admin", role: "admin" };
+
+  const added = service.addCompetitionHistoryComment(player, { operationId: "00000000-0000-4000-8000-000000000201", eventId: "event-comments", body: "Hallo\n🙂" });
+  assert.equal(added.comment.body, "Hallo\n🙂");
+  service.moderateCompetitionHistoryComment(admin, { operationId: "00000000-0000-4000-8000-000000000202", commentId: added.commentId, status: "under_review" });
+  const hidden = service.competitionHistoryComments(other, { eventId: "event-comments" }).comments[0];
+  assert.equal(hidden.body, "");
+  assert.equal(hidden.placeholder, "Kommentar wird geprüft.");
+  assert.equal(hidden.authorName, "Ada");
+  const reviewed = service.competitionHistoryComments(admin, { eventId: "event-comments" }).comments[0];
+  assert.equal(reviewed.body, "Hallo\n🙂");
+  assert.equal(reviewed.canModerate, true);
+  const hiddenReaction = service.setCompetitionHistoryCommentReaction(admin, { operationId: "00000000-0000-4000-8000-000000000207", commentId: added.commentId, reactionKey: "thumbs_up" });
+  assert.equal(hiddenReaction.interaction.myReaction, "thumbs_up");
+  assert.equal(service.competitionHistoryComments(other, { eventId: "event-comments" }).comments[0].interaction.reactionTotal, 0);
+  assert.equal(service.competitionHistoryComments(other, { eventId: "event-comments" }).comments[0].canReact, false);
+  assert.throws(() => service.competitionHistoryCommentReactions(other, added.commentId), { code: "COMPETITION_HISTORY_COMMENT_UNDER_REVIEW" });
+  assert.deepEqual(service.competitionHistoryCommentReactions(admin, added.commentId).reactions.map(({ key, userName }) => ({ key, userName })), [{ key: "thumbs_up", userName: "Admin" }]);
+  assert.equal(service.competitionHistoryCommentForEdit(player, added.commentId).comment.body, "Hallo\n🙂");
+  assert.throws(() => service.competitionHistoryCommentForEdit(other, added.commentId), { code: "FORBIDDEN" });
+
+  service.editCompetitionHistoryComment(player, { operationId: "00000000-0000-4000-8000-000000000203", commentId: added.commentId, body: "Überarbeitet" });
+  assert.equal(service.competitionHistoryComments(other, { eventId: "event-comments" }).comments[0].status, "under_review");
+  service.moderateCompetitionHistoryComment(admin, { operationId: "00000000-0000-4000-8000-000000000208", commentId: added.commentId, status: "visible" });
+  const released = service.competitionHistoryComments(other, { eventId: "event-comments" }).comments[0];
+  assert.equal(released.interaction.reactionTotal, 1);
+  assert.equal(released.canReact, true);
+  const reaction = service.setCompetitionHistoryReaction(player, { operationId: "00000000-0000-4000-8000-000000000204", eventId: "event-comments", reactionKey: "flexed_biceps" });
+  assert.equal(reaction.interaction.myReaction, "flexed_biceps");
+  assert.deepEqual(service.competitionHistoryReactions(player, "event-comments").reactions[0], { key: "flexed_biceps", userName: "Ada", createdAt: 1011, mine: true });
+  assert.throws(() => service.setCompetitionHistoryReaction(player, { operationId: "00000000-0000-4000-8000-000000000205", eventId: "event-comments", reactionKey: "unknown" }), { code: "COMPETITION_HISTORY_REACTION_INVALID" });
+  assert.throws(() => service.addCompetitionHistoryComment(player, { operationId: "00000000-0000-4000-8000-000000000206", eventId: "event-comments", body: "a".repeat(1001) }), { code: "VALIDATION_ERROR" });
+  assert.equal(service.competitionHistory(player, { bewerbId: "cup-1" }).reactionCatalog.some(({ key }) => key === "flexed_biceps"), true);
+  assert.equal(published.every(({ topic, data }) => topic === "competition-history" && !Object.hasOwn(data, "body") && !Object.hasOwn(data, "userName")), true);
+  assert.equal(JSON.stringify(logs).includes("Überarbeitet"), false);
+  assert.equal(JSON.stringify(logs).includes("Hallo"), false);
+  assert.equal(logs.some(({ event, fields }) => event === "competition_history_interaction_persistence_completed" && fields.result === "rejected" && fields.errorCode === "COMPETITION_HISTORY_REACTION_INVALID"), true);
+  assert.equal(logs.some(({ event, fields }) => event === "competition_history_interaction_persistence_completed" && fields.result === "rejected" && fields.errorCode === "VALIDATION_ERROR"), true);
   repository.close();
 });

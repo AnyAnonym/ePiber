@@ -121,6 +121,10 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   Gewinner-/Verliererperspektive und neutrale Historienformulierung. Der Service
   erzeugt ausserdem direkt aus dieser SQLite-Datei die zeitlich begrenzte
   Reportingprojektion; eine zweite Reporting-Datenbank existiert nicht.
+   Schema 8 ergaenzt daran gebundene Kommentare, Moderation, Reaktionen,
+   idempotente Interaktionsoperationen und eine gemeinsame Live-Revision.
+   Schema 9 ergaenzt `comment_reactions` bei bereits auf Schema 8 gestarteten
+   Datenbanken additiv, ohne Ereignisse oder Kommentare zu veraendern.
 
 `emailMessagingAdapter.js`, `whatsappMessagingAdapter.js`
   Begrenzen die kuenftigen externen Zustellkanaele auf getrennte Adapter. Solange
@@ -601,6 +605,21 @@ Fachhistorien und Betriebslogs:
     und Historie/Ergebnis auf die neutrale W.O.-Form um; andere Ereignisse,
     Aufgabe, Quittierungen und Zustellstaende bleiben unveraendert. Akteur und
     W.O.-Geber behalten getrennte Bedeutungen.
+     Schema 8 bindet Kommentare und je Benutzer genau eine Reaktion direkt an die
+    zentrale Ereignis-ID. Ein validierter JSON-Katalog trennt stabile
+    Reaktionsschluessel von den sichtbaren Emojis. Kommentar-, Moderations- und
+    Reaktionswrites samt Operationsergebnis werden in einer Transaktion
+    idempotent gespeichert und erhoehen nur bei tatsaechlicher Aenderung eine
+    gemeinsame Interaktionsrevision. Das authentifizierte Topic
+    `competition-history` publiziert ausschliesslich Revision, Ereignis- und
+    Bewerb-ID. Detailreads laden Kommentare und Reaktornamen getrennt; private
+    Inboxprojektionen bleiben unberuehrt. Normale Benutzer erhalten fuer
+    `under_review` nur Autor, Zeitpunkt und kontrollierten Platzhalter, Autoren
+    den Text gezielt zur Bearbeitung und Administratoren den Text zur Pruefung.
+    Kommentare besitzen zusaetzlich eigene, vom Ereignis getrennte
+     Reaktionsaggregate und Namensdetailprojektionen. Bei `under_review` bleiben
+    diese Daten fuer normale Benutzer serverseitig verborgen und gesperrt;
+    Administratoren behalten sie fuer die Begutachtung.
   - `scorelog.sqlite` und `audit.sqlite` sind getrennte SQLite-Systeme-of-Record
     mit WAL, `synchronous=FULL`, Event-IDs und unbegrenzter fachlicher Historie.
     Die frueheren Google-Sheets-Tabs `ScoreLog` und `Logging` werden nicht mehr
@@ -655,6 +674,13 @@ Fachhistorien und Betriebslogs:
     ausschliesslich in Fachhistorie und Meldungen. Abschlussereignisse sind
     `match_result_update_completed`, `admin_match_end_update_completed` und
     `admin_match_result_clear_completed`.
+    Die Historieninteraktionen verwenden fuer Hinzufuegen, Bearbeiten, Loeschen,
+    Ausblenden, Freigeben und Reagieren dieselbe vierphasige Auditkette. Audit und
+    Abschlusslog `competition_history_interaction_completed` enthalten nur
+    kontrollierte IDs, Reaktionsschluessel, Status und Ergebnismerkmale, nie
+    Kommentartexte oder Reaktornamen. Browserfehler sind auf die benannten
+    `competition_history_*_failed`-Ereignisse mit dem allgemeinen kontrollierten
+    Diagnoseumschlag begrenzt.
   - Der zentrale Logger schreibt einzeilige, redigierte JSON-Events mit UTC-Zeit,
     Level, Service, Instanz, Version und Eventname nach stdout/stderr. journald
     uebernimmt lokale Speicherung; optionale Score-/Audit-Spiegel dienen nur der

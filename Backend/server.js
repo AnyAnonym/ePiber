@@ -1,5 +1,7 @@
 const crypto = require("crypto");
+const fs = require("fs");
 const http = require("http");
+const path = require("path");
 const { version: APP_VERSION } = require("./package.json");
 const {
   ALLOWED_ORIGINS,
@@ -62,6 +64,20 @@ const RESPONSE_REQUEST_ID = Symbol("responseRequestId");
 const RESPONSE_ERROR_CODE = Symbol("responseErrorCode");
 const RESPONSE_BYTES = Symbol("responseBytes");
 const PROCESS_STARTED_AT = Date.now();
+const EMOJI_PICKER_ROOT = path.dirname(require.resolve("emoji-picker-element/package.json"));
+const EMOJI_DATA_ROOT = path.dirname(require.resolve("emoji-picker-element-data/package.json"));
+function emojiAsset(filename, type) {
+  const body = fs.readFileSync(filename);
+  const etag = `"${crypto.createHash("sha256").update(body).digest("base64url")}"`;
+  return Object.freeze({ body, type, etag });
+}
+const EMOJI_ASSETS = new Map([
+  ["/api/emoji-picker/index.js", emojiAsset(path.join(EMOJI_PICKER_ROOT, "index.js"), "text/javascript; charset=utf-8")],
+  ["/api/emoji-picker/picker.js", emojiAsset(path.join(EMOJI_PICKER_ROOT, "picker.js"), "text/javascript; charset=utf-8")],
+  ["/api/emoji-picker/database.js", emojiAsset(path.join(EMOJI_PICKER_ROOT, "database.js"), "text/javascript; charset=utf-8")],
+  ["/api/emoji-picker/i18n/de.js", emojiAsset(path.join(EMOJI_PICKER_ROOT, "i18n", "de.js"), "text/javascript; charset=utf-8")],
+  ["/api/emoji-picker/data/de.json", emojiAsset(path.join(EMOJI_DATA_ROOT, "de", "cldr-native", "data.json"), "application/json; charset=utf-8")],
+]);
 
 function sendJson(response, status, body, headers = {}) {
   const text = JSON.stringify(body);
@@ -341,6 +357,25 @@ function createApplication(overrides = {}) {
 
       if (shuttingDown) {
         throw new AppError("SHUTTING_DOWN", "Server wird beendet", 503);
+      }
+
+      if (EMOJI_ASSETS.has(pathname)) {
+        if (!new Set(["GET", "HEAD"]).has(request.method)) return methodNotAllowed(response, ["GET", "HEAD"], supportId);
+        const asset = EMOJI_ASSETS.get(pathname);
+        if (request.headers["if-none-match"] === asset.etag) {
+          response.writeHead(304, { ETag: asset.etag, "Cache-Control": "public, max-age=86400", "X-Request-ID": supportId });
+          return response.end();
+        }
+        response[RESPONSE_BYTES] = request.method === "HEAD" ? 0 : asset.body.length;
+        response.writeHead(200, {
+          "Content-Type": asset.type,
+          "Content-Length": asset.body.length,
+          "Cache-Control": "public, max-age=86400",
+          ETag: asset.etag,
+          "X-Content-Type-Options": "nosniff",
+          "X-Request-ID": supportId,
+        });
+        return response.end(request.method === "HEAD" ? undefined : asset.body);
       }
 
       if (pathname === "/internal/messaging-report") {

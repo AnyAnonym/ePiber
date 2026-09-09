@@ -111,7 +111,7 @@ test("MessagingRepository migriert v1, gruppiert nur exakte Matchquellen und rei
 
   const repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 7);
+  assert.equal(repository.status().schemaVersion, 9);
   assert.equal(repository.status().eventCount, 2);
   const migratedEventId = repository.getForRecipient("p1", "legacy-challenger").eventId;
   assert.equal(migratedEventId, repository.getForRecipient("p2", "legacy-opponent").eventId);
@@ -167,6 +167,101 @@ test("MessagingRepository speichert Ereignisse mit einem oder vier Teilnehmern a
   repository.close();
 });
 
+test("Bewerbshistorien-Kommentare und Reaktionen sind eventgebunden, idempotent und moderierbar", () => {
+  let now = 100;
+  const repository = new MessagingRepository(":memory:", { now: () => now++ });
+  repository.init();
+  repository.ensureEvent({ id: "event-interaction", competitionId: "cup", createdAt: 10, type: "test", source: "test", sourceId: "source", actorId: "p1" }, [{
+    userId: "p1", role: "participant", messageId: "message-interaction", type: "test", subject: "Test", body: "Privat", deliveries: [{ channel: "Inbox", status: "delivered" }],
+  }]);
+
+  const add = repository.addComment({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000101", eventId: "event-interaction", body: "Erster Kommentar" });
+  const repeated = repository.addComment({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000101", eventId: "event-interaction", body: "Erster Kommentar" });
+  assert.equal(add.commentId, repeated.commentId);
+  assert.equal(repeated.repeated, true);
+  assert.throws(() => repository.addComment({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000101", eventId: "event-interaction", body: "Anders" }), { code: "OPERATION_ID_CONFLICT" });
+  const second = repository.addComment({ userId: "p2", userName: "Berta", operationId: "00000000-0000-4000-8000-000000000102", eventId: "event-interaction", body: "Zweiter Kommentar" });
+  const firstPage = repository.pageComments("event-interaction", { limit: 1 });
+  assert.equal(firstPage.comments[0].id, second.commentId);
+  assert.ok(firstPage.nextCursor);
+  assert.equal(repository.pageComments("event-interaction", { limit: 1, cursor: firstPage.nextCursor }).comments[0].id, add.commentId);
+
+  repository.editComment({ userId: "p1", operationId: "00000000-0000-4000-8000-000000000103", commentId: add.commentId, body: "Bearbeitet" });
+  assert.equal(repository.getComment(add.commentId).body, "Bearbeitet");
+  assert.throws(() => repository.editComment({ userId: "p2", operationId: "00000000-0000-4000-8000-000000000104", commentId: add.commentId, body: "Fremd" }), { code: "FORBIDDEN" });
+  repository.moderateComment({ userId: "admin", operationId: "00000000-0000-4000-8000-000000000105", commentId: add.commentId, status: "under_review" });
+  assert.equal(repository.getComment(add.commentId).status, "under_review");
+  assert.throws(() => repository.setCommentReaction({ userId: "p2", userName: "Berta", operationId: "00000000-0000-4000-8000-000000000105", commentId: add.commentId, reactionKey: "thumbs_up", allowUnderReview: false }), { code: "COMPETITION_HISTORY_COMMENT_UNDER_REVIEW" });
+  repository.setCommentReaction({ userId: "admin", userName: "Admin", operationId: "00000000-0000-4000-8000-000000000112", commentId: add.commentId, reactionKey: "thumbs_up", allowUnderReview: true });
+  assert.deepEqual(repository.commentReactionSummaries([add.commentId], "admin").get(add.commentId), { reactionTotal: 1, reactions: [{ key: "thumbs_up", count: 1 }], myReaction: "thumbs_up" });
+  assert.deepEqual(repository.commentReactionDetails(add.commentId).reactions.map(({ key, userName }) => ({ key, userName })), [{ key: "thumbs_up", userName: "Admin" }]);
+
+  repository.setReaction({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000106", eventId: "event-interaction", reactionKey: "thumbs_up" });
+  repository.setReaction({ userId: "p2", userName: "Berta", operationId: "00000000-0000-4000-8000-000000000107", eventId: "event-interaction", reactionKey: "surprised" });
+  repository.setReaction({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000108", eventId: "event-interaction", reactionKey: "surprised" });
+  assert.deepEqual(repository.interactionSummaries(["event-interaction"], "p1").get("event-interaction"), {
+    commentCount: 2,
+    reactionTotal: 2,
+    reactions: [{ key: "surprised", count: 2 }],
+    myReaction: "surprised",
+  });
+  assert.deepEqual(repository.reactionDetails("event-interaction").reactions.map(({ key, userName }) => ({ key, userName })), [
+    { key: "surprised", userName: "Ada" }, { key: "surprised", userName: "Berta" },
+  ]);
+  repository.setReaction({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000109", eventId: "event-interaction", reactionKey: null });
+  assert.equal(repository.interactionSummaries(["event-interaction"], "p1").get("event-interaction").reactionTotal, 1);
+
+  assert.throws(() => repository.deleteComment({ userId: "p3", role: "player", operationId: "00000000-0000-4000-8000-000000000110", commentId: second.commentId }), { code: "FORBIDDEN" });
+  repository.deleteComment({ userId: "admin", role: "admin", operationId: "00000000-0000-4000-8000-000000000111", commentId: second.commentId });
+  assert.equal(repository.getComment(second.commentId), null);
+  assert.deepEqual(repository.summary("p1"), { revision: 1, totalCount: 1, unreadCount: 1 });
+  assert.ok(repository.historyInteractionRevision() >= 8);
+  repository.close();
+});
+
+test("Kommentar-Cursor bleibt nach Loeschung seines Randkommentars verwendbar", () => {
+  let now = 100;
+  const repository = new MessagingRepository(":memory:", { now: () => now++ });
+  repository.init();
+  repository.ensureEvent({ id: "event-cursor", competitionId: "cup", createdAt: 10, type: "test", source: "test", sourceId: "cursor", actorId: "p1" }, [{
+    userId: "p1", role: "participant", messageId: "message-cursor", type: "test", subject: "Test", body: "Privat", deliveries: [{ channel: "Inbox", status: "delivered" }],
+  }]);
+  const first = repository.addComment({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000121", eventId: "event-cursor", body: "Alt" });
+  const newest = repository.addComment({ userId: "p2", userName: "Berta", operationId: "00000000-0000-4000-8000-000000000122", eventId: "event-cursor", body: "Neu" });
+  const page = repository.pageComments("event-cursor", { limit: 1 });
+  assert.equal(page.comments[0].id, newest.commentId);
+  repository.deleteComment({ userId: "p2", role: "player", operationId: "00000000-0000-4000-8000-000000000123", commentId: newest.commentId });
+  assert.equal(repository.pageComments("event-cursor", { limit: 1, cursor: page.nextCursor }).comments[0].id, first.commentId);
+  repository.close();
+});
+
+test("MessagingRepository migriert Schema 8 mit bestehenden Kommentaren auf Kommentarreaktionen", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-messaging-v7-"));
+  const filename = path.join(directory, "messaging.sqlite");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let repository = new MessagingRepository(filename);
+  repository.init();
+  repository.ensureMessage(message("before-v9"), [{ channel: "Inbox", status: "delivered" }]);
+  repository.ensureEvent({ id: "event-before-v9", competitionId: "cup", createdAt: 10, type: "test", source: "test", sourceId: "before-v9", actorId: "p1" }, [{
+    userId: "p1", role: "participant", messageId: "message-before-v9", type: "test", subject: "Test", body: "Privat", deliveries: [{ channel: "Inbox", status: "delivered" }],
+  }]);
+  const comment = repository.addComment({ userId: "p1", userName: "Ada", operationId: "00000000-0000-4000-8000-000000000131", eventId: "event-before-v9", body: "Bestehender Kommentar" });
+  repository.close();
+  const db = new DatabaseSync(filename);
+  db.exec("DROP TABLE comment_reactions; PRAGMA user_version = 8;");
+  db.close();
+
+  repository = new MessagingRepository(filename);
+  repository.init();
+  assert.equal(repository.status().schemaVersion, 9);
+  assert.equal(repository.getForRecipient("p2", "before-v9").body, "Private body");
+  assert.equal(repository.pageComments("event-before-v9").comments[0].body, "Bestehender Kommentar");
+  assert.deepEqual(repository.commentReactionSummaries([comment.commentId], "p2").get(comment.commentId), { reactionTotal: 0, reactions: [], myReaction: null });
+  assert.deepEqual(repository.interactionSummaries([], "p2"), new Map());
+  assert.equal(repository.historyInteractionRevision(), 1);
+  repository.close();
+});
+
 test("MessagingRepository migriert Schema 3 additiv auf das Ergebnisfeld", (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-messaging-v3-"));
   const filename = path.join(directory, "messaging.sqlite");
@@ -181,7 +276,7 @@ test("MessagingRepository migriert Schema 3 additiv auf das Ergebnisfeld", (t) =
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 7);
+  assert.equal(repository.status().schemaVersion, 9);
   assert.equal(repository.getForRecipient("p2", "before-v4").subject, "Private subject");
   assert.equal(repository.getEvent("before-v4").result, "");
   repository.close();
@@ -239,7 +334,7 @@ test("MessagingRepository migriert Schema 4 mit Datenbestand auf den globalen Ze
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 7);
+  assert.equal(repository.status().schemaVersion, 9);
   assert.equal(repository.getForRecipient("p2", "before-v5").subject, "Private subject");
   assert.equal(repository.db.prepare("PRAGMA index_list('competition_events')").all().some(({ name }) => name === "competition_events_created"), true);
   repository.close();
@@ -272,7 +367,7 @@ test("MessagingRepository migriert bestehende Walkover- und Aufgabe-Texte", (t) 
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 7);
+  assert.equal(repository.status().schemaVersion, 9);
   assert.equal(repository.getForRecipient("p1", "walkover-old-message").body, "Du gewinnst durch W.O. von Peter Player.");
   assert.equal(repository.getForRecipient("p4", "walkover-old-loser-message").body, "Du verlierst durch W.O.");
   assert.equal(repository.getEvent("walkover-old").summary, "Ada Aufschlag gewinnt durch W.O. von Peter Player.");
