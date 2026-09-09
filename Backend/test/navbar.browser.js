@@ -434,6 +434,10 @@ test("Dashboard zeigt aktuelle Geburtstage mit Alter und oeffnet das bestehende 
     await birthday.waitFor({ state: "visible" });
     assert.match(await birthday.textContent(), /Geburtstags Mitglied/);
     assert.match(await birthday.textContent(), /wird heute 30 Jahre/);
+    const highlights = page.locator(".highlight-list .highlight");
+    const highlightCount = await highlights.count();
+    assert.match(await highlights.nth(highlightCount - 2).textContent(), /Mixed Doppel.*Elke Hahn & Alexander Hrazdera/s);
+    assert.match(await highlights.nth(highlightCount - 1).textContent(), /Mixed Doppel.*Monika Strauß & Alfred Pimminger/s);
     await page.evaluate(() => {
       window.openProfileModal = (options) => { window.__openedDashboardProfile = options; };
     });
