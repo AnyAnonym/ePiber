@@ -4,7 +4,7 @@ const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 const { AppError } = require("./errors.js");
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 9;
 
 class MessagingRepository {
   constructor(filename, { now = Date.now } = {}) {
@@ -34,20 +34,35 @@ class MessagingRepository {
       this.migrateV4();
       this.migrateV5();
       this.migrateV6();
+      this.migrateV7();
+      this.migrateV8();
     } else if (version === 3) {
       this.migrateV3();
       this.migrateV4();
       this.migrateV5();
       this.migrateV6();
+      this.migrateV7();
+      this.migrateV8();
     } else if (version === 4) {
       this.migrateV4();
       this.migrateV5();
       this.migrateV6();
+      this.migrateV7();
+      this.migrateV8();
     } else if (version === 5) {
       this.migrateV5();
       this.migrateV6();
+      this.migrateV7();
+      this.migrateV8();
     } else if (version === 6) {
       this.migrateV6();
+      this.migrateV7();
+      this.migrateV8();
+    } else if (version === 7) {
+      this.migrateV7();
+      this.migrateV8();
+    } else if (version === 8) {
+      this.migrateV8();
     } else if (version !== SCHEMA_VERSION) {
       throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     }
@@ -114,7 +129,55 @@ class MessagingRepository {
         user_id TEXT PRIMARY KEY,
         revision INTEGER NOT NULL
       );
-      PRAGMA user_version = 7;
+      CREATE TABLE IF NOT EXISTS event_comments (
+        comment_id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL REFERENCES competition_events(event_id) ON DELETE CASCADE,
+        author_id TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        body TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('visible', 'under_review')),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER,
+        moderated_at INTEGER,
+        moderated_by TEXT
+      );
+      CREATE INDEX IF NOT EXISTS event_comments_history ON event_comments(event_id, created_at DESC, comment_id DESC);
+      CREATE TABLE IF NOT EXISTS comment_reactions (
+        comment_id TEXT NOT NULL REFERENCES event_comments(comment_id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        reaction_key TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY(comment_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS comment_reactions_key ON comment_reactions(comment_id, reaction_key, user_name);
+      CREATE TABLE IF NOT EXISTS event_reactions (
+        event_id TEXT NOT NULL REFERENCES competition_events(event_id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        reaction_key TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY(event_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS event_reactions_key ON event_reactions(event_id, reaction_key, user_name);
+      CREATE TABLE IF NOT EXISTS event_interaction_operations (
+        user_id TEXT NOT NULL,
+        operation_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        payload_hash TEXT NOT NULL,
+        result_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY(user_id, operation_id)
+      );
+      CREATE TABLE IF NOT EXISTS competition_history_revision (
+        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+        revision INTEGER NOT NULL
+      );
+      INSERT OR IGNORE INTO competition_history_revision(singleton, revision) VALUES (1, 0);
+      PRAGMA user_version = 9;
     `);
   }
 
@@ -223,6 +286,90 @@ class MessagingRepository {
         updateEvent.run(summary, event.event_id);
       }
       this.db.exec("PRAGMA user_version = 7; COMMIT");
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+
+  migrateV7() {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS event_comments (
+          comment_id TEXT PRIMARY KEY,
+          event_id TEXT NOT NULL REFERENCES competition_events(event_id) ON DELETE CASCADE,
+          author_id TEXT NOT NULL,
+          author_name TEXT NOT NULL,
+          body TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('visible', 'under_review')),
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER,
+          moderated_at INTEGER,
+          moderated_by TEXT
+        );
+        CREATE INDEX IF NOT EXISTS event_comments_history ON event_comments(event_id, created_at DESC, comment_id DESC);
+        CREATE TABLE IF NOT EXISTS comment_reactions (
+          comment_id TEXT NOT NULL REFERENCES event_comments(comment_id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          user_name TEXT NOT NULL,
+          reaction_key TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(comment_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS comment_reactions_key ON comment_reactions(comment_id, reaction_key, user_name);
+        CREATE TABLE IF NOT EXISTS event_reactions (
+          event_id TEXT NOT NULL REFERENCES competition_events(event_id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          user_name TEXT NOT NULL,
+          reaction_key TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(event_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS event_reactions_key ON event_reactions(event_id, reaction_key, user_name);
+        CREATE TABLE IF NOT EXISTS event_interaction_operations (
+          user_id TEXT NOT NULL,
+          operation_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          payload_hash TEXT NOT NULL,
+          result_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY(user_id, operation_id)
+        );
+        CREATE TABLE IF NOT EXISTS competition_history_revision (
+          singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+          revision INTEGER NOT NULL
+        );
+        INSERT OR IGNORE INTO competition_history_revision(singleton, revision) VALUES (1, 0);
+        PRAGMA user_version = 8;
+        COMMIT;
+      `);
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+
+  migrateV8() {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS comment_reactions (
+          comment_id TEXT NOT NULL REFERENCES event_comments(comment_id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          user_name TEXT NOT NULL,
+          reaction_key TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY(comment_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS comment_reactions_key ON comment_reactions(comment_id, reaction_key, user_name);
+        PRAGMA user_version = 9;
+        COMMIT;
+      `);
     } catch (error) {
       try { this.db.exec("ROLLBACK"); } catch {}
       throw error;
@@ -491,6 +638,234 @@ class MessagingRepository {
     };
   }
 
+  historyInteractionRevision() {
+    this.ensureOpen();
+    return Number(this.db.prepare("SELECT revision FROM competition_history_revision WHERE singleton = 1").get()?.revision || 0);
+  }
+
+  interactionSummaries(eventIds, userId) {
+    this.ensureOpen();
+    const summaries = new Map(eventIds.map((eventId) => [eventId, { commentCount: 0, reactionTotal: 0, reactions: [], myReaction: null }]));
+    if (!eventIds.length) return summaries;
+    const placeholders = eventIds.map(() => "?").join(",");
+    for (const row of this.db.prepare(`SELECT event_id, COUNT(*) AS count FROM event_comments WHERE event_id IN (${placeholders}) GROUP BY event_id`).all(...eventIds)) {
+      summaries.get(row.event_id).commentCount = Number(row.count);
+    }
+    for (const row of this.db.prepare(`SELECT event_id, reaction_key, COUNT(*) AS count FROM event_reactions WHERE event_id IN (${placeholders}) GROUP BY event_id, reaction_key`).all(...eventIds)) {
+      const summary = summaries.get(row.event_id);
+      summary.reactions.push({ key: row.reaction_key, count: Number(row.count) });
+      summary.reactionTotal += Number(row.count);
+    }
+    for (const row of this.db.prepare(`SELECT event_id, reaction_key FROM event_reactions WHERE user_id = ? AND event_id IN (${placeholders})`).all(userId, ...eventIds)) {
+      summaries.get(row.event_id).myReaction = row.reaction_key;
+    }
+    return summaries;
+  }
+
+  commentReactionSummaries(commentIds, userId) {
+    this.ensureOpen();
+    const summaries = new Map(commentIds.map((commentId) => [commentId, { reactionTotal: 0, reactions: [], myReaction: null }]));
+    if (!commentIds.length) return summaries;
+    const placeholders = commentIds.map(() => "?").join(",");
+    for (const row of this.db.prepare(`SELECT comment_id, reaction_key, COUNT(*) AS count FROM comment_reactions WHERE comment_id IN (${placeholders}) GROUP BY comment_id, reaction_key`).all(...commentIds)) {
+      const summary = summaries.get(row.comment_id);
+      summary.reactions.push({ key: row.reaction_key, count: Number(row.count) });
+      summary.reactionTotal += Number(row.count);
+    }
+    for (const row of this.db.prepare(`SELECT comment_id, reaction_key FROM comment_reactions WHERE user_id = ? AND comment_id IN (${placeholders})`).all(userId, ...commentIds)) {
+      summaries.get(row.comment_id).myReaction = row.reaction_key;
+    }
+    return summaries;
+  }
+
+  requireInteractiveEvent(eventId) {
+    const event = this.db.prepare("SELECT event_id, competition_id FROM competition_events WHERE event_id = ?").get(eventId);
+    if (!event || !event.competition_id) throw new AppError("COMPETITION_HISTORY_EVENT_NOT_FOUND", "Historieneintrag wurde nicht gefunden", 404);
+    return { eventId: event.event_id, competitionId: event.competition_id };
+  }
+
+  interactionPayloadHash(value) {
+    return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  }
+
+  interactionWrite(userId, operationId, action, targetId, payload, mutate) {
+    this.ensureOpen();
+    const payloadHash = this.interactionPayloadHash(payload);
+    let committed = false;
+    try {
+      this.db.exec("BEGIN IMMEDIATE");
+      const existing = this.db.prepare("SELECT action, target_id, payload_hash, result_json FROM event_interaction_operations WHERE user_id = ? AND operation_id = ?").get(userId, operationId);
+      if (existing) {
+        if (existing.action !== action || existing.target_id !== targetId || existing.payload_hash !== payloadHash) {
+          throw new AppError("OPERATION_ID_CONFLICT", "operationId wurde bereits anders verwendet", 409);
+        }
+        this.db.exec("COMMIT");
+        committed = true;
+        return { ...JSON.parse(existing.result_json), repeated: true, changed: false };
+      }
+      const result = mutate();
+      if (result.changed) this.db.prepare("UPDATE competition_history_revision SET revision = revision + 1 WHERE singleton = 1").run();
+      const stored = { ...result, repeated: false };
+      this.db.prepare("INSERT INTO event_interaction_operations(user_id, operation_id, action, target_id, payload_hash, result_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(userId, operationId, action, targetId, payloadHash, JSON.stringify(stored), this.now());
+      this.db.exec("COMMIT");
+      committed = true;
+      return stored;
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      this.recordFailure(error);
+      if (committed || !(error instanceof AppError)) throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang der Historienaenderung ist unklar", 503, { targetId });
+      throw error;
+    }
+  }
+
+  commentCursor(eventId, createdAt, commentId) {
+    return Buffer.from(`comments:${eventId}\0${createdAt}\0${commentId}`, "utf8").toString("base64url");
+  }
+
+  commentCursorBoundary(eventId, cursor) {
+    if (!cursor) return null;
+    try {
+      const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+      const prefix = `comments:${eventId}\0`;
+      const [createdAtValue, commentId, ...rest] = decoded.slice(prefix.length).split("\0");
+      const createdAt = Number(createdAtValue);
+      if (!decoded.startsWith(prefix) || rest.length || !Number.isSafeInteger(createdAt) || createdAt < 0 || !/^[A-Za-z0-9_.:-]{1,64}$/.test(commentId)) throw new Error("invalid");
+      return { createdAt, commentId };
+    } catch {
+      throw new AppError("COMPETITION_HISTORY_COMMENT_CURSOR_INVALID", "Kommentar-Cursor ist ungueltig", 400);
+    }
+  }
+
+  pageComments(eventId, { cursor = null, limit = 30 } = {}) {
+    this.ensureOpen();
+    const event = this.requireInteractiveEvent(eventId);
+    const boundary = this.commentCursorBoundary(eventId, cursor);
+    const rows = boundary
+      ? this.db.prepare("SELECT * FROM event_comments WHERE event_id = ? AND (created_at < ? OR (created_at = ? AND comment_id < ?)) ORDER BY created_at DESC, comment_id DESC LIMIT ?")
+        .all(eventId, boundary.createdAt, boundary.createdAt, boundary.commentId, limit + 1)
+      : this.db.prepare("SELECT * FROM event_comments WHERE event_id = ? ORDER BY created_at DESC, comment_id DESC LIMIT ?").all(eventId, limit + 1);
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit);
+    return { event, comments: page.reverse().map((row) => this.rowToComment(row)), nextCursor: hasMore ? this.commentCursor(eventId, page[0].created_at, page[0].comment_id) : null };
+  }
+
+  rowToComment(row) {
+    return {
+      id: row.comment_id,
+      eventId: row.event_id,
+      authorId: row.author_id,
+      authorName: row.author_name,
+      body: row.body,
+      status: row.status,
+      createdAt: Number(row.created_at),
+      updatedAt: row.updated_at === null ? null : Number(row.updated_at),
+      moderatedAt: row.moderated_at === null ? null : Number(row.moderated_at),
+      moderatedBy: row.moderated_by || null,
+    };
+  }
+
+  getComment(commentId) {
+    this.ensureOpen();
+    const row = this.db.prepare("SELECT c.*, e.competition_id FROM event_comments c JOIN competition_events e ON e.event_id = c.event_id WHERE c.comment_id = ? AND e.competition_id IS NOT NULL").get(commentId);
+    return row ? { ...this.rowToComment(row), competitionId: row.competition_id } : null;
+  }
+
+  addComment({ userId, userName, operationId, eventId, body }) {
+    const commentId = `cmt-${crypto.createHash("sha256").update(`${userId}:${operationId}`).digest("hex").slice(0, 32)}`;
+    return this.interactionWrite(userId, operationId, "comment_add", eventId, { eventId, body }, () => {
+      const event = this.requireInteractiveEvent(eventId);
+      const now = this.now();
+      this.db.prepare("INSERT INTO event_comments(comment_id, event_id, author_id, author_name, body, status, created_at) VALUES (?, ?, ?, ?, ?, 'visible', ?)")
+        .run(commentId, eventId, userId, userName, body, now);
+      return { success: true, changed: true, commentId, eventId, competitionId: event.competitionId };
+    });
+  }
+
+  editComment({ userId, operationId, commentId, body }) {
+    return this.interactionWrite(userId, operationId, "comment_edit", commentId, { commentId, body }, () => {
+      const comment = this.getComment(commentId);
+      if (!comment) throw new AppError("COMPETITION_HISTORY_COMMENT_NOT_FOUND", "Kommentar wurde nicht gefunden", 404);
+      if (comment.authorId !== userId) throw new AppError("FORBIDDEN", "Nur der Autor darf den Kommentar bearbeiten", 403);
+      const changed = comment.body !== body;
+      if (changed) this.db.prepare("UPDATE event_comments SET body = ?, updated_at = ? WHERE comment_id = ?").run(body, this.now(), commentId);
+      return { success: true, changed, commentId, eventId: comment.eventId, competitionId: comment.competitionId };
+    });
+  }
+
+  deleteComment({ userId, role, operationId, commentId }) {
+    return this.interactionWrite(userId, operationId, "comment_delete", commentId, { commentId }, () => {
+      const comment = this.getComment(commentId);
+      if (!comment) throw new AppError("COMPETITION_HISTORY_COMMENT_NOT_FOUND", "Kommentar wurde nicht gefunden", 404);
+      if (comment.authorId !== userId && role !== "admin") throw new AppError("FORBIDDEN", "Kommentar darf nicht geloescht werden", 403);
+      this.db.prepare("DELETE FROM event_comments WHERE comment_id = ?").run(commentId);
+      return { success: true, changed: true, commentId, eventId: comment.eventId, competitionId: comment.competitionId };
+    });
+  }
+
+  moderateComment({ userId, operationId, commentId, status }) {
+    return this.interactionWrite(userId, operationId, "comment_moderate", commentId, { commentId, status }, () => {
+      const comment = this.getComment(commentId);
+      if (!comment) throw new AppError("COMPETITION_HISTORY_COMMENT_NOT_FOUND", "Kommentar wurde nicht gefunden", 404);
+      const changed = comment.status !== status;
+      if (changed) this.db.prepare("UPDATE event_comments SET status = ?, moderated_at = ?, moderated_by = ? WHERE comment_id = ?").run(status, this.now(), userId, commentId);
+      return { success: true, changed, commentId, eventId: comment.eventId, competitionId: comment.competitionId, status };
+    });
+  }
+
+  setReaction({ userId, userName, operationId, eventId, reactionKey }) {
+    return this.interactionWrite(userId, operationId, "reaction_set", eventId, { eventId, reactionKey }, () => {
+      const event = this.requireInteractiveEvent(eventId);
+      const existing = this.db.prepare("SELECT reaction_key FROM event_reactions WHERE event_id = ? AND user_id = ?").get(eventId, userId);
+      const changed = (existing?.reaction_key || null) !== reactionKey;
+      if (changed && reactionKey === null) this.db.prepare("DELETE FROM event_reactions WHERE event_id = ? AND user_id = ?").run(eventId, userId);
+      if (changed && reactionKey !== null) {
+        const now = this.now();
+        this.db.prepare(`INSERT INTO event_reactions(event_id, user_id, user_name, reaction_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(event_id, user_id) DO UPDATE SET user_name = excluded.user_name, reaction_key = excluded.reaction_key, updated_at = excluded.updated_at`)
+          .run(eventId, userId, userName, reactionKey, now, now);
+      }
+      return { success: true, changed, eventId, competitionId: event.competitionId, myReaction: reactionKey };
+    });
+  }
+
+  setCommentReaction({ userId, userName, operationId, commentId, reactionKey, allowUnderReview }) {
+    return this.interactionWrite(userId, operationId, "comment_reaction_set", commentId, { commentId, reactionKey }, () => {
+      const comment = this.getComment(commentId);
+      if (!comment) throw new AppError("COMPETITION_HISTORY_COMMENT_NOT_FOUND", "Kommentar wurde nicht gefunden", 404);
+      if (comment.status === "under_review" && !allowUnderReview) {
+        throw new AppError("COMPETITION_HISTORY_COMMENT_UNDER_REVIEW", "Kommentar wird geprüft", 403);
+      }
+      const existing = this.db.prepare("SELECT reaction_key FROM comment_reactions WHERE comment_id = ? AND user_id = ?").get(commentId, userId);
+      const changed = (existing?.reaction_key || null) !== reactionKey;
+      if (changed && reactionKey === null) this.db.prepare("DELETE FROM comment_reactions WHERE comment_id = ? AND user_id = ?").run(commentId, userId);
+      if (changed && reactionKey !== null) {
+        const now = this.now();
+        this.db.prepare(`INSERT INTO comment_reactions(comment_id, user_id, user_name, reaction_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(comment_id, user_id) DO UPDATE SET user_name = excluded.user_name, reaction_key = excluded.reaction_key, updated_at = excluded.updated_at`)
+          .run(commentId, userId, userName, reactionKey, now, now);
+      }
+      return { success: true, changed, commentId, eventId: comment.eventId, competitionId: comment.competitionId, myReaction: reactionKey };
+    });
+  }
+
+  reactionDetails(eventId) {
+    this.ensureOpen();
+    const event = this.requireInteractiveEvent(eventId);
+    const reactions = this.db.prepare("SELECT reaction_key, user_id, user_name, created_at FROM event_reactions WHERE event_id = ? ORDER BY reaction_key, user_name COLLATE NOCASE, user_id").all(eventId)
+      .map((row) => ({ key: row.reaction_key, userId: row.user_id, userName: row.user_name, createdAt: Number(row.created_at) }));
+    return { event, reactions };
+  }
+
+  commentReactionDetails(commentId) {
+    this.ensureOpen();
+    const comment = this.getComment(commentId);
+    if (!comment) throw new AppError("COMPETITION_HISTORY_COMMENT_NOT_FOUND", "Kommentar wurde nicht gefunden", 404);
+    const reactions = this.db.prepare("SELECT reaction_key, user_id, user_name, created_at FROM comment_reactions WHERE comment_id = ? ORDER BY reaction_key, user_name COLLATE NOCASE, user_id").all(commentId)
+      .map((row) => ({ key: row.reaction_key, userId: row.user_id, userName: row.user_name, createdAt: Number(row.created_at) }));
+    return { comment, reactions };
+  }
+
   reportProjections(fromMs, toMs) {
     this.ensureOpen();
     const rows = this.db.prepare(`${this.projectionSelect()}
@@ -588,11 +963,14 @@ class MessagingRepository {
     try {
       const eventCount = Number(this.db.prepare("SELECT COUNT(*) AS count FROM competition_events").get().count);
       const participantCount = Number(this.db.prepare("SELECT COUNT(*) AS count FROM event_participants").get().count);
+      const commentCount = Number(this.db.prepare("SELECT COUNT(*) AS count FROM event_comments").get().count);
+      const commentReactionCount = Number(this.db.prepare("SELECT COUNT(*) AS count FROM comment_reactions").get().count);
+      const reactionCount = Number(this.db.prepare("SELECT COUNT(*) AS count FROM event_reactions").get().count);
       this.lastError = null;
-      return { open: true, ready: true, schemaVersion: SCHEMA_VERSION, count: participantCount, eventCount, participantCount, failureCount: this.failureCount, lastError: null };
+      return { open: true, ready: true, schemaVersion: SCHEMA_VERSION, count: participantCount, eventCount, participantCount, commentCount, commentReactionCount, reactionCount, failureCount: this.failureCount, lastError: null };
     } catch (error) {
       this.recordFailure(error);
-      return { open: true, ready: false, schemaVersion: SCHEMA_VERSION, count: 0, eventCount: 0, participantCount: 0, failureCount: this.failureCount, lastError: this.lastError };
+      return { open: true, ready: false, schemaVersion: SCHEMA_VERSION, count: 0, eventCount: 0, participantCount: 0, commentCount: 0, commentReactionCount: 0, reactionCount: 0, failureCount: this.failureCount, lastError: this.lastError };
     }
   }
 

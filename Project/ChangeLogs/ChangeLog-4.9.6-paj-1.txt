@@ -6,3 +6,37 @@ Commit: 4.9.6-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.6-paj-1-1` gesetzt.
+
+[4.9.6-paj-1-2] - 2026-09-09
+Commit: 4.9.6-paj-1-2 | Bewerbshistorie kommentierbar gemacht
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.6-paj-1-1-x` gesetzt.
+  - [Bewerbshistorie] Historieneintraege zeigen eine kompakte Kommentar- und Reaktionszeile mit gemeinsamer Reaktionssumme, namentlicher Reaktionsliste und konfigurierbarem Siebener-Katalog einschliesslich `💪`.
+  - [Kommentare] Angemeldete Benutzer koennen mehrzeilige Kommentare mit lokalem Voll-Emoji-Picker erstellen, eigene Kommentare bearbeiten oder loeschen und Bearbeitungsstaende erkennen.
+  - [Moderation] Administratoren koennen Kommentare vorlaeufig ausblenden, wieder freigeben oder endgueltig loeschen; ausgeblendete Texte bleiben serverseitig vor normalen Benutzern verborgen.
+  - [Persistenz] Messaging-Schema 9 speichert Kommentare, Einzelreaktionen, idempotente Interaktionsoperationen und die gemeinsame Live-Revision direkt am zentralen Bewerbsereignis; das additive Upgrade repariert auf Schema 8 gestartete Datenbanken mit fehlender Tabelle `comment_reactions`, ohne bestehende Kommentare zu veraendern.
+  - [Observability] Interaktionswrites besitzen kontrollierte Auditphasen, strukturierte Abschlusslogs, textfreie WebSocket-Invalidierungen und allowlist-basierte Browserdiagnosen.
+  - [Zuverlaessigkeit] Reconnect-Snapshots synchronisieren geladene Interaktionen revisionsbasiert; veraltete Kommentarantworten werden verworfen, Cursor bleiben nach parallelem Loeschen gueltig und unklare Writes erlauben nur den exakten Payload-Retry.
+  - [Barrierefreiheit] Bei verschachtelten Kommentar-, Editor- und Reaktionsdialogen wird der jeweils ueberdeckte Dialog inert geschaltet und nach dem Schliessen wiederhergestellt.
+  - [Kommentare] Sichtbare Kommentare erhalten dieselbe Emoji-Reaktionsfunktion wie Historieneintraege, mit getrennten Summen, Namenslisten und einer Reaktion pro Benutzer; bei vorlaeufig ausgeblendeten Kommentaren bleiben Reaktionen fuer normale Benutzer verborgen und gesperrt.
+
+  Added
+  - [Frontend] `emoji-picker-element` 1.29.1 und deutsche Daten 1.8.0 werden lokal und ohne CDN-Zugriff fuer den Kommentar-Editor ausgeliefert.
+  - [Tests] Repository-, Service-, Vertrags-, Integrations-, Diagnose- und Browsertests decken Idempotenz, Rollen, Datenschutz, Moderation, Emoji-Picker, kompakte Abstaende und bestehende Historienbedienung ab.
+
+  Dokumentationsuebernahme beim Main-Versionssprung
+
+    Project/software/ARCHITEKTUR.txt
+    - Schema 9 als additive Reparatur fuer auf Schema 8 gestartete Datenbanken mit fehlender Tabelle `comment_reactions` aufnehmen; Ereignisse und Kommentare bleiben unveraendert.
+    - Zentralen Datenfluss fuer Kommentare, Moderation, Ereignis- und Kommentarreaktionen, gemeinsame Interaktionsrevision sowie rollenbezogene Projektionen beschreiben.
+
+    Project/software/DATENBANK.txt
+    - Messaging-Schema 9, Tabellen `event_comments`, `comment_reactions`, `event_reactions`, `event_interaction_operations` und `competition_history_revision` samt Schluesseln, Kaskaden und Datenschutzgrenzen dokumentieren.
+    - Additive Schema-9-Migration fuer fehlende `comment_reactions` und den Erhalt bestehender Kommentare festhalten.
+
+    Project/software/ENDPOINTS.txt
+    - Lese- und Schreibvertraege fuer Kommentare und getrennte Ereignis-/Kommentarreaktionen, Rollenpruefungen, idempotente `operationId`, Fehlercodes, Audits und revisionsbasierte WebSocket-Invalidierungen dokumentieren.
+
+    Project/software/seiten/bewerbe.txt
+    - Bedienung der kompakten Historieninteraktionen, Kommentarerstellung, Bearbeitung, Loeschung, Moderation, Emoji-Picker, Reaktionslisten und Zustandsdarstellung fuer normale Benutzer, Autoren und Administratoren dokumentieren.

@@ -493,7 +493,7 @@ und `synchronous=FULL`; es gibt keine automatische fachliche Bereinigung.
 
 `MESSAGING_FILE`, standardmaessig `messaging.sqlite` im Verzeichnis von
 `STATE_FILE`, produktiv `/var/lib/epiber-<system>/messaging.sqlite`, verwendet
-Schema 7:
+Schema 9:
 
 Tabelle `competition_events`:
   event_id PRIMARY KEY, competition_id, created_at, event_type, source,
@@ -526,6 +526,41 @@ Tabelle `messaging_revisions`:
   user_id PRIMARY KEY, revision. Neue persoenliche Projektionen und erstmalige
   Quittierungen erhoehen die Revision und den privaten WebSocket-Snapshot.
 
+Tabelle `event_comments`:
+  comment_id PRIMARY KEY, event_id als kaskadierender Fremdschluessel,
+  author_id, author_name, body, status `visible|under_review`, created_at,
+  updated_at, moderated_at und moderated_by. Der Namenssnapshot und Text bleiben
+  am Ereignis gebunden. Bei `under_review` wird der Text normalen Benutzern nicht
+  projiziert; Autoren duerfen ihn gezielt laden und bearbeiten, ohne den Status
+  aufzuheben. Administratoren duerfen ausblenden, freigeben und endgueltig
+  loeschen.
+
+Tabelle `event_reactions`:
+  event_id + user_id PRIMARY KEY, user_name, reaction_key, created_at und
+  updated_at. Damit existiert je Benutzer und Historienereignis hoechstens eine
+  Reaktion. `reaction_key` verweist fachlich auf den versionierten, beim Start
+  validierten JSON-Katalog; historische Katalogeintraege bleiben inaktiv
+  darstellbar.
+
+Tabelle `comment_reactions`:
+  comment_id + user_id PRIMARY KEY, user_name, reaction_key, created_at und
+  updated_at. Sie speichert genau eine Reaktion je Benutzer und Kommentar und
+  wird beim Loeschen des Kommentars kaskadierend entfernt. Kommentarreaktionen
+  verwenden denselben Reaktionskatalog wie Ereignisreaktionen, sind aber davon
+  getrennt aggregiert. Bei `under_review` bleiben sie gespeichert, werden aber
+  nur Administratoren projiziert und sind fuer normale Benutzer nicht schreibbar.
+
+Tabelle `event_interaction_operations`:
+  user_id + operation_id PRIMARY KEY, action, target_id, payload_hash,
+  result_json und created_at. Sie bindet Kommentar-, Moderations- und
+  Reaktionswrites samt kontrolliertem Ergebnis atomar an dieselbe SQLite-Datei;
+  freie Kommentartexte stehen nur als Hash, nicht im Operationsergebnis.
+
+Tabelle `competition_history_revision`:
+  Singleton und revision. Jede tatsaechliche Kommentar-, Moderations- oder
+  Reaktionsaenderung erhoeht die gemeinsame Revision fuer den authentifizierten
+  WebSocket-Snapshot.
+
 Stabile Ereignis-, Meldungs- und Operation-IDs verhindern Dubletten. Ein bereits
 vorhandenes Ereignis darf nur kompatibel um fehlende Teilnehmer oder eine zuvor
 fehlende Bewerbszuordnung ergaenzt werden; eine abweichende Wiederverwendung wird
@@ -536,7 +571,12 @@ ausschliesslich kontrolliert erkannte Walkover-Ergebnisereignisse: Inboxtexte
 erhalten die Gewinnerperspektive `Du gewinnst durch W.O. von ...` beziehungsweise
 die Verliererperspektive `Du verlierst durch W.O.`, Historienzusammenfassung und
 -detail werden auf die neutrale W.O.-Formulierung und `Ergebnis: W.O.` gesetzt.
-Andere Ereignisse, Aufgabe, Quittierungen und Zustellstaende bleiben unveraendert.
+  Andere Ereignisse, Aufgabe, Quittierungen und Zustellstaende bleiben unveraendert.
+  Schema 8 ergaenzt ausschliesslich die Tabellen fuer Bewerbshistorien-Kommentare,
+  Reaktionen, idempotente Interaktionsoperationen und ihre Revision; bestehende
+  Ereignisse und persoenliche Meldungsprojektionen bleiben unveraendert. Schema 9
+  ergaenzt bei bereits auf Schema 8 gestarteten Datenbanken die fehlende Tabelle
+  `comment_reactions` samt Index additiv; vorhandene Kommentare bleiben unveraendert.
 Eine einmalige
 Legacy-Zuordnung ergaenzt bei matchgebundenen Ereignissen fehlende Bewerb-IDs aus
 `Matches1`; beliebige manuelle Sheet-Aenderungen erzeugen dagegen keine

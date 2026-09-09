@@ -263,6 +263,16 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(excessiveReport.status, 400);
   assert.equal((await excessiveReport.json()).error.code, "REPORTING_RANGE_TOO_LARGE");
 
+  const emojiPickerModule = await fetch(`${httpBase}/api/emoji-picker/index.js`);
+  assert.equal(emojiPickerModule.status, 200);
+  assert.match(emojiPickerModule.headers.get("content-type"), /^text\/javascript/);
+  assert.match(await emojiPickerModule.text(), /Picker/);
+  const emojiDataHead = await fetch(`${httpBase}/api/emoji-picker/data/de.json`, { method: "HEAD" });
+  assert.equal(emojiDataHead.status, 200);
+  assert.equal(Number(emojiDataHead.headers.get("content-length")) > 1000, true);
+  assert.equal((await emojiDataHead.text()), "");
+  assert.equal((await fetch(`${httpBase}/api/emoji-picker/data/de.json`, { headers: { "If-None-Match": emojiDataHead.headers.get("etag") } })).status, 304);
+
   const anonymousSession = await fetch(`${httpBase}/api/session`);
   assert.equal(anonymousSession.status, 200);
   assert.match(anonymousSession.headers.get("x-request-id"), /^[0-9a-f-]{36}$/i);
@@ -590,7 +600,11 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   }
   const anonymousMessagingClient = createSocketClient(`${wsBase}/ws`, { Origin: "http://test.local" });
   await anonymousMessagingClient.handshake();
-  for (const endpoint of ["myMessageSummary", "myMessages", "myMessage", "acknowledgeMessage", "competitionHistory"]) {
+  for (const endpoint of [
+    "myMessageSummary", "myMessages", "myMessage", "acknowledgeMessage", "competitionHistory",
+    "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryCommentForEdit", "competitionHistoryReactions", "competitionHistoryCommentReactions",
+    "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment", "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
+  ]) {
     assert.equal((await anonymousMessagingClient.request(endpoint, {})).data.error.code, "AUTH_REQUIRED", endpoint);
   }
   await anonymousMessagingClient.close();
@@ -930,12 +944,14 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
 
   const authenticatedEndpoints = [
     "memberDirectory", "myProfile", "operationStatus", "addMatch", "addEntryList",
-    "removeEntryList", "withdrawFromRanking",
+    "removeEntryList", "withdrawFromRanking", "competitionHistory", "competitionHistoryComments",
+    "competitionHistoryInteraction", "competitionHistoryCommentForEdit", "competitionHistoryReactions", "competitionHistoryCommentReactions",
+    "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
   ];
   const resultPlayerEndpoints = ["matchResultSuggestion", "setMatchResult"];
   const playerOnlyEndpoints = ["setMatchAppointment"];
   const operatorEndpoints = ["navigator", "courtAssign", "courtSetActive", "monitorList", "monitorNavigate", "monitorScroll"];
-  const adminEndpoints = ["adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "sheetDataStatus", "refreshSheetData", "normalizePerson", "reconcilePerson", "monitorProvision", "monitorRotate", "monitorRevoke"];
+  const adminEndpoints = ["adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "sheetDataStatus", "refreshSheetData", "normalizePerson", "reconcilePerson", "monitorProvision", "monitorRotate", "monitorRevoke", "moderateCompetitionHistoryComment"];
   const deviceEndpoints = ["monitorTarget", "monitorAck"];
   const assertAllowedByPolicy = async (client, endpoint) => {
     const response = await client.request(endpoint, {});
@@ -1225,6 +1241,87 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.deepEqual(globalCompetitionHistory.data.competition, { id: "", name: "Alle Bewerbe" });
   assert.equal(globalCompetitionHistory.data.entries[0].competitionId, "cup-1");
   assert.equal(globalCompetitionHistory.data.entries[0].competitionName, "Cup");
+  assert.equal(globalCompetitionHistory.data.reactionCatalog.some(({ key, emoji }) => key === "flexed_biceps" && emoji === "💪"), true);
+  const historyEventId = competitionHistory.data.entries[0].id;
+  playerClient.socket.send(JSON.stringify({ v: 2, type: "subscribe", topics: ["competition-history"] }));
+  const historySnapshot = await playerClient.next((message) => message.type === "event" && message.topic === "competition-history", "history-snapshot");
+  assert.equal(historySnapshot.data.revision, 0);
+  assert.deepEqual((await playerClient.next((message) => message.type === "subscribed" && message.topics.includes("competition-history"), "history-subscription")).topics, ["competition-history"]);
+  const reactionWrite = await playerClient.request("setCompetitionHistoryReaction", {
+    operationId: "00000000-0000-4000-8000-000000000701",
+    eventId: historyEventId,
+    reactionKey: "flexed_biceps",
+  });
+  assert.equal(reactionWrite.data.interaction.reactionTotal, 1);
+  assert.equal(reactionWrite.data.interaction.myReaction, "flexed_biceps");
+  const reactionUpdate = await playerClient.next((message) => message.type === "event" && message.topic === "competition-history" && message.data.eventId === historyEventId, "history-reaction-update");
+  assert.deepEqual(Object.keys(reactionUpdate.data).sort(), ["competitionId", "eventId", "revision"]);
+  assert.deepEqual((await adminClient.request("competitionHistoryReactions", { eventId: historyEventId })).data.reactions.map(({ key, userName, mine }) => ({ key, userName, mine })), [
+    { key: "flexed_biceps", userName: "Peter Player", mine: false },
+  ]);
+  const commentWrite = await playerClient.request("addCompetitionHistoryComment", {
+    operationId: "00000000-0000-4000-8000-000000000702",
+    eventId: historyEventId,
+    body: "Toller Verlauf 🙂\n<img src=x onerror=alert(1)>",
+  });
+  assert.equal(commentWrite.data.comment.authorName, "Peter Player");
+  const commentId = commentWrite.data.comment.id;
+  const playerComments = await playerClient.request("competitionHistoryComments", { eventId: historyEventId });
+  assert.equal(playerComments.data.comments[0].body, "Toller Verlauf 🙂\n<img src=x onerror=alert(1)>");
+  assert.equal(playerComments.data.comments[0].canEdit, true);
+  const commentReactionWrite = await playerClient.request("setCompetitionHistoryCommentReaction", {
+    operationId: "00000000-0000-4000-8000-000000000707",
+    commentId,
+    reactionKey: "thumbs_up",
+  });
+  assert.equal(commentReactionWrite.data.interaction.reactionTotal, 1);
+  assert.equal(commentReactionWrite.data.interaction.myReaction, "thumbs_up");
+  assert.deepEqual((await adminClient.request("competitionHistoryCommentReactions", { commentId })).data.reactions.map(({ key, userName, mine }) => ({ key, userName, mine })), [
+    { key: "thumbs_up", userName: "Peter Player", mine: false },
+  ]);
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  const hiddenWrite = await adminClient.request("moderateCompetitionHistoryComment", {
+    operationId: "00000000-0000-4000-8000-000000000703",
+    commentId,
+    status: "under_review",
+  });
+  assert.equal(hiddenWrite.data.success, true, JSON.stringify(hiddenWrite.data));
+  assert.equal(hiddenWrite.data.status, "under_review");
+  const hiddenComments = await playerClient.request("competitionHistoryComments", { eventId: historyEventId });
+  assert.equal(hiddenComments.data.comments[0].body, "");
+  assert.equal(hiddenComments.data.comments[0].placeholder, "Kommentar wird geprüft.");
+  assert.deepEqual(hiddenComments.data.comments[0].interaction, { reactionTotal: 0, reactions: [], myReaction: null });
+  assert.equal((await playerClient.request("setCompetitionHistoryCommentReaction", {
+    operationId: "00000000-0000-4000-8000-000000000708", commentId, reactionKey: "surprised",
+  })).data.error.code, "COMPETITION_HISTORY_COMMENT_UNDER_REVIEW");
+  assert.equal((await playerClient.request("competitionHistoryCommentReactions", { commentId })).data.error.code, "COMPETITION_HISTORY_COMMENT_UNDER_REVIEW");
+  assert.equal((await adminClient.request("competitionHistoryComments", { eventId: historyEventId })).data.comments[0].body.includes("Toller Verlauf"), true);
+  assert.equal((await playerClient.request("competitionHistoryCommentForEdit", { commentId })).data.comment.body.includes("Toller Verlauf"), true);
+  const editedWrite = await playerClient.request("editCompetitionHistoryComment", {
+    operationId: "00000000-0000-4000-8000-000000000704",
+    commentId,
+    body: "Überarbeiteter Kommentar",
+  });
+  assert.equal(editedWrite.data.success, true, JSON.stringify(editedWrite.data));
+  assert.equal((await playerClient.request("competitionHistoryComments", { eventId: historyEventId })).data.comments[0].status, "under_review");
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  const releasedWrite = await adminClient.request("moderateCompetitionHistoryComment", {
+    operationId: "00000000-0000-4000-8000-000000000705",
+    commentId,
+    status: "visible",
+  });
+  assert.equal(releasedWrite.data.success, true, JSON.stringify(releasedWrite.data));
+  const releasedComment = (await playerClient.request("competitionHistoryComments", { eventId: historyEventId })).data.comments[0];
+  assert.equal(releasedComment.body, "Überarbeiteter Kommentar");
+  assert.equal(Number.isFinite(releasedComment.updatedAt), true);
+  assert.equal(releasedComment.interaction.reactionTotal, 1);
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  const removedComment = await adminClient.request("deleteCompetitionHistoryComment", {
+    operationId: "00000000-0000-4000-8000-000000000706",
+    commentId,
+  });
+  assert.equal(removedComment.data.success, true);
+  assert.equal((await playerClient.request("competitionHistoryInteraction", { eventId: historyEventId })).data.interaction.commentCount, 0);
   const challengerMessages = await playerClient.request("myMessages", { limit: 10 });
   assert.equal(challengerMessages.data.unreadCount, 1);
   assert.equal(challengerMessages.data.messages[0].subject, "Forderung ausgesprochen in Cup");
@@ -1335,9 +1432,11 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   const successfulActions = new Set(auditRows.filter((row) => row.result === "success").map((row) => row.action));
   assert.equal(auditRows.some((row) => row.action === "acknowledgeMessage" && row.result === "failed" && row.errorCode === "MESSAGE_NOT_FOUND"), true);
   assert.equal(auditRows.some((row) => row.action === "acknowledgeMessage" && row.result === "unknown" && row.errorCode === "WRITE_OUTCOME_UNKNOWN"), true);
+  assert.equal(auditRows.some((row) => row.action === "moderateCompetitionHistoryComment" && row.result === "failed" && row.errorCode === "AUTH_REQUIRED"), true);
   for (const action of [
     "login", "adminPasswordSet", "adminPasswordSetup", "passwordSetup", "adminPasswordResetProof",
     "passwordReset", "addMatch", "setMatchAppointment", "acknowledgeMessage", "refreshSheetData", "monitorProvision", "monitorEnroll", "monitorNavigate", "courtAssign", "monitorRotate", "monitorRevoke",
+    "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction", "addCompetitionHistoryComment", "editCompetitionHistoryComment", "moderateCompetitionHistoryComment", "deleteCompetitionHistoryComment",
     "frontendLoggingSettings", "frontendLoggingTargetSet", "frontendLoggingTargetRemove",
   ]) {
     assert.equal(successfulActions.has(action), true, `Audit fehlt fuer ${action}`);
@@ -1347,6 +1446,8 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(serializedAudit.includes("ada@example.test"), false);
   assert.equal(serializedAudit.includes(" bad login "), false);
   assert.equal(serializedAudit.includes("a".repeat(64)), false);
+  assert.equal(serializedAudit.includes("Toller Verlauf"), false);
+  assert.equal(serializedAudit.includes("Überarbeiteter Kommentar"), false);
   assert.equal(serializedAudit.includes(provisioned.data.monitor.token), false);
   const failedLoginAudit = auditRows.find((row) => row.action === "login" && row.errorCode === "LOGIN_FAILED");
   assert.equal(failedLoginAudit.errorCode, "LOGIN_FAILED");

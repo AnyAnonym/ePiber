@@ -309,10 +309,10 @@ function inspectEventsReadOnly(filename, events = EVENTS) {
     const activeWal = fs.existsSync(`${filename}-wal`) && fs.existsSync(`${filename}-shm`);
     db = new DatabaseSync(activeWal ? filename : `file:${encodeURI(filename)}?immutable=1`, { readOnly: true });
     const schemaVersion = Number(db.prepare("PRAGMA user_version").get().user_version);
-    const required = ["competition_events", "event_participants", "event_receipts", "event_deliveries", "event_ack_operations", "messaging_revisions"];
+    const required = ["competition_events", "event_participants", "event_receipts", "event_deliveries", "event_ack_operations", "messaging_revisions", "event_comments", "comment_reactions", "event_reactions", "event_interaction_operations", "competition_history_revision"];
     const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(({ name }) => name));
     const eventColumns = tables.has("competition_events") ? new Set(db.prepare("PRAGMA table_info(competition_events)").all().map(({ name }) => name)) : new Set();
-    if (schemaVersion !== 7 || required.some((name) => !tables.has(name)) || !eventColumns.has("result")) fail("MESSAGING_SCHEMA_MISMATCH");
+    if (schemaVersion !== 9 || required.some((name) => !tables.has(name)) || !eventColumns.has("result")) fail("MESSAGING_SCHEMA_MISMATCH");
     for (const expected of events) {
       const actual = readOnlyEvent(db, expected.event.id);
       if (actual && !sameEvent(actual, expected)) fail("EVENT_ID_CONFLICT");

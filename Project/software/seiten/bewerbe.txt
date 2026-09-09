@@ -22,7 +22,9 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   Im Historienmodal sitzt `Weitere Einträge laden` am Ende der scrollbaren Liste,
   damit es erst nach dem Herunterscrollen sichtbar wird.
   Angemeldete Benutzer koennen zusaetzlich die cursorpaginierte
-  `competitionHistory` eines einzelnen Bewerbs oder aller Bewerbe laden.
+  `competitionHistory` eines einzelnen Bewerbs oder aller Bewerbe laden. Das
+  authentifizierte Topic `competition-history` invalidiert Kommentar- und
+  Reaktionsprojektionen anhand kontrollierter Revision, Ereignis- und Bewerb-ID.
 
 -- Bedienung --
   Keine URL-Parameter. Ranglisten fuehren zu `rangliste.html?id=...`. Gestartete
@@ -38,6 +40,28 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   Gesamthistorie. Tooltip und zugaengliche Beschriftung nennen den jeweiligen
   Zweck; fuer anonyme Benutzer werden die Buttons nicht angeboten. Das
   Kachellayout und die normale Kartennavigation bleiben unveraendert.
+  Jeder Historieneintrag besitzt unten eine kompakte Aktionszeile: links stehen
+  Sprechblasensymbol und Kommentaranzahl, danach jedes verwendete Reaktions-Emoji
+  genau einmal, die unmittelbar folgende Gesamtzahl und ein Smiley-Plus-Symbol.
+  Das Reaktionssymbol oeffnet die sieben konfigurierten Reaktionen
+  `👍 ❤️ 😂 😮 😢 👏 💪`; pro Benutzer und Ereignis besteht genau eine Reaktion,
+  die gewechselt oder in der namentlichen Reaktionsliste entfernt werden kann.
+  Die Sprechblase oeffnet den chronologischen Kommentarfeed. Kommentare sind
+  mehrzeilig, auf 1000 Unicode-Grapheme begrenzt und koennen mit dem lokal
+  ausgelieferten vollstaendigen Emoji-Picker erstellt werden. Autoren duerfen
+  eigene Kommentare bearbeiten und loeschen; Bearbeitungen werden bezeichnet.
+  Administratoren duerfen Kommentare endgueltig loeschen, vorlaeufig ausblenden
+  und wieder freigeben. Beim Ausblenden bleiben Autor und Zeitpunkt sichtbar,
+  waehrend normale Benutzer nur `Kommentar wird geprüft.` erhalten. Der Autor
+  darf den Text weiter bearbeiten; der Pruefstatus bleibt bis zur Freigabe aktiv.
+  Sichtbare Kommentarkarten besitzen dieselbe verdichtete Reaktionszeile wie
+  Historieneintraege, jedoch ohne Kommentarsymbol: unterschiedliche Emojis,
+  Reaktionssumme und Smiley-Plus-Symbol. Kommentarreaktionen sind von den
+  Reaktionen des Historieneintrags getrennt, verwenden aber denselben Katalog und
+  dieselbe Eine-Reaktion-pro-Benutzer-Regel. Bei vorlaeufig ausgeblendeten
+  Kommentaren sehen und setzen normale Benutzer keine Reaktionen; Administratoren
+  koennen sie fuer die Begutachtung weiterhin sehen und verwalten. Nach Freigabe
+  werden gespeicherte Reaktionen wieder angezeigt.
 
 -- Darstellung und Sicherheit --
   Datumswerte YYMMDD/YYMMDD-HHMM sowie die vierstelligen Varianten werden lokal
@@ -63,3 +87,8 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   Viewport und Safe Area, nur die Eintragsliste scrollt. Weitere Cursorseiten
   werden innerhalb dieser Liste nachgeladen. Persoenliche Inboxtexte,
   Kenntnisnahmen und Zustellstatus erscheinen nicht in der Historie.
+  Kommentare werden immer mit Namenssnapshot und Zeitpunkt gezeigt. Reaktionen
+  sind fuer angemeldete Benutzer ueber die Emojiaktion namentlich einsehbar.
+  Texte entstehen ausschliesslich als DOM-Text; ausgeblendete Texte werden
+  normalen Benutzern bereits serverseitig nicht projiziert. Einzel- und
+  Gesamthistorie teilen Kommentare und Reaktionen ueber dieselbe Ereignis-ID.

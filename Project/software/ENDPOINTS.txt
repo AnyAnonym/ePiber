@@ -217,6 +217,13 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
   `https://epiber.at/grafana/`. Der Authvertrag selbst ist ueber keine der drei
   Browser-Origins erreichbar; Caddy antwortet dort mit 404.
 
+----- GET/HEAD /api/emoji-picker/* (public) -----
+  Liefert ausschliesslich die fest allowlist-basierten, lokal installierten Module
+  von `emoji-picker-element` 1.29.1, dessen deutsche Oberflaeche und den deutschen
+  Datensatz von `emoji-picker-element-data` 1.8.0. Beliebige Paketpfade sind nicht
+  erreichbar. Der Kommentar-Editor setzt die Datenquelle explizit auf diesen
+  same-origin Pfad; der Browser kontaktiert kein CDN. HEAD liefert nur Metadaten.
+
 ----- GET /api/frontend-logging-policy (public) -----
   Liefert `{ success, frontendLogging }`. Die Policy enthaelt nur technische
   Steuerwerte: `enabled`, `level`, `targeted`, `expiresAt`,
@@ -630,8 +637,52 @@ AUTHENTICATED (player, operator oder admin):
       `Viertelfinale` beziehungsweise `1. Gruppe` bezeichnet. Ranglistenbewerbe
       (`BewerbsartID=2`) projizieren keine Runde. Einzel- und Gesamtansicht
       verwenden unterschiedliche scope-gebundene Cursor; ein Cursor der anderen
-      Ansicht ergibt `COMPETITION_HISTORY_CURSOR_INVALID`. Private Inboxtexte,
-      Receipts und fremde Zustellstaende werden nicht ausgegeben.
+       Ansicht ergibt `COMPETITION_HISTORY_CURSOR_INVALID`. Private Inboxtexte,
+       Receipts und fremde Zustellstaende werden nicht ausgegeben. Jeder Eintrag
+       enthaelt zusaetzlich `interaction:{ commentCount, reactionTotal,
+       reactions:[{key,count}], myReaction }`; die Antwort liefert den zentralen
+       Reaktionskatalog und die aktuelle Interaktionsrevision.
+
+  `competitionHistoryInteraction { eventId }`
+      Liefert die aktuelle Interaktionszusammenfassung genau eines vorhandenen,
+      bewerbsgebundenen Historienereignisses.
+
+  `competitionHistoryComments { eventId, cursor?, limit? }`
+      Liefert Kommentare eines Historienereignisses chronologisch innerhalb der
+      cursorpaginierten Seite; initial werden die neuesten Eintraege geliefert.
+      Projektionen enthalten Autorname und Zeitpunkt sowie `mine`, `canEdit`,
+      `canDelete` und `canModerate`. Bei `under_review` erhalten normale Benutzer
+      keinen Text, sondern `Kommentar wird geprüft.`; Administratoren sehen den
+      Text zur Pruefung. `competitionHistoryCommentForEdit { commentId }` liefert
+      den Text eines eigenen Kommentars gezielt an dessen Autor.
+
+  `addCompetitionHistoryComment { operationId, eventId, body }`
+  `editCompetitionHistoryComment { operationId, commentId, body }`
+  `deleteCompetitionHistoryComment { operationId, commentId }`
+      Fuegen bis zu 1000 Unicode-Grapheme langen mehrzeiligen Text hinzu,
+      bearbeiten einen eigenen Kommentar oder loeschen ihn. Administratoren
+      duerfen auch fremde Kommentare loeschen. Alle Writes sind idempotent.
+
+  `moderateCompetitionHistoryComment { operationId, commentId, status }`
+      Nur fuer Administratoren. `under_review` blendet den Text vorlaeufig aus,
+      `visible` gibt den aktuellen Text wieder frei. Eine Autorenbearbeitung hebt
+      `under_review` nicht auf.
+
+  `setCompetitionHistoryReaction { operationId, eventId, reactionKey }`
+      Setzt oder wechselt die einzige eigene Reaktion; `reactionKey:null` entfernt
+      sie. Erlaubt sind nur aktive Schluessel aus dem serverseitigen Katalog.
+      `competitionHistoryReactions { eventId }` liefert Reaktionsschluessel,
+      Namenssnapshots, Zeitpunkt und die Markierung der eigenen Reaktion, jedoch
+      keine privaten Inboxdaten.
+
+  `setCompetitionHistoryCommentReaction { operationId, commentId, reactionKey }`
+      Setzt oder wechselt die eine eigene Reaktion auf einen Kommentar;
+      `reactionKey:null` entfernt sie. Der Reaktionskatalog und die Semantik
+      entsprechen den Reaktionen eines Historieneintrags, Summen bleiben aber
+      getrennt. `competitionHistoryCommentReactions { commentId }` liefert die
+      namentliche Detailprojektion. Bei `under_review` sind beide Endpunkte fuer
+      normale Benutzer gesperrt und Kommentarlisten projizieren keine
+      Reaktionsdaten; Administratoren duerfen sie zur Begutachtung verwenden.
 
   `rankingChallengeState { bewerbId }`
       Liefert fuer den angemeldeten Spieler den serverseitig bestimmten Modus

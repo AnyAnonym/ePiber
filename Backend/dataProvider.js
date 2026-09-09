@@ -55,6 +55,10 @@ const unsubscribeCallbacks = [];
 const activeHandlers = new Set();
 const REQUEST_HISTORY_LIMIT = 20;
 const PUBLIC_TOPICS = new Set(["scores", "scoreboard-state", "matches", "players", "bewerbe", "bewerbsart", "matchtyp", "entryList", "ranking"]);
+const HISTORY_INTERACTION_WRITES = new Set([
+  "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment",
+  "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
+]);
 const PUBLIC_COLUMNS = {
   bewerbe: ["id", "bezeichnung", "bewerbsartid", "geschlecht", "entrystart", "entrydeadline", "bewerbsbeginn", "bewerbsende", "sortorder"],
   bewerbsart: ["id", "bezeichnung", "entrylistavailable", "roundrobin", "rasterfunktion", "spezifikum"],
@@ -134,6 +138,48 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
         targetId: params.messageId,
         before: result.success ? { acknowledged: !result.changed } : null,
         after: result.success ? { acknowledged: true } : null,
+      };
+    case "addCompetitionHistoryComment":
+      return {
+        targetType: "competition-history-comment",
+        targetId: result.commentId || params.eventId,
+        before: null,
+        after: result.success ? { eventId: params.eventId, commentId: result.commentId || "", textRecorded: true, repeated: !!result.repeated } : null,
+      };
+    case "editCompetitionHistoryComment":
+      return {
+        targetType: "competition-history-comment",
+        targetId: params.commentId,
+        before: result.success ? { commentId: params.commentId, textRecorded: true } : null,
+        after: result.success ? { commentId: params.commentId, textRecorded: true, changed: !!result.changed, repeated: !!result.repeated } : null,
+      };
+    case "deleteCompetitionHistoryComment":
+      return {
+        targetType: "competition-history-comment",
+        targetId: params.commentId,
+        before: result.success ? { commentId: params.commentId, existed: true } : null,
+        after: result.success ? { deleted: true, repeated: !!result.repeated } : null,
+      };
+    case "moderateCompetitionHistoryComment":
+      return {
+        targetType: "competition-history-comment",
+        targetId: params.commentId,
+        before: result.success ? { commentId: params.commentId } : null,
+        after: result.success ? { status: params.status, changed: !!result.changed, repeated: !!result.repeated } : null,
+      };
+    case "setCompetitionHistoryReaction":
+      return {
+        targetType: "competition-history-event",
+        targetId: params.eventId,
+        before: params.eventId ? { eventId: params.eventId } : null,
+        after: result.success ? { reactionKey: params.reactionKey || "", removed: params.reactionKey === null, changed: !!result.changed, repeated: !!result.repeated } : null,
+      };
+    case "setCompetitionHistoryCommentReaction":
+      return {
+        targetType: "competition-history-comment",
+        targetId: params.commentId,
+        before: params.commentId ? { commentId: params.commentId } : null,
+        after: result.success ? { reactionKey: params.reactionKey || "", removed: params.reactionKey === null, changed: !!result.changed, repeated: !!result.repeated } : null,
       };
     case "addEntryList":
       return { targetType: "entry", targetId: result.entryId || "", after: { entryId: result.entryId || "", bewerbId: params.bewerbId, alreadyPresent: !!result.alreadyPresent } };
@@ -743,6 +789,34 @@ function writeAudit({ eventId, principal, endpoint, params, result = {}, interna
   });
 }
 
+function writeRejectedInteractionAudit({ eventId, principal, endpoint, error }) {
+  if (!HISTORY_INTERACTION_WRITES.has(endpoint)) return;
+  try {
+    writeAudit({ eventId, principal, endpoint, params: {}, outcome: "started" });
+    writeAudit({ eventId, principal, endpoint, params: {}, outcome: "failed", error });
+  } catch (auditError) {
+    logger.log("error", "audit_record_failed", { supportId: eventId, action: endpoint, error: auditError });
+  }
+  logHistoryInteractionCompletion({ supportId: eventId, principal, endpoint, params: {}, error, outcome: "rejected" });
+}
+
+function logHistoryInteractionCompletion({ supportId, principal, endpoint, params = {}, result = {}, error = null, outcome, startedAt = Date.now() }) {
+  if (!HISTORY_INTERACTION_WRITES.has(endpoint)) return;
+  logger.log(error && (error.status || 500) >= 500 ? "warn" : "info", "competition_history_interaction_completed", {
+    supportId,
+    action: endpoint,
+    actorId: principal.id,
+    eventId: result.eventId || params.eventId || "",
+    commentId: result.commentId || params.commentId || "",
+    reactionKey: params.reactionKey || "",
+    changed: !!result.changed,
+    repeated: !!result.repeated,
+    durationMs: Math.max(0, Date.now() - startedAt),
+    result: outcome,
+    errorCode: error?.code || null,
+  });
+}
+
 function requireCurrentTables(...tableNames) {
   for (const tableName of tableNames) {
     if (!dataStore.isTableCurrent(tableName)) {
@@ -1200,6 +1274,60 @@ const endpoints = {
       limit: params.limit || 50,
     }),
   },
+  competitionHistoryComments: {
+    access: "authenticated",
+    handler: (params, context) => dependencies.messagingService.competitionHistoryComments(context.principal, {
+      eventId: params.eventId,
+      cursor: params.cursor || null,
+      limit: params.limit || 30,
+    }),
+  },
+  competitionHistoryInteraction: {
+    access: "authenticated",
+    handler: (params, context) => dependencies.messagingService.competitionHistoryInteraction(context.principal, params.eventId),
+  },
+  competitionHistoryCommentForEdit: {
+    access: "authenticated",
+    handler: (params, context) => dependencies.messagingService.competitionHistoryCommentForEdit(context.principal, params.commentId),
+  },
+  competitionHistoryReactions: {
+    access: "authenticated",
+    handler: (params, context) => dependencies.messagingService.competitionHistoryReactions(context.principal, params.eventId),
+  },
+  competitionHistoryCommentReactions: {
+    access: "authenticated",
+    handler: (params, context) => dependencies.messagingService.competitionHistoryCommentReactions(context.principal, params.commentId),
+  },
+  addCompetitionHistoryComment: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => dependencies.messagingService.addCompetitionHistoryComment(context.principal, params),
+  },
+  editCompetitionHistoryComment: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => dependencies.messagingService.editCompetitionHistoryComment(context.principal, params),
+  },
+  deleteCompetitionHistoryComment: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => dependencies.messagingService.deleteCompetitionHistoryComment(context.principal, params),
+  },
+  moderateCompetitionHistoryComment: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => dependencies.messagingService.moderateCompetitionHistoryComment(context.principal, params),
+  },
+  setCompetitionHistoryReaction: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => dependencies.messagingService.setCompetitionHistoryReaction(context.principal, params),
+  },
+  setCompetitionHistoryCommentReaction: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => dependencies.messagingService.setCompetitionHistoryCommentReaction(context.principal, params),
+  },
   rankingChallengeState: {
     access: "authenticated",
     handler: (params, context) => dependencies.sheetService.rankingChallengeState(
@@ -1460,6 +1588,7 @@ function canSubscribe(info, topic) {
   if (topic.startsWith("messages:")) {
     return info.principal.type === "user" && topic === `messages:${info.principal.id}`;
   }
+  if (topic === "competition-history") return info.principal.type === "user";
   if (topic.startsWith("monitor-status:")) {
     return info.principal.type === "user" && ["operator", "admin"].includes(info.principal.role);
   }
@@ -1547,6 +1676,9 @@ function sendSubscriptionSnapshot(info, topic) {
     const { revision, unreadCount } = dependencies.messagingService.summary(info.principal);
     send(info, { type: "event", topic, data: { revision, unreadCount } });
   }
+  if (topic === "competition-history" && canSubscribe(info, topic)) {
+    send(info, { type: "event", topic, data: { revision: dependencies.messagingService.repository.historyInteractionRevision() } });
+  }
   const tableTopics = { matches: "matches1", players: "players", bewerbe: "bewerbe", bewerbsart: "bewerbsart", matchtyp: "matchtyp", entryList: "entryList", ranking: "rlPlatzierung", navigator: "navigator" };
   if (tableTopics[topic]) send(info, { type: "event", topic, data: { table: tableTopics[topic], ...dataStore.getMeta(tableTopics[topic]) } });
   if (topic.startsWith("monitor-status:")) {
@@ -1557,19 +1689,33 @@ function sendSubscriptionSnapshot(info, topic) {
 }
 
 async function handleRequest(info, message, supportId) {
+  const historyInteractionStartedAt = Date.now();
   if (shuttingDown) throw new AppError("SHUTTING_DOWN", "Server wird beendet", 503);
   const endpoint = endpoints[message.endpoint];
   if (!endpoint || !Object.hasOwn(endpoints, message.endpoint)) throw new AppError("ENDPOINT_NOT_FOUND", "Unbekannter Endpoint", 404);
   if (info.inflight >= WS_MAX_INFLIGHT) throw new AppError("TOO_MANY_REQUESTS", "Zu viele parallele Requests", 429);
   const authContext = refreshPrincipal(info);
-  authorize(endpoint, authContext);
-  const params = validateEndpointRequest(message.endpoint, message.params);
+  try {
+    authorize(endpoint, authContext);
+  } catch (error) {
+    writeRejectedInteractionAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error });
+    throw error;
+  }
+  let params;
+  try {
+    params = validateEndpointRequest(message.endpoint, message.params);
+  } catch (error) {
+    writeRejectedInteractionAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error });
+    throw error;
+  }
   if (endpoint.write) {
     const principalKey = `principal:${authContext.principal.type}:${authContext.principal.id}`;
     const ipKey = `ip:${info.ip}`;
     const writeCost = endpoint.writeCost || 1;
     if (!writeLimiter.take(principalKey, writeCost) || !writeLimiter.take(ipKey, writeCost)) {
-      throw new AppError("WRITE_RATE_LIMIT", "Zu viele Schreiboperationen", 429);
+      const error = new AppError("WRITE_RATE_LIMIT", "Zu viele Schreiboperationen", 429);
+      writeRejectedInteractionAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error });
+      throw error;
     }
   }
   if (endpoint.write) {
@@ -1587,6 +1733,7 @@ async function handleRequest(info, message, supportId) {
     if (endpoint.write) {
       writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, internal, outcome: "success" });
     }
+    logHistoryInteractionCompletion({ supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, outcome: "success", startedAt: historyInteractionStartedAt });
     return data;
   } catch (error) {
     let responseError = error;
@@ -1607,6 +1754,15 @@ async function handleRequest(info, message, supportId) {
       if (actionCompleted && error.code !== "WRITE_OUTCOME_UNKNOWN") {
         responseError = new AppError("WRITE_OUTCOME_UNKNOWN", "Aenderung ausgefuehrt, Auditabschluss ist unklar", 503);
       }
+      logHistoryInteractionCompletion({
+        supportId,
+        principal: authContext.principal,
+        endpoint: message.endpoint,
+        params,
+        error: responseError,
+        outcome: actionCompleted || responseError.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : ((responseError.status || 500) < 500 ? "rejected" : "failed"),
+        startedAt: historyInteractionStartedAt,
+      });
     }
     throw responseError;
   } finally {
