@@ -79,10 +79,12 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   stehen die zentrierte Begruessung `Der Piber gruesst` und das runde
   Begruessungsbild. Direkt danach folgen die sportlichen Highlights: Die goldenen
   Vereinsmeister- und silbernen Vizemeisterkarten stehen mobil einzeln
-  untereinander und am Desktop paarweise. Geburtstage und naechster Termin bilden
-  den Abschluss; mobil stehen sie untereinander, am Desktop nebeneinander. Der
-  gemeinsame Footer ordnet auf schmalen Displays Brand, Uhr und Version in
-  getrennten Zeilen an.
+  untereinander und am Desktop paarweise. Das Frauen-Einzelpodium ergaenzt eine
+  bronzene Drittplatzkarte: mobil folgt sie auf Platz 1 und 2, am Desktop steht
+  sie rechts unter Platz 2; die linke Rasterflaeche darunter bleibt frei.
+  Geburtstage und naechster Termin bilden den Abschluss; mobil stehen sie
+  untereinander, am Desktop nebeneinander. Der gemeinsame Footer ordnet auf
+  schmalen Displays Brand, Uhr und Version in getrennten Zeilen an.
 
   staticReady.js meldet im Monitorbetrieb nach DOMContentLoaded
   `epiber-monitor-ready`; die Informationsbereiche blockieren die grundlegende
@@ -97,7 +99,8 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
 
 -- Besonderheiten --
   Vereinstermin und Vereinsmeisterschaftsergebnisse sind derzeit statisch in
-  `Frontend/index.html` gepflegt. Offene Maenner-Doppelplaetze erscheinen als
+  `Frontend/index.html` gepflegt. Frauen Einzel: Anita Pimminger,
+  Sabine Stocker, Sara Graf. Offene Maenner-Doppelplaetze erscheinen als
   Gedankenstrich. Fehler beim Laden der Geburtstage erzeugen das kontrollierte
   Browserereignis `dashboard_birthdays_load_failed` fuer den bekannten Seitentyp
   `index`; die Diagnose enthaelt keine Mitgliederdaten.

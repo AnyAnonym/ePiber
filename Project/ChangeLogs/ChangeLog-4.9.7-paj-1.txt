@@ -6,3 +6,24 @@ Commit: 4.9.7-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.7-paj-1-1` gesetzt.
+
+[4.9.7-paj-1-2] - 2026-09-10
+Commit: 4.9.7-paj-1-2 | Dashboard und OpenCode-Betrieb dokumentiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.7-paj-1-2` finalisiert.
+  - [Dashboard] Frauen Einzel zeigt Sara Graf als Drittplatzierte in einer bronzenen Podiumskarte; mobil folgen alle drei Plaetze untereinander, am Desktop steht Platz 3 rechts unter Platz 2.
+  - [Dokumentation] Dashboard-Sollbeschreibung um das responsive Frauen-Einzelpodium und die drei Platzierungen ergaenzt.
+  - [Infrastruktur] OpenCode-Betriebsanleitung fuer Anmeldung vom Windows-Rechner, Callback-SSH-Tunnel und Kontoidentifikation ergaenzt.
+
+  Dokumentationsuebernahme beim Main-Versionssprung
+
+    Project/server-configs/SERVER-SETUP.txt
+    - OpenCode-Modellanbieterwechsel, bevorzugte headless ChatGPT-Anmeldung und den Browser-Callback-Tunnel vom Windows-Rechner ueber SSH-Port 2288 dokumentieren.
+    - Den sicheren Kontoabgleich mit `opencode auth list` und einer lokalen JWT-Profilprojektion sowie Schutz und Mehrkonto-Verhalten der OAuth-Credentials dokumentieren.
+
+    Project/software/seiten/index.txt
+    - Das statisch gepflegte Frauen-Einzelpodium mit Anita Pimminger, Sabine Stocker und Sara Graf sowie seine mobile und Desktop-Rasteranordnung dokumentieren.
+
+    Project/ChangeLogs/ChangeLog-main.txt
+    - Dashboard-Podium, Responsive-Browsertest und die beiden Betriebs-/Seitendokumentationen als Patch-Release aus dem Branch `4.9.7-paj-1` zusammenfassen.

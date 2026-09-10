@@ -556,6 +556,89 @@ verwendet. Danach Vordergrundprozess und Tunnel beenden, das Terminal mit den
 exportierten Geheimnissen schliessen, `systemctl start grafana.service`
 ausfuehren und den normalen ePiber-Adminzugang erneut testen.
 
+OpenCode-Modellanbieter authentifizieren:
+
+Ein bereits verbundener Anbieter wird mit `/models` beziehungsweise ueber die
+Modellauswahl gewechselt; eine erneute Browseranmeldung ist dafuer nicht
+erforderlich. Fuer eine neue oder erneuerte OpenAI-/ChatGPT-Anmeldung auf dem
+Server ist `ChatGPT Pro/Plus (headless)` bevorzugt. Die dabei angezeigte URL und
+der Code werden am Windows-Rechner verwendet; eine Portweiterleitung ist nicht
+notwendig.
+
+Falls stattdessen `ChatGPT Pro/Plus (browser)` verwendet wird, muss der von
+OpenCode angezeigte Callback-Port mit lokalem SSH-Forwarding vom Windows-Rechner
+zum Linux-Server weitergeleitet werden:
+
+  ssh -N -L 127.0.0.1:PORT:127.0.0.1:PORT -p 2288 root@epiber.at
+
+Bei DNS-Problemen kann die aktuelle Serveradresse verwendet werden:
+
+  ssh -N -L 127.0.0.1:PORT:127.0.0.1:PORT -p 2288 root@49.13.20.166
+
+Beispiel fuer den OpenAI-Callback-Port 1455:
+
+  ssh -N -L 127.0.0.1:1455:127.0.0.1:1455 -p 2288 root@49.13.20.166
+
+Das PowerShell-Fenster bleibt waehrend der Anmeldung geoeffnet. Anschliessend
+wird der von OpenCode ausgegebene Anmeldelink im Windows-Browser geoeffnet. Der
+Browseraufruf an `localhost:1455` wird zum wartenden OpenCode-Prozess auf dem
+Linux-Server weitergeleitet. Dies ist lokales Forwarding mit `-L`, nicht
+Remote-Forwarding mit `-R`. Der Callback-Port wird nicht in der Firewall
+freigegeben. Andere Anbieter oder MCP-Verbindungen koennen abweichende Ports
+verwenden; massgeblich ist immer der aktuell von OpenCode ausgegebene
+Callback-Port.
+
+OpenCode-Konto pruefen:
+
+Die verbundene Providerart zeigt auf dem Server:
+
+  opencode auth list
+
+Fuer das aktuell hinterlegte OpenAI-Konto gibt der folgende Befehl nur die
+nicht geheimen Profilfelder Name, E-Mail-Adresse, Loginart, Plan, Account-ID und
+Ablaufzeit des Zugriffstokens aus. Das OAuth-Token selbst wird nicht ausgegeben:
+
+  node -e '
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+
+  const file = process.env.OPENCODE_AUTH_FILE ||
+    path.join(process.env.XDG_DATA_HOME ||
+      path.join(os.homedir(), ".local", "share"), "opencode", "auth.json");
+  const credential = JSON.parse(fs.readFileSync(file, "utf8")).openai;
+  if (!credential) throw new Error("Keine OpenAI-Anmeldung in " + file);
+
+  const payload = JSON.parse(Buffer.from(credential.access.split(".")[1],
+    "base64url"));
+  const profile = payload["https://api.openai.com/profile"] || {};
+  const auth = payload["https://api.openai.com/auth"] || {};
+
+  console.log({
+    name: profile.name,
+    email: profile.email,
+    login: payload.sub?.split("|")[0],
+    plan: auth.chatgpt_plan_type,
+    accountId: credential.accountId || auth.chatgpt_account_id,
+    expires: credential.expires ? new Date(credential.expires).toISOString() : undefined
+  });
+  '
+
+OpenCode laeuft auf diesem Server unter dem Benutzer `paj`; der Befehl wird daher
+normal ohne `sudo` ausgefuehrt. Laeuft OpenCode auf einem anderen Benutzerkonto,
+muss der Befehl in dessen Umgebung ausgefuehrt werden, beispielsweise mit
+`sudo -H -u <BENUTZER> node -e '...'`. Den laufenden Benutzer zeigt:
+
+  ps -eo user,pid,args | grep "[o]pencode"
+
+`~/.local/share/opencode/auth.json` enthaelt Zugriffs- und Refresh-Tokens. Die
+Datei darf weder ausgegeben, kopiert, versioniert noch weitergegeben werden. Die
+Ablaufzeit betrifft nur den aktuellen Zugriffstoken; OpenCode erneuert ihn
+normalerweise mit dem lokal gespeicherten Refresh-Token. Pro Provider ist nur
+eine aktive OpenAI-Anmeldung gespeichert. Eine erneute OpenAI-Anmeldung ersetzt
+sie daher. Bei mehreren Konten vor der Bestaetigung im Browser das passende
+Browserprofil waehlen und anschliessend die ausgegebenen Profilfelder pruefen.
+
 Die externe Negativabnahme muss fuer Live, PAJ und PK einen HTTP-404-Status auf
 `/internal/messaging-report` sowie einem weiteren Pfad unter `/internal/*`
 bestaetigen. Direkte lokale Positivproben erfolgen nur als autorisierter
