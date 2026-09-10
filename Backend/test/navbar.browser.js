@@ -449,6 +449,49 @@ test("Dashboard zeigt aktuelle Geburtstage mit Alter und oeffnet das bestehende 
   }
 });
 
+test("Dashboard ordnet das Frauen-Einzelpodium responsiv an", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "domcontentloaded" });
+    const podium = page.locator(".highlight-podium .highlight");
+    assert.equal(await podium.count(), 3);
+    assert.deepEqual(await podium.locator("h3").allTextContents(), ["Anita Pimminger", "Sabine Stocker", "Sara Graf"]);
+    assert.equal(await podium.nth(2).locator(".highlight-symbol").textContent(), "3");
+
+    const mobile = await podium.evaluateAll((cards) => cards.map((card) => {
+      const { x, y, bottom } = card.getBoundingClientRect();
+      return { x, y, bottom };
+    }));
+    assert.equal(Math.abs(mobile[0].x - mobile[1].x) <= 1, true);
+    assert.equal(Math.abs(mobile[1].x - mobile[2].x) <= 1, true);
+    assert.equal(mobile[1].y > mobile[0].bottom, true);
+    assert.equal(mobile[2].y > mobile[1].bottom, true);
+
+    await page.setViewportSize({ width: 1024, height: 720 });
+    const desktop = await podium.evaluateAll((cards) => cards.map((card) => {
+      const { x, y, bottom } = card.getBoundingClientRect();
+      return { x, y, bottom };
+    }));
+    const doubles = await page.locator(".highlight-list > .highlight").evaluateAll((cards) => cards.slice(0, 2).map((card) => {
+      const { y } = card.getBoundingClientRect();
+      return { y };
+    }));
+    assert.equal(Math.abs(desktop[0].y - desktop[1].y) <= 1, true);
+    assert.equal(Math.abs(desktop[1].x - desktop[2].x) <= 1, true);
+    assert.equal(desktop[2].y > desktop[1].bottom, true);
+    assert.equal(doubles[0].y > desktop[2].bottom, true);
+    assert.equal(Math.abs(doubles[0].y - doubles[1].y) <= 1, true);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("Anonyme direkte Profilaufrufe bleiben geschlossen und senden keinen Profilrequest", {
   skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
