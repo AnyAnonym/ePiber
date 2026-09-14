@@ -69,3 +69,8 @@ Dokumentationsuebernahme beim Main-Versionssprung
   Project/server-configs/observability/README.md
   - Die Grafana-Panels fuer Mitgliederklassifikationen sowie getrennte aktive Admin- und explizite Operatorzaehler mit den kontrollierten Metriklabels dokumentieren.
   - Festhalten, dass geerbte Operatorrechte von Admins nicht als explizite Operatoren gezaehlt werden.
+[4.9.8-paj-1-4] - 2026-09-14
+Commit: 4.9.8-paj-1-4 | PAJ-Rollenmigration bereitgestellt
+
+  Added
+  - [Software] Rollenauflösung und kontrolliertes PAJ-Migrationsskript nach dem vorigen Branch-Commit nachgeführt.
