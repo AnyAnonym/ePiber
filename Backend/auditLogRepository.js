@@ -160,7 +160,13 @@ class AuditLogRepository {
           target_id = excluded.target_id,
           target_name = CASE WHEN excluded.target_name != '' THEN excluded.target_name ELSE audit_log.target_name END,
           result = excluded.result,
-          before_json = COALESCE(audit_log.before_json, excluded.before_json),
+           before_json = CASE
+             WHEN audit_log.action IN ('setMatchAppointment', 'adminSetMatchAppointment')
+               AND audit_log.before_json LIKE '%"matchDate":""%'
+               AND excluded.before_json NOT LIKE '%"matchDate":""%'
+             THEN excluded.before_json
+             ELSE COALESCE(audit_log.before_json, excluded.before_json)
+           END,
           after_json = COALESCE(excluded.after_json, audit_log.after_json),
           error_code = excluded.error_code,
           source_ip = CASE WHEN audit_log.source_ip != '' THEN audit_log.source_ip ELSE excluded.source_ip END,

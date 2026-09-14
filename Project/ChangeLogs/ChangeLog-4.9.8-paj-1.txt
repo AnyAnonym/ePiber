@@ -6,3 +6,14 @@ Commit: 4.9.8-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.8-paj-1-1` gesetzt.
+
+[4.9.8-paj-1-2] - 2026-09-14
+Commit: 4.9.8-paj-1-2 | Ranglistentermine zukunftssicher gepflegt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.8-paj-1-1-x` gesetzt.
+  - [Terminpflege] Ersttermine von Ranglistenforderungen muessen serverseitig kuenftig liegen; vergangene Termine bleiben innerhalb des vierzehntaegigen Korridors nicht mehr speicherbar.
+  - [Profil] Offene Ranglistenforderungen zeigen Zeitpunkt der Forderung, die siebentaegige Terminvereinbarungsfrist und die vierzehntaegige Spielterminfrist.
+  - [Terminpflege] Der Kalender markiert Forderung, Terminvereinbarungsfrist und Spielterminfrist blau, orange beziehungsweise rot mit einer Legende; auswaehlbar bleiben nur zukuenftige volle Stunden bis zur Spielterminfrist.
+  - [Profil] Die Ranglisten-Uebersichtsbox zeigt Forderungszeitpunkt und Gegner immer, die beiden Fristzeitpunkte und den Countdown dagegen nur bis zur Terminsetzung.
+  - [Audit] Termin-Audits uebernehmen beim Abschluss den tatsaechlichen vorherigen Termin und kennzeichnen Aenderungen dadurch korrekt.

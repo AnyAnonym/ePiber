@@ -342,6 +342,8 @@ const matchDateModal = createModal("matchDateModal", `
       <div class="match-date-weekdays" aria-hidden="true"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
       <div id="matchDateCalendarDays" class="match-date-calendar-days" role="grid"></div>
     </div>
+    <div id="matchDateLegend" class="match-date-legend" aria-live="polite"></div>
+    <p id="matchDateAvailability" class="match-date-availability" role="status" aria-live="polite"></p>
     <label for="rankingMatchHour">Uhrzeit:</label>
     <select id="rankingMatchHour" name="rankingMatchHour" required>
       ${Array.from({ length: 18 }, (_, index) => `<option value="${String(index + 6).padStart(2, "0")}">${String(index + 6).padStart(2, "0")}:00 Uhr</option>`).join("")}
@@ -1014,6 +1016,49 @@ function calendarDayValue(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
+function compactDateFromDate(date) {
+  const part = (value) => String(value).padStart(2, "0");
+  return `${String(date.getFullYear()).slice(-2)}${part(date.getMonth() + 1)}${part(date.getDate())}-${part(date.getHours())}${part(date.getMinutes())}`;
+}
+
+function dayHasSelectableMatchHour(day, context) {
+  return Array.from({ length: 18 }, (_, index) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), index + 6).getTime())
+    .some((timestamp) => timestamp > context.earliestAt && (!context.latestAt || timestamp <= context.latestAt));
+}
+
+function renderMatchDateLegend() {
+  const legend = document.getElementById("matchDateLegend");
+  const availability = document.getElementById("matchDateAvailability");
+  if (!legend || !availability || !matchDateContext) return;
+  legend.replaceChildren();
+  availability.textContent = "";
+  if (!matchDateContext.ranking || !matchDateContext.challengedAt) {
+    legend.hidden = true;
+    availability.hidden = true;
+    return;
+  }
+  const entries = [
+    ["challenge-start", "Forderung ausgesprochen", matchDateContext.challengedAt],
+    ["challenge-agreement", "Termin festlegen bis", matchDateContext.agreementDeadlineAt],
+    ["challenge-end", "Spieltermin spätestens", matchDateContext.appointmentDeadlineAt],
+  ];
+  for (const [className, label, date] of entries) {
+    const line = document.createElement("p");
+    const marker = document.createElement("span");
+    marker.className = `match-date-legend-marker ${className}`;
+    marker.setAttribute("aria-hidden", "true");
+    line.append(marker, `${label}: ${formatCompactDate(compactDateFromDate(date))}`);
+    legend.appendChild(line);
+  }
+  legend.hidden = false;
+  if (matchDateContext.appointmentDeadlineAt.getTime() <= matchDateContext.earliestAt) {
+    availability.textContent = "Die Frist für einen Spieltermin ist bereits abgelaufen.";
+    availability.hidden = false;
+  } else {
+    availability.hidden = true;
+  }
+}
+
 function renderMatchDateCalendar() {
   if (!matchCalendarMonth || !matchDateContext) return;
   const monthLabel = document.getElementById("matchDateCalendarMonth");
@@ -1035,9 +1080,10 @@ function renderMatchDateCalendar() {
     const timestamp = calendarDayValue(date);
     const inOriginalWindow = matchDateContext.ranking
       && timestamp >= matchDateContext.challengeDay && timestamp <= matchDateContext.finalDay;
-    const selectable = matchDateContext.previousDate || !matchDateContext.ranking
+    const inRange = matchDateContext.previousDate || !matchDateContext.ranking
       ? timestamp >= matchDateContext.today
       : inOriginalWindow;
+    const selectable = inRange && dayHasSelectableMatchHour(date, matchDateContext);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "match-date-calendar-day";
@@ -1047,6 +1093,7 @@ function renderMatchDateCalendar() {
     button.setAttribute("aria-label", new Intl.DateTimeFormat("de-AT", { dateStyle: "long" }).format(date));
     button.classList.toggle("in-window", inOriginalWindow);
     button.classList.toggle("challenge-start", timestamp === matchDateContext.challengeDay);
+    button.classList.toggle("challenge-agreement", timestamp === matchDateContext.agreementDay);
     button.classList.toggle("challenge-end", timestamp === matchDateContext.finalDay);
     button.classList.toggle("selected", value === selectedValue);
     if (selectable) button.addEventListener("click", () => {
@@ -1094,7 +1141,9 @@ function openMatchDateModal(match, profile, competition) {
   today.setHours(0, 0, 0, 0);
   const ranking = competition?.ranking === true;
   const challengedAt = ranking ? compactDateValue(match.challengeDate) : null;
-  const finalDay = challengedAt ? new Date(challengedAt.getFullYear(), challengedAt.getMonth(), challengedAt.getDate() + 14) : today;
+  const agreementDeadlineAt = challengedAt ? new Date(challengedAt.getTime() + 7 * 24 * 60 * 60 * 1000) : null;
+  const appointmentDeadlineAt = challengedAt ? new Date(challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000) : null;
+  const finalDay = appointmentDeadlineAt || today;
   matchDateContext = {
     matchId,
     playerId: String(profile?.id || ""),
@@ -1102,12 +1151,16 @@ function openMatchDateModal(match, profile, competition) {
     previousDate: String(match.matchDate || ""),
     ranking,
     admin,
-    earliestAt: currentDate ? now : challengedAt?.getTime() || now,
-    earliestExclusive: Boolean(currentDate || !ranking),
-    latestAt: currentDate || !challengedAt ? null : challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+    earliestAt: currentDate || !challengedAt ? now : Math.max(now, challengedAt.getTime()),
+    earliestExclusive: true,
+    latestAt: currentDate || !appointmentDeadlineAt ? null : appointmentDeadlineAt.getTime(),
     today: calendarDayValue(today),
     challengeDay: challengedAt ? calendarDayValue(challengedAt) : calendarDayValue(today),
+    agreementDay: agreementDeadlineAt ? calendarDayValue(agreementDeadlineAt) : calendarDayValue(today),
     finalDay: calendarDayValue(finalDay),
+    challengedAt,
+    agreementDeadlineAt,
+    appointmentDeadlineAt,
   };
   reasonFields.hidden = !admin;
   reasonInput.disabled = !admin;
@@ -1124,6 +1177,7 @@ function openMatchDateModal(match, profile, competition) {
   }
   const visibleDate = compactDateValue(`${dayInput.value.replaceAll("-", "").slice(2)}-0000`) || today;
   matchCalendarMonth = new Date(visibleDate.getFullYear(), visibleDate.getMonth(), 1);
+  renderMatchDateLegend();
   renderMatchDateCalendar();
   updateMatchDateHours();
   openModal(matchDateModal);
@@ -1624,9 +1678,22 @@ window.openProfileModal = async (options = {}) => {
         const challengeBlock = document.createElement("div");
         challengeBlock.className = "profile-open-challenge";
         const challengedAtLine = document.createElement("p");
-        challengedAtLine.textContent = `Forderung vom ${formatCompactDate(challenge.challengedAt)}`;
-        challengeBlock.append(challengedAtLine);
-        if (ownProfile || sessionUser?.role === "admin") appendMatchDateCountdown(challengeBlock, challenge, actionSignal);
+        challengedAtLine.textContent = `Forderung ausgesprochen: ${formatCompactDate(challenge.challengedAt)}`;
+        const opponentLine = document.createElement("p");
+        opponentLine.textContent = `Gegner: ${String(challenge.opponentName || "Unbekannt").trim() || "Unbekannt"}`;
+        const challengedAt = compactDateValue(challenge.challengedAt);
+        if (challengedAt && !challenge.matchDate) {
+          const agreementDeadline = new Date(challengedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+          const appointmentDeadline = new Date(challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+          const agreementDeadlineLine = document.createElement("p");
+          agreementDeadlineLine.textContent = `Termin festlegen bis: ${formatCompactDate(compactDateFromDate(agreementDeadline))}`;
+          const appointmentDeadlineLine = document.createElement("p");
+          appointmentDeadlineLine.textContent = `Spieltermin spätestens: ${formatCompactDate(compactDateFromDate(appointmentDeadline))}`;
+          challengeBlock.append(challengedAtLine, opponentLine, agreementDeadlineLine, appointmentDeadlineLine);
+        } else {
+          challengeBlock.append(challengedAtLine, opponentLine);
+        }
+        if (!challenge.matchDate && (ownProfile || sessionUser?.role === "admin")) appendMatchDateCountdown(challengeBlock, challenge, actionSignal);
         panel.appendChild(challengeBlock);
       }
       if (ranking.status === "withdrawn" && ranking.withdrawal) {

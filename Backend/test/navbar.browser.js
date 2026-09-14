@@ -641,7 +641,8 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     await playerPage.locator("#withdrawModal .close").click();
     await playerPage.getByRole("tab", { name: "Damen Doppel Lang", exact: true }).click();
     assert.deepEqual(await playerPage.locator("#profileRankingPanel1 .profile-open-challenge > p").allTextContents(), [
-      "Forderung vom 29.08.2026, 12:00 Uhr",
+      "Forderung ausgesprochen: 29.08.2026, 12:00 Uhr",
+      "Gegner: Test Gegner",
     ]);
     assert.deepEqual(await playerPage.locator("#profileRankingPanel1 .profile-actions > button").allTextContents(), []);
     assert.equal(await playerPage.getByRole("button", { name: "Raushängen" }).count(), 0);
@@ -658,6 +659,12 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     assert.equal(await changeDateDialog.locator(".match-date-calendar-day").filter({ hasText: /^1$/ }).isDisabled(), false);
     await changeDateDialog.getByRole("button", { name: "Terminauswahl schließen" }).click();
     await playerPage.getByRole("tab", { name: "Senioren 45 Plus", exact: true }).click();
+    assert.deepEqual((await playerPage.locator("#profileRankingPanel2 .profile-open-challenge > p").allTextContents()).slice(0, 4), [
+      "Forderung ausgesprochen: 30.08.2026, 09:00 Uhr",
+      "Gegner: Andere Gegnerin",
+      "Termin festlegen bis: 06.09.2026, 09:00 Uhr",
+      "Spieltermin spätestens: 13.09.2026, 09:00 Uhr",
+    ]);
     const greenCountdown = playerPage.locator("#profileRankingPanel2 .profile-match-date-countdown");
     assert.match(await greenCountdown.textContent(), /^Terminfrist: -\d+ Tage, \d+ Stunden, \d+ Minuten$/);
     assert.equal(await greenCountdown.evaluate((element) => element.classList.contains("warning") || element.classList.contains("overdue")), false);
@@ -673,13 +680,21 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     assert.equal(await matchDateDialog.locator("#matchDateCalendarMonth").textContent(), "August 2026");
     const challengeDay = matchDateDialog.locator(".match-date-calendar-day.challenge-start");
     assert.equal(await challengeDay.textContent(), "30");
-    assert.equal(await challengeDay.isDisabled(), false);
+    assert.equal(await challengeDay.isDisabled(), true);
     await matchDateDialog.getByRole("button", { name: "Nächster Monat" }).click();
     assert.equal(await matchDateDialog.locator("#matchDateCalendarMonth").textContent(), "September 2026");
+    const agreementDay = matchDateDialog.locator(".match-date-calendar-day.challenge-agreement");
+    assert.equal(await agreementDay.textContent(), "6");
+    assert.equal(await agreementDay.isDisabled(), false);
     const finalDay = matchDateDialog.locator(".match-date-calendar-day.challenge-end");
     assert.equal(await finalDay.textContent(), "13");
     assert.equal(await finalDay.isDisabled(), false);
     assert.equal(await matchDateDialog.locator(".match-date-calendar-day").filter({ hasText: /^14$/ }).isDisabled(), true);
+    assert.deepEqual(await matchDateDialog.locator("#matchDateLegend > p").allTextContents(), [
+      "Forderung ausgesprochen: 30.08.2026, 09:00 Uhr",
+      "Termin festlegen bis: 06.09.2026, 09:00 Uhr",
+      "Spieltermin spätestens: 13.09.2026, 09:00 Uhr",
+    ]);
     assert.deepEqual(await matchDateDialog.locator("select option").allTextContents(), Array.from({ length: 18 }, (_, index) => `${String(index + 6).padStart(2, "0")}:00 Uhr`));
     const selectableMiddleDay = matchDateDialog.locator(".match-date-calendar-day").filter({ hasText: /^5$/ });
     assert.equal(await selectableMiddleDay.evaluate((element) => element.classList.contains("in-window")), true);
@@ -745,17 +760,21 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     assert.equal(await playerPage.getByRole("button", { name: "Fordern" }).isVisible(), true);
     await playerPage.getByRole("tab", { name: "Damen Doppel Lang", exact: true }).click();
     assert.deepEqual(await playerPage.locator("#profileRankingPanel1 .profile-open-challenge > p").allTextContents(), [
-      "Forderung vom 29.08.2026, 12:00 Uhr",
+      "Forderung ausgesprochen: 29.08.2026, 12:00 Uhr",
+      "Gegner: Test Gegner",
     ]);
     assert.equal(await playerPage.locator("#profileRankingPanel1 .profile-match-date-countdown").count(), 0);
     assert.equal(await playerPage.locator("#profileRankingPanel1 .admin-ranking-danger").count(), 0);
     assert.doesNotMatch(await playerPage.locator("#profileRankingPanel1").textContent(), /Keine Aktion verfügbar/i);
     await playerPage.getByRole("tab", { name: "Senioren 45 Plus", exact: true }).click();
     assert.deepEqual(await playerPage.locator("#profileRankingPanel2 .profile-open-challenge > p").allTextContents(), [
-      "Forderung vom 30.08.2026, 09:00 Uhr",
+      "Forderung ausgesprochen: 30.08.2026, 09:00 Uhr",
+      "Gegner: Andere Gegnerin",
+      "Termin festlegen bis: 06.09.2026, 09:00 Uhr",
+      "Spieltermin spätestens: 13.09.2026, 09:00 Uhr",
     ]);
     assert.equal(await playerPage.locator("#profileRankingPanel2 .profile-match-date-countdown").count(), 0);
-    assert.doesNotMatch(await playerPage.locator("#profileRankingPanel2").textContent(), /Spieltermin/);
+    assert.match(await playerPage.locator("#profileRankingPanel2").textContent(), /Spieltermin spätestens/);
     await playerPage.getByRole("tab", { name: "Sommercup", exact: true }).click();
     assert.deepEqual(await playerPage.locator('[data-competition-id="cup"] .profile-match-card h3').allTextContents(), [
       "Halbfinale (03.09.2026, 11:00 Uhr)",
@@ -1127,6 +1146,9 @@ test("Admins bearbeiten offene Forderungen mit roten begruendungspflichtigen Dat
   const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.addInitScript(() => {
+      Date.now = () => new Date(2026, 8, 2, 12, 0).getTime();
+    });
     await page.goto(`http://127.0.0.1:${address.port}/modals-test.html?role=admin&dst=1`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => window.openProfileModal({ playerId: "p2" }));
     await page.getByRole("tab", { name: "Aktuell", exact: true }).click();

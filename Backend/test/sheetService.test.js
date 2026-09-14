@@ -1430,6 +1430,10 @@ test("beide Beteiligten koennen Ranglistenspieltermine festlegen und spaeter ohn
     { type: "user", id: "p1", role: "player", name: "Ada Admin" },
     { operationId: "00000000-0000-4000-8000-000000000128", matchId: "match-date-challenger", matchDate: "260917-1800" },
   ), { code: "MATCH_DATE_AFTER_DEADLINE" });
+  await assert.rejects(service.setMatchAppointment(
+    { type: "user", id: "p1", role: "player", name: "Ada Admin" },
+    { operationId: "00000000-0000-4000-8000-000000000136", matchId: "match-date-challenger", matchDate: "260902-1100" },
+  ), { code: "MATCH_DATE_PAST" });
 
   const challengerResult = await service.setMatchAppointment(
     { type: "user", id: "p1", role: "player", name: "Ada Admin" },
@@ -1439,14 +1443,13 @@ test("beide Beteiligten koennen Ranglistenspieltermine festlegen und spaeter ohn
     { type: "user", id: "p2", role: "player", name: "Peter Player" },
     { operationId: "00000000-0000-4000-8000-000000000130", matchId: "match-date-opponent", matchDate: "260906-1800" },
   );
-  const overdueResult = await service.setMatchAppointment(
+  await assert.rejects(service.setMatchAppointment(
     { type: "user", id: "p1", role: "player", name: "Ada Admin" },
     { operationId: "00000000-0000-4000-8000-000000000135", matchId: "match-date-overdue", matchDate: "260805-1800" },
-  );
+  ), { code: "MATCH_DATE_PAST" });
 
   assert.equal(challengerResult.success, true);
   assert.equal(opponentResult.success, true);
-  assert.equal(overdueResult.success, true);
   assert.deepEqual(challengerResult._audit, {
     before: { matchId: "match-date-challenger", competitionId: "cup-1", matchDate: "" },
     after: { matchId: "match-date-challenger", competitionId: "cup-1", matchDate: "260905-1800", recovered: false },
@@ -1456,7 +1459,6 @@ test("beide Beteiligten koennen Ranglistenspieltermine festlegen und spaeter ohn
   assert.deepEqual(events.map(({ matchId, actorId, participantIds }) => ({ matchId, actorId, participantIds })), [
     { matchId: "match-date-challenger", actorId: "p1", participantIds: ["p1", "p2"] },
     { matchId: "match-date-opponent", actorId: "p2", participantIds: ["p1", "p2"] },
-    { matchId: "match-date-overdue", actorId: "p1", participantIds: ["p1", "p2"] },
   ]);
   const changed = await service.setMatchAppointment(
     { type: "user", id: "p2", role: "player", name: "Peter Player" },
@@ -1468,8 +1470,8 @@ test("beide Beteiligten koennen Ranglistenspieltermine festlegen und spaeter ohn
     after: { matchId: "match-date-challenger", competitionId: "cup-1", matchDate: "261020-2000", recovered: false },
   });
   assert.equal(fake.tables.Matches1.find((row) => row[1] === "match-date-challenger")[2], "261020-2000");
-  assert.equal(events[3].previousDate, "260905-1800");
-  assert.equal(events[3].actorId, "p2");
+  assert.equal(events[2].previousDate, "260905-1800");
+  assert.equal(events[2].actorId, "p2");
   await assert.rejects(service.setMatchAppointment(
     { type: "user", id: "p1", role: "player", name: "Ada Admin" },
     { operationId: "00000000-0000-4000-8000-000000000134", matchId: "match-date-challenger", matchDate: "261020-2000" },

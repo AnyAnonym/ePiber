@@ -1987,9 +1987,8 @@ class SheetService {
         throw new AppError("MATCH_DATA_INVALID", "Forderungszeitpunkt ist ungueltig", 503);
       }
       const now = this.now();
-      if (previousDate || !competitionContext.ranking) {
-        if (appointment.getTime() <= now) throw new AppError("MATCH_DATE_PAST", "Der Spieltermin muss in der Zukunft liegen", 409);
-      } else {
+      if (appointment.getTime() <= now) throw new AppError("MATCH_DATE_PAST", "Der Spieltermin muss in der Zukunft liegen", 409);
+      if (!previousDate && competitionContext.ranking) {
         const deadline = challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000;
         if (appointment.getTime() < challengedAt.getTime() || appointment.getTime() > deadline) {
           throw new AppError("MATCH_DATE_AFTER_DEADLINE", "Der erste Spieltermin muss im vierzehntaegigen Zeitkorridor ab der Forderung liegen", 409);

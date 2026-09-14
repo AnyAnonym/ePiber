@@ -876,6 +876,12 @@ body.modal-open {
   background: #2563eb;
 }
 
+.match-date-calendar-day.challenge-agreement {
+  border-color: #a16207;
+  color: #fff;
+  background: #d97706;
+}
+
 .match-date-calendar-day.challenge-end {
   border-color: #991b1b;
   color: #fff;
@@ -893,6 +899,54 @@ body.modal-open {
   background: #eef0f3;
   cursor: default;
   opacity: 1;
+}
+
+.match-date-calendar-day.challenge-start:disabled {
+  border-color: #1d4ed8;
+  color: #fff;
+  background: #2563eb;
+}
+
+.match-date-calendar-day.challenge-agreement:disabled {
+  border-color: #a16207;
+  color: #fff;
+  background: #d97706;
+}
+
+.match-date-calendar-day.challenge-end:disabled {
+  border-color: #991b1b;
+  color: #fff;
+  background: #dc2626;
+}
+
+.match-date-legend {
+  margin: 8px 0;
+  font-size: 0.85rem;
+}
+
+.match-date-legend p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+}
+
+.match-date-legend-marker {
+  width: 12px;
+  height: 12px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  flex: 0 0 12px;
+}
+
+.match-date-legend-marker.challenge-start { background: #2563eb; border-color: #1d4ed8; }
+.match-date-legend-marker.challenge-agreement { background: #d97706; border-color: #a16207; }
+.match-date-legend-marker.challenge-end { background: #dc2626; border-color: #991b1b; }
+
+.match-date-availability {
+  margin: 8px 0;
+  color: #b42318;
+  font-weight: 700;
 }
 
 @media (max-width: 600px) {
