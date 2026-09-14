@@ -254,6 +254,7 @@ test("Terminaudit spiegelt nur kontrollierte Matchfelder ohne Admin-Grund", () =
   repository.record({
     ...common,
     result: "success",
+    before: { matchId: "m1", competitionId: "cup-1", matchDate: "260904-1800" },
     after: { matchId: "m1", competitionId: "cup-1", matchDate: "260905-1800", recovered: true, reasonRecorded: true },
   });
   assert.deepEqual({
@@ -262,7 +263,8 @@ test("Terminaudit spiegelt nur kontrollierte Matchfelder ohne Admin-Grund", () =
     changed: events[0].fields.changed,
     recovered: events[0].fields.recovered,
     reason: events[0].fields.reason,
-  }, { matchId: "m1", competitionId: "cup-1", changed: false, recovered: true, reason: undefined });
+  }, { matchId: "m1", competitionId: "cup-1", changed: true, recovered: true, reason: undefined });
+  assert.deepEqual(repository.get("appointment-audit-1").before, { matchId: "m1", competitionId: "cup-1", matchDate: "260904-1800" });
   repository.close();
 });
 

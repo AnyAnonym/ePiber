@@ -7,6 +7,7 @@ const { hashPayload, timingSafeTextEqual } = require("./security.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const { emailValue, loginValue, passwordHashValue, roleValue } = require("./validators.js");
 const { notificationChannels } = require("./messagingService.js");
+const { hasAnyRole, rolesFromRow } = require("./personRoles.js");
 
 const scryptAsync = promisify(crypto.scrypt);
 const SCRYPT_N = 16384;
@@ -97,13 +98,18 @@ class AuthService {
       gender: genderIdIndex >= 0 ? genderIdIndex : headerIndex(header, "geschlecht"),
       active: headerIndex(header, "aktiv"),
       role: headerIndex(header, "role"),
+      member: headerIndex(header, "mitglied"),
+      admin: headerIndex(header, "admin"),
+      operator: headerIndex(header, "operator"),
       passwordSetup: headerIndex(header, "kennwortvergessen"),
       notification: headerIndex(header, "notification"),
     };
     if ([indexes.id, indexes.firstName, indexes.lastName].some((index) => index < 0)) {
       throw new AppError("SHEET_SCHEMA", "Pflichtspalten der Personen-Tabelle fehlen", 503);
     }
-    return values.slice(1).map((row, offset) => ({
+    return values.slice(1).map((row, offset) => {
+      const roleData = rolesFromRow(header, row);
+      return {
       id: String(row[indexes.id] || "").trim(),
       firstName: String(row[indexes.firstName] || "").trim(),
       lastName: String(row[indexes.lastName] || "").trim(),
@@ -115,14 +121,16 @@ class AuthService {
       birthDate: indexes.birthDate < 0 ? "" : String(row[indexes.birthDate] || "").trim(),
       gender: indexes.gender < 0 ? "" : String(row[indexes.gender] || "").trim(),
       active: indexes.active < 0 || String(row[indexes.active] || "").trim() === "1",
-      role: roleValue(indexes.role < 0 ? "player" : row[indexes.role]),
+      role: roleData.role,
+      roles: roleData.roles,
+      member: roleData.member,
       passwordSetupAllowed: indexes.passwordSetup >= 0 && String(row[indexes.passwordSetup] || "").trim().toLowerCase() === "x",
       notificationChannels: indexes.notification < 0 ? [] : notificationChannels(row[indexes.notification], {
         personId: String(row[indexes.id] || "").trim(),
         rowNumber: offset + 2,
       }),
       rowNumber: offset + 2,
-    })).filter((person) => person.id);
+    }; }).filter((person) => person.id);
   }
 
   findByLogin(login) {
@@ -189,6 +197,8 @@ class AuthService {
       birthDate: person.birthDate,
       gender: person.gender,
       role: person.role,
+      roles: person.roles,
+      member: person.member,
       notificationChannels: person.notificationChannels,
     };
   }
@@ -305,6 +315,8 @@ class AuthService {
         login: person.login,
         email: person.email,
         role: person.role,
+        roles: person.roles,
+        member: person.member,
         ...(!peopleCurrent ? { roleSource: "last_known_good" } : {}),
         name: [person.firstName, person.lastName].filter(Boolean).join(" "),
       },
@@ -339,7 +351,7 @@ class AuthService {
 
   requireRole(token, roles, options) {
     const auth = this.requireUser(token, options);
-    if (!roles.includes(auth.principal.role)) throw new AppError("FORBIDDEN", "Berechtigung fehlt", 403);
+    if (!hasAnyRole(auth.principal, roles)) throw new AppError("FORBIDDEN", "Berechtigung fehlt", 403);
     return auth;
   }
 

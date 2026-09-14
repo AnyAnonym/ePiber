@@ -112,3 +112,9 @@ Neuabschluss beginnt ein neues Korrekturfenster. [Bestaetigt]
 Eine Ergebniskorrektur behaelt bei regulaeren Abschluessen und Retirement
 `MatchStart`, `MatchEnde` und `ErgebnisErfasstAm` bei. Nur die sportliche Leitung
 darf `MatchEnde` mit dokumentiertem Grund korrigieren. [Bestaetigt]
+
+Ein eingetragener Termin eines offenen, vollstaendig besetzten Nicht-BYE-Matches
+kann von einem Beteiligten abgesagt werden. Die sportliche Leitung kann jeden
+zulaessigen Termin mit dokumentiertem Grund absagen. Die Absage leert nur den
+vereinbarten `MatchDate`; sie ist weder ein Walkover noch ein Retirement und
+schliesst das Match nicht ab. [Bestaetigt]

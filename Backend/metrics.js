@@ -188,7 +188,7 @@ function render({ appVersion, processStartedAt, activeHttpRequests, readiness, w
     "epiber_ws_connections", "epiber_ws_requests_active", "epiber_sqlite_open", "epiber_sqlite_ready",
     "epiber_sqlite_writes_total", "epiber_sqlite_failures_total", "epiber_audit_records", "epiber_scorelog_sequence",
     "epiber_people_normalization_current", "epiber_people_normalization_people",
-    "epiber_people_normalization_active_members",
+    "epiber_people_normalization_active_members", "epiber_people_normalization_active_privileged",
     "epiber_people_normalization_affected_people", "epiber_people_normalization_issues",
     "epiber_people_normalization_issue_count",
   ]) metricType(lines, name, name.endsWith("_total") ? "counter" : "gauge");
@@ -220,6 +220,9 @@ function render({ appVersion, processStartedAt, activeHttpRequests, readiness, w
   gauge(lines, "epiber_people_normalization_people", Math.max(0, number(peopleNormalization?.peopleCount)));
   for (const classification of ["player", "player_a", "player_b"]) {
     gauge(lines, "epiber_people_normalization_active_members", Math.max(0, number(peopleNormalization?.activeMemberCounts?.[classification])), { classification });
+  }
+  for (const role of ["admin", "operator"]) {
+    gauge(lines, "epiber_people_normalization_active_privileged", Math.max(0, number(peopleNormalization?.activePrivilegedCounts?.[role])), { role });
   }
   gauge(lines, "epiber_people_normalization_affected_people", Math.max(0, number(peopleNormalization?.affectedCount)));
   gauge(lines, "epiber_people_normalization_issues", Math.max(0, number(peopleNormalization?.issueCount)));

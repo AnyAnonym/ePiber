@@ -4,7 +4,7 @@ const { requestContracts, validateEndpointRequest, validateEndpointResponse } = 
 
 test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
   assert.deepEqual(Object.keys(requestContracts).sort(), [
-    "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
+    "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
     "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "matchResultSuggestion", "matches", "matches1",
     "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
     "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myMessage", "myMessageSummary", "myMessages", "myProfile", "navigator", "normalizePerson", "operationStatus",
@@ -28,6 +28,13 @@ test("Spieltermin akzeptiert nur operationId, Match-ID und kompaktes Datum", () 
   assert.throws(() => validateEndpointRequest("setMatchAppointment", {
     operationId, matchId: "match-1", matchDate: "260905-1830",
   }), { code: "VALIDATION_ERROR" });
+});
+
+test("Spielterminabsage trennt Beteiligte von begruendungspflichtigen Admins", () => {
+  const operationId = "00000000-0000-4000-8000-000000000023";
+  assert.deepEqual(validateEndpointRequest("clearMatchAppointment", { operationId, matchId: "match-1" }), { operationId, matchId: "match-1" });
+  assert.deepEqual(validateEndpointRequest("adminClearMatchAppointment", { operationId, matchId: "match-1", reason: " Korrektur " }), { operationId, matchId: "match-1", reason: "Korrektur" });
+  assert.throws(() => validateEndpointRequest("adminClearMatchAppointment", { operationId, matchId: "match-1", reason: " " }), { code: "VALIDATION_ERROR" });
 });
 
 test("Matchergebnisvertraege sind geschlossen und trennen Spieler- von Adminaktionen", () => {

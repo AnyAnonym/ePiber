@@ -12,6 +12,7 @@ const DEFINITIONS = Object.freeze({
   address: { max: 200 },
   active: { max: 1 },
   role: { max: 16 },
+  member: { max: 8 },
 });
 
 const ROLES = new Map([
@@ -89,6 +90,10 @@ export function canonicalizePersonValue(field, rawValue) {
   if (field === "role") {
     value = ROLES.get(value.toLocaleLowerCase("en-US")) || "";
     if (!value) invalid(field, "Rolle ist ungültig.");
+  }
+  if (field === "member") {
+    value = ROLES.get(value.toLocaleLowerCase("en-US")) || "";
+    if (!["", "player", "player A", "player B"].includes(value)) invalid(field, "Mitglied ist ungültig.");
   }
   return value;
 }

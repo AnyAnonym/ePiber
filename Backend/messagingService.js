@@ -3,6 +3,7 @@ const dataStore = require("./dataStore.js");
 const logger = require("./logger.js");
 const { AppError } = require("./errors.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
+const { hasRole, rolesFromRow } = require("./personRoles.js");
 const { reactionCatalog, reactionByKey } = require("./competitionHistoryReactionCatalog.js");
 
 const warnedInvalidNotifications = new Set();
@@ -100,8 +101,7 @@ class MessagingService {
     return values.slice(1).flatMap((row) => {
       const id = String(row[indexes.id] || "").trim();
       const active = indexes.active < 0 || String(row[indexes.active] || "").trim() === "1";
-      const role = indexes.role < 0 ? "player" : String(row[indexes.role] || "").trim().toLowerCase();
-      if (!id || !active || role !== "admin") return [];
+      if (!id || !active || !hasRole({ roles: rolesFromRow(header, row).roles }, "admin")) return [];
       const name = [row[indexes.firstName], row[indexes.lastName]].map((value) => String(value || "").trim()).filter(Boolean).join(" ");
       return [{ id, name: name || id }];
     });
@@ -230,6 +230,32 @@ class MessagingService {
         ? `Spieltermin für ${firstTeamName} gegen ${secondTeamName} von ${previousDateText} auf ${dateText} geändert.`
         : `${firstTeamName} und ${secondTeamName} haben den Spieltermin für den ${dateText} vereinbart.`,
       detail: [changed ? `Alter Spieltermin: ${previousDateText}; neuer Spieltermin: ${dateText}` : `Spieltermin: ${dateText}`, reason ? `Grund: ${reason}` : ""].filter(Boolean).join("; "),
+    }, participants);
+    return { event, participants: event.participants };
+  }
+
+  async ensureMatchAppointmentCancelledEvent({ operationId, matchId, previousDate, competitionId, participantIds, participantNames = {}, teams = [], actorId, actorName, reason = "", createdAt = this.now() }) {
+    const identity = `appointment-cancelled:${matchId}:${operationId}`;
+    const previousDateText = appointmentText(previousDate);
+    const uniqueIds = [...new Set((participantIds || []).map(String).filter(Boolean))];
+    if (!uniqueIds.length) throw new AppError("MESSAGING_EVENT_INVALID", "Terminereignis besitzt keine Teilnehmer", 500);
+    const namedTeams = teams.slice(0, 2).map((team) => (team || []).map(String).filter(Boolean).map((id) => participantNames[id] || id));
+    if (namedTeams.length !== 2 || namedTeams.some((team) => !team.length)) throw new AppError("MESSAGING_EVENT_INVALID", "Terminereignis besitzt keine vollstaendigen Seiten", 500);
+    const firstTeamName = namedTeams[0].join(" / ");
+    const secondTeamName = namedTeams[1].join(" / ");
+    const participants = uniqueIds.map((userId) => {
+      const ownTeam = teams.findIndex((team) => (team || []).map(String).includes(userId));
+      const opponentName = ownTeam >= 0 ? namedTeams[1 - ownTeam].join(" / ") : "Unbekannt";
+      return this.participant({
+        identity: `${identity}:${userId}`, userId, role: "participant", displayName: participantNames[userId] || userId,
+        type: "appointment_cancelled", subject: `Spieltermin abgesagt mit ${opponentName}`,
+        body: `Der Spieltermin für dein Match gegen ${opponentName} am ${previousDateText} wurde abgesagt.`, allowMissingPerson: true,
+      });
+    });
+    const event = await this.ensureEvent({
+      id: stableId("evt", identity), competitionId, createdAt, type: "appointment_cancelled", source: "match", sourceId: matchId, actorId, actorName,
+      summary: `Spieltermin für ${firstTeamName} gegen ${secondTeamName} am ${previousDateText} abgesagt.`,
+      detail: ["Spieltermin abgesagt", reason ? `Grund: ${reason}` : ""].filter(Boolean).join("; "),
     }, participants);
     return { event, participants: event.participants };
   }
@@ -509,7 +535,7 @@ class MessagingService {
   }
 
   projectComment(comment, principal, interaction) {
-    const admin = principal.role === "admin";
+    const admin = hasRole(principal, "admin");
     const mine = comment.authorId === principal.id;
     const hidden = comment.status === "under_review" && !admin;
     return {
@@ -667,7 +693,7 @@ class MessagingService {
         operationId: params.operationId,
         commentId: params.commentId,
         reactionKey: params.reactionKey,
-        allowUnderReview: principal.role === "admin",
+        allowUnderReview: hasRole(principal, "admin"),
       });
     });
     const summary = this.repository.commentReactionSummaries([params.commentId], principal.id).get(params.commentId);
@@ -676,7 +702,7 @@ class MessagingService {
 
   competitionHistoryCommentReactions(principal, commentId) {
     const details = this.repository.commentReactionDetails(commentId);
-    if (details.comment.status === "under_review" && principal.role !== "admin") {
+    if (details.comment.status === "under_review" && !hasRole(principal, "admin")) {
       throw new AppError("COMPETITION_HISTORY_COMMENT_UNDER_REVIEW", "Kommentar wird geprüft", 403);
     }
     return {

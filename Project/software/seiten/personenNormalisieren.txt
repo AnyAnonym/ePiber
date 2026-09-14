@@ -40,7 +40,7 @@ Personendaten normalisieren - kontrollierte Admin-Datenpflege
   freigegebenen Felder. Bearbeitete Felder und Personen werden sichtbar markiert.
 
 -- Freigegebene Felder und Zielwerte --
-  Genau folgende dreizehn Stringfelder werden projiziert, im Browser sichtbar
+   Genau folgende sechzehn Stringfelder werden projiziert, im Browser sichtbar
   und bearbeitbar dargestellt, in den Fingerprint
   aufgenommen und als Aenderungen akzeptiert:
 
@@ -59,14 +59,22 @@ Personendaten normalisieren - kontrollierte Admin-Datenpflege
     city        Ort, getrimmt, maximal 100 Zeichen
     address     Adresse, getrimmt, maximal 200 Zeichen
     active      leer fuer inaktiv oder `1` fuer aktiv
-    role        `player`, `player A`, `player B`, `operator` oder `admin`
+     role        Legacy: `player`, `player A`, `player B`, `operator` oder `admin`
+     member      leer, `player`, `player A` oder `player B`
+     admin       leer oder `1`
+     operator    leer oder `1`
 
-  `player`, `player A` und `player B` besitzen dieselbe Berechtigungsstufe.
+   `member` bestimmt die fachliche Mitgliederklassifikation; `admin` und
+   `operator` sind davon getrennte Berechtigungsflags. `Admin=1` erbt die
+   Operatorrechte. Sobald mindestens eines der drei neuen Felder belegt ist,
+   bestimmt diese Gruppe die Rechte und `role` ist nur noch sichtbarer
+   Legacywert. Sind alle drei leer, bleibt `role` wirksam. `player`, `player A`
+   und `player B` besitzen dieselbe Spielerberechtigung.
   `GeschlechtID` ist der bevorzugte Sheetheader; `Geschlecht` bleibt
   Legacy-Fallback. Passwort-Hash, Passwortfreigabe, Resetdaten, `CD-ID`, interne
   Zusatzkennungen und alle nicht genannten Spalten werden weder projiziert noch
-  geschrieben. `Login` ist damit das sichtbare und editierbare dreizehnte
-  Browserfeld, nicht nur ein serverseitiger Projektionswert. Die Personen-ID
+   geschrieben. `Login` ist damit ein sichtbares und editierbares Browserfeld,
+   nicht nur ein serverseitiger Projektionswert. Die Personen-ID
   selbst ist notwendiger Bestandteil von
   Projektion, Anzeige und Writeadressierung, aber kein bearbeitbares Feld.
 
@@ -88,7 +96,9 @@ Personendaten normalisieren - kontrollierte Admin-Datenpflege
     ROLE_INVALID            unbekannte Rolle
     ROLE_NONCANONICAL       bekannte Rolle in nicht kanonischer Schreibweise
 
-  Das sind vierzehn Problemcodes. Nur sichere, eindeutig bestimmbare Zielwerte
+   Das sind vierzehn Problemcodes. `ROLE_INVALID` prueft bei aktivem neuen
+   Rollenmodell `Mitglied`, `Admin` und `Operator`; andernfalls prueft er den
+   Legacywert `Role`. Nur sichere, eindeutig bestimmbare Zielwerte
   erhalten die Aktion `Vorschlag uebernehmen`. Kontakt-E-Mail-Dubletten sind kein
   Problem. Doppelte oder syntaktisch ungueltige Logins werden nicht geraten.
 

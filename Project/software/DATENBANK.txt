@@ -194,23 +194,36 @@ historischen Snapshots unveraendert, eine Ergebnisloeschung leert sie.
                      | externe Kanaele fuer diese Person; die Inbox bleibt aktiv.
   Aktiv              | "1" = aktiv. Inaktive Personen koennen sich nicht
                      | anmelden und erscheinen nicht im Mitgliederverzeichnis.
-  Role               | Pflichtspalte: player, player A, player B, operator oder
-                     | admin.
+   Mitglied           | Leere oder fachliche Mitgliederklassifikation `player`,
+                      | `player A` oder `player B`.
+   Admin              | Leer oder `1`; `1` verleiht Administratorrechte.
+   Operator           | Leer oder `1`; `1` verleiht Operatorrechte.
+   Role               | Legacy-Fallback mit `player`, `player A`, `player B`,
+                      | `operator` oder `admin`.
 
 `KennwortVergessen` ist keine allgemeine Import-Pflichtspalte. Fuer die
 Passwort-Erstvergabe muss sie jedoch vorhanden und fuer den Service-Account
 beschreibbar sein; andernfalls lehnt der betreffende Write die Funktion mit
 `SHEET_SCHEMA` ab.
 
-Role-Vertrag:
-  - Die erlaubten normalisierten Werte sind `player`, `player A`, `player B`,
-    `operator` und `admin`. Die drei Playerrollen besitzen dieselbe technische
-    Berechtigungsstufe; A/B ist eine fachliche Mitgliederklassifikation.
-  - Ein leerer Wert wird technisch als `player` behandelt. Beim Rollout muss
-    dennoch jede Zeile explizit migriert werden; mindestens ein aktiver Admin
-    ist erforderlich.
-  - Ein nichtleerer ungueltiger Wert erhaelt ebenfalls nur `player`-Rechte. Pro
-    normalisiertem ungueltigem Wert wird pro Backendprozess einmal gewarnt.
+Rollenvertrag:
+  - Sobald in einer Personenzeile mindestens eines der neuen Felder `Mitglied`,
+    `Admin` oder `Operator` nicht leer ist, bestimmt ausschliesslich diese
+    Dreiergruppe die Rechte; `Role` wird dann ignoriert. Sind alle drei neuen
+    Felder leer, bleibt `Role` der Legacy-Fallback.
+  - `Mitglied` verleiht die technische Spielerrolle; `player`, `player A` und
+    `player B` sind dabei fachliche Klassifikationen mit derselben
+    Spielerberechtigung. Eine leere Mitgliederklassifikation verleiht keine
+    Spielerrechte.
+  - `Admin=1` verleiht Admin- und geerbte Operatorrechte. `Operator=1` verleiht
+    Operatorrechte. Beide Flags koennen neben einer Mitgliederklassifikation
+    gesetzt sein; die effektive Rolle fuer bestehende Antworten ist in der
+    Reihenfolge admin, operator, player bestimmt.
+  - Im Legacy-Fallback entsprechen `admin` den Admin- plus Operatorrechten und
+    `operator` den Operatorrechten; `player`, `player A` und `player B`
+    entsprechen Spielerrechten. Leere oder ungueltige Legacywerte ergeben nur
+    Spielerrechte. Ein nichtleerer ungueltiger Legacywert wird pro
+    normalisiertem Wert und Backendprozess einmal gewarnt.
 
 Normalisierungsvertrag:
   - Zielwerte werden getrimmt. Nachname ist Pflicht; GeburtsDatum ist leer oder
@@ -231,12 +244,12 @@ Normalisierungsvertrag:
     nur beibehalten oder reduzieren; neue oder vergroesserte Konflikte ergeben
     `LOGIN_CONFLICT`.
   - Projiziert, in der Adminoberflaeche sichtbar analysiert, fingerprinted und
-    geschrieben werden genau 13 Stringfelder: Vorname, Nachname, GeburtsDatum,
-    GeschlechtID/Geschlecht, TelefonMobil, E-Mail, Login, Land, PLZ, Ort, Adresse,
-    Aktiv und Role. Damit ist Login wie die anderen kontrollierten Felder
-    personweise reparierbar. `PasswdHash`, `KennwortVergessen`, Resetdaten,
-    `CD-ID` und andere Spalten sind von dieser Projektion und diesem Write
-    ausgeschlossen.
+    geschrieben werden genau 16 Stringfelder: Vorname, Nachname, GeburtsDatum,
+    GeschlechtID/Geschlecht, TelefonMobil, E-Mail, Login, Land, PLZ, Ort,
+    Adresse, Aktiv, Role, Mitglied, Admin und Operator. Damit sind Login und die
+    getrennten Rollenfelder personweise reparierbar. `PasswdHash`,
+    `KennwortVergessen`, Resetdaten, `CD-ID` und andere Spalten sind von dieser
+    Projektion und diesem Write ausgeschlossen.
 
 Login-Loadvertrag:
   - Leere Logins werden akzeptiert. Ungueltige Werte und jede Zeile einer
@@ -256,7 +269,7 @@ Login-Loadvertrag:
 ClubDesk-Mitgliederabgleich:
   - `adminMemberReconciliation` verlangt zusaetzlich die Spalte `CD-ID` und
     projiziert pro Person ausschliesslich ID, getrimmte `CD-ID`, die oben
-    genannten 13 kontrollierten Stringfelder und einen Fingerprint aus `CD-ID`
+    genannten 16 kontrollierten Stringfelder und einen Fingerprint aus `CD-ID`
     plus diesen Feldern. Passwort-, Reset- und sonstige Zusatzfelder werden nicht
     projiziert.
   - Eine `CD-ID` ist eine positive Dezimalzahl ohne Vorzeichen oder fuehrende
@@ -265,8 +278,10 @@ ClubDesk-Mitgliederabgleich:
     umhaengen und keinen bestehenden Login aendern. Importierte Aktivwerte duerfen
     nur `1`, Rollen nur `player`, `player A` oder `player B` sein; bestehende
     Admin-/Operatorrollen sind gegen Importaenderungen geschuetzt.
-  - `create` verlangt Nachname, Aktiv `1` und eine der drei Playerrollen. Alle 13
-    kontrollierten Sheetspalten muessen vorhanden sein; nicht gelieferte Werte
+  - `create` verlangt Nachname, Aktiv `1` und eine der drei
+    Mitgliederklassifikationen. Bei aktivem neuen Rollenmodell ist `Mitglied`
+    massgeblich und `Role` darf nicht geschrieben werden. Alle kontrollierten
+    Sheetspalten muessen vorhanden sein; nicht gelieferte Werte
     werden leer geschrieben. Die neue Personen-ID ist der exakte Nachfolger der
     hoechsten vorhandenen ID. Deshalb muessen fuer Neuanlagen alle bestehenden
     Personen-IDs reine Dezimalzahlen sein; die Berechnung verwendet beliebig
@@ -592,6 +607,14 @@ Projektion fuer alle zwei beziehungsweise vier Beteiligten. Scheitert diese reco
 Ereignispersistenz nach dem Sheetwrite, wird der Fachwrite nicht als eindeutig
 erfolgreich bestaetigt.
 
+Eine nachweisliche Terminabsage erzeugt `appointment_cancelled` mit altem Termin,
+Akteur und je einer privaten Projektion fuer alle zwei beziehungsweise vier
+Beteiligten. Der optionale freie Admin-Grund steht nur im Ereignisdetail, nicht
+in Audit oder Betriebslog. Der persistente Recovery-Plan bindet Match, Bewerb,
+Teilnehmer, Teamseiten, alten Termin und Ereigniszeitpunkt. Nach bestaetigtem
+Leeren von `MatchDate` wird eine fehlende Ereignispersistenz ohne zweiten
+Sheetwrite nachgeholt.
+
 Administrative Korrekturen offener Ranglistenforderungen erzeugen die Typen
 `ranking_challenge_deleted` und `ranking_challenge_date_changed` mit
 Bewerbszuordnung, Adminakteur und je einer richtungsbezogenen Projektion fuer
@@ -725,6 +748,14 @@ Bewerbs-ID, Recoverykennzeichen und bei Adminaktionen nur `reasonRecorded`. Der
 freie Grund steht ausschliesslich in Fachhistorie und Meldungen. Der strukturierte
 Journalabschluss enthaelt nur Match- und Bewerbs-ID sowie Aenderungs- und
 Recoverykennzeichen.
+
+Terminabsagen verwenden `clearMatchAppointment` fuer Beteiligte und
+`adminClearMatchAppointment` fuer Administratoren. Bereits `started` enthaelt
+nur Match-ID; der Abschluss `success`, `failed` oder `unknown` speichert alten
+Termin, Match-/Bewerbs-ID, Recoverykennzeichen und bei Adminaktionen nur
+`reasonRecorded`. Der freie Grund bleibt ausschliesslich in Fachhistorie und
+Meldungen. Der strukturierte Journalabschluss enthaelt nur Match-/Bewerbs-ID und
+Recoverystatus.
 
 Ergebnisoperationen verwenden die Auditaktionen `setMatchResult`,
 `adminSetMatchEnd`, `adminClearMatchResult` und `adminCorrectRankingResult`.
@@ -879,7 +910,8 @@ Tokens, Passwortwerte oder privaten Schluessel.
 ================================================================================
 
 Vor einer produktiven Bereitstellung sind ein Sheet-Backup, die explizite
-Role-Migration, alle oben genannten Pflichtspalten, `Entrydate`, `MatchStart`,
+Rollenmigration mit `Mitglied`, `Admin` und `Operator`, alle oben genannten
+Pflichtspalten, `Entrydate`, `MatchStart`,
 `MatchEnde`, `ErgebnisErfasstAm`, `Spieler1RangBeiErgebnis`,
 `Spieler3RangBeiErgebnis`, die
 sechs strikten Matchtypfelder, Schreibrechte
@@ -887,7 +919,7 @@ fuer Personen, Matches1 und EntryList sowie eindeutige IDs/Metadaten zu pruefen.
 Insbesondere muss `Personen.Login` vor dem Backendstart vorhanden sein; bestehende
 Anmeldekonten brauchen einen gueltigen, kanonischen und eindeutigen Login. Es gibt
 keinen Rueckfall auf Kontakt-E-Mail. Fuer den Mitgliederabgleich muessen `CD-ID`
-und alle 13 kontrollierten Feldspalten vorhanden sein, bestehende `CD-ID`-Werte
+und alle 16 kontrollierten Feldspalten vorhanden sein, bestehende `CD-ID`-Werte
 eindeutig sein und vor Personenneuanlagen alle Personen-IDs aus reinen
 Dezimalzahlen bestehen. Der kontrollierte Mitgliederabgleich darf nicht parallel
 zu manuellen oder zweiten Backendwrites auf `Personen` laufen: Google Sheets
@@ -895,6 +927,17 @@ bietet keine transaktionale Compare-and-set-Operation ueber Zielzeile, ID-,
 `CD-ID`- und Login-Eindeutigkeit. Fingerprints, die serialisierte `players`-Queue,
 Developer Metadata und Bestaetigungsreads sind Schutzschichten, aber kein
 atomarer Ersatz dafuer.
+
+Die kontrollierte Migration wird aus `Backend/` mit
+`node scripts/migratePeopleRoles.js --dry-run` vorgeprueft und erst danach bei
+freigegebenem Sheet-Backup mit `--apply` ausgefuehrt. Sie verlangt die Header
+`ID`, `Aktiv`, `Role`, `Mitglied`, `Admin` und `Operator`, lehnt abweichend
+vorbelegte Zielwerte ab und bestaetigt den Zielstand erneut. Aktive Legacy-
+`player`/`player A`/`player B` werden in die entsprechende
+Mitgliederklassifikation ueberfuehrt, `admin` in `Mitglied=player A` plus
+`Admin=1` und `operator` in `Operator=1` ohne Mitgliederklassifikation;
+inaktive Zeilen erhalten keine Mitgliederklassifikation. Die Legacyspalte wird
+dabei nicht geloescht.
 Auch die A1-Einfuegung einer neuen Ranglistenmitgliedschaft liest die Rangliste
 unmittelbar vor dem Batch ein letztes Mal und verengt damit das Konfliktfenster.
 Google Sheets bietet dennoch kein transaktionales CAS; Ergebniswrites mit

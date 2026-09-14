@@ -140,16 +140,18 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   denselben exklusiven Gesamtpfad. Bei dessen Fehler bleibt der letzte gueltige
   Snapshot aktiv.
 
-`tableSchemas.js`, `tableUtils.js`
+`tableSchemas.js`, `tableUtils.js`, `personRoles.js`
   Kanonisieren Header, erzwingen Pflichtspalten/eindeutige IDs, erfassen
   ungueltige oder kanonisch doppelte Logins als reparierbare
-  Datenqualitaetsprobleme und normalisieren Rollen. Kontakt-E-Mails duerfen leer
-  oder mehrfach vorhanden sein. Leere oder ungueltige Rollen werden als player
-  behandelt; jeder nichtleere ungueltige normalisierte Rollenwert wird pro
-  Prozess einmal gewarnt.
+   Datenqualitaetsprobleme und normalisieren Rollen. `personRoles.js` leitet
+   Spielerklassifikation und Rechte aus `Mitglied`, `Admin` und `Operator` ab;
+   sobald eines dieser Felder belegt ist, bleibt `Role` nur Legacywert. Kontakt-
+   E-Mails duerfen leer oder mehrfach vorhanden sein. Leere oder ungueltige
+   Legacyrollen werden als player behandelt; jeder nichtleere ungueltige
+   normalisierte Legacywert wird pro Prozess einmal gewarnt.
 
 `peopleNormalization.js`, `memberReconciliation.js`
-  Definieren die dreizehn kontrollierten Personenfelder und dieselben
+  Definieren die sechzehn kontrollierten Personenfelder und dieselben
   Kanonisierungs-, Fingerprint-, Login-Konflikt- und Auditprojektionsregeln fuer
   Bestandsnormalisierung und Mitgliederabgleich. Der Abgleich ergaenzt `CD-ID`,
   geschlossene Aktionen fuer Update, Neuanlage und Deaktivierung sowie den Schutz
@@ -279,7 +281,10 @@ Personenzeile ermittelt; fehlt die Person, ist sie inaktiv oder stimmt der Login
   admin           | zusaetzlich Status, Reset/Passwort und Geraeteverwaltung
   device          | nur eigenes Monitorziel, ACK und monitor-command
 
-Leere und ungueltige Personenrollen erhalten minimal `player`. localStorage
+Die effektive Rolle stammt bei neuem Personenmodell aus den unabhaengigen
+Feldern `Mitglied` (Spieler), `Operator=1` und `Admin=1`; Admin erbt Operator.
+Nur wenn alle drei Felder leer sind, liefert `Role` den Legacy-Fallback. Leere
+und ungueltige Legacyrollen erhalten minimal `player`. localStorage
 enthaelt hoechstens eine nicht geheime Browser-deviceId; keine Sessiontokens und
 keine Rollenautoritaet.
 
@@ -389,9 +394,24 @@ Matchtermin:
   gleiche Request liest nach und repariert das stabile Ereignis ohne zweiten
   Sheetwrite und ohne zwischenzeitlich geaenderte Teilnehmer zu benachrichtigen.
   Der ranglistenspezifische Matchtermin-RPC existiert nicht mehr; nur
-  `setMatchAppointment` und `adminSetMatchAppointment` bedienen Rangliste, KO und
-  Round Robin. `match_date_action_failed`, Audit und Abschlusslog verwenden nur
-  kontrollierte Felder und nie den Admin-Grund oder Matchpayload.
+   `setMatchAppointment` und `adminSetMatchAppointment` bedienen Rangliste, KO und
+   Round Robin. `match_date_action_failed`, Audit und Abschlusslog verwenden nur
+   kontrollierte Felder und nie den Admin-Grund oder Matchpayload.
+
+Terminabsage:
+  Die Profilmatchkarte zeigt fuer ein offenes, vollstaendig besetztes,
+  terminiertetes Nicht-BYE-Match die Aktion `Termin absagen`, wenn der aktuelle
+  Principal beteiligt ist und Spielerrechte hat oder Admin ist. Sie sendet
+  `clearMatchAppointment` beziehungsweise den begruendungspflichtigen
+  `adminClearMatchAppointment`. Der stabile, idempotente Write leert nur
+  `MatchDate`, bestaetigt nach Transportverlust ausschliesslich diesen Zielstand
+  und repariert danach ohne zweiten Sheetwrite das Ereignis
+  `appointment_cancelled` samt privaten Meldungen. Audit startet vor der Mutation
+  und endet mit `success`, `failed` oder `unknown`; das Abschlusslog
+  `match_appointment_clear_completed` und die Browserdiagnose
+  `match_appointment_clear_failed` enthalten nur kontrollierte technische
+  Felder. Der freie Admin-Grund bleibt auf Ereignisdetail und private Meldungen
+  beschraenkt.
 
 Ranglistenforderung:
   Nach dem frischen `Matches1`-Read bestimmt der Server die Zeile unmittelbar
@@ -493,7 +513,7 @@ Universelles Matchergebnis:
   dafuer gilt die operative Single-Writer-Beschraenkung.
 
 Personennormalisierung:
-  Adminprojektion -> dreizehn erlaubte Feldwerte + Problemcodes + SHA-256-
+  Adminprojektion -> sechzehn erlaubte Feldwerte + Problemcodes + SHA-256-
   Feldfingerprint -> sichtbares, bearbeitbares `Login`-Feld mit sicherem Vorschlag
   und Einzelauswahl -> lokaler Entwurf und Pflichtvorschau -> `normalizePerson` mit
   Personen-ID, Operation-ID und erwartetem Fingerprint -> aktuelle Volltabelle ->
@@ -966,7 +986,7 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
                       vollstaendig entfernt.
 `loadingHelper.js`    Abschlussgarantien sowie fokussierbare, schliessbare
                       Fehleranzeigen mit erhaltener Support-ID.
-`personValues.js`     Gemeinsame Browserkanonisierung der dreizehn erlaubten
+`personValues.js`     Gemeinsame Browserkanonisierung der sechzehn erlaubten
                       Personenfelder fuer Vorschau und Request.
 `memberImport.js`     Lokaler begrenzter ClubDesk-CSV-Parser, Feldabbildung,
                       Zuordnung, Differenzbildung und Konfliktklassifikation.

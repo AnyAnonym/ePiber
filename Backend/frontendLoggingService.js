@@ -81,6 +81,7 @@ const EVENT_LEVELS = new Map([
   ["match_result_action_failed", "error"],
   ["match_result_suggestion_failed", "warn"],
   ["match_date_action_failed", "error"],
+  ["match_appointment_clear_failed", "error"],
   ["ranking_auth_refresh_failed", "error"],
   ["ranking_busy_data_load_failed", "warn"],
   ["ranking_current_player_blocked", "info"],

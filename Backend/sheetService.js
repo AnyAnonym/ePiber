@@ -31,6 +31,7 @@ const {
 } = require("./memberReconciliation.js");
 const { columnName, headerIndex, headerOf } = require("./tableUtils.js");
 const { assertPlayerLoginConflictsNotWorsened, validateTableValues } = require("./tableSchemas.js");
+const { hasRole, rolesFromRow } = require("./personRoles.js");
 const logger = require("./logger.js");
 const metrics = require("./metrics.js");
 const { acquireSheetTableActivity, executeSheetRead, getSheetReadStatus, rateLimitError } = require("./sheetsReadCoordinator.js");
@@ -1339,6 +1340,10 @@ class SheetService {
       const externalIdIndex = headerIndex(header, "cd-id");
       if (idIndex < 0 || externalIdIndex < 0) throw new AppError("SHEET_SCHEMA", "Personen-Spalten ID oder CD-ID fehlen", 503);
       const projection = projectPeopleReconciliation(values);
+      const usesNewFields = ["mitglied", "admin", "operator"].some((name) => headerIndex(header, name) >= 0);
+      if (usesNewFields && ((request.action === "update" && Object.hasOwn(request.changes, "role")) || (request.action === "create" && Object.hasOwn(request.values, "role")))) {
+        throw new AppError("VALIDATION_ERROR", "Importdaten duerfen Legacy-Role bei aktivem Rollenmodell nicht aendern");
+      }
 
       if (request.action === "create") {
         const existingIds = values.slice(1).map((row) => String(row[idIndex] || "").trim()).filter(Boolean);
@@ -1474,8 +1479,7 @@ class SheetService {
       let targetExternalId = beforeExternalId;
       let changes;
       if (request.action === "deactivate") {
-        const role = String(beforeValues.role || "").trim().toLowerCase();
-        if (["admin", "operator"].includes(role)) {
+        if (hasRole({ roles: rolesFromRow(header, row).roles }, "admin") || hasRole({ roles: rolesFromRow(header, row).roles }, "operator")) {
           throw new AppError("ROLE_PROTECTED", "Admin und Operator duerfen nicht durch den Mitgliederabgleich deaktiviert werden", 409);
         }
         changes = { active: "" };
@@ -1488,10 +1492,6 @@ class SheetService {
         assertUniqueExternalId(projection.people, request.externalId, request.personId);
         targetExternalId = request.externalId;
         changes = request.changes;
-        const currentRole = String(beforeValues.role || "").trim().toLowerCase();
-        if (["admin", "operator"].includes(currentRole) && Object.hasOwn(changes, "role") && changes.role.toLowerCase() !== currentRole) {
-          throw new AppError("ROLE_PROTECTED", "Admin- und Operatorrollen duerfen nicht aus Importdaten geaendert werden", 409);
-        }
       }
 
       const indexes = fieldIndexes(header);
@@ -1501,11 +1501,11 @@ class SheetService {
       const targetsMatch = String(row[externalIdIndex] || "").trim() === targetExternalId
         && Object.entries(changes).every(([field, value]) => String(row[indexes[field]] ?? "") === value);
       if (recoveryOnly && !targetsMatch) {
-        if (["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(request.personId);
+        if (["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(request.personId);
         throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang des Mitgliederabgleichs ist weiterhin unklar", 503, { personId: request.personId });
       }
       if (targetsMatch) {
-        if (recoveryOnly && ["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) {
+        if (recoveryOnly && ["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) {
           this.repository.revokeUserSessions(request.personId);
         }
         return withAudit({ success: true, action: request.action, personId: request.personId, fingerprint: currentFingerprint, repeated: true }, {
@@ -1549,14 +1549,14 @@ class SheetService {
             && Object.entries(changes).every(([field, value]) => String(confirmationRow[indexes[field]] ?? "") === value);
           if (!confirmed) throw error;
         } catch {
-          if (["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(request.personId);
+          if (["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(request.personId);
           throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang des Mitgliederabgleichs ist unklar", 503, { personId: request.personId });
         }
       }
 
       dataStore.set("players", candidate, { source: "write-local", authoritative: false });
       this.scheduleRefresh("players");
-      if (["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(request.personId);
+      if (["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(request.personId);
       const afterProjection = projectPeopleReconciliation(candidate).people.find((person) => person.id === request.personId);
       const changedExternalId = beforeExternalId !== targetExternalId;
       return withAudit({
@@ -1610,11 +1610,11 @@ class SheetService {
 
       if (recoveryOnly) {
         if (!targetsMatch) {
-          if (["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
+          if (["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
           throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang der Personenaenderung ist weiterhin unklar", 503, { personId: params.personId });
         }
         const refreshed = values;
-        if (["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
+        if (["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
         const projected = projectPeopleNormalization(refreshed).people.find((person) => person.id === params.personId);
         return withAudit({ success: true, personId: params.personId, fingerprint: projected?.fingerprint || "", recovered: true }, {
           targetName: [projected?.values.firstName, projected?.values.lastName].map((value) => String(value || "").trim()).filter(Boolean).join(" "),
@@ -1645,18 +1645,12 @@ class SheetService {
       if (!candidateRow) throw new AppError("PERSON_NOT_FOUND", "Person wurde nicht gefunden", 404);
       for (const [field, value] of Object.entries(changes)) candidateRow[indexes[field]] = value;
 
-      const roleIndex = headerIndex(header, "role");
-      const activeIndex = headerIndex(header, "aktiv");
-      const currentRole = String(row[roleIndex] || "").trim().toLowerCase();
-      const targetRole = String(candidateRow[roleIndex] || "").trim().toLowerCase();
-      const targetActive = String(candidateRow[activeIndex] || "").trim();
-      if (params.personId === principal.id && currentRole === "admin" && (targetRole !== "admin" || targetActive !== "1")) {
+        const activeIndex = headerIndex(header, "aktiv");
+        const targetActive = String(candidateRow[activeIndex] || "").trim();
+        if (params.personId === principal.id && hasRole(principal, "admin") && (!hasRole({ roles: rolesFromRow(header, candidateRow).roles }, "admin") || targetActive !== "1")) {
         throw new AppError("ADMIN_SELF_PROTECTION", "Die eigene aktive Adminrolle darf nicht entfernt werden", 409);
       }
-      const activeAdminCount = candidate.slice(1).filter((entry) => (
-        String(entry[roleIndex] || "").trim().toLowerCase() === "admin"
-        && String(entry[activeIndex] || "").trim() === "1"
-      )).length;
+        const activeAdminCount = candidate.slice(1).filter((entry) => String(entry[activeIndex] || "").trim() === "1" && hasRole({ roles: rolesFromRow(header, entry).roles }, "admin")).length;
       if (!activeAdminCount) throw new AppError("LAST_ADMIN_PROTECTION", "Mindestens ein aktiver Admin muss erhalten bleiben", 409);
 
       try {
@@ -1688,7 +1682,7 @@ class SheetService {
           const confirmed = confirmationRow && Object.entries(changes).every(([field, value]) => String(confirmationRow[indexes[field]] ?? "") === value);
           if (!confirmed) throw error;
         } catch {
-          if (["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
+          if (["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
           throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang der Personenaenderung ist unklar", 503, { personId: params.personId });
         }
       }
@@ -1696,7 +1690,7 @@ class SheetService {
       const refreshed = candidate;
       dataStore.set("players", refreshed, { source: "write-local", authoritative: false });
       this.scheduleRefresh("players");
-      if (["login", "active", "role"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
+        if (["login", "active", "role", "member", "admin", "operator"].some((field) => Object.hasOwn(changes, field))) this.repository.revokeUserSessions(params.personId);
       const projected = projectPeopleNormalization(refreshed).people.find((person) => person.id === params.personId);
       return withAudit({ success: true, personId: params.personId, fingerprint: projected?.fingerprint || "" }, {
         targetName: [projected?.values.firstName, projected?.values.lastName].map((value) => String(value || "").trim()).filter(Boolean).join(" "),
@@ -1907,15 +1901,84 @@ class SheetService {
     return this.updateMatchAppointment(principal, params, { endpoint: "adminSetMatchAppointment", admin: true });
   }
 
+  async clearMatchAppointment(principal, params) {
+    return this.clearMatchAppointmentValue(principal, params, { endpoint: "clearMatchAppointment", admin: false });
+  }
+
+  async adminClearMatchAppointment(principal, params) {
+    return this.clearMatchAppointmentValue(principal, params, { endpoint: "adminClearMatchAppointment", admin: true });
+  }
+
+  async clearMatchAppointmentValue(principal, params, options) {
+    const reason = String(params.reason || "").trim();
+    const payload = { matchId: params.matchId, ...(options.admin ? { reason } : {}) };
+    return this.runIdempotent(principal, options.endpoint, params.operationId, payload, ({ recoveryOnly, recoveryDetails, checkpointUnknown }) => this.enqueue("matches1", async () => {
+      if (options.admin) {
+        if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
+        if (!reason || reason.length > 500) throw new AppError("VALIDATION_ERROR", "Grund ist erforderlich", 400);
+      } else if (!["player", "player A", "player B"].some((memberRole) => hasRole(principal, memberRole))) throw new AppError("MATCH_PARTICIPANT_REQUIRED", "Nur Matchbeteiligte duerfen den Spieltermin absagen", 403);
+      requireCurrentData("bewerbe", "bewerbsart", "players");
+      this.cancelScheduledRefresh("matches1");
+      const values = await this.readTable("matches1");
+      dataStore.set("matches1", values, { source: "write-read" });
+      let stable;
+      try { stable = await this.resolveStableRow("matches1", params.matchId, values, "FORMATTED_VALUE"); } catch (error) {
+        if (error.code === "RECORD_NOT_FOUND") throw new AppError("MATCH_NOT_FOUND", "Forderung wurde nicht gefunden", 404);
+        throw error;
+      }
+      const { sheets, metadata, row, header } = stable;
+      const indexes = { ignore: headerIndex(header, "ignore"), date: headerIndex(header, "matchdate"), result: headerIndex(header, "ergebnis"), competition: headerIndex(header, "bewerbid"), participants: ["spieler1id", "spieler2id", "spieler3id", "spieler4id"].map((name) => headerIndex(header, name)) };
+      if ([indexes.date, indexes.result, indexes.competition, indexes.participants[0], indexes.participants[2]].some((index) => index < 0)) throw new AppError("SHEET_SCHEMA", "Matches1-Spalten fuer Spieltermine fehlen", 503);
+      const currentDate = String(row[indexes.date] || "").trim();
+      const previousDate = String(recoveryOnly ? recoveryDetails?.previousDate || "" : currentDate);
+      const participants = indexes.participants.map((index) => index < 0 ? { id: "", retired: false } : parseParticipant(row[index]));
+      const eventSnapshot = recoveryDetails?.eventSnapshot || { competitionId: String(row[indexes.competition] || "").trim(), participantIds: participants.map(({ id }) => id).filter(Boolean), teams: [participants.slice(0, 2).map(({ id }) => id).filter(Boolean), participants.slice(2, 4).map(({ id }) => id).filter(Boolean)], createdAt: this.now() };
+      const ensureEvent = async () => {
+        if (!this.messagingService) throw new AppError("MESSAGING_UNAVAILABLE", "Nachrichtendienst ist nicht verfuegbar", 503);
+        const players = dataStore.get("players"); const playerHeader = headerOf(players); const idIndex = headerIndex(playerHeader, "id"); const firstNameIndex = headerIndex(playerHeader, "vorname"); const lastNameIndex = headerIndex(playerHeader, "nachname");
+        const participantNames = Object.fromEntries(eventSnapshot.participantIds.map((id) => { const player = players.slice(1).find((entry) => String(entry[idIndex] || "").trim() === id); return [id, player ? [player[firstNameIndex], player[lastNameIndex]].map((value) => String(value || "").trim()).filter(Boolean).join(" ") || id : id]; }));
+        try { await this.messagingService.ensureMatchAppointmentCancelledEvent({ operationId: params.operationId, matchId: params.matchId, previousDate, competitionId: eventSnapshot.competitionId, participantIds: eventSnapshot.participantIds, participantNames, teams: eventSnapshot.teams, actorId: principal.id, actorName: principal.name || participantNames[principal.id] || principal.id, reason, createdAt: eventSnapshot.createdAt }); } catch (error) {
+          logger.log("error", "match_appointment_cancellation_event_persistence_failed", { matchId: params.matchId, actorId: principal.id, errorCode: error.code || "MESSAGING_WRITE_FAILED" });
+          throw appointmentRecoveryError("Spieltermin ist geloescht, Meldungen konnten nicht bestaetigt werden", params, { matchId: params.matchId, previousDate, eventSnapshot, phase: "appointment-cancellation-event" });
+        }
+      };
+      if (recoveryOnly) {
+        if (currentDate) throw appointmentRecoveryError("Spielterminloeschung ist noch nicht nachweisbar", params, recoveryDetails);
+        await ensureEvent();
+        logger.log("info", "match_appointment_clear_completed", { matchId: params.matchId, competitionId: eventSnapshot.competitionId, actorId: principal.id, recovered: true });
+        return withAudit({ success: true, matchId: params.matchId, matchDate: "", recovered: true }, { before: { matchId: params.matchId, competitionId: eventSnapshot.competitionId, matchDate: previousDate }, after: { matchId: params.matchId, competitionId: eventSnapshot.competitionId, matchDate: "", recovered: true, ...(options.admin ? { reasonRecorded: true } : {}) } });
+      }
+      const closed = Boolean(String(row[indexes.result] || "").trim() || participants.some(({ retired }) => retired));
+      if ((indexes.ignore >= 0 && String(row[indexes.ignore] || "").trim() === "1") || closed) throw new AppError("MATCH_APPOINTMENT_CLOSED", "Der Spieltermin kann fuer dieses Match nicht mehr geaendert werden", 409);
+      this.assertResultParticipants({ participants, result: String(row[indexes.result] || "").trim(), closed });
+      if (!options.admin && !participants.some(({ id }) => id === String(principal.id))) throw new AppError("MATCH_PARTICIPANT_REQUIRED", "Nur die Beteiligten duerfen den Spieltermin absagen", 403);
+      if (!currentDate) throw new AppError("MATCH_DATE_UNCHANGED", "Es ist kein Spieltermin eingetragen", 409);
+      checkpointUnknown({ phase: "match-date-clear", matchId: params.matchId, previousDate, eventSnapshot });
+      const updates = Array(indexes.date + 1).fill(null); updates[indexes.date] = "";
+      let recovered = false;
+      try {
+        const response = await sheets.spreadsheets.values.batchUpdateByDataFilter({ spreadsheetId: SHEET_ID, requestBody: { valueInputOption: "RAW", data: [{ dataFilter: { developerMetadataLookup: { metadataId: metadata.metadataId } }, majorDimension: "ROWS", values: [updates] }] } }, { timeout: GOOGLE_REQUEST_TIMEOUT_MS });
+        if (Number(response.data.totalUpdatedRows) !== 1) throw new Error("Metadaten-Update hat keine eindeutige Zeile aktualisiert");
+      } catch (error) {
+        const confirmationRow = await this.readMetadataRow(sheets, metadata.metadataId, "FORMATTED_VALUE", "confirmation").catch(() => null);
+        if (!confirmationRow || String(confirmationRow[indexes.date] || "").trim()) throw appointmentRecoveryError("Ausgang der Spielterminloeschung ist unklar", params, { matchId: params.matchId, previousDate, eventSnapshot });
+        recovered = true;
+      }
+      const candidate = structuredClone(values); const candidateRow = candidate.slice(1).find((entry) => String(entry[headerIndex(headerOf(candidate), "id")] || "").trim() === params.matchId); if (candidateRow) candidateRow[indexes.date] = "";
+      dataStore.set("matches1", candidate, { source: "write-local", authoritative: false }); this.scheduleRefresh("matches1"); await ensureEvent();
+      logger.log("info", "match_appointment_clear_completed", { matchId: params.matchId, competitionId: eventSnapshot.competitionId, actorId: principal.id, recovered });
+      return withAudit({ success: true, matchId: params.matchId, matchDate: "", ...(recovered ? { recovered: true } : {}) }, { before: { matchId: params.matchId, competitionId: eventSnapshot.competitionId, matchDate: previousDate }, after: { matchId: params.matchId, competitionId: eventSnapshot.competitionId, matchDate: "", recovered, ...(options.admin ? { reasonRecorded: true } : {}) } });
+    }));
+  }
+
   async updateMatchAppointment(principal, params, options) {
     const reason = String(params.reason || "").trim();
     const payload = { matchId: params.matchId, matchDate: params.matchDate, ...(options.admin ? { reason } : {}) };
     return this.runIdempotent(principal, options.endpoint, params.operationId, payload, ({ recoveryOnly, recoveryDetails, checkpointUnknown }) => this.enqueue("matches1", async () => {
-      const role = String(principal.role || "").toLowerCase();
       if (options.admin) {
-        if (role !== "admin") throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
+        if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
         if (!reason || reason.length > 500) throw new AppError("VALIDATION_ERROR", "Grund ist erforderlich", 400);
-      } else if (!["player", "player a", "player b"].includes(role)) {
+      } else if (!["player", "player A", "player B"].some((memberRole) => hasRole(principal, memberRole))) {
         throw new AppError("MATCH_PARTICIPANT_REQUIRED", "Nur Matchbeteiligte duerfen den Spieltermin festlegen", 403);
       }
       requireCurrentData("bewerbe", "bewerbsart", "players");
@@ -1987,9 +2050,8 @@ class SheetService {
         throw new AppError("MATCH_DATA_INVALID", "Forderungszeitpunkt ist ungueltig", 503);
       }
       const now = this.now();
-      if (previousDate || !competitionContext.ranking) {
-        if (appointment.getTime() <= now) throw new AppError("MATCH_DATE_PAST", "Der Spieltermin muss in der Zukunft liegen", 409);
-      } else {
+      if (appointment.getTime() <= now) throw new AppError("MATCH_DATE_PAST", "Der Spieltermin muss in der Zukunft liegen", 409);
+      if (!previousDate && competitionContext.ranking) {
         const deadline = challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000;
         if (appointment.getTime() < challengedAt.getTime() || appointment.getTime() > deadline) {
           throw new AppError("MATCH_DATE_AFTER_DEADLINE", "Der erste Spieltermin muss im vierzehntaegigen Zeitkorridor ab der Forderung liegen", 409);
@@ -2064,8 +2126,8 @@ class SheetService {
   }
 
   assertResultActor(principal, state) {
-    if (principal.role === "admin") return;
-    if (!["player", "player a", "player b"].includes(String(principal.role || "").toLowerCase())
+    if (hasRole(principal, "admin")) return;
+    if (!["player", "player A", "player B"].some((role) => hasRole(principal, role))
       || !state.participants.some(({ id }) => id === String(principal.id))) {
       throw new AppError("MATCH_PARTICIPANT_REQUIRED", "Nur Matchbeteiligte duerfen Ergebnisse eintragen", 403);
     }
@@ -2268,7 +2330,7 @@ class SheetService {
       changeType = "result_cleared";
     } else {
       this.assertResultActor(principal, state);
-      if (state.closed && principal.role !== "admin") {
+      if (state.closed && !hasRole(principal, "admin")) {
         const capturedAt = parseMatchDate(state.resultCapturedAt);
         if (!capturedAt || this.now() > capturedAt.getTime() + 60 * 60 * 1000) {
           throw new AppError("RESULT_CORRECTION_WINDOW_EXPIRED", "Die Korrekturfrist von 60 Minuten ist abgelaufen", 409);
@@ -2294,9 +2356,9 @@ class SheetService {
         throw new AppError("MATCH_START_CHANGE_FORBIDDEN", "Matchstart darf bei Ergebniskorrekturen nicht geaendert werden", 409);
       }
       if (state.closed && suppliedEnd && suppliedEnd !== state.matchEnd) {
-        throw new AppError("MATCH_END_CHANGE_FORBIDDEN", principal.role === "admin"
+        throw new AppError("MATCH_END_CHANGE_FORBIDDEN", hasRole(principal, "admin")
           ? "Matchende muss ueber die administrative Zeitkorrektur geaendert werden"
-          : "Beteiligte duerfen MatchEnde bei Korrekturen nicht aendern", principal.role === "admin" ? 409 : 403);
+          : "Beteiligte duerfen MatchEnde bei Korrekturen nicht aendern", hasRole(principal, "admin") ? 409 : 403);
       }
       const targetEnd = validated.kind === "walkover" ? "" : state.closed ? state.matchEnd : suppliedEnd;
       const targetStart = validated.kind === "walkover" ? "" : state.closed ? state.matchStart : suppliedStart;
@@ -2750,7 +2812,7 @@ class SheetService {
     const payload = Object.fromEntries(Object.entries(params).filter(([key]) => key !== "operationId"));
     return this.runIdempotent(principal, options.endpoint, params.operationId, payload, ({ recoveryOnly, recoveryDetails, checkpointUnknown }) => this.enqueue("matches1", () => this.enqueue("rlPlatzierung", async () => {
       requireCurrentData("bewerbe", "bewerbsart", "matchtyp", "players");
-      if (options.admin && principal.role !== "admin") throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
+      if (options.admin && !hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
       this.cancelScheduledRefresh("matches1");
       this.cancelScheduledRefresh("rlPlatzierung");
       const [matches, rankings] = await Promise.all([this.readTable("matches1"), this.readTable("rlPlatzierung")]);
@@ -2937,7 +2999,7 @@ class SheetService {
   }
 
   setMatchResult(principal, params) {
-    return this.applyResultOperation(principal, params, { endpoint: "setMatchResult", action: "result", source: principal.role === "admin" ? "admin" : "participant" });
+    return this.applyResultOperation(principal, params, { endpoint: "setMatchResult", action: "result", source: hasRole(principal, "admin") ? "admin" : "participant" });
   }
 
   adminSetMatchEnd(principal, params) {
@@ -2955,7 +3017,7 @@ class SheetService {
   async adminDeleteRankingChallenge(principal, params) {
     const payload = { matchId: params.matchId, reason: params.reason };
     return this.runIdempotent(principal, "adminDeleteRankingChallenge", params.operationId, payload, ({ recoveryOnly, recoveryDetails, checkpointUnknown }) => this.enqueue("matches1", async () => {
-      if (principal.role !== "admin") throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
+      if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
       requireCurrentData("bewerbe", "players");
       this.cancelScheduledRefresh("matches1");
       const values = await this.readTable("matches1");
@@ -3043,7 +3105,7 @@ class SheetService {
     const nextDate = params[options.field];
     const payload = { matchId: params.matchId, [options.field]: nextDate, reason: params.reason };
     return this.runIdempotent(principal, options.endpoint, params.operationId, payload, ({ recoveryOnly, recoveryDetails, checkpointUnknown }) => this.enqueue("matches1", async () => {
-      if (principal.role !== "admin") throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
+      if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorberechtigung fehlt", 403);
       requireCurrentData("bewerbe", "players");
       if (!validCompactDateTime(nextDate)) throw new AppError("MATCH_DATE_INVALID", "Zeitpunkt ist ungueltig", 400);
       if (options.fullHour && !nextDate.endsWith("00")) {

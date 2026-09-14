@@ -31,7 +31,7 @@ const VALUE_FIELDS = Object.freeze([
   "city",
   "address",
   "active",
-  "role",
+  "member",
 ]);
 
 const HEADER_FIELDS = Object.freeze({
@@ -180,7 +180,11 @@ function controlledPerson(person) {
   return {
     id: String(person?.id ?? ""),
     externalId: String(person?.externalId ?? "").trim(),
-    values: controlledValues(person?.values),
+    values: {
+      ...controlledValues(person?.values),
+      admin: String(person?.values?.admin ?? "").trim(),
+      operator: String(person?.values?.operator ?? "").trim(),
+    },
     fingerprint: String(person?.fingerprint ?? ""),
   };
 }
@@ -208,9 +212,9 @@ function differencesFor(record, person) {
   const differences = [];
   for (const field of VALUE_FIELDS) {
     if (field === "login") continue;
+    if (field === "member" && (person.values.admin === "1" || person.values.operator === "1")) continue;
     const imported = record.values[field];
     if (!imported) continue;
-    if (field === "role" && ["admin", "operator"].includes(person.values.role.trim().toLowerCase())) continue;
     const before = person.values[field];
     if (comparisonValue(field, before) !== comparisonValue(field, imported)) {
       differences.push({ field, before, import: imported });
@@ -263,7 +267,7 @@ export function parseClubDeskCsv(arrayBuffer) {
       values[field] = String(row[indexes.get(headerName)] ?? "").trim();
     }
     values.gender = genderValue(row[indexes.get("Geschlecht")] ?? "");
-    values.role = groupRole(row[indexes.get("[Gruppen]")] ?? "");
+    values.member = groupRole(row[indexes.get("[Gruppen]")] ?? "");
     values.active = "1";
     const phone = phoneValue(values.phone);
     values.phone = phone.value;
@@ -383,9 +387,9 @@ export function compareClubDeskMembers(importRecords, serverPeople) {
   }
   for (const person of people) {
     if (handledPeople.has(person.id)) continue;
-    const role = person.values.role.trim().toLowerCase();
     const inactive = person.values.active.trim() !== "1";
-    if (inactive || role === "admin" || role === "operator") {
+    const privileged = person.values.admin === "1" || person.values.operator === "1";
+    if (inactive || privileged) {
       result.identical.push(comparisonEntry("identical", null, person));
     } else {
       result.missing.push(comparisonEntry("missing", null, person, {

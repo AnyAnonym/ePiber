@@ -264,6 +264,26 @@
       "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "{deployment=\"$deployment\",service=\"epiber-backend\"} | json | event=\"frontend_client_event\" | frontendEvent=~\"people_normalization_.*\" | keep frontendEvent, code, supportId | line_format \"{{.frontendEvent}} | {{.code}} | Support {{.supportId}}\"", "queryType": "range", "refId": "A" }],
       "title": "Browserdiagnosen der Normalisierungsseite",
       "type": "logs"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "decimals": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 60 },
+      "id": 26,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "editorMode": "code", "expr": "epiber_people_normalization_active_privileged{deployment=\"$deployment\",role=\"admin\"} and on(deployment) (epiber_people_normalization_current{deployment=\"$deployment\"} == 1)", "instant": true, "legendFormat": "Admins", "range": false, "refId": "A" }],
+      "title": "Aktive Admins",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "decimals": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 60 },
+      "id": 27,
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "editorMode": "code", "expr": "epiber_people_normalization_active_privileged{deployment=\"$deployment\",role=\"operator\"} and on(deployment) (epiber_people_normalization_current{deployment=\"$deployment\"} == 1)", "instant": true, "legendFormat": "Operatoren", "range": false, "refId": "A" }],
+      "title": "Aktive Operatoren",
+      "type": "stat"
     }
   ],
   "refresh": "30s",

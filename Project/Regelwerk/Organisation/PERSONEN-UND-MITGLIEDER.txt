@@ -18,9 +18,16 @@ verwendet werden und verleiht fuer sich allein keine Loginberechtigung.
 2. MITGLIEDERKLASSIFIKATION
 ===========================
 
-`player A` und `player B` kennzeichnen die fachliche A-/B-Mitgliedschaft. Beide
-sind gemeinsam mit `player` fachlich gleichgestellt. Trainer-, Vorstands- oder
-andere Vereinsfunktionen erzeugen keine eigene Spielerrolle. [Bestaetigt]
+`Mitglied` enthaelt leer, `player`, `player A` oder `player B`. `player A` und
+`player B` kennzeichnen die fachliche A-/B-Mitgliedschaft; alle drei Werte sind
+sportlich gleichgestellt. `Admin=1` und `Operator=1` sind davon getrennte
+Berechtigungsflags. Ein Admin besitzt auch Operatorrechte. Trainer-, Vorstands-
+oder andere Vereinsfunktionen erzeugen weder eine Mitgliederklassifikation noch
+eine Berechtigung. [Bestaetigt]
+
+Sobald mindestens eines der Felder Mitglied, Admin oder Operator in einer Person
+belegt ist, gelten diese drei Felder und nicht mehr das historische Feld `Role`.
+Sind alle drei leer, wird `Role` als Legacy-Fallback gelesen. [Bestaetigt]
 
 
 3. PERSONENNORMALISIERUNG
@@ -46,9 +53,11 @@ abgeschlossene Personenaktionen bleiben bei einem spaeteren Fehler bestehen.
 [Bestaetigt]
 
 Der Abgleich darf Personen anlegen, eine ClubDesk-ID zuordnen,
-Mitgliederklassifikation und Aktivstatus pflegen. Bestehende Logins werden durch
-den Import niemals geaendert. Admins und Operatoren werden bei Exportabwesenheit
-nicht automatisch deaktiviert oder auf eine Spielerrolle reduziert. [Bestaetigt]
+Mitgliederklassifikation und Aktivstatus pflegen. Er schreibt weder Admin- noch
+Operatorflags und aendert bei aktivem neuen Rollenmodell auch das Legacyfeld
+`Role` nicht. Bestehende Logins werden durch den Import niemals geaendert.
+Admins und Operatoren werden bei Exportabwesenheit nicht automatisch deaktiviert
+oder auf eine Spielerrolle reduziert. [Bestaetigt]
 
 
 5. ABGRENZUNG DER BEIDEN ABLAEUFE

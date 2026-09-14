@@ -26,9 +26,11 @@ const readMyMessage = createEndpoint("myMessage");
 const acknowledgeMessage = createEndpoint("acknowledgeMessage");
 const addMatch = createEndpoint("addMatch");
 const setMatchAppointment = createEndpoint("setMatchAppointment");
+const clearMatchAppointment = createEndpoint("clearMatchAppointment");
 const adminDeleteRankingChallenge = createEndpoint("adminDeleteRankingChallenge");
 const adminSetRankingChallengeDate = createEndpoint("adminSetRankingChallengeDate");
 const adminSetMatchAppointment = createEndpoint("adminSetMatchAppointment");
+const adminClearMatchAppointment = createEndpoint("adminClearMatchAppointment");
 const matchResultSuggestion = createEndpoint("matchResultSuggestion");
 const setMatchResult = createEndpoint("setMatchResult");
 const adminSetMatchEnd = createEndpoint("adminSetMatchEnd");
@@ -38,6 +40,7 @@ const withdrawFromRanking = createEndpoint("withdrawFromRanking");
 const readWithdrawnRankingPlayers = createEndpoint("withdrawnRankingPlayers");
 let withdrawContext = null;
 let matchDateContext = null;
+let matchAppointmentClearContext = null;
 let matchCalendarMonth = null;
 let adminRankingActionContext = null;
 let matchResultContext = null;
@@ -58,6 +61,11 @@ function errorMessage(value, fallback) {
   if (typeof value?.error === "string") return value.error;
   if (value?.message) return value.message;
   return fallback;
+}
+
+function isAdmin() {
+  const user = getUser();
+  return Array.isArray(user?.roles) ? user.roles.includes("admin") : user?.role === "admin";
 }
 
 function setLoginStatus(message = "") {
@@ -125,6 +133,7 @@ function closeModal(modal) {
   }
   if (modal?.id === "withdrawModal") withdrawContext = null;
   if (modal?.id === "matchDateModal") matchDateContext = null;
+  if (modal?.id === "matchAppointmentClearModal") matchAppointmentClearContext = null;
   if (modal?.id === "adminRankingActionModal") adminRankingActionContext = null;
   if (modal?.id === "matchResultModal") {
     matchResultContext = null;
@@ -133,6 +142,7 @@ function closeModal(modal) {
   }
   if (modal?.id === "profileModal") {
     closeModal(matchDateModal);
+    closeModal(matchAppointmentClearModal);
     closeModal(adminRankingActionModal);
     closeModal(matchResultModal);
     closeModal(messageDetailModal);
@@ -342,6 +352,8 @@ const matchDateModal = createModal("matchDateModal", `
       <div class="match-date-weekdays" aria-hidden="true"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
       <div id="matchDateCalendarDays" class="match-date-calendar-days" role="grid"></div>
     </div>
+    <div id="matchDateLegend" class="match-date-legend" aria-live="polite"></div>
+    <p id="matchDateAvailability" class="match-date-availability" role="status" aria-live="polite"></p>
     <label for="rankingMatchHour">Uhrzeit:</label>
     <select id="rankingMatchHour" name="rankingMatchHour" required>
       ${Array.from({ length: 18 }, (_, index) => `<option value="${String(index + 6).padStart(2, "0")}">${String(index + 6).padStart(2, "0")}:00 Uhr</option>`).join("")}
@@ -357,6 +369,22 @@ matchDateModal.setAttribute("role", "dialog");
 matchDateModal.setAttribute("aria-modal", "true");
 matchDateModal.setAttribute("aria-labelledby", "matchDateTitle");
 matchDateModal.querySelector(".close")?.setAttribute("aria-label", "Terminauswahl schließen");
+
+const matchAppointmentClearModal = createModal("matchAppointmentClearModal", `
+  <h2 id="matchAppointmentClearTitle">Spieltermin absagen</h2>
+  <p>Der eingetragene Spieltermin wird gelöscht. Die Beteiligten werden informiert.</p>
+  <form id="matchAppointmentClearForm">
+    <div id="matchAppointmentClearReasonFields" hidden>
+      <label for="matchAppointmentClearReason">Grund:</label>
+      <textarea id="matchAppointmentClearReason" name="reason" maxlength="500" placeholder="Bitte geben Sie den Grund ein..."></textarea>
+    </div>
+    <button type="submit" class="btn-login admin-danger">Termin verbindlich absagen</button>
+  </form>
+`, { explicitDismiss: true });
+matchAppointmentClearModal.setAttribute("role", "dialog");
+matchAppointmentClearModal.setAttribute("aria-modal", "true");
+matchAppointmentClearModal.setAttribute("aria-labelledby", "matchAppointmentClearTitle");
+matchAppointmentClearModal.querySelector(".close")?.setAttribute("aria-label", "Terminabsage schließen");
 
 const adminRankingActionModal = createModal("adminRankingActionModal", `
   <h2 id="adminRankingActionTitle">Forderung bearbeiten</h2>
@@ -869,6 +897,14 @@ function appendMatchCard(panel, profile, competition, match, signal) {
     appointmentButton.addEventListener("click", () => openMatchDateModal(match, profile, competition), { signal });
     actions.appendChild(appointmentButton);
   }
+  if (match.canClearMatchAppointment) {
+    const clearAppointmentButton = document.createElement("button");
+    clearAppointmentButton.type = "button";
+    clearAppointmentButton.className = `btn-login${isAdmin() ? " admin-danger" : ""}`;
+    clearAppointmentButton.textContent = "Termin absagen";
+    clearAppointmentButton.addEventListener("click", () => openMatchAppointmentClearModal(match, profile, competition), { signal });
+    actions.appendChild(clearAppointmentButton);
+  }
   if (getUser()?.role === "admin" && competition.ranking === true && match.status === "completed") {
     const repairButton = document.createElement("button");
     repairButton.type = "button";
@@ -1014,6 +1050,49 @@ function calendarDayValue(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
+function compactDateFromDate(date) {
+  const part = (value) => String(value).padStart(2, "0");
+  return `${String(date.getFullYear()).slice(-2)}${part(date.getMonth() + 1)}${part(date.getDate())}-${part(date.getHours())}${part(date.getMinutes())}`;
+}
+
+function dayHasSelectableMatchHour(day, context) {
+  return Array.from({ length: 18 }, (_, index) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), index + 6).getTime())
+    .some((timestamp) => timestamp > context.earliestAt && (!context.latestAt || timestamp <= context.latestAt));
+}
+
+function renderMatchDateLegend() {
+  const legend = document.getElementById("matchDateLegend");
+  const availability = document.getElementById("matchDateAvailability");
+  if (!legend || !availability || !matchDateContext) return;
+  legend.replaceChildren();
+  availability.textContent = "";
+  if (!matchDateContext.ranking || !matchDateContext.challengedAt) {
+    legend.hidden = true;
+    availability.hidden = true;
+    return;
+  }
+  const entries = [
+    ["challenge-start", "Forderung ausgesprochen", matchDateContext.challengedAt],
+    ["challenge-agreement", "Termin festlegen bis", matchDateContext.agreementDeadlineAt],
+    ["challenge-end", "Spieltermin spätestens", matchDateContext.appointmentDeadlineAt],
+  ];
+  for (const [className, label, date] of entries) {
+    const line = document.createElement("p");
+    const marker = document.createElement("span");
+    marker.className = `match-date-legend-marker ${className}`;
+    marker.setAttribute("aria-hidden", "true");
+    line.append(marker, `${label}: ${formatCompactDate(compactDateFromDate(date))}`);
+    legend.appendChild(line);
+  }
+  legend.hidden = false;
+  if (matchDateContext.appointmentDeadlineAt.getTime() <= matchDateContext.earliestAt) {
+    availability.textContent = "Die Frist für einen Spieltermin ist bereits abgelaufen.";
+    availability.hidden = false;
+  } else {
+    availability.hidden = true;
+  }
+}
+
 function renderMatchDateCalendar() {
   if (!matchCalendarMonth || !matchDateContext) return;
   const monthLabel = document.getElementById("matchDateCalendarMonth");
@@ -1035,9 +1114,10 @@ function renderMatchDateCalendar() {
     const timestamp = calendarDayValue(date);
     const inOriginalWindow = matchDateContext.ranking
       && timestamp >= matchDateContext.challengeDay && timestamp <= matchDateContext.finalDay;
-    const selectable = matchDateContext.previousDate || !matchDateContext.ranking
+    const inRange = matchDateContext.previousDate || !matchDateContext.ranking
       ? timestamp >= matchDateContext.today
       : inOriginalWindow;
+    const selectable = inRange && dayHasSelectableMatchHour(date, matchDateContext);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "match-date-calendar-day";
@@ -1047,6 +1127,7 @@ function renderMatchDateCalendar() {
     button.setAttribute("aria-label", new Intl.DateTimeFormat("de-AT", { dateStyle: "long" }).format(date));
     button.classList.toggle("in-window", inOriginalWindow);
     button.classList.toggle("challenge-start", timestamp === matchDateContext.challengeDay);
+    button.classList.toggle("challenge-agreement", timestamp === matchDateContext.agreementDay);
     button.classList.toggle("challenge-end", timestamp === matchDateContext.finalDay);
     button.classList.toggle("selected", value === selectedValue);
     if (selectable) button.addEventListener("click", () => {
@@ -1088,13 +1169,15 @@ function openMatchDateModal(match, profile, competition) {
   const hourInput = document.getElementById("rankingMatchHour");
   const reasonFields = document.getElementById("matchDateReasonFields");
   const reasonInput = document.getElementById("matchDateReason");
-  const admin = getUser()?.role === "admin";
+  const admin = isAdmin();
   const today = new Date(Date.now());
   const now = today.getTime();
   today.setHours(0, 0, 0, 0);
   const ranking = competition?.ranking === true;
   const challengedAt = ranking ? compactDateValue(match.challengeDate) : null;
-  const finalDay = challengedAt ? new Date(challengedAt.getFullYear(), challengedAt.getMonth(), challengedAt.getDate() + 14) : today;
+  const agreementDeadlineAt = challengedAt ? new Date(challengedAt.getTime() + 7 * 24 * 60 * 60 * 1000) : null;
+  const appointmentDeadlineAt = challengedAt ? new Date(challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000) : null;
+  const finalDay = appointmentDeadlineAt || today;
   matchDateContext = {
     matchId,
     playerId: String(profile?.id || ""),
@@ -1102,12 +1185,16 @@ function openMatchDateModal(match, profile, competition) {
     previousDate: String(match.matchDate || ""),
     ranking,
     admin,
-    earliestAt: currentDate ? now : challengedAt?.getTime() || now,
-    earliestExclusive: Boolean(currentDate || !ranking),
-    latestAt: currentDate || !challengedAt ? null : challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000,
+    earliestAt: currentDate || !challengedAt ? now : Math.max(now, challengedAt.getTime()),
+    earliestExclusive: true,
+    latestAt: currentDate || !appointmentDeadlineAt ? null : appointmentDeadlineAt.getTime(),
     today: calendarDayValue(today),
     challengeDay: challengedAt ? calendarDayValue(challengedAt) : calendarDayValue(today),
+    agreementDay: agreementDeadlineAt ? calendarDayValue(agreementDeadlineAt) : calendarDayValue(today),
     finalDay: calendarDayValue(finalDay),
+    challengedAt,
+    agreementDeadlineAt,
+    appointmentDeadlineAt,
   };
   reasonFields.hidden = !admin;
   reasonInput.disabled = !admin;
@@ -1124,10 +1211,29 @@ function openMatchDateModal(match, profile, competition) {
   }
   const visibleDate = compactDateValue(`${dayInput.value.replaceAll("-", "").slice(2)}-0000`) || today;
   matchCalendarMonth = new Date(visibleDate.getFullYear(), visibleDate.getMonth(), 1);
+  renderMatchDateLegend();
   renderMatchDateCalendar();
   updateMatchDateHours();
   openModal(matchDateModal);
   matchDateModal.querySelector(".match-date-calendar-day.selected:not(:disabled), .match-date-calendar-day:not(:disabled)")?.focus();
+}
+
+function openMatchAppointmentClearModal(match, profile, competition) {
+  const matchId = String(match?.matchId || "").trim();
+  if (!matchId || !match.matchDate) {
+    window.showToast("Der Spieltermin konnte nicht eindeutig zugeordnet werden.", "error");
+    return;
+  }
+  const admin = isAdmin();
+  const reasonFields = document.getElementById("matchAppointmentClearReasonFields");
+  const reasonInput = document.getElementById("matchAppointmentClearReason");
+  matchAppointmentClearContext = { matchId, playerId: String(profile?.id || ""), competitionId: String(competition?.competitionId || ""), admin };
+  reasonFields.hidden = !admin;
+  reasonInput.disabled = !admin;
+  reasonInput.required = admin;
+  reasonInput.value = "";
+  openModal(matchAppointmentClearModal);
+  (admin ? reasonInput : matchAppointmentClearModal.querySelector('button[type="submit"]'))?.focus();
 }
 
 function appendMatchDateCountdown(container, challenge, signal) {
@@ -1624,9 +1730,22 @@ window.openProfileModal = async (options = {}) => {
         const challengeBlock = document.createElement("div");
         challengeBlock.className = "profile-open-challenge";
         const challengedAtLine = document.createElement("p");
-        challengedAtLine.textContent = `Forderung vom ${formatCompactDate(challenge.challengedAt)}`;
-        challengeBlock.append(challengedAtLine);
-        if (ownProfile || sessionUser?.role === "admin") appendMatchDateCountdown(challengeBlock, challenge, actionSignal);
+        challengedAtLine.textContent = `Forderung ausgesprochen: ${formatCompactDate(challenge.challengedAt)}`;
+        const opponentLine = document.createElement("p");
+        opponentLine.textContent = `Gegner: ${String(challenge.opponentName || "Unbekannt").trim() || "Unbekannt"}`;
+        const challengedAt = compactDateValue(challenge.challengedAt);
+        if (challengedAt && !challenge.matchDate) {
+          const agreementDeadline = new Date(challengedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+          const appointmentDeadline = new Date(challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+          const agreementDeadlineLine = document.createElement("p");
+          agreementDeadlineLine.textContent = `Termin festlegen bis: ${formatCompactDate(compactDateFromDate(agreementDeadline))}`;
+          const appointmentDeadlineLine = document.createElement("p");
+          appointmentDeadlineLine.textContent = `Spieltermin spätestens: ${formatCompactDate(compactDateFromDate(appointmentDeadline))}`;
+          challengeBlock.append(challengedAtLine, opponentLine, agreementDeadlineLine, appointmentDeadlineLine);
+        } else {
+          challengeBlock.append(challengedAtLine, opponentLine);
+        }
+        if (!challenge.matchDate && (ownProfile || sessionUser?.role === "admin")) appendMatchDateCountdown(challengeBlock, challenge, actionSignal);
         panel.appendChild(challengeBlock);
       }
       if (ranking.status === "withdrawn" && ranking.withdrawal) {
@@ -2220,6 +2339,37 @@ document.getElementById("matchDateForm").addEventListener("submit", async (event
   } finally {
     setModalBusy(form, false);
     submitButton.textContent = "Übernehmen";
+  }
+});
+
+document.getElementById("matchAppointmentClearForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!matchAppointmentClearContext) return;
+  const context = { ...matchAppointmentClearContext };
+  const reason = form.elements.reason.value.trim();
+  if (context.admin && !reason) {
+    window.showToast("Bitte gib einen Grund an.", "error");
+    form.elements.reason.focus();
+    return;
+  }
+  const operationKey = `match:appointment-clear:${context.matchId}:${context.admin ? reason : ""}`;
+  setModalBusy(form, true);
+  try {
+    const request = { operationId: getOperationId(operationKey), matchId: context.matchId };
+    if (context.admin) request.reason = reason;
+    const result = await (context.admin ? adminClearMatchAppointment : clearMatchAppointment)(request);
+    if (!result.data?.success) throw new Error(errorMessage(result.data, "Spieltermin konnte nicht abgesagt werden."));
+    releaseOperationId(operationKey);
+    closeModal(matchAppointmentClearModal);
+    window.showToast("Der Spieltermin wurde abgesagt.", "success");
+    window.openProfileModal({ playerId: context.playerId, competitionId: context.competitionId });
+  } catch (error) {
+    releaseOperationId(operationKey, error);
+    diagnostic.error("match_appointment_clear_failed", error);
+    window.showToast(errorMessage(error, "Spieltermin konnte nicht abgesagt werden."), "error");
+  } finally {
+    setModalBusy(form, false);
   }
 });
 

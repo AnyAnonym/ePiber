@@ -79,12 +79,15 @@ Mitglieder abgleichen - kontrollierter ClubDesk-Import
   senkrechtem Strich oder Zeilenende getrennt. `A-Mitglieder` sowie
   `A-Mitglieder (<Funktion>)` ergeben vorrangig `player A`; danach ergeben
   `B-Mitglieder` und `B-Mitglieder (<Funktion>)` `player B`; alle anderen
-  Gruppen ergeben `player`. Trainer-, Vorstands- und sonstige Funktionsgruppen
-  besitzen keine eigene Rollenwirkung. Bei bestehenden Admins und Operatoren
-  wird die Rolle nie aus Importgruppen geaendert. Leere Importwerte ueberschreiben
-  keine Bestandswerte. Zusammen mit dem nur fuer eindeutige Neuanlagen erzeugten
-  `login` sind genau die dreizehn kontrollierten Personenfelder der
-  Bestandsnormalisierung schreibbar; die CD-ID bleibt eine getrennte Verknuepfung.
+   Gruppen ergeben `player`. Trainer-, Vorstands- und sonstige Funktionsgruppen
+   besitzen keine eigene Rollenwirkung. Bei bestehenden Personen mit `Admin=1`
+   oder `Operator=1` wird die Mitgliederklassifikation nicht aus Importgruppen
+   geaendert. Der Import schreibt niemals `Admin` oder `Operator`; bei aktivem
+   neuen Rollenmodell schreibt er auch nicht das Legacyfeld `Role`. Leere
+   Importwerte ueberschreiben keine Bestandswerte. Zusammen mit dem nur fuer
+   eindeutige Neuanlagen erzeugten `login` sind die kontrollierten Personenfelder
+   der Bestandsnormalisierung schreibbar; die CD-ID bleibt eine getrennte
+   Verknuepfung.
 
   Nicht sicher vergleichbare oder ungueltige Datensaetze verwenden:
 
@@ -148,11 +151,11 @@ Mitglieder abgleichen - kontrollierter ClubDesk-Import
   automatisch neu. Nach vollstaendigem Erfolg wird ohne Auswahl neu geladen.
 
 -- Backendkonflikte, Idempotenz und unklarer Ausgang --
-  Das Backend akzeptiert nur die geschlossenen Aktionen `update`, `create` und
-  `deactivate`. Bestandsupdates duerfen Login nicht aendern, importierte Personen
-  nur aktiv halten und nur Spielerrollen setzen. Create verlangt Nachname,
-  `active = 1` und `player`, `player A` oder `player B`; Passwort-, Reset- und
-  interne Felder bleiben leer. Neue interne IDs werden in der serialisierten
+   Das Backend akzeptiert nur die geschlossenen Aktionen `update`, `create` und
+   `deactivate`. Bestandsupdates duerfen Login nicht aendern, importierte Personen
+   nur aktiv halten und nur Mitgliederklassifikationen setzen. Create verlangt
+   Nachname, `active = 1` und `member` mit `player`, `player A` oder `player B`;
+   Passwort-, Reset- und interne Felder bleiben leer. Neue interne IDs werden in der serialisierten
   `players`-Queue als exakte Folge der hoechsten numerischen ID vergeben.
 
   Vor jedem Write werden aktuelle stabile Sheetzeile, Fingerprint, CD-ID- und

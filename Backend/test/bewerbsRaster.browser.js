@@ -13,6 +13,7 @@ let user = null;
 const listeners = new Set();
 export const ready = Promise.resolve();
 export const getUser = () => user;
+export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
 export function subscribeAuth(callback) {
   listeners.add(callback);
   queueMicrotask(() => callback(user));

@@ -2,6 +2,7 @@ const { AppError } = require("./errors.js");
 const { hashPayload } = require("./security.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const { emailValue, loginValue } = require("./validators.js");
+const { memberRole, rolesFromRow } = require("./personRoles.js");
 
 const FIELD_DEFINITIONS = Object.freeze({
   firstName: { headers: ["vorname"], max: 100 },
@@ -17,6 +18,9 @@ const FIELD_DEFINITIONS = Object.freeze({
   address: { headers: ["adresse"], max: 200 },
   active: { headers: ["aktiv"], max: 1 },
   role: { headers: ["role"], max: 16 },
+  member: { headers: ["mitglied"], max: 8 },
+  admin: { headers: ["admin"], max: 1 },
+  operator: { headers: ["operator"], max: 1 },
 });
 
 const ROLE_VALUES = new Map([
@@ -62,6 +66,9 @@ const AUDIT_FIELD_LABELS = Object.freeze([
   ["address", "Adresse"],
   ["active", "Aktiv"],
   ["role", "Rolle"],
+  ["member", "Mitglied"],
+  ["admin", "Admin"],
+  ["operator", "Operator"],
 ]);
 
 function fieldIndexes(header) {
@@ -135,6 +142,13 @@ function validateTargetValue(field, rawValue) {
     const role = canonicalRole(value);
     if (!role) throw new AppError("VALIDATION_ERROR", "Role ist ungueltig");
     value = role;
+  }
+  if (field === "member") {
+    value = memberRole(value);
+    if (!value && rawValue.trim()) throw new AppError("VALIDATION_ERROR", "Mitglied ist ungueltig");
+  }
+  if (["admin", "operator"].includes(field) && !["", "1"].includes(value)) {
+    throw new AppError("VALIDATION_ERROR", `${field} muss leer oder 1 sein`);
   }
   return value;
 }
@@ -225,10 +239,17 @@ function analyzePerson(values, duplicateLogins) {
   if (!["", "1"].includes(active)) issues.push(issue("active", "ACTIVE_NONCANONICAL", "Aktiv muss leer oder 1 sein", active === "0" ? "" : undefined));
   else if (values.active !== active) issues.push(issue("active", "EDGE_WHITESPACE", "Rand-Leerraum im Aktivstatus", active));
 
+  const usesNewFields = [values.member, values.admin, values.operator].some((value) => value.trim());
   const role = values.role.trim();
   const normalizedRole = canonicalRole(role);
-  if (!normalizedRole) issues.push(issue("role", "ROLE_INVALID", "Role ist ungueltig"));
-  else if (values.role !== normalizedRole) issues.push(issue("role", "ROLE_NONCANONICAL", "Role ist nicht kanonisch geschrieben", normalizedRole));
+  if (!usesNewFields) {
+    if (!normalizedRole) issues.push(issue("role", "ROLE_INVALID", "Role ist ungueltig"));
+    else if (values.role !== normalizedRole) issues.push(issue("role", "ROLE_NONCANONICAL", "Role ist nicht kanonisch geschrieben", normalizedRole));
+  }
+  if (values.member.trim() && !memberRole(values.member)) issues.push(issue("member", "ROLE_INVALID", "Mitglied ist ungueltig"));
+  for (const field of ["admin", "operator"]) {
+    if (!["", "1"].includes(values[field].trim())) issues.push(issue(field, "ROLE_INVALID", `${field} muss leer oder 1 sein`));
+  }
   return issues;
 }
 
@@ -273,6 +294,7 @@ function summarizePeopleNormalization(table) {
   const { header, idIndex, duplicateLogins } = normalizationContext(table);
   const issueCounts = Object.fromEntries(ISSUE_CODES.map((code) => [code, 0]));
   const activeMemberCounts = { player: 0, player_a: 0, player_b: 0 };
+  const activePrivilegedCounts = { admin: 0, operator: 0 };
   let peopleCount = 0;
   let affectedCount = 0;
   let issueCount = 0;
@@ -284,14 +306,17 @@ function summarizePeopleNormalization(table) {
     if (issues.length) affectedCount++;
     issueCount += issues.length;
     for (const entry of issues) issueCounts[entry.code]++;
-    const classification = values.active.trim() === "1"
-      ? ACTIVE_MEMBER_CLASSIFICATIONS.get(canonicalRole(values.role))
-      : null;
+    const roleData = rolesFromRow(header, row);
+    const classification = values.active.trim() === "1" ? ACTIVE_MEMBER_CLASSIFICATIONS.get(roleData.member) : null;
     if (classification) activeMemberCounts[classification]++;
+    if (values.active.trim() === "1") {
+      for (const role of ["admin", "operator"]) if (roleData.explicitRoles.includes(role)) activePrivilegedCounts[role]++;
+    }
   }
   return {
     peopleCount,
     activeMemberCounts,
+    activePrivilegedCounts,
     affectedCount,
     issueCount,
     issueCounts,

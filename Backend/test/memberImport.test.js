@@ -38,7 +38,7 @@ function person(id, externalId, values = {}) {
       firstName: "Anna", lastName: "Muster", birthDate: "02.01.1990", gender: "2",
       phone: "0043 664 123 45 67", email: "anna@example.test", login: "", country: "Österreich",
       postalCode: "4060", city: "Piberbach", address: "Dorf 1", active: "1",
-      role: "player A", ...values,
+      member: "player A", admin: "", operator: "", ...values,
     },
     secret: "must not survive projection",
   };
@@ -105,7 +105,7 @@ test("maps groups, gender, and safely convertible Austrian phones", async () => 
     row({ id: "105", groups: "A-Mitglieder (Trainer), Trainer (Trainer), Vorstand (Obmann Stv.)" }),
     row({ id: "106", groups: "B-Mitglieder (Jugend), Funktionär" }),
   ]));
-  assert.deepEqual(records.map((record) => record.values.role), ["player A", "player B", "player A", "player", "player A", "player B"]);
+  assert.deepEqual(records.map((record) => record.values.member), ["player A", "player B", "player A", "player", "player A", "player B"]);
   assert.deepEqual(records.map((record) => record.values.gender), ["2", "1", "", "", "2", "2"]);
   assert.equal(records[0].values.phone, "0043 664 123 45 67");
   assert.equal(records[3].values.phone, "0664 1234567");
@@ -149,8 +149,8 @@ test("classifies new and missing while excluding protected and inactive people",
   })]));
   const result = compareClubDeskMembers([record], [
     person("p1", "101"),
-    person("p2", "102", { role: "admin", email: "admin@example.test" }),
-    person("p3", "103", { role: "operator", email: "operator@example.test" }),
+    person("p2", "102", { admin: "1", email: "admin@example.test" }),
+    person("p3", "103", { operator: "1", email: "operator@example.test" }),
     person("p4", "104", { active: "", email: "inactive@example.test" }),
   ]);
   assert.equal(result.new.length, 1);
@@ -161,7 +161,7 @@ test("classifies new and missing while excluding protected and inactive people",
 test("empty imported fields preserve existing values and protected roles", async () => {
   const { compareClubDeskMembers, parseClubDeskCsv } = await modulePromise;
   const [record] = parseClubDeskCsv(csv([row({ email: "", city: "", groups: "B-Mitglieder" })]));
-  const result = compareClubDeskMembers([record], [person("p1", "101", { role: "admin" })]);
+  const result = compareClubDeskMembers([record], [person("p1", "101", { admin: "1" })]);
   assert.equal(result.identical.length, 1);
   assert.deepEqual(result.identical[0].differences, []);
 });

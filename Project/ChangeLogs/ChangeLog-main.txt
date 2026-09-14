@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.9.8
+Stand: 4.9.9
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2159,3 +2159,12 @@ Commit: 3.0.0 - Serverplattformumzug
 
   Fixed
   - Cache-Busting fuer Monitor-iframe (Timestamp-Parameter)
+[4.9.9] - 2026-09-14
+Commit: 4.9.9 | Rollenmodell und Terminabsagen erweitert
+Quelle: 4.9.8-paj-1
+
+  Added
+  - [Software] Personen verwenden getrennte Mitgliedschafts-, Admin- und Operatorfelder mit kontrollierter Legacy-Projektion sowie einer PAJ-/Live-tauglichen Google-Sheet-Migration.
+  - [Software] Spieler und Administratoren koennen offene Ranglisten-, KO- und Gruppenmatchtermine unter geregelten Berechtigungen absagen; Audit, Meldung und Diagnose erfassen den Vorgang.
+  - [Software] Ranglistenansichten zeigen Forderungen, Fristen, Termindetails und die fristgerechte Terminsetzung nachvollziehbar an.
+  - [Infrastruktur] Personen-Normalisierungsmetriken und Grafana unterscheiden Mitgliedschaften, Administratoren und Operatoren.

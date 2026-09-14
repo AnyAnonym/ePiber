@@ -200,6 +200,10 @@ const requestContracts = {
     matchId: id("matchId"),
     matchDate: rankingHour("matchDate"),
   }),
+  clearMatchAppointment: (params) => objectShape(params, {
+    operationId: operation,
+    matchId: id("matchId"),
+  }),
   matchResultSuggestion: (params) => objectShape(params, {
     matchId: id("matchId"),
     court: text("court", { min: 1, max: 1, pattern: /^[12]$/ }),
@@ -238,6 +242,11 @@ const requestContracts = {
     operationId: operation,
     matchId: id("matchId"),
     matchDate: rankingHour("matchDate"),
+    reason: adminRankingReason,
+  }),
+  adminClearMatchAppointment: (params) => objectShape(params, {
+    operationId: operation,
+    matchId: id("matchId"),
     reason: adminRankingReason,
   }),
   addEntryList: competitionWrite,

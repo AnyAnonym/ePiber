@@ -13,10 +13,15 @@ const FINGERPRINT_B = "b".repeat(64);
 const authStub = `
 export const ready = Promise.resolve();
 let listener = null;
-window.__setReconciliationAuth = (user, state) => listener?.(user, state);
+let user = { id: "1", role: "admin" };
+export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
+window.__setReconciliationAuth = (nextUser, state) => {
+  user = nextUser;
+  listener?.(user, state);
+};
 export function subscribeAuth(callback) {
   listener = callback;
-  queueMicrotask(() => callback({ id: "1", role: "admin" }, { status: "authenticated" }));
+  queueMicrotask(() => callback(user, { status: "authenticated" }));
   return () => {};
 }
 `;

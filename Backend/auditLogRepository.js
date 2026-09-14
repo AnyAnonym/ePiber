@@ -160,7 +160,13 @@ class AuditLogRepository {
           target_id = excluded.target_id,
           target_name = CASE WHEN excluded.target_name != '' THEN excluded.target_name ELSE audit_log.target_name END,
           result = excluded.result,
-          before_json = COALESCE(audit_log.before_json, excluded.before_json),
+           before_json = CASE
+              WHEN audit_log.action IN ('setMatchAppointment', 'adminSetMatchAppointment', 'clearMatchAppointment', 'adminClearMatchAppointment')
+               AND audit_log.before_json LIKE '%"matchDate":""%'
+               AND excluded.before_json NOT LIKE '%"matchDate":""%'
+             THEN excluded.before_json
+             ELSE COALESCE(audit_log.before_json, excluded.before_json)
+           END,
           after_json = COALESCE(excluded.after_json, audit_log.after_json),
           error_code = excluded.error_code,
           source_ip = CASE WHEN audit_log.source_ip != '' THEN audit_log.source_ip ELSE excluded.source_ip END,
@@ -192,7 +198,7 @@ class AuditLogRepository {
           koTargetMatchId: String(persisted.after?.koTargetMatchId || ""),
           koTargetStatus: String(persisted.after?.koTargetStatus || ""),
         } : {};
-        const appointmentFields = ["setMatchAppointment", "adminSetMatchAppointment"].includes(persisted.action) ? {
+        const appointmentFields = ["setMatchAppointment", "adminSetMatchAppointment", "clearMatchAppointment", "adminClearMatchAppointment"].includes(persisted.action) ? {
           matchId: String(persisted.after?.matchId || persisted.before?.matchId || persisted.targetId || ""),
           competitionId: String(persisted.after?.competitionId || persisted.before?.competitionId || ""),
           changed: Boolean(persisted.before?.matchDate),

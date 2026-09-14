@@ -12,6 +12,7 @@ const authStub = `
 let user = { id: "admin-1", role: "admin", login: "admin" };
 let listener = null;
 export const ready = Promise.resolve(user);
+export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
 export function subscribeAuth(callback) {
   listener = callback;
   queueMicrotask(() => callback(user, { status: "authenticated" }));
