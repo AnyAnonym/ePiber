@@ -63,11 +63,13 @@ function optionalChanges(rawChanges) {
 
 function createValues(rawValues) {
   const values = validateChanges(rawValues);
-  for (const field of ["lastName", "role", "active"]) {
+  for (const field of ["lastName", "active"]) {
     if (!Object.hasOwn(values, field)) throw new AppError("VALIDATION_ERROR", `values.${field} fehlt`);
   }
   if (values.active !== "1") throw new AppError("VALIDATION_ERROR", "values.active muss 1 sein");
-  if (!["player", "player A", "player B"].includes(values.role)) {
+  const classification = values.member || values.role;
+  if (!classification) throw new AppError("VALIDATION_ERROR", "values.member fehlt");
+  if (!["player", "player A", "player B"].includes(classification)) {
     throw new AppError("VALIDATION_ERROR", "Neue Mitglieder muessen eine Spielerrolle erhalten");
   }
   return values;
@@ -97,8 +99,11 @@ function validateReconciliationRequest(raw) {
     if (Object.hasOwn(result.changes, "active") && result.changes.active !== "1") {
       throw new AppError("VALIDATION_ERROR", "Importierte Mitglieder muessen aktiv bleiben");
     }
+    if (Object.hasOwn(result.changes, "admin") || Object.hasOwn(result.changes, "operator")) {
+      throw new AppError("VALIDATION_ERROR", "Importdaten duerfen Admin und Operator nicht aendern");
+    }
     if (Object.hasOwn(result.changes, "role") && !["player", "player A", "player B"].includes(result.changes.role)) {
-      throw new AppError("VALIDATION_ERROR", "Importdaten duerfen nur Spielerrollen setzen");
+      throw new AppError("VALIDATION_ERROR", "Importdaten duerfen Admin und Operator nicht aendern");
     }
     return result;
   }

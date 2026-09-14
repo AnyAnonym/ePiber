@@ -28,7 +28,7 @@ function notify() {
 }
 
 function authIdentityFingerprint(value, expiry = expiresAt) {
-  return value ? `${value.id || ""}:${value.role || ""}:${value.login || ""}:${expiry || 0}` : "anonymous";
+  return value ? `${value.id || ""}:${value.role || ""}:${(value.roles || []).join(",")}:${value.login || ""}:${expiry || 0}` : "anonymous";
 }
 
 function userFingerprint(value, expiry = expiresAt) {
@@ -311,7 +311,7 @@ export function isAuthenticated() {
 }
 
 export function hasRole(...roles) {
-  return !!user && roles.includes(user.role);
+  return !!user && roles.some((role) => (user.roles || [user.role]).includes(role));
 }
 
 export function subscribeAuth(callback) {

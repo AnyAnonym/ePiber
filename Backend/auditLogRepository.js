@@ -161,7 +161,7 @@ class AuditLogRepository {
           target_name = CASE WHEN excluded.target_name != '' THEN excluded.target_name ELSE audit_log.target_name END,
           result = excluded.result,
            before_json = CASE
-             WHEN audit_log.action IN ('setMatchAppointment', 'adminSetMatchAppointment')
+              WHEN audit_log.action IN ('setMatchAppointment', 'adminSetMatchAppointment', 'clearMatchAppointment', 'adminClearMatchAppointment')
                AND audit_log.before_json LIKE '%"matchDate":""%'
                AND excluded.before_json NOT LIKE '%"matchDate":""%'
              THEN excluded.before_json
@@ -198,7 +198,7 @@ class AuditLogRepository {
           koTargetMatchId: String(persisted.after?.koTargetMatchId || ""),
           koTargetStatus: String(persisted.after?.koTargetStatus || ""),
         } : {};
-        const appointmentFields = ["setMatchAppointment", "adminSetMatchAppointment"].includes(persisted.action) ? {
+        const appointmentFields = ["setMatchAppointment", "adminSetMatchAppointment", "clearMatchAppointment", "adminClearMatchAppointment"].includes(persisted.action) ? {
           matchId: String(persisted.after?.matchId || persisted.before?.matchId || persisted.targetId || ""),
           competitionId: String(persisted.after?.competitionId || persisted.before?.competitionId || ""),
           changed: Boolean(persisted.before?.matchDate),

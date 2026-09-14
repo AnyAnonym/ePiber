@@ -25,6 +25,7 @@ export const ready = new Promise((resolve) => {
   if (params.get("manualAuth") === "1") window.__resolveAuth = () => resolveAuth(resolve);
   else setTimeout(() => resolveAuth(resolve), Number(params.get("authDelay") || 0));
 });
+export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
 export function subscribeAuth(callback) {
   listeners.add(callback);
   callback(user, { status, error: null });

@@ -33,6 +33,7 @@ const { inspectMatchtypDisplayRules, projectScoreboardScores } = require("./scor
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const logger = require("./logger.js");
 const metrics = require("./metrics.js");
+const { hasAnyRole, hasRole } = require("./personRoles.js");
 const {
   booleanValue,
   idValue,
@@ -96,11 +97,13 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
       };
     case "setMatchAppointment":
     case "adminSetMatchAppointment":
+    case "clearMatchAppointment":
+    case "adminClearMatchAppointment":
       return {
         targetType: "match",
         targetId: params.matchId,
         before: internal?.before || { matchId: params.matchId, matchDate: "" },
-        after: internal?.after || { matchId: params.matchId, matchDate: params.matchDate },
+        after: internal?.after || { matchId: params.matchId, matchDate: params.matchDate || "" },
       };
     case "adminDeleteRankingChallenge":
       return {
@@ -553,8 +556,8 @@ function profileCompetitions(personId, principal = null) {
   ]));
   const role = String(principal?.role || "").toLowerCase();
   const actorId = String(principal?.id || "");
-  const admin = role === "admin";
-  const participantRole = ["player", "player a", "player b"].includes(role);
+  const admin = hasRole(principal, "admin");
+  const participantRole = hasAnyRole(principal, ["player", "player A", "player B"]);
   if (admin) {
     for (const competition of competitionById.values()) {
       if (!competition.ranking) continue;
@@ -647,6 +650,8 @@ function profileCompetitions(personId, principal = null) {
       fingerprint: matchCompletionFingerprint(row, matchHeader),
       canSetResult: !bye && !correctionBlocked && (admin || participantRole && cleanIds.includes(actorId) && participantCorrectionOpen),
       canSetMatchAppointment: !completed && !bye && Boolean(completeParticipants)
+        && (admin || participantRole && cleanIds.includes(actorId)),
+      canClearMatchAppointment: !completed && !bye && Boolean(String(row[indexes.matchDate] || "").trim()) && Boolean(completeParticipants)
         && (admin || participantRole && cleanIds.includes(actorId)),
       canAdminSetMatchEnd: !bye && admin && completed && Boolean(String(row[indexes.matchEnd] || "").trim()),
       canAdminClear: !bye && admin && completed && !correctionBlocked,
@@ -851,7 +856,7 @@ function matchRowContext(matchId) {
 
 function resultSuggestion(params, principal) {
   const context = matchRowContext(params.matchId);
-  if (principal.role !== "admin" && !context.participantIds.includes(String(principal.id))) {
+  if (!hasRole(principal, "admin") && !context.participantIds.includes(String(principal.id))) {
     throw new AppError("MATCH_PARTICIPANT_REQUIRED", "Nur Beteiligte duerfen einen Ergebnisvorschlag lesen", 403);
   }
   const state = stateStore.getCourt(params.court);
@@ -1120,7 +1125,7 @@ const endpoints = {
     handler: (params, context) => {
       requireCurrentTables("players");
       const id = idValue(params?.id, "id");
-      const profile = dependencies.authService.memberProfile(id, { includeAdminFields: context.principal.role === "admin" });
+      const profile = dependencies.authService.memberProfile(id, { includeAdminFields: hasRole(context.principal, "admin") });
       return { success: true, profile: {
         ...profile,
         rankings: profileRankings(id, context.principal),
@@ -1375,6 +1380,11 @@ const endpoints = {
       matchDate: stringValue(params?.matchDate, "matchDate", { min: 11, max: 11, pattern: /^\d{6}-\d{4}$/ }),
     }),
   },
+  clearMatchAppointment: {
+    access: ["player", "player a", "player b"],
+    write: true,
+    handler: (params, context) => dependencies.sheetService.clearMatchAppointment(context.principal, params),
+  },
   matchResultSuggestion: {
     access: ["player", "player a", "player b", "admin"],
     handler: (params, context) => resultSuggestion(params, context.principal),
@@ -1413,6 +1423,11 @@ const endpoints = {
     access: ["admin"],
     write: true,
     handler: (params, context) => dependencies.sheetService.adminSetMatchAppointment(context.principal, params),
+  },
+  adminClearMatchAppointment: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => dependencies.sheetService.adminClearMatchAppointment(context.principal, params),
   },
   addEntryList: {
     access: "authenticated",
@@ -1571,7 +1586,7 @@ function authorize(endpoint, context) {
   if (access === "public") return;
   if (access === "authenticated" && context.principal.type === "user") return;
   if (access === "device" && context.principal.type === "device") return;
-  if (Array.isArray(access) && context.principal.type === "user" && access.includes(context.principal.role)) return;
+  if (Array.isArray(access) && context.principal.type === "user" && hasAnyRole(context.principal, access)) return;
   if (context.principal.type === "anonymous") throw new AppError("AUTH_REQUIRED", "Anmeldung erforderlich", 401);
   throw new AppError("FORBIDDEN", "Berechtigung fehlt", 403);
 }
@@ -1579,10 +1594,10 @@ function authorize(endpoint, context) {
 function canSubscribe(info, topic) {
   if (PUBLIC_TOPICS.has(topic)) return true;
   if (topic === "navigator") {
-    return info.principal.type === "user" && ["operator", "admin"].includes(info.principal.role);
+    return info.principal.type === "user" && hasAnyRole(info.principal, ["operator", "admin"]);
   }
   if (topic === "monitors") {
-    return info.principal.type === "user" && ["operator", "admin"].includes(info.principal.role);
+    return info.principal.type === "user" && hasAnyRole(info.principal, ["operator", "admin"]);
   }
   if (topic === "monitor-command") return info.principal.type === "device";
   if (topic.startsWith("messages:")) {
@@ -1590,7 +1605,7 @@ function canSubscribe(info, topic) {
   }
   if (topic === "competition-history") return info.principal.type === "user";
   if (topic.startsWith("monitor-status:")) {
-    return info.principal.type === "user" && ["operator", "admin"].includes(info.principal.role);
+    return info.principal.type === "user" && hasAnyRole(info.principal, ["operator", "admin"]);
   }
   return false;
 }

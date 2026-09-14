@@ -233,6 +233,22 @@ test("Doppeltermin informiert alle vier Beteiligten mit der gegnerischen Seite",
   repository.close();
 });
 
+test("Terminabsage sendet keinen Admin-Grund an Beteiligte", async () => {
+  dataStore.resetForTests();
+  dataStore.set("players", [["ID", "Notification"], ["p1", ""], ["p2", ""]], { source: "test" });
+  const repository = new MessagingRepository(":memory:");
+  repository.init();
+  const service = new MessagingService({ repository, emailAdapter: new EmailMessagingAdapter(), whatsappAdapter: new WhatsappMessagingAdapter() });
+  const result = await service.ensureMatchAppointmentCancelledEvent({
+    operationId: "00000000-0000-4000-8000-000000000303", matchId: "m-cancel", previousDate: "260905-1800", competitionId: "cup-1",
+    participantIds: ["p1", "p2"], participantNames: { p1: "Ada", p2: "Peter" }, teams: [["p1"], ["p2"]], actorId: "admin", actorName: "Admin", reason: "Platz gesperrt",
+  });
+  assert.equal(result.event.type, "appointment_cancelled");
+  assert.equal(result.event.detail.includes("Platz gesperrt"), true);
+  assert.equal(result.participants.every(({ body }) => !body.includes("Platz gesperrt")), true);
+  repository.close();
+});
+
 test("Admin-Korrekturen nennen Grund und Administrator in Bewerbshistorie und beiden Inboxen", async () => {
   dataStore.resetForTests();
   dataStore.set("players", [["ID", "Notification"], ["p1", ""], ["p2", ""], ["admin", ""]], { source: "test" });

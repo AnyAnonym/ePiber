@@ -45,6 +45,7 @@ test("Prometheusmetriken begrenzen Labels und rendern kumulative Histogramme", (
       current: true,
       peopleCount: 42,
       activeMemberCounts: { player: 12, player_a: 18, player_b: 9 },
+      activePrivilegedCounts: { admin: 3, operator: 5 },
       affectedCount: 7,
       issueCount: 9,
       issueCounts: { LOGIN_DUPLICATE: 2, PHONE_FORMAT_INVALID: 3 },
@@ -78,6 +79,8 @@ test("Prometheusmetriken begrenzen Labels und rendern kumulative Histogramme", (
   assert.match(output, /epiber_people_normalization_active_members\{classification="player"\} 12/);
   assert.match(output, /epiber_people_normalization_active_members\{classification="player_a"\} 18/);
   assert.match(output, /epiber_people_normalization_active_members\{classification="player_b"\} 9/);
+  assert.match(output, /epiber_people_normalization_active_privileged\{role="admin"\} 3/);
+  assert.match(output, /epiber_people_normalization_active_privileged\{role="operator"\} 5/);
   assert.match(output, /epiber_people_normalization_affected_people 7/);
   assert.match(output, /epiber_people_normalization_issues 9/);
   assert.match(output, /epiber_people_normalization_issue_count\{code="LOGIN_DUPLICATE"\} 2/);

@@ -325,10 +325,10 @@ function seedStore(tables) {
 function reconciliationFixtures() {
   return {
     Personen: [
-      ["ID", "CD-ID", "Vorname", "Nachname", "E-Mail", "PasswdHash", "KennwortVergessen", "GeburtsDatum", "GeschlechtID", "TelefonMobil", "Land", "PLZ", "Ort", "Adresse", "Aktiv", "Role", "Login"],
-      ["1", "1000001", "Ada", "Admin", "ada@example.test", "a".repeat(64), "", "02.01.1990", "2", "0043 664 1111111", "Österreich", "4060", "Piberbach", "Dorf 1", "1", "admin", "ada.admin"],
-      ["1032", "", "Peter", "Player", "peter@example.test", "b".repeat(64), "x", "03.02.1991", "1", "0043 664 2222222", "Österreich", "4060", "Piberbach", "Dorf 2", "1", "player", "peter.player"],
-      ["1000", "1000999", "Olivia", "Operator", "olivia@example.test", "c".repeat(64), "", "04.03.1992", "2", "0043 664 3333333", "Österreich", "4060", "Piberbach", "Dorf 3", "1", "operator", "olivia.operator"],
+      ["ID", "CD-ID", "Vorname", "Nachname", "E-Mail", "PasswdHash", "KennwortVergessen", "GeburtsDatum", "GeschlechtID", "TelefonMobil", "Land", "PLZ", "Ort", "Adresse", "Aktiv", "Role", "Login", "Mitglied", "Admin", "Operator"],
+      ["1", "1000001", "Ada", "Admin", "ada@example.test", "a".repeat(64), "", "02.01.1990", "2", "0043 664 1111111", "Österreich", "4060", "Piberbach", "Dorf 1", "1", "admin", "ada.admin", "player A", "1", ""],
+      ["1032", "", "Peter", "Player", "peter@example.test", "b".repeat(64), "x", "03.02.1991", "1", "0043 664 2222222", "Österreich", "4060", "Piberbach", "Dorf 2", "1", "player", "peter.player", "player", "", ""],
+      ["1000", "1000999", "Olivia", "Operator", "olivia@example.test", "c".repeat(64), "", "04.03.1992", "2", "0043 664 3333333", "Österreich", "4060", "Piberbach", "Dorf 3", "1", "operator", "olivia.operator", "", "", "1"],
     ],
   };
 }
@@ -357,7 +357,7 @@ test("Mitgliederabgleich verknuepft und aktualisiert bestehende Personen konflik
       personId: "1032",
       expectedFingerprint: person.fingerprint,
       externalId: "1000068",
-      changes: { firstName: "Petra", email: "petra@example.test", role: "player A" },
+      changes: { firstName: "Petra", email: "petra@example.test", member: "player A" },
     },
   );
 
@@ -366,11 +366,11 @@ test("Mitgliederabgleich verknuepft und aktualisiert bestehende Personen konflik
   assert.equal(fake.tables.Personen[2][1], "1000068");
   assert.equal(fake.tables.Personen[2][2], "Petra");
   assert.equal(fake.tables.Personen[2][4], "petra@example.test");
-  assert.equal(fake.tables.Personen[2][15], "player A");
+  assert.equal(fake.tables.Personen[2][17], "player A");
   assert.equal(fake.tables.Personen[2][16], "peter.player");
   assert.equal(fake.tables.Personen[2][5], passwordBefore);
-  assert.deepEqual(result._audit.before, { externalId: "vorher", firstName: "vorher", email: "vorher", role: "player" });
-  assert.deepEqual(result._audit.after, { externalId: "nachher", firstName: "nachher", email: "nachher", role: "player A" });
+  assert.deepEqual(result._audit.before, { externalId: "vorher", firstName: "vorher", email: "vorher", member: "vorher" });
+  assert.deepEqual(result._audit.after, { externalId: "nachher", firstName: "nachher", email: "nachher", member: "nachher" });
   assert.equal(JSON.stringify(result._audit).includes("peter@example.test"), false);
   assert.equal(JSON.stringify(result._audit).includes("petra@example.test"), false);
   assert.equal(JSON.stringify(result._audit).includes("peter.player"), false);
@@ -429,7 +429,7 @@ test("Mitgliederabgleich legt neue Personen mit max ID plus eins und Metadata id
       city: "Piberbach",
       address: "Dorf 4",
       active: "1",
-      role: "player B",
+      member: "player B",
     },
   };
 
@@ -444,7 +444,7 @@ test("Mitgliederabgleich legt neue Personen mit max ID plus eins und Metadata id
   assert.equal(row[1], "1000494");
   assert.equal(row[5], "");
   assert.equal(row[6], "");
-  assert.equal(row[15], "player B");
+  assert.equal(row[17], "player B");
   assert.equal(row[16], "neue.person");
 });
 
@@ -460,7 +460,7 @@ test("parallele Mitgliedsneuanlagen vergeben fortlaufende eindeutige Personen-ID
     operationId,
     action: "create",
     externalId,
-    values: { firstName, lastName: "Neu", active: "1", role: "player" },
+    values: { firstName, lastName: "Neu", active: "1", member: "player" },
   });
 
   const [first, second] = await Promise.all([
@@ -485,7 +485,7 @@ test("Mitgliedsneuanlage vergibt auch oberhalb der sicheren Number-Grenze die ex
     operationId: "00000000-0000-4000-8000-000000000214",
     action: "create",
     externalId: "1000503",
-    values: { firstName: "Gross", lastName: "ID", active: "1", role: "player" },
+    values: { firstName: "Gross", lastName: "ID", active: "1", member: "player" },
   });
   assert.equal(result.personId, "9007199254740994");
 });
@@ -506,7 +506,7 @@ test("unklare Mitgliedsneuanlage wird nicht blind erneut angehaengt", async (t) 
     operationId: "00000000-0000-4000-8000-000000000210",
     action: "create",
     externalId: "1000600",
-    values: { firstName: "Unklar", lastName: "Neu", active: "1", role: "player" },
+    values: { firstName: "Unklar", lastName: "Neu", active: "1", member: "player" },
   };
 
   await assert.rejects(service.reconcilePerson({ type: "user", id: "1", role: "admin" }, params), { code: "WRITE_OUTCOME_UNKNOWN" });
@@ -530,7 +530,7 @@ test("Metadatenfehler nach Personappend bleibt wiederaufnehmbar und haengt nicht
     operationId: "00000000-0000-4000-8000-000000000212",
     action: "create",
     externalId: "1000601",
-    values: { firstName: "Metadata", lastName: "Neu", active: "1", role: "player" },
+    values: { firstName: "Metadata", lastName: "Neu", active: "1", member: "player" },
   };
 
   await assert.rejects(service.reconcilePerson({ type: "user", id: "1", role: "admin" }, params), (error) => (
@@ -595,7 +595,7 @@ test("unklare Deaktivierung widerruft Sitzungen vorsorglich", async (t) => {
 test("Mitgliederabgleich behaelt Sitzungen bei E-Mail-only und widerruft sie bei unklarer Rolle", async (t) => {
   for (const entry of [
     { field: "email", value: "new@example.test", unknown: false, revoked: false },
-    { field: "role", value: "player B", unknown: true, revoked: true },
+    { field: "member", value: "player B", unknown: true, revoked: true },
   ]) {
     const repository = new StateRepository(":memory:");
     repository.init();
@@ -651,7 +651,7 @@ test("Recovery eines angewendeten Rollen-Writes widerruft zwischenzeitlich erzeu
     personId: "1032",
     expectedFingerprint: person.fingerprint,
     externalId: "1000068",
-    changes: { role: "player B" },
+    changes: { member: "player B" },
   };
 
   await assert.rejects(service.reconcilePerson({ type: "user", id: "1", role: "admin" }, params), { code: "WRITE_OUTCOME_UNKNOWN" });
@@ -696,7 +696,7 @@ test("Mitgliederabgleich lehnt Fingerprint-, CD-ID- und Login-Konflikte vor Writ
     operationId: "00000000-0000-4000-8000-000000000217",
     action: "create",
     externalId: "1000602",
-    values: { lastName: "Collision", login: "ada.admin", active: "1", role: "player" },
+    values: { lastName: "Collision", login: "ada.admin", active: "1", member: "player" },
   }), { code: "LOGIN_CONFLICT" });
   assert.equal(fake.calls.valueUpdates.length, 0);
   assert.equal(fake.calls.append.length, 0);
@@ -1586,6 +1586,40 @@ test("Spieltermin repariert nach bestaetigtem Sheet-Write eine fehlgeschlagene M
     { participantIds: ["p1", "p2"], teams: [["p1"], ["p2"]], createdAt: new Date(2026, 8, 2, 12, 0).getTime() },
   ]);
   assert.deepEqual(fake.calls.valueUpdates.filter(({ value }) => value === "260905-1800").length, 1);
+  await service.stop();
+  repository.close();
+});
+
+test("Spielterminabsage ist fuer Beteiligte idempotent wiederherstellbar und Admins brauchen einen Grund", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const tables = fixtures();
+  tables.Matches1.push(["", "match-date-clear", "260905-1800", "260902-1000", "cup-1", "", "p1", "", "p2", "", ""]);
+  const fake = fakeSheets(tables);
+  seedStore(fake.tables);
+  let eventAttempts = 0;
+  const service = new SheetService({
+    repository,
+    messagingService: {
+      async ensureMatchAppointmentCancelledEvent() {
+        eventAttempts++;
+        if (eventAttempts === 1) throw Object.assign(new Error("sqlite unavailable"), { code: "MESSAGING_WRITE_FAILED" });
+      },
+    },
+    clientFactory: async () => fake.client,
+    now: () => new Date(2026, 8, 2, 12, 0).getTime(),
+  });
+  const player = { type: "user", id: "p1", role: "player", name: "Ada Admin" };
+  const params = { operationId: "00000000-0000-4000-8000-000000000137", matchId: "match-date-clear" };
+  await assert.rejects(service.adminClearMatchAppointment({ ...player, role: "admin" }, { ...params, operationId: "00000000-0000-4000-8000-000000000138", reason: "" }), { code: "VALIDATION_ERROR" });
+  const publicError = await service.clearMatchAppointment(player, params).catch((error) => error);
+  assert.equal(publicError.code, "WRITE_OUTCOME_UNKNOWN");
+  assert.equal(fake.tables.Matches1.find((row) => row[1] === params.matchId)[2], "");
+  const recovered = await service.clearMatchAppointment(player, params);
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.repeated, true);
+  assert.equal(eventAttempts, 2);
+  assert.equal(fake.calls.valueUpdates.filter(({ value }) => value === "").length, 1);
   await service.stop();
   repository.close();
 });

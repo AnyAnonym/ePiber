@@ -11,6 +11,7 @@ const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
 const authStub = `
 export const ready = Promise.resolve();
 export function getUser() { return { id: "admin-1", role: "admin" }; }
+export const hasRole = (...roles) => roles.includes(getUser().role);
 export function subscribeAuth(callback) {
   queueMicrotask(() => callback(getUser(), { status: "authenticated" }));
   return () => {};

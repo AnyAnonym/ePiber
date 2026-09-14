@@ -26,9 +26,11 @@ const readMyMessage = createEndpoint("myMessage");
 const acknowledgeMessage = createEndpoint("acknowledgeMessage");
 const addMatch = createEndpoint("addMatch");
 const setMatchAppointment = createEndpoint("setMatchAppointment");
+const clearMatchAppointment = createEndpoint("clearMatchAppointment");
 const adminDeleteRankingChallenge = createEndpoint("adminDeleteRankingChallenge");
 const adminSetRankingChallengeDate = createEndpoint("adminSetRankingChallengeDate");
 const adminSetMatchAppointment = createEndpoint("adminSetMatchAppointment");
+const adminClearMatchAppointment = createEndpoint("adminClearMatchAppointment");
 const matchResultSuggestion = createEndpoint("matchResultSuggestion");
 const setMatchResult = createEndpoint("setMatchResult");
 const adminSetMatchEnd = createEndpoint("adminSetMatchEnd");
@@ -38,6 +40,7 @@ const withdrawFromRanking = createEndpoint("withdrawFromRanking");
 const readWithdrawnRankingPlayers = createEndpoint("withdrawnRankingPlayers");
 let withdrawContext = null;
 let matchDateContext = null;
+let matchAppointmentClearContext = null;
 let matchCalendarMonth = null;
 let adminRankingActionContext = null;
 let matchResultContext = null;
@@ -58,6 +61,11 @@ function errorMessage(value, fallback) {
   if (typeof value?.error === "string") return value.error;
   if (value?.message) return value.message;
   return fallback;
+}
+
+function isAdmin() {
+  const user = getUser();
+  return Array.isArray(user?.roles) ? user.roles.includes("admin") : user?.role === "admin";
 }
 
 function setLoginStatus(message = "") {
@@ -125,6 +133,7 @@ function closeModal(modal) {
   }
   if (modal?.id === "withdrawModal") withdrawContext = null;
   if (modal?.id === "matchDateModal") matchDateContext = null;
+  if (modal?.id === "matchAppointmentClearModal") matchAppointmentClearContext = null;
   if (modal?.id === "adminRankingActionModal") adminRankingActionContext = null;
   if (modal?.id === "matchResultModal") {
     matchResultContext = null;
@@ -133,6 +142,7 @@ function closeModal(modal) {
   }
   if (modal?.id === "profileModal") {
     closeModal(matchDateModal);
+    closeModal(matchAppointmentClearModal);
     closeModal(adminRankingActionModal);
     closeModal(matchResultModal);
     closeModal(messageDetailModal);
@@ -359,6 +369,22 @@ matchDateModal.setAttribute("role", "dialog");
 matchDateModal.setAttribute("aria-modal", "true");
 matchDateModal.setAttribute("aria-labelledby", "matchDateTitle");
 matchDateModal.querySelector(".close")?.setAttribute("aria-label", "Terminauswahl schließen");
+
+const matchAppointmentClearModal = createModal("matchAppointmentClearModal", `
+  <h2 id="matchAppointmentClearTitle">Spieltermin absagen</h2>
+  <p>Der eingetragene Spieltermin wird gelöscht. Die Beteiligten werden informiert.</p>
+  <form id="matchAppointmentClearForm">
+    <div id="matchAppointmentClearReasonFields" hidden>
+      <label for="matchAppointmentClearReason">Grund:</label>
+      <textarea id="matchAppointmentClearReason" name="reason" maxlength="500" placeholder="Bitte geben Sie den Grund ein..."></textarea>
+    </div>
+    <button type="submit" class="btn-login admin-danger">Termin verbindlich absagen</button>
+  </form>
+`, { explicitDismiss: true });
+matchAppointmentClearModal.setAttribute("role", "dialog");
+matchAppointmentClearModal.setAttribute("aria-modal", "true");
+matchAppointmentClearModal.setAttribute("aria-labelledby", "matchAppointmentClearTitle");
+matchAppointmentClearModal.querySelector(".close")?.setAttribute("aria-label", "Terminabsage schließen");
 
 const adminRankingActionModal = createModal("adminRankingActionModal", `
   <h2 id="adminRankingActionTitle">Forderung bearbeiten</h2>
@@ -871,6 +897,14 @@ function appendMatchCard(panel, profile, competition, match, signal) {
     appointmentButton.addEventListener("click", () => openMatchDateModal(match, profile, competition), { signal });
     actions.appendChild(appointmentButton);
   }
+  if (match.canClearMatchAppointment) {
+    const clearAppointmentButton = document.createElement("button");
+    clearAppointmentButton.type = "button";
+    clearAppointmentButton.className = `btn-login${isAdmin() ? " admin-danger" : ""}`;
+    clearAppointmentButton.textContent = "Termin absagen";
+    clearAppointmentButton.addEventListener("click", () => openMatchAppointmentClearModal(match, profile, competition), { signal });
+    actions.appendChild(clearAppointmentButton);
+  }
   if (getUser()?.role === "admin" && competition.ranking === true && match.status === "completed") {
     const repairButton = document.createElement("button");
     repairButton.type = "button";
@@ -1135,7 +1169,7 @@ function openMatchDateModal(match, profile, competition) {
   const hourInput = document.getElementById("rankingMatchHour");
   const reasonFields = document.getElementById("matchDateReasonFields");
   const reasonInput = document.getElementById("matchDateReason");
-  const admin = getUser()?.role === "admin";
+  const admin = isAdmin();
   const today = new Date(Date.now());
   const now = today.getTime();
   today.setHours(0, 0, 0, 0);
@@ -1182,6 +1216,24 @@ function openMatchDateModal(match, profile, competition) {
   updateMatchDateHours();
   openModal(matchDateModal);
   matchDateModal.querySelector(".match-date-calendar-day.selected:not(:disabled), .match-date-calendar-day:not(:disabled)")?.focus();
+}
+
+function openMatchAppointmentClearModal(match, profile, competition) {
+  const matchId = String(match?.matchId || "").trim();
+  if (!matchId || !match.matchDate) {
+    window.showToast("Der Spieltermin konnte nicht eindeutig zugeordnet werden.", "error");
+    return;
+  }
+  const admin = isAdmin();
+  const reasonFields = document.getElementById("matchAppointmentClearReasonFields");
+  const reasonInput = document.getElementById("matchAppointmentClearReason");
+  matchAppointmentClearContext = { matchId, playerId: String(profile?.id || ""), competitionId: String(competition?.competitionId || ""), admin };
+  reasonFields.hidden = !admin;
+  reasonInput.disabled = !admin;
+  reasonInput.required = admin;
+  reasonInput.value = "";
+  openModal(matchAppointmentClearModal);
+  (admin ? reasonInput : matchAppointmentClearModal.querySelector('button[type="submit"]'))?.focus();
 }
 
 function appendMatchDateCountdown(container, challenge, signal) {
@@ -2287,6 +2339,37 @@ document.getElementById("matchDateForm").addEventListener("submit", async (event
   } finally {
     setModalBusy(form, false);
     submitButton.textContent = "Übernehmen";
+  }
+});
+
+document.getElementById("matchAppointmentClearForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!matchAppointmentClearContext) return;
+  const context = { ...matchAppointmentClearContext };
+  const reason = form.elements.reason.value.trim();
+  if (context.admin && !reason) {
+    window.showToast("Bitte gib einen Grund an.", "error");
+    form.elements.reason.focus();
+    return;
+  }
+  const operationKey = `match:appointment-clear:${context.matchId}:${context.admin ? reason : ""}`;
+  setModalBusy(form, true);
+  try {
+    const request = { operationId: getOperationId(operationKey), matchId: context.matchId };
+    if (context.admin) request.reason = reason;
+    const result = await (context.admin ? adminClearMatchAppointment : clearMatchAppointment)(request);
+    if (!result.data?.success) throw new Error(errorMessage(result.data, "Spieltermin konnte nicht abgesagt werden."));
+    releaseOperationId(operationKey);
+    closeModal(matchAppointmentClearModal);
+    window.showToast("Der Spieltermin wurde abgesagt.", "success");
+    window.openProfileModal({ playerId: context.playerId, competitionId: context.competitionId });
+  } catch (error) {
+    releaseOperationId(operationKey, error);
+    diagnostic.error("match_appointment_clear_failed", error);
+    window.showToast(errorMessage(error, "Spieltermin konnte nicht abgesagt werden."), "error");
+  } finally {
+    setModalBusy(form, false);
   }
 });
 

@@ -1,4 +1,4 @@
-import { ready, subscribeAuth } from "./authClient.js";
+import { hasRole, ready, subscribeAuth } from "./authClient.js";
 import {
   createEndpoint,
   getOperationId,
@@ -557,7 +557,7 @@ function bindEvents() {
 
 bindEvents();
 subscribeAuth((user, authState) => {
-  if (!user || user.role !== "admin" || authState.status !== "authenticated") {
+  if (!user || !hasRole("admin") || authState.status !== "authenticated") {
     showAccess(user, authState);
     return;
   }

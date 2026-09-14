@@ -1,4 +1,4 @@
-import { ready, subscribeAuth } from "./authClient.js";
+import { hasRole, ready, subscribeAuth } from "./authClient.js";
 import { createEndpoint, subscribe } from "./dataClient.js";
 
 const readMyMessageSummary = createEndpoint("myMessageSummary");
@@ -102,7 +102,7 @@ function renderAuthState(user, authState = {}) {
     element.hidden = !resolved || !authenticated;
   });
   document.querySelectorAll('[data-role="admin"]').forEach((element) => {
-    element.hidden = !resolved || user?.role !== "admin";
+    element.hidden = !resolved || !hasRole("admin");
   });
   document.querySelectorAll(".authUnavailable").forEach((element) => {
     const visible = !resolved;

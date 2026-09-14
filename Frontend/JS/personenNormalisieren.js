@@ -1,4 +1,4 @@
-import { getUser, ready, subscribeAuth } from "./authClient.js";
+import { getUser, hasRole, ready, subscribeAuth } from "./authClient.js";
 import {
   createEndpoint,
   getOperationId,
@@ -24,6 +24,9 @@ const FIELD_LABELS = Object.freeze({
   address: "Adresse",
   active: "Aktiv",
   role: "Rolle",
+  member: "Mitglied",
+  admin: "Admin",
+  operator: "Operator",
 });
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
@@ -156,15 +159,17 @@ function makeFieldControl(person, field) {
   } else if (field === "gender") {
     control = document.createElement("select");
     control.append(makeOption("", "Nicht gesetzt"), makeOption("1", "Männlich (1)"), makeOption("2", "Weiblich (2)"), makeOption("3", "Divers (3)"));
-  } else if (field === "role") {
+  } else if (field === "member") {
     control = document.createElement("select");
     control.append(
+      makeOption("", "Kein Mitglied"),
       makeOption("player", "Player"),
       makeOption("player A", "Player A"),
       makeOption("player B", "Player B"),
-      makeOption("operator", "Operator"),
-      makeOption("admin", "Admin"),
     );
+  } else if (["admin", "operator"].includes(field)) {
+    control = document.createElement("select");
+    control.append(makeOption("", "Nein"), makeOption("1", "Ja (1)"));
   } else {
     control = document.createElement("input");
     control.type = field === "email" ? "text" : "text";
@@ -447,7 +452,7 @@ function bindEvents() {
 
 bindEvents();
 subscribeAuth((user, authState) => {
-  if (!user || user.role !== "admin" || authState.status !== "authenticated") {
+  if (!user || !hasRole("admin") || authState.status !== "authenticated") {
     showAccess(user, authState);
     return;
   }

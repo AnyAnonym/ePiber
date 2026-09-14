@@ -556,8 +556,9 @@ AUTHENTICATED (player, operator oder admin):
       `matchId`, `round`, `matchDate`, `challengeDate`, `matchStart`, `matchEnd`,
       `result`, `completionType`, die kontrollierten `resultRules`, optional
       `losingSide`, zwei `teams` mit IDs/Namen und bei Ranglistenspielen optionalem
-      nichtnegativem `rankAtResult`, `status`, `fingerprint` sowie `canSetResult`,
-      `canSetMatchAppointment`, `canAdminSetMatchEnd` und `canAdminClear`.
+       nichtnegativem `rankAtResult`, `status`, `fingerprint` sowie `canSetResult`,
+       `canSetMatchAppointment`, `canClearMatchAppointment`,
+       `canAdminSetMatchEnd` und `canAdminClear`.
       `correctionBlockReason` kann eine erforderliche Ranglistenreparatur
       kennzeichnen. `BYE` ist die einzige kontrollierte Personenausnahme:
       `bye:true`, kein BYE in Team-IDs oder Namen und alle mutierenden
@@ -746,10 +747,36 @@ AUTHENTICATED (player, operator oder admin):
       `MATCH_DATE_PAST`, `MATCH_DATE_AFTER_DEADLINE`, `MATCH_DATE_UNCHANGED`,
       `OPERATION_ID_CONFLICT`, `SHEET_SCHEMA` und `WRITE_OUTCOME_UNKNOWN`.
 
-      Diese generischen Endpunkte ersetzen den nicht mehr vorhandenen RPC
-      `adminSetRankingMatchDate`. Sie gelten fuer Rangliste, KO und Round Robin;
-      die ranglistenspezifischen Adminvertraege fuer Loeschung und Forderungsdatum
-      bleiben dagegen erhalten.
+       Diese generischen Endpunkte ersetzen den nicht mehr vorhandenen RPC
+       `adminSetRankingMatchDate`. Sie gelten fuer Rangliste, KO und Round Robin;
+       die ranglistenspezifischen Adminvertraege fuer Loeschung und Forderungsdatum
+       bleiben dagegen erhalten.
+
+   `clearMatchAppointment { operationId, matchId }`
+       Idempotente Absage eines eingetragenen Spieltermins durch einen
+       Matchbeteiligten mit Spielerrolle. Das Match muss offen, nicht ignoriert,
+       kein BYE, vollstaendig besetzt und noch terminiert sein.
+
+   `adminClearMatchAppointment { operationId, matchId, reason }`
+       Gleiche Terminabsage fuer Administratoren fuer jedes zulaessige Match.
+       `reason` ist getrimmt 1 bis 500 Zeichen lang. Beide Endpunkte leeren nur
+       `MatchDate` und liefern `{ success:true, matchId, matchDate:"",
+       recovered? }`. Sie verwenden die stabil aufgeloeste Matchzeile, den
+       idempotenten Operationvertrag und die gleichen Offenheits-, Teilnehmer-
+       und Abschlussgrenzen wie der Terminwrite; ein nicht eingetragener Termin
+       ergibt `MATCH_DATE_UNCHANGED`.
+
+       Ein Erfolg invalidiert `matches`, erzeugt recovery-sicher ein
+       `appointment_cancelled`-Ereignis und je eine private Meldung fuer alle
+       zwei oder vier Beteiligten. Der Admin-Grund steht nur im Ereignisdetail,
+       nicht in Audit, Browserdiagnose oder Betriebslog. Auditaktionen
+       `clearMatchAppointment` beziehungsweise `adminClearMatchAppointment`
+       umfassen `started` und `success|failed|unknown`; Abschlusslogs enthalten
+       nur Match-/Bewerbs-ID, Akteur und Recoverystatus. Relevante Fehler sind
+       `MATCH_NOT_FOUND`, `MATCH_PARTICIPANT_REQUIRED`,
+       `MATCH_PARTICIPANTS_INVALID`, `MATCH_APPOINTMENT_CLOSED`,
+       `MATCH_DATE_UNCHANGED`, `OPERATION_ID_CONFLICT`, `SHEET_SCHEMA` und
+       `WRITE_OUTCOME_UNKNOWN`.
 
   `adminDeleteRankingChallenge { operationId, matchId, reason }`
       Admin-only, idempotent und nur fuer eine offene Ranglistenforderung mit
@@ -974,15 +1001,16 @@ ADMIN:
       nur Tabellenanzahl, Anzahl geaenderter Tabellen und Abschlusszeit.
 
   `adminPeopleNormalization {}`
-      Liefert die geschlossene Projektion der dreizehn erlaubten Personenfelder,
+      Liefert die geschlossene Projektion der sechzehn erlaubten Personenfelder,
       Probleme, sichere Vorschlaege, Fingerprints und Summen aus einem aktuellen
       Personenbestand; Passwort- und Resetfelder sind ausgeschlossen.
       Antwort:
       `{ success, people:[{ id, values:{ firstName, lastName, birthDate, gender,
-      phone, email, login, country, postalCode, city, address, active, role },
+      phone, email, login, country, postalCode, city, address, active, role,
+      member, admin, operator },
       issues:[{ field, code, message, proposedValue? }], fingerprint }],
       issueCount, affectedCount }`. `fingerprint` ist ein 64-stelliger SHA-256-
-      Vergleichswert ueber genau die dreizehn projizierten Felder. Fuer `login`
+      Vergleichswert ueber genau die sechzehn projizierten Felder. Fuer `login`
       werden `LOGIN_NONCANONICAL`, `LOGIN_INVALID` und `LOGIN_DUPLICATE` gemeldet;
       ungueltige oder mehrdeutige Logins bleiben zur Adminreparatur sichtbar,
       koennen aber nicht zur Anmeldung verwendet werden. Kontakt-E-Mail-Dubletten
@@ -991,7 +1019,7 @@ ADMIN:
       Vorschau dar und schreibt den bestaetigten Zielwert ueber `normalizePerson`.
 
   `normalizePerson { operationId, personId, expectedFingerprint, changes }`
-      `changes` enthaelt ein bis dreizehn erlaubte Stringfelder. Der Fingerprint
+      `changes` enthaelt ein bis sechzehn erlaubte Stringfelder. Der Fingerprint
       schuetzt gegen zwischenzeitliche Aenderungen; der Write ist idempotent,
       verwendet eine stabile Personenzeile und prueft Adminschutz, Tabellenwerte
       und Login-Konflikte. Bestehende Login-Dublettengruppen duerfen personweise
@@ -1017,11 +1045,12 @@ ADMIN:
 
   `adminMemberReconciliation {}`
       Admin-only Read aus einem aktuellen Personenbestand. Liefert
-      `{ success:true, people:[{ id, externalId, values:{ firstName, lastName,
-      birthDate, gender, phone, email, login, country, postalCode, city, address,
-      active, role }, fingerprint }] }`. `externalId` ist die `CD-ID` oder leer;
-      der 64-stellige SHA-256-Fingerprint umfasst `externalId` und genau die
-      dreizehn kontrollierten Werte. Passwort- und Resetfelder, Probleme und
+       `{ success:true, people:[{ id, externalId, values:{ firstName, lastName,
+       birthDate, gender, phone, email, login, country, postalCode, city, address,
+       active, role, member, admin, operator }, fingerprint }] }`. `externalId`
+       ist die `CD-ID` oder leer;
+       der 64-stellige SHA-256-Fingerprint umfasst `externalId` und genau die
+       sechzehn kontrollierten Werte. Passwort- und Resetfelder, Probleme und
       Normalisierungssummen sind nicht Teil dieser Projektion.
 
   `reconcilePerson { operationId, action, ... }`
@@ -1033,12 +1062,13 @@ ADMIN:
         64 Stellen lange positive Dezimalzahl. `changes` darf leer sein, wenn eine
         CD-ID neu verknuepft wird, sonst enthaelt es kontrollierte Stringfelder.
         `login` ist bei Updates ausdruecklich verboten; `active` darf nur `"1"`
-        und `role` nur `player|player A|player B` sein. Eine bestehende CD-ID darf
-        nicht auf einen anderen Wert umgehaengt werden. Admin-/Operatorrollen
-        duerfen durch Importdaten nicht geaendert werden.
+         und `member` nur `player|player A|player B` sein. Bei aktivem neuen
+         Rollenmodell sind `role`, `admin` und `operator` fuer den Import
+         verboten. Eine bestehende CD-ID darf nicht auf einen anderen Wert
+         umgehaengt werden.
       - `create`: `{ operationId, action:"create", externalId, values }`.
-        `values` enthaelt mindestens `lastName`, `active:"1"` und eine Rolle
-        `player|player A|player B`; alle uebrigen der dreizehn kontrollierten
+         `values` enthaelt mindestens `lastName`, `active:"1"` und `member`
+         `player|player A|player B`; alle uebrigen der sechzehn kontrollierten
         Felder einschliesslich `login` sind optional und fehlende Werte werden
         leer angelegt. Die neue Personen-ID ist exakt die groesste numerische ID
         plus eins; nicht numerische Bestands-IDs verhindern die Anlage.

@@ -25,6 +25,7 @@ export const logout = async () => {};
 export const changePassword = async () => ({ success: true });
 export const getUser = () => user;
 export const isAuthenticated = () => Boolean(user);
+export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
 export const refreshSession = async () => user;
 export const resetPassword = async () => ({ success: true });
 export const setPasswordSetupAllowed = async () => ({ success: true });

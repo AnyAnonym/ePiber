@@ -49,6 +49,7 @@ test("Normalisierungsprojektion zeigt nur freigegebene Werte und konkrete Proble
   assert.deepEqual(summary, {
     peopleCount: 2,
     activeMemberCounts: { player: 0, player_a: 0, player_b: 0 },
+    activePrivilegedCounts: { admin: 1, operator: 0 },
     affectedCount: 2,
     issueCount: 13,
     issueCounts: {

@@ -3,6 +3,7 @@ const { headerIndex, headerOf } = require("./tableUtils.js");
 const logger = require("./logger.js");
 const { loginValue } = require("./validators.js");
 const { notificationChannels } = require("./messagingService.js");
+const { rolesFromRow } = require("./personRoles.js");
 
 const VALID_ROLES = new Set(["player", "player a", "player b", "operator", "admin"]);
 const warnedInvalidRoles = new Set();
@@ -132,7 +133,8 @@ function validateTableValues(tableName, values) {
     const loginIssues = [];
     for (const [offset, row] of values.slice(1).entries()) {
       const role = String(row[roleIndex] || "").trim().toLowerCase();
-      if (role && !VALID_ROLES.has(role) && !warnedInvalidRoles.has(role)) {
+      const roleData = rolesFromRow(header, row);
+      if (!roleData.usesNewFields && role && !VALID_ROLES.has(role) && !warnedInvalidRoles.has(role)) {
         warnedInvalidRoles.add(role);
         logger.log("warn", "player_role_fallback_applied", { invalidRole: role, fallbackRole: "player" });
       }

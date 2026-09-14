@@ -17,3 +17,55 @@ Commit: 4.9.8-paj-1-2 | Ranglistentermine zukunftssicher gepflegt
   - [Terminpflege] Der Kalender markiert Forderung, Terminvereinbarungsfrist und Spielterminfrist blau, orange beziehungsweise rot mit einer Legende; auswaehlbar bleiben nur zukuenftige volle Stunden bis zur Spielterminfrist.
   - [Profil] Die Ranglisten-Uebersichtsbox zeigt Forderungszeitpunkt und Gegner immer, die beiden Fristzeitpunkte und den Countdown dagegen nur bis zur Terminsetzung.
   - [Audit] Termin-Audits uebernehmen beim Abschluss den tatsaechlichen vorherigen Termin und kennzeichnen Aenderungen dadurch korrekt.
+
+[4.9.8-paj-1-3] - 2026-09-14
+Commit: 4.9.8-paj-1-3 | Rollenmodell und Terminabsagen erweitert
+
+  Changed
+   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.8-paj-1-2-x` gesetzt.
+   - [Datenbank] Personenrollen sind in `Mitglied` (`leer|player|player A|player B`), `Admin` (`leer|1`) und `Operator` (`leer|1`) getrennt; sobald mindestens eines dieser Felder in einer Zeile belegt ist, uebersteuern sie die Legacyspalte `Role`. Adminrechte enthalten Operatorrechte.
+   - [Software] Normalisierung und ClubDesk-Abgleich projizieren die getrennten Rollenfelder kontrolliert. Der ClubDesk-Abgleich setzt nur Mitgliederklassifikationen, aendert keine Admin-/Operatorflags und schreibt bei aktivem neuen Rollenmodell keine Legacy-`Role`.
+   - [Infrastruktur] Das Grafana-Dashboard zur Personennormalisierung zeigt aktive Mitglieder nach `player`, `player A` und `player B` sowie getrennte Zaehler fuer aktive Admins und explizite Operatoren. Geerbte Operatorrechte eines Admins werden nicht als expliziter Operator gezaehlt.
+   - [Terminpflege] Offene Matches mit eingetragenem Termin koennen von Beteiligten abgesagt werden; Administratoren muessen dafuer einen Grund angeben.
+   - [Terminpflege] Terminabsagen werden idempotent mit Sheet-Bestaetigung wiederhergestellt, auditiert und als `appointment_cancelled` an die Beteiligten gemeldet; Admin-Gruende bleiben auf dem Ereignisverlauf beschraenkt.
+
+Dokumentationsuebernahme beim Main-Versionssprung
+
+  Project/software/DATENBANK.txt
+  - Personenfelder `Mitglied`, `Admin` und `Operator` mit ihren erlaubten Werten sowie `Role` als Legacy-Fallback dokumentieren.
+  - Festhalten, dass jede belegte neue Rollenangabe den zeilenweisen Legacy-Fallback abschaltet, Mitglied Spielerrechte verleiht und Admin Operatorrechte erbt.
+  - Die kontrollierte Personenprojektion, Fingerprints und ClubDesk-Projektion von 13 auf 16 Felder mit `Role`, `Mitglied`, `Admin` und `Operator` aktualisieren.
+  - Fuer ClubDesk-Create die Mitgliederklassifikation als Pflicht festhalten und bei aktivem neuen Rollenmodell Legacy-`Role`-Writes ausschliessen.
+  - Den kontrollierten Rollen-Migrationslauf mit `--dry-run`, `--apply`, benoetigten Headern, Zielwertzuordnung, Konfliktstopp und Bestaetigungsread dokumentieren.
+  - `appointment_cancelled`, seine privaten Teilnehmerprojektionen, den beschraenkten freien Admin-Grund und die recovery-sichere Ereignisnachholung nach `MatchDate`-Clear ergaenzen.
+  - Auditaktionen `clearMatchAppointment` und `adminClearMatchAppointment` mit Start, Abschluss, kontrollierten Feldern und `reasonRecorded` dokumentieren.
+
+  Project/software/ENDPOINTS.txt
+  - Die Normalisierungs- und Abgleichprojektionen, Fingerprints und Change-Grenzen von 13 auf 16 Felder mit `Role`, `Mitglied`, `Admin` und `Operator` aktualisieren.
+  - Die neue Profilaktionsprojektion `canClearMatchAppointment` dokumentieren.
+  - RPCs `clearMatchAppointment { operationId, matchId }` und `adminClearMatchAppointment { operationId, matchId, reason }` mit Rollen, Offenheits- und Teilnehmergrenzen, nur `MatchDate` leerndem Ergebnis, Fehlern, Idempotenz und Recovery dokumentieren.
+  - `appointment_cancelled`, Beteiligtenmeldungen sowie die Trennung des Admin-Grundes von Audit, Browserdiagnose und Betriebslog dokumentieren.
+
+  Project/software/ARCHITEKTUR.txt
+  - `personRoles.js` und den Vorrang der getrennten Personenrollen vor dem zeilenweisen Legacy-Fallback beschreiben.
+  - Den Bedienablauf `Termin absagen` in der Profilmatchkarte, die Admin-Begruendung, den idempotenten Stable-Row-Clear, Audit, Meldungsrecovery, Abschlusslog und Browserdiagnose dokumentieren.
+
+  Project/software/seiten/personenNormalisieren.txt
+  - Die sichtbaren, fingerprinted und schreibbaren Rollenfelder von 13 auf 16 Felder mit `Role`, `Mitglied`, `Admin` und `Operator` erweitern.
+  - Die Bedeutungen der Mitgliederklassifikation, der zwei Berechtigungsflags, Admin-Operator-Erbschaft und des zeilenweisen Legacy-Fallbacks festhalten.
+
+  Project/software/seiten/mitgliederAbgleichen.txt
+  - Die ClubDesk-Gruppenabbildung auf `Mitglied` und den Schutz bestehender Admin-/Operatorflags dokumentieren.
+  - Bei aktivem neuen Rollenmodell Legacy-`Role`-Writes ausschliessen und fuer Neuanlagen `member` als erforderliche Mitgliederklassifikation dokumentieren.
+
+  Project/Regelwerk/Organisation/PERSONEN-UND-MITGLIEDER.txt
+  - Fachliche Trennung von Mitgliederklassifikation und Admin-/Operatorberechtigung, die Admin-Operator-Erbschaft und den Legacy-Fallback festhalten.
+  - Den ClubDesk-Schutz gegen Admin-/Operator- und aktive Legacy-Role-Aenderungen aufnehmen.
+
+  Project/Regelwerk/Spielbetrieb/ALLGEMEINE-MATCHREGELN.txt
+  - Die Terminabsage eines offenen, vollstaendig besetzten Nicht-BYE-Matches durch Beteiligte und die begruendungspflichtige administrative Absage festhalten.
+  - Abgrenzen, dass die Absage nur `MatchDate` leert und weder Walkover noch Retirement noch Matchabschluss ist.
+
+  Project/server-configs/observability/README.md
+  - Die Grafana-Panels fuer Mitgliederklassifikationen sowie getrennte aktive Admin- und explizite Operatorzaehler mit den kontrollierten Metriklabels dokumentieren.
+  - Festhalten, dass geerbte Operatorrechte von Admins nicht als explizite Operatoren gezaehlt werden.

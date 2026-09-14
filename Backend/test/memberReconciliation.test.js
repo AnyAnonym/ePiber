@@ -26,6 +26,9 @@ const controlledValues = {
   address: "Dorf 1",
   active: "1",
   role: "admin",
+  member: "",
+  admin: "",
+  operator: "",
 };
 
 test("reconciliation projection exposes only identity, CD-ID, controlled values, and their fingerprint", () => {
