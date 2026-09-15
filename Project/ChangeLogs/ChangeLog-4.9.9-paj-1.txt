@@ -6,3 +6,13 @@ Commit: 4.9.9-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-1` gesetzt.
+
+[4.9.9-paj-1-2] - 2026-09-15
+Commit: 4.9.9-paj-1-2 | Notification-Architektur dokumentiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-1-x` gesetzt.
+  - [Dokumentation] Nicht-kanonische Arbeitsgrundlage fuer das zentrale Inbox-, Web-Push- und Erinnerungssystem erarbeitet; PostgreSQL-Migration bewusst als spaeteren separaten Auftrag abgegrenzt.
+
+  Added
+  - [Dokumentation] `Project/2do/NOTIFICATIONS-UND-PUSH.md` mit Zielbild, PWA-Einrichtung, Pflicht- und Opt-in-Meldungen, Quittierung, Eigenmeldungsunterdrueckung, Ereigniskatalog, zeitgesteuerten Erinnerungen, Rollen-/Datenschutzvorgaben sowie offenen Entscheidungen angelegt.
