@@ -603,7 +603,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   const anonymousMessagingClient = createSocketClient(`${wsBase}/ws`, { Origin: "http://test.local" });
   await anonymousMessagingClient.handshake();
   for (const endpoint of [
-    "myMessageSummary", "myMessages", "myMessage", "acknowledgeMessage", "competitionHistory",
+    "myMessageSummary", "myMessages", "myMessage", "acknowledgeMessage", "acknowledgeAllMessages", "competitionHistory",
     "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryCommentForEdit", "competitionHistoryReactions", "competitionHistoryCommentReactions",
     "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment", "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
   ]) {
@@ -1364,6 +1364,28 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   await new Promise((resolve) => setTimeout(resolve, 5100));
   const repeatedAcknowledgment = await adminClient.request("acknowledgeMessage", acknowledgmentParams);
   assert.equal(repeatedAcknowledgment.data.repeated, true);
+  await application.messagingService.ensureChallengeMessage({
+    matchId: "bulk-ack-match", recipientId: "p1", competitionId: "cup-1", competitionName: "Cup", challengerId: "p2", challengerName: "Peter Player",
+  });
+  await adminClient.next((message) => message.type === "event" && message.topic === "messages:p1" && message.data.unreadCount === 1, "bulk-message-update");
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  const bulkAcknowledgmentParams = { operationId: "00000000-0000-4000-8000-000000000209" };
+  const bulkAcknowledgment = await adminClient.request("acknowledgeAllMessages", bulkAcknowledgmentParams);
+  assert.equal(bulkAcknowledgment.data.changedCount, 1);
+  assert.equal(bulkAcknowledgment.data.unreadCount, 0);
+  await adminClient.next((message) => message.type === "event" && message.topic === "messages:p1" && message.data.unreadCount === 0, "bulk-acknowledgment-update");
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  assert.equal((await adminClient.request("acknowledgeAllMessages", bulkAcknowledgmentParams)).data.repeated, true);
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  const acknowledgeAllOriginal = application.messagingRepository.acknowledgeAll.bind(application.messagingRepository);
+  application.messagingRepository.acknowledgeAll = () => {
+    throw new AppError("WRITE_OUTCOME_UNKNOWN", "simulated bulk unknown", 503);
+  };
+  const unknownBulkAcknowledgment = await adminClient.request("acknowledgeAllMessages", {
+    operationId: "00000000-0000-4000-8000-000000000210",
+  });
+  application.messagingRepository.acknowledgeAll = acknowledgeAllOriginal;
+  assert.equal(unknownBulkAcknowledgment.data.error.code, "WRITE_OUTCOME_UNKNOWN");
   await new Promise((resolve) => setTimeout(resolve, 5100));
   const failedAcknowledgment = await adminClient.request("acknowledgeMessage", {
     operationId: "00000000-0000-4000-8000-000000000203",
@@ -1437,10 +1459,15 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   const successfulActions = new Set(auditRows.filter((row) => row.result === "success").map((row) => row.action));
   assert.equal(auditRows.some((row) => row.action === "acknowledgeMessage" && row.result === "failed" && row.errorCode === "MESSAGE_NOT_FOUND"), true);
   assert.equal(auditRows.some((row) => row.action === "acknowledgeMessage" && row.result === "unknown" && row.errorCode === "WRITE_OUTCOME_UNKNOWN"), true);
+  assert.equal(auditRows.some((row) => row.action === "acknowledgeAllMessages" && row.result === "success" && row.after?.acknowledgedCount === 1), true);
+  assert.equal(auditRows.some((row) => row.action === "acknowledgeAllMessages" && row.result === "unknown" && row.errorCode === "WRITE_OUTCOME_UNKNOWN"), true);
+  assert.equal(auditRows.some((row) => row.action === "acknowledgeAllMessages" && row.result === "failed" && row.errorCode === "AUTH_REQUIRED"), true);
+  assert.equal(logEntries.some(({ event, fields }) => event === "message_bulk_acknowledgment_completed"
+    && fields.result === "rejected" && fields.errorCode === "AUTH_REQUIRED"), true);
   assert.equal(auditRows.some((row) => row.action === "moderateCompetitionHistoryComment" && row.result === "failed" && row.errorCode === "AUTH_REQUIRED"), true);
   for (const action of [
     "login", "adminPasswordSet", "adminPasswordSetup", "passwordSetup", "adminPasswordResetProof",
-    "passwordReset", "addMatch", "setMatchAppointment", "acknowledgeMessage", "refreshSheetData", "monitorProvision", "monitorEnroll", "monitorNavigate", "courtAssign", "monitorRotate", "monitorRevoke",
+    "passwordReset", "addMatch", "setMatchAppointment", "acknowledgeMessage", "acknowledgeAllMessages", "refreshSheetData", "monitorProvision", "monitorEnroll", "monitorNavigate", "courtAssign", "monitorRotate", "monitorRevoke",
     "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction", "addCompetitionHistoryComment", "editCompetitionHistoryComment", "moderateCompetitionHistoryComment", "deleteCompetitionHistoryComment",
     "frontendLoggingSettings", "frontendLoggingTargetSet", "frontendLoggingTargetRemove",
   ]) {

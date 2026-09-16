@@ -39,3 +39,40 @@ Commit: 4.9.9-paj-1-4 | Modalposition und KO-Rasterdarstellung korrigiert
   Added
   - [Software] Mobile Browserabnahme fuer ein aus vertikaler Scrollposition geoeffnetes Profilmodal mit sichtbarem Dialog und wiederhergestellter Listenposition erweitert.
   - [Tests] KO-Raster-Browserabnahme um gleiche kompakte Matchbox- und Rasterhoehen vor und nach der Anmeldung auf Mobil- und Desktopbreiten erweitert; die 24-Pixel-Mindesthoehe der Profilbuttons bleibt abgesichert.
+
+[4.9.9-paj-1-5] - 2026-09-16
+Commit: 4.9.9-paj-1-5 | Meldungsquittierung und Profilkontakte erweitert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-4-x` gesetzt.
+  - [Software] Neue Terminsetzungen, Terminaenderungen, Terminabsagen, Ergebniseintraege und Ergebniskorrekturen speichern fuer den handelnden Matchteilnehmer eine sichtbare, bereits gelesene persoenliche Aktivitaetsmeldung ohne externe Eigenzustellung; Doppelpartner und Gegner erhalten ihre Meldungen ungelesen, bestehende Meldungen bleiben unveraendert.
+  - [Datenbank] Messaging-Schema 10 ergaenzt eine idempotente Operationstabelle fuer atomare Sammelquittierungen; Eigenaktivitaeten verwenden den bestehenden personengebundenen Receipt mit dem Ereigniszeitpunkt als initiale Kenntnisnahme.
+  - [Software] Der Meldungsreiter im Eigenprofil besitzt einen eigenen Scrollbereich und behaelt `Alle als gelesen markieren` dauerhaft darunter sichtbar; die Aktion quittiert serverseitig alle ungelesenen Meldungen einschliesslich noch nicht geladener Seiten und ist ohne offene Meldung deaktiviert. Nach erfolgreicher einzelner Kenntnisnahme schliesst der Meldungsdialog sofort und gibt den Fokus an die aktualisierte Meldungszeile zurueck.
+  - [Software] Nichtleere Telefonnummern und Kontakt-E-Mail-Adressen im Profil erhalten neben der Kopieraktion einen Telefonhoerer beziehungsweise Briefumschlag; die Links oeffnen die normalisierte Nummer ueber `tel:` oder eine leere, bereits adressierte Nachricht ueber `mailto:` in der systemseitigen Standard-App.
+  - [Observability] Die Sammelquittierung besitzt strukturierte Abschlusslogs und die bestehende vierphasige Auditkette mit kontrollierten Zaehlern und IDs ohne Meldungstexte.
+
+  Added
+  - [Software] Authentifizierter Endpoint `acknowledgeAllMessages` markiert alle aktuell ungelesenen eigenen Meldungen atomar und idempotent, aktualisiert Revision und Ungelesenanzahl und publiziert bei Aenderung genau einen privaten Summary-Snapshot.
+  - [Tests] Repository-, Service-, Vertrags- und Integrationstests sichern Schema-10-Migration, unveraenderte Bestandsmeldungen, sichtbare bereits gelesene Eigenaktivitaeten ohne externe Eigenzustellung, ungelesene Doppelpartner- und Gegnerzustellung, paginationsunabhaengige Sammelquittierung, Idempotenz, WebSocket-Summary, Audit und kontrollierte Logs ab.
+  - [Tests] Browserabnahme sichert auf Desktop und Mobilgeraeten den dauerhaft sichtbaren Sammelbutton unter einer eigenstaendig scrollbaren Meldungsliste, die unmittelbare Aktualisierung von Tab, Profilbadge und mobilem Menue sowie die Kontakt-App-Links mit normalisierten Zieladressen ab.
+  - [Dokumentation] Dateigenaue Uebernahmeliste fuer Profilseite, Endpointvertrag, Datenbankmodell und Architektur zur Behandlung eigener Aktivitaetsmeldungen, Sammelquittierung, Kontakt-App-Links und Messaging-Schema 10 vorbereitet.
+
+Dokumentationsuebernahme beim Main-Versionssprung
+
+  Project/software/ARCHITEKTUR.txt
+  - Dokumentieren, dass neue Termin-, Absage- und Ergebnisereignisse die persoenliche Projektion eines beteiligten Akteurs mit dem Ereigniszeitpunkt bereits quittiert und ohne externe Zustellung speichern; die sichtbare Aktivitaet bleibt in Inbox, Reporting und Historie erhalten, erhoeht aber keinen Ungelesenzaehler, waehrend alle anderen Beteiligten ihre Projektion ungelesen erhalten.
+  - Messaging-Schema 10 mit der benutzer- und operationId-gebundenen atomaren Sammelquittierung sowie der nur bei tatsaechlicher Aenderung fortgeschriebenen Revision und Ungelesenanzahl aufnehmen.
+
+  Project/software/DATENBANK.txt
+  - Messaging-Schema von 9 auf 10 anheben und `message_bulk_ack_operations` mit `user_id + operation_id` als Primaerschluessel sowie `acknowledged_at` und `changed_count` dokumentieren; spaeter eintreffende Meldungen bleiben ungelesen, Bestandsmeldungen und bestehende Quittierungen bleiben bei der additiven Migration unveraendert.
+  - Fuer Terminsetzung, Terminaenderung, Terminabsage und Ergebnisereignisse dokumentieren, dass alle Matchteilnehmer erhalten bleiben, die Eigenprojektion des beteiligten Akteurs sichtbar und bereits quittiert gespeichert sowie nicht extern zugestellt wird und Partner beziehungsweise Gegner ihre Projektion ungelesen erhalten.
+
+  Project/software/ENDPOINTS.txt
+  - Bei Terminsetzung, Terminaenderung, Terminabsage und Ergebnisereignissen die sichtbare, initial gelesene Eigenprojektion ohne externe Eigenzustellung sowie die ungelesene Zustellung an Partner und Gegner ergaenzen; Bestandsmeldungen werden nicht rueckwirkend veraendert.
+  - `acknowledgeAllMessages { operationId }` als authentifizierten, atomaren und idempotenten Schreibendpoint dokumentieren: Er quittiert alle zum Operationszeitpunkt ungelesenen eigenen Meldungen unabhaengig von der geladenen Seite und liefert `success`, `changedCount`, `acknowledgedAt`, `repeated`, `revision` und `unreadCount`; bei einer Aenderung publiziert er genau einen privaten Summary-Snapshot. Audit umfasst `started` und `success|failed|unknown`, abgewiesene Requests werden als `failed` erfasst; das Abschlusslog transportiert nur Empfaenger-ID, Zaehler, Wiederholungsstatus, Dauer, Ergebnis und Fehlercode.
+
+  Project/software/seiten/players.txt
+  - Den eigenen vertikalen Scrollbereich des Meldungsreiters und die dauerhaft darunter sichtbare Aktion `Alle als gelesen markieren` dokumentieren; sie quittiert auch nicht geladene Seiten und bleibt ohne ungelesene Meldung deaktiviert.
+  - Dokumentieren, dass eigene Termin- und Ergebnisaktivitaeten sichtbar, initial gelesen, nicht fett, ohne Kenntnisnahme und ohne externe Eigenzustellung erscheinen, waehrend andere Beteiligte ungelesene Meldungen erhalten und die neutrale Bewerbshistorie alle Teilnehmer behaelt; Bestandsmeldungen bleiben unveraendert.
+  - Nach erfolgreicher einzelner Kenntnisnahme schliesst der Meldungsdialog sofort und fokussiert die aktualisierte Meldungszeile; bei Fehlern bleibt er mit Fehlerstatus offen.
+  - Nichtleere E-Mail-Adressen und Telefonnummern erhalten neben der Kopieraktion einen Briefumschlag beziehungsweise Telefonhoerer. `mailto:` oeffnet eine leere Nachricht mit URI-sicher kodiertem Empfaenger, `tel:` die auf Pluszeichen und Ziffern normalisierte Nummer in der jeweiligen systemseitigen Standard-App; leere Werte erhalten keine Kontaktaktionen.

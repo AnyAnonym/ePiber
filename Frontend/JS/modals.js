@@ -24,6 +24,7 @@ const readMyMessageSummary = createEndpoint("myMessageSummary");
 const readMyMessages = createEndpoint("myMessages");
 const readMyMessage = createEndpoint("myMessage");
 const acknowledgeMessage = createEndpoint("acknowledgeMessage");
+const acknowledgeAllMessages = createEndpoint("acknowledgeAllMessages");
 const addMatch = createEndpoint("addMatch");
 const setMatchAppointment = createEndpoint("setMatchAppointment");
 const clearMatchAppointment = createEndpoint("clearMatchAppointment");
@@ -1348,7 +1349,7 @@ async function copyProfileValue(value, label) {
   }
 }
 
-function appendProfileField(container, label, value, copyValue = "", signal) {
+function appendProfileField(container, label, value, copyValue = "", signal, contactAction = null) {
   const row = document.createElement("p");
   row.className = "profile-field";
   const strong = document.createElement("strong");
@@ -1373,6 +1374,19 @@ function appendProfileField(container, label, value, copyValue = "", signal) {
     row.appendChild(copyButton);
   }
 
+  if (contactAction) {
+    const actionLink = document.createElement("a");
+    actionLink.className = "profile-contact-button";
+    actionLink.href = contactAction.href;
+    actionLink.setAttribute("aria-label", contactAction.label);
+    actionLink.title = contactAction.label;
+    const icon = document.createElement("span");
+    icon.className = `profile-contact-icon ${contactAction.iconClass}`;
+    icon.setAttribute("aria-hidden", "true");
+    actionLink.appendChild(icon);
+    row.appendChild(actionLink);
+  }
+
   container.appendChild(row);
 }
 
@@ -1380,8 +1394,16 @@ function appendContactFields(container, profile, signal) {
   const email = String(profile.email || "").trim();
   const phone = String(profile.phone || "").trim();
   const displayedPhone = formatPhone(phone);
-  appendProfileField(container, "E-Mail", email, email, signal);
-  appendProfileField(container, "Telefon", displayedPhone, phone ? displayedPhone : "", signal);
+  appendProfileField(container, "E-Mail", email, email, signal, email ? {
+    href: `mailto:${encodeURIComponent(email).replace("%40", "@")}`,
+    label: "E-Mail verfassen",
+    iconClass: "email",
+  } : null);
+  appendProfileField(container, "Telefon", displayedPhone, phone ? displayedPhone : "", signal, phone ? {
+    href: `tel:${displayedPhone.replace(/[^+\d]/g, "")}`,
+    label: "Telefon-App öffnen",
+    iconClass: "phone",
+  } : null);
   appendProfileField(container, "Geburtsdatum", formatBirthDate(profile.birthDate), "", signal);
 }
 
@@ -1394,6 +1416,9 @@ function activateProfileTab(tab) {
     candidate.setAttribute("aria-selected", String(selected));
     const panel = document.getElementById(candidate.getAttribute("aria-controls"));
     if (panel) panel.hidden = !selected;
+  }
+  if (tablist.id === "profileTabs") {
+    document.getElementById("profileBody")?.classList.toggle("messages-active", tab.getAttribute("aria-controls") === "profileMessagesPanel");
   }
   tab.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
 }
@@ -1422,15 +1447,45 @@ function updateMessagesTabLabel() {
   messageState.tab.textContent = `Meldungen (${messageState.unreadCount})`;
 }
 
+function updateAcknowledgeAllButton() {
+  const button = document.getElementById("acknowledgeAllMessagesButton");
+  if (!button || !messageState) return;
+  button.disabled = messageState.loading || messageState.acknowledgingAll || messageState.unreadCount === 0;
+}
+
+function prepareMessagesPanel(panel, signal) {
+  panel.replaceChildren();
+  const scroll = document.createElement("div");
+  scroll.id = "profileMessagesScroll";
+  scroll.className = "profile-messages-scroll";
+  const actions = document.createElement("div");
+  actions.className = "profile-message-actions";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "acknowledgeAllMessagesButton";
+  button.className = "btn-login";
+  button.textContent = "Alle als gelesen markieren";
+  button.addEventListener("click", acknowledgeAllOpenMessages, { signal });
+  const status = document.createElement("p");
+  status.id = "acknowledgeAllMessagesStatus";
+  status.className = "profile-message-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  actions.append(button, status);
+  panel.append(scroll, actions);
+}
+
 function renderMessageList({ append = false } = {}) {
   if (!messageState) return;
-  const panel = document.getElementById("profileMessagesPanel");
+  const panel = document.getElementById("profileMessagesScroll");
+  if (!panel) return;
   if (!append) panel.replaceChildren();
   if (!messageState.messages.length) {
     const empty = document.createElement("p");
     empty.className = "message-list-empty";
     empty.textContent = "Keine Meldungen vorhanden.";
     panel.appendChild(empty);
+    updateAcknowledgeAllButton();
     return;
   }
   const list = document.createElement("div");
@@ -1482,14 +1537,16 @@ function renderMessageList({ append = false } = {}) {
     more.addEventListener("click", () => loadMessages({ append: true }), { once: true, signal: profileActionController?.signal });
     panel.appendChild(more);
   }
+  updateAcknowledgeAllButton();
 }
 
 async function loadMessages({ append = false } = {}) {
   if (!messageState || messageState.loading) return;
   messageState.loading = true;
   const generation = profileRequestGeneration;
-  const panel = document.getElementById("profileMessagesPanel");
+  const panel = document.getElementById("profileMessagesScroll");
   if (!append) panel.textContent = "Lade Meldungen...";
+  updateAcknowledgeAllButton();
   try {
     const params = { limit: 50 };
     if (append && messageState.nextCursor) params.cursor = messageState.nextCursor;
@@ -1511,6 +1568,34 @@ async function loadMessages({ append = false } = {}) {
     }
   } finally {
     if (messageState) messageState.loading = false;
+    updateAcknowledgeAllButton();
+  }
+}
+
+async function acknowledgeAllOpenMessages() {
+  if (!messageState || messageState.acknowledgingAll || messageState.unreadCount === 0) return;
+  const operationKey = "messages:acknowledge-all";
+  const status = document.getElementById("acknowledgeAllMessagesStatus");
+  messageState.acknowledgingAll = true;
+  status.textContent = "Wird gespeichert...";
+  updateAcknowledgeAllButton();
+  try {
+    const result = await acknowledgeAllMessages({ operationId: getOperationId(operationKey) });
+    if (!result.data?.success) throw new Error(errorMessage(result.data, "Meldungen konnten nicht als gelesen markiert werden."));
+    releaseOperationId(operationKey);
+    messageState.messages = messageState.messages.map((message) => ({ ...message, acknowledged: true }));
+    messageState.unreadCount = Math.max(0, Number(result.data.unreadCount) || 0);
+    messageState.revision = result.data.revision ?? messageState.revision;
+    updateMessagesTabLabel();
+    renderMessageList();
+    status.textContent = result.data.changedCount > 0 ? "Alle offenen Meldungen wurden als gelesen markiert." : "Alle Meldungen waren bereits gelesen.";
+    window.dispatchEvent(new CustomEvent("epiber-message-summary-refresh"));
+  } catch (error) {
+    releaseOperationId(operationKey, error);
+    status.textContent = errorMessage(error, "Meldungen konnten nicht als gelesen markiert werden.");
+  } finally {
+    if (messageState) messageState.acknowledgingAll = false;
+    updateAcknowledgeAllButton();
   }
 }
 
@@ -1572,7 +1657,6 @@ async function acknowledgeOpenMessage(id, message, button) {
     message.acknowledged = true;
     status.textContent = "";
     button.hidden = true;
-    messageDetailModal.querySelector(".close")?.focus();
     announcement.textContent = "Zur Kenntnis genommen.";
     if (messageState) {
       messageState.messages = messageState.messages.map((entry) => (
@@ -1582,11 +1666,11 @@ async function acknowledgeOpenMessage(id, message, button) {
       messageState.revision = result.data.revision ?? messageState.revision;
       updateMessagesTabLabel();
       renderMessageList();
-      await loadMessages();
       messageDetailReturnFocus = [...document.querySelectorAll("#profileMessagesPanel .message-row")]
         .find((row) => row.dataset.messageId === id) || null;
     }
     window.dispatchEvent(new CustomEvent("epiber-message-summary-refresh"));
+    closeModal(messageDetailModal);
   } catch (error) {
     releaseOperationId(operationKey, error);
     status.textContent = errorMessage(error, "Meldung konnte nicht bestätigt werden.");
@@ -1690,6 +1774,7 @@ window.openProfileModal = async (options = {}) => {
   archiveCompetitionTabs.replaceChildren();
   archiveCompetitionTabs.hidden = true;
   messagesPanel.replaceChildren();
+  document.getElementById("profileBody")?.classList.remove("messages-active");
   rankingPanelsElement.replaceChildren();
   systemActionsElement.replaceChildren();
   adminActionsElement.replaceChildren();
@@ -1906,6 +1991,7 @@ window.openProfileModal = async (options = {}) => {
     };
     appendProfileTab(tabsElement, "System", systemPanel, true, actionSignal, hideCompetitionTabs);
     if (ownProfile) {
+      prepareMessagesPanel(messagesPanel, actionSignal);
       let unreadCount = 0;
       let revision = null;
       try {
@@ -1919,12 +2005,14 @@ window.openProfileModal = async (options = {}) => {
       messageState = {
         loaded: false,
         loading: false,
+        acknowledgingAll: false,
         messages: [],
         nextCursor: null,
         revision,
         tab: null,
         unreadCount,
       };
+      updateAcknowledgeAllButton();
       messageState.tab = appendProfileTab(
         tabsElement,
         `Meldungen (${unreadCount})`,

@@ -136,7 +136,7 @@ test("Forderung erzeugt fuer Gegner und Forderer getrennte Meldungen samt extern
   repository.close();
 });
 
-test("Spieltermin erzeugt ein gemeinsames Bewerbsereignis und zwei persoenliche Meldungen mit Akteur", async () => {
+test("Spieltermin speichert die Eigenmeldung des Akteurs sichtbar und bereits gelesen", async () => {
   dataStore.resetForTests();
   dataStore.set("players", [["ID", "Notification"], ["p1", ""], ["p2", ""], ["p3", ""], ["p4", ""]], { source: "test" });
   dataStore.set("bewerbe", [["ID", "Bezeichnung", "BewerbsartID"], ["ranking-1", "Herren", "2"]], { source: "test" });
@@ -185,6 +185,8 @@ test("Spieltermin erzeugt ein gemeinsames Bewerbsereignis und zwei persoenliche 
     interaction: { commentCount: 0, reactionTotal: 0, reactions: [], myReaction: null },
   });
   assert.equal(service.messages({ id: "p1" }, { limit: 10 }).messages[0].subject, "Spieltermin festgelegt mit Peter Player");
+  assert.equal(service.messages({ id: "p2" }, { limit: 10 }).messages[0].acknowledgedAt, 2000);
+  assert.deepEqual(repository.summary("p2"), { revision: 1, totalCount: 1, unreadCount: 0 });
   assert.equal(service.message({ id: "p1" }, first.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Dein Match gegen Peter Player ist für den 05.09.2026, 18:00 Uhr geplant.");
   const changed = await service.ensureMatchAppointmentEvent({
     ...input,
@@ -199,18 +201,25 @@ test("Spieltermin erzeugt ein gemeinsames Bewerbsereignis und zwei persoenliche 
   assert.equal(changed.event.detail, "Alter Spieltermin: 05.09.2026, 18:00 Uhr; neuer Spieltermin: 10.09.2026, 19:00 Uhr");
   assert.equal(changed.participants[0].subject, "Spieltermin geändert mit Peter Player");
   assert.equal(changed.participants[0].body, "Der Termin für dein Match gegen Peter Player wurde von 05.09.2026, 18:00 Uhr auf 10.09.2026, 19:00 Uhr geändert.");
+  assert.equal(changed.participants.find(({ recipient }) => recipient === "p1").acknowledgedAt, 2000);
+  assert.equal(changed.participants.find(({ recipient }) => recipient === "p2").acknowledgedAt, null);
   assert.deepEqual(published.map(({ topic }) => topic), ["messages:p1", "messages:p2", "messages:p1", "messages:p2"]);
   repository.close();
 });
 
-test("Doppeltermin informiert alle vier Beteiligten mit der gegnerischen Seite", async () => {
+test("Doppeltermin speichert den Akteur gelesen und informiert Partner und Gegner ungelesen", async () => {
   dataStore.resetForTests();
-  dataStore.set("players", [["ID", "Notification"], ["p1", ""], ["p2", ""], ["p3", ""], ["p4", ""]], { source: "test" });
+  dataStore.set("players", [["ID", "Notification"], ["p1", ""], ["p2", "Email"], ["p3", ""], ["p4", "Email"]], { source: "test" });
   dataStore.set("bewerbe", [["ID", "Bezeichnung", "BewerbsartID"], ["cup-1", "Doppelcup", "ko"]], { source: "test" });
   dataStore.set("matches1", [["ID", "BewerbID", "BewerbRunde"], ["m-double", "cup-1", "F"]], { source: "test" });
   const repository = new MessagingRepository(":memory:");
   repository.init();
-  const service = new MessagingService({ repository, emailAdapter: new EmailMessagingAdapter(), whatsappAdapter: new WhatsappMessagingAdapter() });
+  const externalRecipients = [];
+  const service = new MessagingService({
+    repository,
+    emailAdapter: { async send({ recipientId }) { externalRecipients.push(recipientId); return { status: "delivered" }; } },
+    whatsappAdapter: new WhatsappMessagingAdapter(),
+  });
   const names = { p1: "Ada A", p2: "Peter B", p3: "Chris C", p4: "Olivia D" };
 
   const result = await service.ensureMatchAppointmentEvent({
@@ -227,6 +236,11 @@ test("Doppeltermin informiert alle vier Beteiligten mit der gegnerischen Seite",
   });
 
   assert.equal(result.participants.length, 4);
+  assert.notEqual(result.participants.find(({ recipient }) => recipient === "p4").acknowledgedAt, null);
+  assert.equal(service.messages({ id: "p4" }, { limit: 10 }).messages.length, 1);
+  assert.equal(service.messages({ id: "p4" }, { limit: 10 }).unreadCount, 0);
+  assert.equal(service.messages({ id: "p2" }, { limit: 10 }).messages.length, 1);
+  assert.deepEqual(externalRecipients, ["p2"]);
   assert.equal(result.event.summary, "Ada A / Chris C und Peter B / Olivia D haben den Spieltermin für den 05.09.2026, 18:00 Uhr vereinbart.");
   assert.equal(result.participants.find(({ recipient }) => recipient === "p1").subject, "Spieltermin festgelegt mit Peter B / Olivia D");
   assert.equal(result.participants.find(({ recipient }) => recipient === "p4").subject, "Spieltermin festgelegt mit Ada A / Chris C");
@@ -246,6 +260,12 @@ test("Terminabsage sendet keinen Admin-Grund an Beteiligte", async () => {
   assert.equal(result.event.type, "appointment_cancelled");
   assert.equal(result.event.detail.includes("Platz gesperrt"), true);
   assert.equal(result.participants.every(({ body }) => !body.includes("Platz gesperrt")), true);
+  const playerCancellation = await service.ensureMatchAppointmentCancelledEvent({
+    operationId: "00000000-0000-4000-8000-000000000304", matchId: "m-cancel-player", previousDate: "260906-1900", competitionId: "cup-1",
+    participantIds: ["p1", "p2"], participantNames: { p1: "Ada", p2: "Peter" }, teams: [["p1"], ["p2"]], actorId: "p1", actorName: "Ada",
+  });
+  assert.notEqual(playerCancellation.participants.find(({ recipient }) => recipient === "p1").acknowledgedAt, null);
+  assert.equal(playerCancellation.participants.find(({ recipient }) => recipient === "p2").acknowledgedAt, null);
   repository.close();
 });
 
@@ -322,7 +342,7 @@ test("Admin-Korrekturen nennen Grund und Administrator in Bewerbshistorie und be
   repository.close();
 });
 
-test("Ergebnisereignisse informieren jeden eindeutigen Teilnehmer ohne Bestaetigungstyp", async () => {
+test("Ergebnisereignisse speichern Eigenmeldungen sichtbar gelesen und Fremdmeldungen ungelesen", async () => {
   dataStore.resetForTests();
   dataStore.set("players", [["ID", "Notification"], ["p1", ""], ["p2", ""]], { source: "test" });
   dataStore.set("bewerbe", [["ID", "Bezeichnung", "BewerbsartID"], ["cup-1", "Cup", "3"]], { source: "test" });
@@ -352,9 +372,9 @@ test("Ergebnisereignisse informieren jeden eindeutigen Teilnehmer ohne Bestaetig
   assert.equal(outcome.participants.length, 2);
   assert.deepEqual(new Set(outcome.participants.map(({ type }) => type)), new Set(["result_corrected"]));
   assert.equal(outcome.event.summary, "Ada Aufschlag gewinnt gegen Peter Player.");
-  assert.equal(service.message({ id: "p1" }, outcome.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Du gewinnst das Match gegen Peter Player. Ergebnis: 6-4/2-1 (Aufgabe). Grund: Falsche Erfassung");
+  assert.equal(outcome.participants.find(({ recipient }) => recipient === "p1").acknowledgedAt, 4000);
+  assert.equal(service.messages({ id: "p1" }, { limit: 10 }).messages[0].acknowledgedAt, 4000);
   assert.equal(service.message({ id: "p2" }, outcome.participants.find(({ recipient }) => recipient === "p2").id).message.body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 6-4/2-1 (Aufgabe). Grund: Falsche Erfassung");
-  assert.equal(service.messages({ id: "p1" }, { limit: 10 }).messages[0].subject, "Match gewonnen: Cup");
   assert.equal(service.messages({ id: "p2" }, { limit: 10 }).messages[0].subject, "Match verloren: Cup");
   assert.match(outcome.event.detail, /Grund: Falsche Erfassung/);
   assert.equal(outcome.event.detail.includes("Abschlussart"), false);
@@ -379,7 +399,8 @@ test("Ergebnisereignisse informieren jeden eindeutigen Teilnehmer ohne Bestaetig
   assert.equal(historyEntry.summary, "Peter Player / Paula Passierball gewinnt durch W.O. von Ada Aufschlag / Alfred Ass.");
   assert.equal(historyEntry.result, "W.O.");
   assert.equal(service.message({ id: "p1" }, walkover.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Du verlierst durch W.O.");
-  assert.equal(service.message({ id: "p3" }, walkover.participants.find(({ recipient }) => recipient === "p3").id).message.body, "Du gewinnst durch W.O. von Ada Aufschlag / Alfred Ass.");
+  assert.equal(service.messages({ id: "p3" }, { limit: 10 }).messages[0].acknowledgedAt, 4000);
+  assert.equal(service.message({ id: "p4" }, walkover.participants.find(({ recipient }) => recipient === "p4").id).message.body, "Du gewinnst durch W.O. von Ada Aufschlag / Alfred Ass.");
   const retirementWithoutResult = await service.ensureMatchResultEvent({
     operationId: "00000000-0000-4000-8000-000000000503",
     matchId: "m-retirement-without-result",
@@ -396,7 +417,8 @@ test("Ergebnisereignisse informieren jeden eindeutigen Teilnehmer ohne Bestaetig
   });
   assert.equal(retirementWithoutResult.event.result, "(Aufgabe)");
   assert.equal(service.message({ id: "p1" }, retirementWithoutResult.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Du gewinnst das Match gegen Peter Player. Ergebnis: (Aufgabe).");
-  assert.equal(service.message({ id: "p2" }, retirementWithoutResult.participants.find(({ recipient }) => recipient === "p2").id).message.body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: (Aufgabe).");
+  assert.equal(retirementWithoutResult.participants.find(({ recipient }) => recipient === "p2").acknowledgedAt, 4000);
+  assert.equal(service.messages({ id: "p2" }, { limit: 10 }).messages.find(({ id }) => id === retirementWithoutResult.participants.find(({ recipient }) => recipient === "p2").id).acknowledgedAt, 4000);
   repository.close();
 });
 
@@ -579,6 +601,66 @@ test("Ranglisten-Rueckzug erzeugt ein zentrales Einteilnehmerereignis und Wettbe
   assert.equal(service.acknowledge({ id: "p7" }, { operationId: "00000000-0000-4000-8000-000000000778", messageId: first.message.id }).repeated, true);
   assert.equal(repository.summary("p7").unreadCount, 0);
   repository.close();
+});
+
+test("Sammelbestaetigung markiert alle offenen Meldungen idempotent und publiziert nur eine Summary", async () => {
+  dataStore.resetForTests();
+  dataStore.set("players", [["ID", "Notification"], ["p7", ""]], { source: "test" });
+  const repository = new MessagingRepository(":memory:", { now: () => 8000 });
+  repository.init();
+  const published = [];
+  const logs = [];
+  const service = new MessagingService({
+    repository,
+    now: () => 8000,
+    publish: (topic, data) => published.push({ topic, data }),
+    log: (level, event, fields) => logs.push({ level, event, fields }),
+  });
+  await service.ensureChallengeMessage({ matchId: "m-bulk-1", recipientId: "p7", competitionName: "Cup", challengerId: "p1", challengerName: "Ada" });
+  await service.ensureChallengeMessage({ matchId: "m-bulk-2", recipientId: "p7", competitionName: "Cup", challengerId: "p2", challengerName: "Berta" });
+  published.length = 0;
+  const params = { operationId: "00000000-0000-4000-8000-000000000779" };
+  const first = service.acknowledgeAll({ id: "p7" }, params);
+  const repeated = service.acknowledgeAll({ id: "p7" }, params);
+  assert.equal(first.changedCount, 2);
+  assert.equal(first.unreadCount, 0);
+  assert.equal(repeated.repeated, true);
+  assert.deepEqual(published, [{ topic: "messages:p7", data: { revision: 3, unreadCount: 0 } }]);
+  assert.deepEqual(logs.filter(({ event }) => event === "message_bulk_acknowledgment_completed").map(({ fields }) => ({
+    recipientId: fields.recipientId, changedCount: fields.changedCount, repeated: fields.repeated, result: fields.result,
+  })), [
+    { recipientId: "p7", changedCount: 2, repeated: false, result: "success" },
+    { recipientId: "p7", changedCount: 2, repeated: true, result: "success" },
+  ]);
+  repository.close();
+});
+
+test("Sammelbestaetigung loggt einen unklaren Schreibausgang kontrolliert", () => {
+  const logs = [];
+  const repository = {
+    acknowledgeAll() {
+      throw Object.assign(new Error("uncertain"), { code: "WRITE_OUTCOME_UNKNOWN", status: 503 });
+    },
+  };
+  const service = new MessagingService({
+    repository,
+    now: () => 9000,
+    log: (level, event, fields) => logs.push({ level, event, fields }),
+  });
+
+  assert.throws(() => service.acknowledgeAll({ id: "p7" }, {
+    operationId: "00000000-0000-4000-8000-000000000780",
+  }), { code: "WRITE_OUTCOME_UNKNOWN" });
+  assert.deepEqual(logs, [{
+    level: "warn",
+    event: "message_bulk_acknowledgment_completed",
+    fields: {
+      recipientId: "p7",
+      durationMs: 0,
+      result: "unknown",
+      errorCode: "WRITE_OUTCOME_UNKNOWN",
+    },
+  }]);
 });
 
 test("Bewerbshistorie projiziert Ergebnis, Akteur und eine globale Bewerbszuordnung kontrolliert", () => {

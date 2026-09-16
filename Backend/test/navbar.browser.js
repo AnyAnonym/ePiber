@@ -44,12 +44,25 @@ let messages = [
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
   { messageId: "read-new", createdAt: "2026-08-31T11:00:00.000Z", competitionName: "", roundName: "", subject: "Bereits bestätigt", actorName: "System", acknowledged: true, acknowledgedAt: "2026-08-31T11:30:00.000Z" },
 ];
+if (new URLSearchParams(window.location.search).get("longMessages") === "1") {
+  messages.push(...Array.from({ length: 12 }, (_, index) => ({
+    messageId: "read-extra-" + index,
+    createdAt: "2026-08-28T0" + (index % 10) + ":00:00.000Z",
+    competitionName: "Archivcup",
+    roundName: "",
+    subject: "Gelesene Zusatzmeldung " + (index + 1),
+    actorName: "System",
+    acknowledged: true,
+    acknowledgedAt: "2026-08-31T11:30:00.000Z",
+  })));
+}
 const messageBodies = {
   "unread-new": Array.from({ length: 80 }, (_, index) => "Lange Meldungszeile " + (index + 1)).join("\\n"),
   "unread-old": "Bitte den Turnierhinweis beachten.",
   "read-new": "Diese Meldung wurde bereits bestätigt.",
 };
 window.__acknowledgeCalls = [];
+window.__acknowledgeAllCalls = [];
 window.__matchDateCalls = [];
 window.__adminRankingCalls = [];
 window.__matchResultCalls = [];
@@ -198,7 +211,7 @@ export function createEndpoint(name) {
     ] } };
     if (name === "myProfile") return { data: { success: true, profile: {
        id: role + "-1", firstName: "Own", lastName: "Player", login: role + "-login",
-        email: "contact@example.test", phone: "", birthDate: "", notifications: noNotifications ? [] : ["Email", "Whatsapp"], competitions: emptyProfile ? [] : competitions.filter(({ competitionId }) => competitionId.startsWith("r")), rankings: emptyProfile ? [] : withdrawn ? [{
+        email: "contact+team?x@example.test", phone: "0043 664 1234567", birthDate: "", notifications: noNotifications ? [] : ["Email", "Whatsapp"], competitions: emptyProfile ? [] : competitions.filter(({ competitionId }) => competitionId.startsWith("r")), rankings: emptyProfile ? [] : withdrawn ? [{
          competitionId: "2", competitionName: "Mobile Rangliste", rank: 0, status: "withdrawn",
          withdrawal: { withdrawnAt: "260829-1200", previousRank: 4, reason: "Pause" },
        }] : rankings,
@@ -209,7 +222,7 @@ export function createEndpoint(name) {
       return { data: { success: true, profile: {
         id: "p2", firstName: "Foreign", lastName: "Player",
         ...(role === "admin" ? { login: "foreign-login", passwordSetupAllowed: false } : {}),
-        email: "directory@example.test", phone: "", birthDate: "", competitions, rankings: newcomer ? [{
+        email: "directory@example.test", phone: "0043 699 7654321", birthDate: "", competitions, rankings: newcomer ? [{
           competitionId: "2", competitionName: "Mobile Rangliste", rank: 2, status: "active", canChallenge: true,
         }] : profileRankings,
       } } };
@@ -243,6 +256,13 @@ export function createEndpoint(name) {
         unreadCount: messages.filter((message) => !message.acknowledged).length,
         revision: messageRevision,
       } };
+    }
+    if (name === "acknowledgeAllMessages") {
+      window.__acknowledgeAllCalls.push({ ...params });
+      const changedCount = messages.filter((message) => !message.acknowledged).length;
+      messages = messages.map((message) => ({ ...message, acknowledged: true, acknowledgedAt: message.acknowledgedAt || "2026-08-31T12:00:00.000Z" }));
+      messageRevision += changedCount > 0 ? 1 : 0;
+      return { data: { success: true, changedCount, unreadCount: 0, revision: messageRevision } };
     }
     if (name === "setMatchAppointment" || name === "adminSetMatchAppointment") {
       window.__matchDateCalls.push({ endpoint: name, ...params });
@@ -615,7 +635,11 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     await playerPage.evaluate(() => window.openProfileModal());
     await playerPage.locator("#profileModal").waitFor({ state: "visible" });
     assert.match(await playerPage.locator("#profileText").textContent(), /Login: player-login/);
-    assert.match(await playerPage.locator("#profileText").textContent(), /E-Mail: contact@example\.test/);
+    assert.match(await playerPage.locator("#profileText").textContent(), /E-Mail: contact\+team\?x@example\.test/);
+    assert.equal(await playerPage.getByRole("button", { name: "E-Mail kopieren" }).count(), 1);
+    assert.equal(await playerPage.getByRole("link", { name: "E-Mail verfassen" }).getAttribute("href"), "mailto:contact%2Bteam%3Fx@example.test");
+    assert.equal(await playerPage.getByRole("button", { name: "Telefon kopieren" }).count(), 1);
+    assert.equal(await playerPage.getByRole("link", { name: "Telefon-App öffnen" }).getAttribute("href"), "tel:+436641234567");
     assert.deepEqual(await playerPage.locator("#profileTabs [role=tab]").allTextContents(), [
       "System", "Meldungen (2)", "Aktuell", "Archiv",
     ]);
@@ -749,6 +773,8 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     await playerPage.locator("#profileModal").waitFor({ state: "visible" });
     assert.doesNotMatch(await playerPage.locator("#profileText").textContent(), /Login:/);
     assert.match(await playerPage.locator("#profileText").textContent(), /E-Mail: directory@example\.test/);
+    assert.equal(await playerPage.getByRole("link", { name: "E-Mail verfassen" }).getAttribute("href"), "mailto:directory@example.test");
+    assert.equal(await playerPage.getByRole("link", { name: "Telefon-App öffnen" }).getAttribute("href"), "tel:+436997654321");
     assert.equal(await playerPage.getByRole("tab", { name: /Meldungen/ }).count(), 0);
     await playerPage.getByRole("tab", { name: "Aktuell", exact: true }).click();
     assert.deepEqual(await playerPage.locator("#profileCurrentCompetitionTabs [role=tab]").allTextContents(), [
@@ -1267,6 +1293,7 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
     assert.equal(await rows.nth(0).evaluate((row) => row.classList.contains("unread")), true);
     assert.equal(await rows.nth(1).evaluate((row) => row.classList.contains("unread")), true);
     assert.equal(await rows.nth(2).evaluate((row) => row.classList.contains("unread")), false);
+    assert.equal(await page.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).isEnabled(), true);
 
     await rows.first().focus();
     await page.keyboard.press("Enter");
@@ -1318,10 +1345,8 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
 
     await rows.first().click();
     await page.getByRole("button", { name: "Zur Kenntnis genommen", exact: true }).click();
-    await page.locator("#acknowledgeMessageButton").waitFor({ state: "hidden" });
-    assert.equal(await page.locator("#messageDetailStatus").isVisible(), false);
-    assert.equal(await page.locator("#messageDetailAnnouncement").textContent(), "Zur Kenntnis genommen.");
-    assert.equal(await page.locator("#messageDetailModal .close").evaluate((button) => document.activeElement === button), true);
+    await page.locator("#messageDetailModal").waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#profileModal").isVisible(), true);
     assert.deepEqual(await page.evaluate(() => window.__acknowledgeCalls), [{
       operationId: "operation-message:acknowledge:unread-new",
       messageId: "unread-new",
@@ -1330,10 +1355,17 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
     assert.equal(await page.locator("#profileMessagesPanel .message-row.unread").count(), 1);
     assert.equal(await page.locator("#profileButton .message-count-badge").textContent(), "1");
     assert.equal(await page.locator("#profileButtonMobile .message-count-badge").textContent(), "1");
+    assert.equal(await page.locator('#profileMessagesPanel .message-row[data-message-id="unread-new"]').evaluate((row) => document.activeElement === row), true);
+    await page.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => window.__acknowledgeAllCalls), [{ operationId: "operation-messages:acknowledge-all" }]);
+    assert.equal(await page.locator("#profileMessagesPanel .message-row.unread").count(), 0);
+    assert.equal(await page.locator("#profileMessagesPanelTab").textContent(), "Meldungen (0)");
+    assert.equal(await page.locator("#acknowledgeAllMessagesStatus").textContent(), "Alle offenen Meldungen wurden als gelesen markiert.");
+    assert.equal(await page.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).isDisabled(), true);
     await page.close();
 
     const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await mobilePage.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await mobilePage.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player&longMessages=1`, { waitUntil: "domcontentloaded" });
     await mobilePage.locator("#hamburgerBtn.has-unread-messages").waitFor({ state: "visible" });
     assert.equal(await mobilePage.locator("#hamburgerBtn").getAttribute("aria-label"), "Menü öffnen, 2 ungelesene Meldungen");
     assert.equal(await mobilePage.locator("#hamburgerBtn").evaluate((button) => getComputedStyle(button).color), "rgb(255, 77, 79)");
@@ -1351,12 +1383,22 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
       { color: "rgb(0, 0, 0)", fontSize: "14.4px", fontWeight: "700" },
       { color: "rgb(0, 0, 0)", fontSize: "12.8px", fontWeight: "400" },
     ]);
-    for (let unread = 2; unread > 0; unread--) {
-      await mobilePage.locator("#profileMessagesPanel .message-row.unread").first().click();
-      await mobilePage.getByRole("button", { name: "Zur Kenntnis genommen", exact: true }).click();
-      await mobilePage.locator("#acknowledgeMessageButton").waitFor({ state: "hidden" });
-      await mobilePage.locator("#messageDetailModal .close").click();
-    }
+    const mobileMessagesLayout = await mobilePage.locator("#profileMessagesPanel").evaluate((panel) => {
+      const scroll = panel.querySelector("#profileMessagesScroll");
+      const actions = panel.querySelector(".profile-message-actions");
+      scroll.scrollTop = scroll.scrollHeight;
+      const panelRect = panel.getBoundingClientRect();
+      const scrollRect = scroll.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      return {
+        listScrollable: scroll.scrollHeight > scroll.clientHeight,
+        panelContained: actionsRect.bottom <= panelRect.bottom + 1,
+        actionsBelowList: actionsRect.top >= scrollRect.bottom - 1,
+        buttonVisible: actions.querySelector("button").getBoundingClientRect().height > 0,
+      };
+    });
+    assert.deepEqual(mobileMessagesLayout, { listScrollable: true, panelContained: true, actionsBelowList: true, buttonVisible: true });
+    await mobilePage.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).click();
     await mobilePage.waitForFunction(() => !document.getElementById("hamburgerBtn").classList.contains("has-unread-messages"));
     assert.equal(await mobilePage.locator("#hamburgerBtn").getAttribute("aria-label"), "Menü öffnen");
     assert.equal(await mobilePage.locator("#hamburgerBtn").evaluate((button) => getComputedStyle(button).color), "rgb(255, 255, 255)");

@@ -171,12 +171,12 @@ body.modal-open {
   overflow-wrap: anywhere;
 }
 
-.profile-copy-button {
+.profile-copy-button,
+.profile-contact-button {
   position: relative;
   flex: 0 0 28px;
   width: 28px;
   height: 28px;
-  margin-left: auto;
   padding: 0;
   border: 1px solid #c5cad3;
   border-radius: 6px;
@@ -185,8 +185,21 @@ body.modal-open {
   cursor: pointer;
 }
 
+.profile-copy-button {
+  margin-left: auto;
+}
+
+.profile-contact-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .profile-copy-button:hover,
-.profile-copy-button:focus-visible {
+.profile-copy-button:focus-visible,
+.profile-contact-button:hover,
+.profile-contact-button:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
   background: #eef4ff;
@@ -216,6 +229,20 @@ body.modal-open {
 .profile-copy-button:hover .profile-copy-icon::after,
 .profile-copy-button:focus-visible .profile-copy-icon::after {
   background: #eef4ff;
+}
+
+.profile-contact-icon::before {
+  display: block;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.profile-contact-icon.email::before {
+  content: "\2709";
+}
+
+.profile-contact-icon.phone::before {
+  content: "\260e";
 }
 
 .profile-modal {
@@ -297,6 +324,10 @@ body.modal-open {
   padding: 20px 24px 24px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.profile-body.messages-active {
+  overflow: hidden;
 }
 
 .profile-panel[hidden] {
@@ -633,6 +664,39 @@ body.modal-open {
 .message-list {
   display: grid;
   gap: 8px;
+}
+
+#profileMessagesPanel:not([hidden]) {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.profile-messages-scroll {
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.profile-message-actions {
+  padding-top: 12px;
+  border-top: 1px solid #d6dbe3;
+  background: #fff;
+}
+
+.profile-message-actions .btn-login {
+  width: 100%;
+  margin-top: 0;
+}
+
+.profile-message-status {
+  min-height: 1.25rem;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
 }
 
 .message-row {

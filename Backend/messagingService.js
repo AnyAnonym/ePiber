@@ -107,15 +107,17 @@ class MessagingService {
     });
   }
 
-  participant({ identity, userId, role, displayName = "", type, subject, body, allowMissingPerson = false }) {
+  participant({ identity, userId, role, displayName = "", type, subject, body, allowMissingPerson = false, acknowledgedAt = null, externalDelivery = true }) {
     let external = [];
-    try {
-      external = this.person(userId).channels;
-    } catch (error) {
-      if (!allowMissingPerson || error.code !== "PERSON_NOT_FOUND") throw error;
+    if (externalDelivery) {
+      try {
+        external = this.person(userId).channels;
+      } catch (error) {
+        if (!allowMissingPerson || error.code !== "PERSON_NOT_FOUND") throw error;
+      }
     }
     return {
-      userId, role, displayName, messageId: stableId("msg", identity), type, subject, body,
+      userId, role, displayName, messageId: stableId("msg", identity), type, subject, body, acknowledgedAt,
       deliveries: [{ channel: "Inbox", status: "delivered" }, ...external.map((channel) => ({ channel, status: "pending" }))],
     };
   }
@@ -213,6 +215,8 @@ class MessagingService {
         subject: `${changed ? "Spieltermin geändert" : "Spieltermin festgelegt"} mit ${opponentName}`,
         body: `${changeText}${reason ? ` Administrator ${actorName || actorId} hat als Grund angegeben: ${reason}` : ""}`,
         allowMissingPerson: true,
+        acknowledgedAt: userId === String(actorId) ? createdAt : null,
+        externalDelivery: userId !== String(actorId),
       });
     });
     const firstTeamName = namedTeams[0].join(" / ");
@@ -250,6 +254,8 @@ class MessagingService {
         identity: `${identity}:${userId}`, userId, role: "participant", displayName: participantNames[userId] || userId,
         type: "appointment_cancelled", subject: `Spieltermin abgesagt mit ${opponentName}`,
         body: `Der Spieltermin für dein Match gegen ${opponentName} am ${previousDateText} wurde abgesagt.`, allowMissingPerson: true,
+        acknowledgedAt: userId === String(actorId) ? createdAt : null,
+        externalDelivery: userId !== String(actorId),
       });
     });
     const event = await this.ensureEvent({
@@ -308,6 +314,8 @@ class MessagingService {
           ? `${completionType === "walkover" ? recipientWon ? `Du gewinnst durch W.O. von ${namedTeams[2 - winnerSide].join(" / ")}.` : "Du verlierst durch W.O." : `${outcomeText}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}`}${reason ? ` Grund: ${reason}` : ""}`
           : `${actorName || actorId} hat das Matchergebnis ${changeType === "result" ? "eingetragen" : changeType === "result_cleared" ? "zurückgenommen" : "korrigiert"}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}${reason ? ` Grund: ${reason}` : ""}`,
         allowMissingPerson: true,
+        acknowledgedAt: userId === String(actorId) ? createdAt : null,
+        externalDelivery: userId !== String(actorId),
       });
     });
     const event = await this.ensureEvent({
@@ -889,6 +897,31 @@ class MessagingService {
     const result = this.repository.acknowledge(principal.id, operationId, messageId);
     if (result.changed) this.publishSummary(principal.id);
     return { success: true, messageId, acknowledgedAt: result.acknowledgedAt, repeated: result.repeated, changed: result.changed };
+  }
+
+  acknowledgeAll(principal, { operationId }) {
+    const startedAt = this.now();
+    try {
+      const result = this.repository.acknowledgeAll(principal.id, operationId);
+      if (result.changed) this.publishSummary(principal.id);
+      const summary = this.repository.summary(principal.id);
+      this.log("info", "message_bulk_acknowledgment_completed", {
+        recipientId: principal.id,
+        changedCount: result.changedCount,
+        repeated: result.repeated,
+        durationMs: Math.max(0, this.now() - startedAt),
+        result: "success",
+      });
+      return { success: true, ...result, ...summary };
+    } catch (error) {
+      this.log("warn", "message_bulk_acknowledgment_completed", {
+        recipientId: principal.id,
+        durationMs: Math.max(0, this.now() - startedAt),
+        result: error.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : (error.status || 500) < 500 ? "rejected" : "failed",
+        errorCode: error.code || "MESSAGE_BULK_ACKNOWLEDGMENT_FAILED",
+      });
+      throw error;
+    }
   }
 
   publishSummary(recipientId) {

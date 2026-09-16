@@ -4,7 +4,7 @@ const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 const { AppError } = require("./errors.js");
 
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 class MessagingRepository {
   constructor(filename, { now = Date.now } = {}) {
@@ -36,6 +36,7 @@ class MessagingRepository {
       this.migrateV6();
       this.migrateV7();
       this.migrateV8();
+      this.migrateV9();
     } else if (version === 3) {
       this.migrateV3();
       this.migrateV4();
@@ -43,26 +44,34 @@ class MessagingRepository {
       this.migrateV6();
       this.migrateV7();
       this.migrateV8();
+      this.migrateV9();
     } else if (version === 4) {
       this.migrateV4();
       this.migrateV5();
       this.migrateV6();
       this.migrateV7();
       this.migrateV8();
+      this.migrateV9();
     } else if (version === 5) {
       this.migrateV5();
       this.migrateV6();
       this.migrateV7();
       this.migrateV8();
+      this.migrateV9();
     } else if (version === 6) {
       this.migrateV6();
       this.migrateV7();
       this.migrateV8();
+      this.migrateV9();
     } else if (version === 7) {
       this.migrateV7();
       this.migrateV8();
+      this.migrateV9();
     } else if (version === 8) {
       this.migrateV8();
+      this.migrateV9();
+    } else if (version === 9) {
+      this.migrateV9();
     } else if (version !== SCHEMA_VERSION) {
       throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     }
@@ -129,6 +138,13 @@ class MessagingRepository {
         user_id TEXT PRIMARY KEY,
         revision INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS message_bulk_ack_operations (
+        user_id TEXT NOT NULL,
+        operation_id TEXT NOT NULL,
+        acknowledged_at INTEGER NOT NULL,
+        changed_count INTEGER NOT NULL,
+        PRIMARY KEY(user_id, operation_id)
+      );
       CREATE TABLE IF NOT EXISTS event_comments (
         comment_id TEXT PRIMARY KEY,
         event_id TEXT NOT NULL REFERENCES competition_events(event_id) ON DELETE CASCADE,
@@ -177,7 +193,7 @@ class MessagingRepository {
         revision INTEGER NOT NULL
       );
       INSERT OR IGNORE INTO competition_history_revision(singleton, revision) VALUES (1, 0);
-      PRAGMA user_version = 9;
+      PRAGMA user_version = 10;
     `);
   }
 
@@ -376,6 +392,26 @@ class MessagingRepository {
     }
   }
 
+  migrateV9() {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS message_bulk_ack_operations (
+          user_id TEXT NOT NULL,
+          operation_id TEXT NOT NULL,
+          acknowledged_at INTEGER NOT NULL,
+          changed_count INTEGER NOT NULL,
+          PRIMARY KEY(user_id, operation_id)
+        );
+        PRAGMA user_version = 10;
+        COMMIT;
+      `);
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+
   migrateV1() {
     this.db.exec("PRAGMA foreign_keys = OFF");
     try {
@@ -463,12 +499,12 @@ class MessagingRepository {
         const missing = expected.filter((participant) => !stored.some((row) => row.user_id === participant.userId));
         const now = this.now();
         const insertParticipant = this.db.prepare("INSERT INTO event_participants(event_id, user_id, participant_role, display_name, message_id, projection_type, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        const insertReceipt = this.db.prepare("INSERT INTO event_receipts(event_id, user_id, acknowledged_at) VALUES (?, ?, NULL)");
+        const insertReceipt = this.db.prepare("INSERT INTO event_receipts(event_id, user_id, acknowledged_at) VALUES (?, ?, ?)");
         const insertDelivery = this.db.prepare("INSERT INTO event_deliveries(event_id, user_id, channel, status, updated_at) VALUES (?, ?, ?, ?, ?)");
         const revise = this.db.prepare("INSERT INTO messaging_revisions(user_id, revision) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET revision = revision + 1");
         for (const participant of missing) {
           insertParticipant.run(event.id, participant.userId, participant.role, participant.displayName || "", participant.messageId, participant.type, participant.subject, participant.body);
-          insertReceipt.run(event.id, participant.userId);
+          insertReceipt.run(event.id, participant.userId, Number.isFinite(participant.acknowledgedAt) ? participant.acknowledgedAt : null);
           for (const delivery of participant.deliveries || []) insertDelivery.run(event.id, participant.userId, delivery.channel, delivery.status, now);
           revise.run(participant.userId);
         }
@@ -479,12 +515,12 @@ class MessagingRepository {
       this.db.prepare("INSERT INTO competition_events(event_id, competition_id, created_at, event_type, source, source_id, actor_id, actor_name, summary, detail, result, inserted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(event.id, event.competitionId || null, event.createdAt, event.type, event.source, event.sourceId, event.actorId, event.actorName || "", summary, detail, result, now);
       const insertParticipant = this.db.prepare("INSERT INTO event_participants(event_id, user_id, participant_role, display_name, message_id, projection_type, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-      const insertReceipt = this.db.prepare("INSERT INTO event_receipts(event_id, user_id, acknowledged_at) VALUES (?, ?, NULL)");
+      const insertReceipt = this.db.prepare("INSERT INTO event_receipts(event_id, user_id, acknowledged_at) VALUES (?, ?, ?)");
       const insertDelivery = this.db.prepare("INSERT INTO event_deliveries(event_id, user_id, channel, status, updated_at) VALUES (?, ?, ?, ?, ?)");
       const revise = this.db.prepare("INSERT INTO messaging_revisions(user_id, revision) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET revision = revision + 1");
       for (const participant of participants) {
         insertParticipant.run(event.id, participant.userId, participant.role, participant.displayName || "", participant.messageId, participant.type, participant.subject, participant.body);
-        insertReceipt.run(event.id, participant.userId);
+        insertReceipt.run(event.id, participant.userId, Number.isFinite(participant.acknowledgedAt) ? participant.acknowledgedAt : null);
         for (const delivery of participant.deliveries || []) insertDelivery.run(event.id, participant.userId, delivery.channel, delivery.status, now);
         revise.run(participant.userId);
       }
@@ -949,6 +985,38 @@ class MessagingRepository {
       try { this.db.exec("ROLLBACK"); } catch {}
       this.recordFailure(error);
       if (committed || !(error instanceof AppError)) throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang der Nachrichtenbestaetigung ist unklar", 503, { messageId });
+      throw error;
+    }
+  }
+
+  acknowledgeAll(recipientId, operationId) {
+    this.ensureOpen();
+    let committed = false;
+    try {
+      this.db.exec("BEGIN IMMEDIATE");
+      const operation = this.db.prepare("SELECT acknowledged_at, changed_count FROM message_bulk_ack_operations WHERE user_id = ? AND operation_id = ?").get(recipientId, operationId);
+      if (operation) {
+        this.db.exec("COMMIT"); committed = true;
+        return { acknowledgedAt: Number(operation.acknowledged_at), changedCount: Number(operation.changed_count), repeated: true, changed: false };
+      }
+      const acknowledgedAt = this.now();
+      const result = this.db.prepare(`
+        UPDATE event_receipts
+        SET acknowledged_at = ?
+        WHERE user_id = ? AND acknowledged_at IS NULL
+      `).run(acknowledgedAt, recipientId);
+      const changedCount = Number(result.changes);
+      if (changedCount > 0) {
+        this.db.prepare("INSERT INTO messaging_revisions(user_id, revision) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET revision = revision + 1").run(recipientId);
+      }
+      this.db.prepare("INSERT INTO message_bulk_ack_operations(user_id, operation_id, acknowledged_at, changed_count) VALUES (?, ?, ?, ?)")
+        .run(recipientId, operationId, acknowledgedAt, changedCount);
+      this.db.exec("COMMIT"); committed = true;
+      return { acknowledgedAt, changedCount, repeated: false, changed: changedCount > 0 };
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      this.recordFailure(error);
+      if (committed || !(error instanceof AppError)) throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang der Sammelbestaetigung ist unklar", 503);
       throw error;
     }
   }

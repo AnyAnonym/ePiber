@@ -138,6 +138,7 @@ const requestContracts = {
   }),
   myMessage: (params) => objectShape(params, { messageId: id("messageId") }),
   acknowledgeMessage: (params) => objectShape(params, { operationId: operation, messageId: id("messageId") }),
+  acknowledgeAllMessages: (params) => objectShape(params, { operationId: operation }),
   competitionHistory: (params) => objectShape(params, {
     bewerbId: optional(id("bewerbId")),
     cursor: optional(text("cursor", { max: 256, pattern: /^[A-Za-z0-9_-]+$/ })),

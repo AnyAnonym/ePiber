@@ -142,6 +142,16 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
         before: result.success ? { acknowledged: !result.changed } : null,
         after: result.success ? { acknowledged: true } : null,
       };
+    case "acknowledgeAllMessages":
+      {
+        const acknowledgedCount = result.repeated ? 0 : Number(result.changedCount || 0);
+      return {
+        targetType: "message-inbox",
+        targetId: "self",
+        before: result.success ? { unreadCount: Number(result.unreadCount || 0) + acknowledgedCount } : { scope: "own" },
+        after: result.success ? { unreadCount: Number(result.unreadCount || 0), acknowledgedCount, repeated: !!result.repeated } : null,
+      };
+      }
     case "addCompetitionHistoryComment":
       return {
         targetType: "competition-history-comment",
@@ -794,15 +804,24 @@ function writeAudit({ eventId, principal, endpoint, params, result = {}, interna
   });
 }
 
-function writeRejectedInteractionAudit({ eventId, principal, endpoint, error }) {
-  if (!HISTORY_INTERACTION_WRITES.has(endpoint)) return;
+function writeRejectedEndpointAudit({ eventId, principal, endpoint, error, startedAt }) {
+  if (!HISTORY_INTERACTION_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages") return;
   try {
     writeAudit({ eventId, principal, endpoint, params: {}, outcome: "started" });
     writeAudit({ eventId, principal, endpoint, params: {}, outcome: "failed", error });
   } catch (auditError) {
     logger.log("error", "audit_record_failed", { supportId: eventId, action: endpoint, error: auditError });
   }
-  logHistoryInteractionCompletion({ supportId: eventId, principal, endpoint, params: {}, error, outcome: "rejected" });
+  if (HISTORY_INTERACTION_WRITES.has(endpoint)) {
+    logHistoryInteractionCompletion({ supportId: eventId, principal, endpoint, params: {}, error, outcome: "rejected", startedAt });
+  } else {
+    logger.log("info", "message_bulk_acknowledgment_completed", {
+      recipientId: principal.id,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      result: "rejected",
+      errorCode: error.code || "MESSAGE_BULK_ACKNOWLEDGMENT_REJECTED",
+    });
+  }
 }
 
 function logHistoryInteractionCompletion({ supportId, principal, endpoint, params = {}, result = {}, error = null, outcome, startedAt = Date.now() }) {
@@ -1271,6 +1290,11 @@ const endpoints = {
     write: true,
     handler: (params, context) => dependencies.messagingService.acknowledge(context.principal, params),
   },
+  acknowledgeAllMessages: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => dependencies.messagingService.acknowledgeAll(context.principal, params),
+  },
   competitionHistory: {
     access: "authenticated",
     handler: (params, context) => dependencies.messagingService.competitionHistory(context.principal, {
@@ -1713,14 +1737,14 @@ async function handleRequest(info, message, supportId) {
   try {
     authorize(endpoint, authContext);
   } catch (error) {
-    writeRejectedInteractionAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error });
+    writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
   let params;
   try {
     params = validateEndpointRequest(message.endpoint, message.params);
   } catch (error) {
-    writeRejectedInteractionAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error });
+    writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
   if (endpoint.write) {
@@ -1729,7 +1753,7 @@ async function handleRequest(info, message, supportId) {
     const writeCost = endpoint.writeCost || 1;
     if (!writeLimiter.take(principalKey, writeCost) || !writeLimiter.take(ipKey, writeCost)) {
       const error = new AppError("WRITE_RATE_LIMIT", "Zu viele Schreiboperationen", 429);
-      writeRejectedInteractionAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error });
+      writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
       throw error;
     }
   }
