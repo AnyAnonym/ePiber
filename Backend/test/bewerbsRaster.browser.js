@@ -126,6 +126,21 @@ test("KO-Doppelnamen werden erst nach Login getrennt und zugaenglich anklickbar"
   const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const readCompactLayout = async () => {
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      return page.locator(".bracket-match-box").evaluateAll((boxes) => ({
+        heights: boxes.map((box) => box.getBoundingClientRect().height),
+        rowHeight: parseFloat(getComputedStyle(document.querySelector(".bracket-grid")).getPropertyValue("--row-height")),
+      }));
+    };
+    const assertLoginKeepsCompactLayout = (anonymousLayout, authenticatedLayout, viewport) => {
+      const anonymousMax = Math.max(...anonymousLayout.heights);
+      const authenticatedMax = Math.max(...authenticatedLayout.heights);
+      assert.equal(authenticatedMax <= 70, true, `${viewport}: ${JSON.stringify(authenticatedLayout)}`);
+      assert.equal(Math.abs(authenticatedMax - anonymousMax) <= 0.5, true, `${viewport}: Boxhoehe aendert sich nach Login`);
+      assert.equal(Math.abs(authenticatedLayout.rowHeight - anonymousLayout.rowHeight) <= 0.5, true, `${viewport}: Rasterabstand aendert sich nach Login`);
+    };
+
     await page.goto(`http://127.0.0.1:${address.port}/raster-test.html?id=cup`, { waitUntil: "domcontentloaded" });
     await page.locator(".bracket").waitFor();
     assert.deepEqual(await page.locator(".bracket-round-header").allTextContents(), ["Viertelfinale", "Halbfinale", "Finale"]);
@@ -135,12 +150,9 @@ test("KO-Doppelnamen werden erst nach Login getrennt und zugaenglich anklickbar"
     assert.equal(await page.locator(".bracket-completion").count(), 0);
     assert.equal(await completedMatch.locator(".bracket-player").nth(1).locator(".badge").textContent(), "ret");
     assert.deepEqual(await completedMatch.locator(".player-result").allTextContents(), ["6|2", "4|1"]);
-    const compactLayout = await page.locator(".bracket-match-box").evaluateAll((boxes) => ({
-      heights: boxes.map((box) => box.getBoundingClientRect().height),
-      rowHeight: parseFloat(getComputedStyle(document.querySelector(".bracket-grid")).getPropertyValue("--row-height")),
-    }));
-    assert.equal(Math.max(...compactLayout.heights) < 70, true, JSON.stringify(compactLayout));
-    assert.equal(compactLayout.rowHeight < 60, true, JSON.stringify(compactLayout));
+    const mobileAnonymousLayout = await readCompactLayout();
+    assert.equal(Math.max(...mobileAnonymousLayout.heights) < 70, true, JSON.stringify(mobileAnonymousLayout));
+    assert.equal(mobileAnonymousLayout.rowHeight < 60, true, JSON.stringify(mobileAnonymousLayout));
 
     await page.getByRole("button", { name: "Gruppe" }).click();
     await page.locator(".rr-player-name").first().waitFor({ timeout: 3000 });
@@ -170,11 +182,22 @@ test("KO-Doppelnamen werden erst nach Login getrennt und zugaenglich anklickbar"
     });
     assert.equal(layout.buttonHeights.every((height) => height >= 24), true);
     assert.equal(layout.namesRight <= layout.resultLeft, true);
+    const mobileAuthenticatedLayout = await readCompactLayout();
+    assertLoginKeepsCompactLayout(mobileAnonymousLayout, mobileAuthenticatedLayout, "Mobil");
 
     await page.evaluate(() => window.__setAuth(null));
     await page.waitForFunction(() => document.querySelectorAll("button.bracket-player-name").length === 0, null, { timeout: 3000 });
     assert.equal(await page.locator("button.bracket-player-name").count(), 0);
     assert.equal(await page.locator('.bracket-player-name[data-player-id="p1"]').count(), 0);
+
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".bracket").waitFor();
+    const desktopAnonymousLayout = await readCompactLayout();
+    await page.evaluate(() => window.__setAuth("player"));
+    await page.locator("button.bracket-player-name").first().waitFor({ timeout: 3000 });
+    const desktopAuthenticatedLayout = await readCompactLayout();
+    assertLoginKeepsCompactLayout(desktopAnonymousLayout, desktopAuthenticatedLayout, "Desktop");
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

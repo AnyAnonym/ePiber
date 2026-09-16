@@ -20,6 +20,10 @@ body {
 
 body.modal-open {
   overflow: hidden;
+  position: fixed;
+  top: var(--modal-lock-top, 0px);
+  left: var(--modal-lock-left, 0px);
+  width: 100%;
 }
 
 .diagnostic-mode-notice {
@@ -3404,7 +3408,7 @@ body.bracket-page {
 }
 
 .bracket-player {
-  padding: 8px 14px;
+  padding: 4px 14px;
   font-size: 0.85rem;
   background: #fff;
   border-bottom: 2px solid #666;
@@ -3419,6 +3423,7 @@ body.bracket-page {
 .bracket-player .pname {
   display: inline-flex;
   align-items: center;
+  min-height: 24px;
   min-width: 0;
 }
 
@@ -3530,7 +3535,7 @@ button.bracket-player-name:focus-visible {
   }
   .bracket-player {
     font-size: 0.75rem;
-    padding: 6px 10px;
+    padding: 1px 10px;
   }
 }
 

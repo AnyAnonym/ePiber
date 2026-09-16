@@ -26,3 +26,16 @@ Commit: 4.9.9-paj-1-3 | Mandanten- und LLM-Betriebsmodell dokumentiert
   Added
   - [Dokumentation] `Project/2do/MANDANTEN-PLATTFORM-UND-RELEASEARCHITEKTUR.md` als detaillierte nicht-kanonische Arbeitsgrundlage fuer Vereins-Cells, Tenant- und Sektionsmodell, Datenbankisolation, Entwicklungsumgebungen, Release-Ringe, Plattformbetrieb, Sicherheit und schrittweise Umsetzung angelegt.
   - [Dokumentation] `Project/2do/WIRTSCHAFTLICHKEIT-UND-LLM-BETRIEBSMODELL.md` als detaillierte nicht-kanonische Arbeitsgrundlage fuer Preisannahmen, Umsatz- und Kostenszenarien, LLM-gestuetzte Entwicklung und Support, Personalstufen, Unit Economics, Risiken und Kennzahlen angelegt.
+
+[4.9.9-paj-1-4] - 2026-09-16
+Commit: 4.9.9-paj-1-4 | Modalposition und KO-Rasterdarstellung korrigiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-3-x` gesetzt.
+  - [Software] Gemeinsame Modale sichern beim Oeffnen die Dokumentscrollposition, fixieren den Hintergrund daran und stellen sie nach Schliessen des letzten Modals wieder her; dadurch bleibt das Profilmodal auf mobilen Geraeten auch aus einer weit unten liegenden Spielerliste sichtbar zentriert.
+  - [Software] Die Bewerbshistorie verwendet denselben zentralen Scroll-Lock, damit verschachtelte oder parallele Modale den Hintergrund erst nach dem letzten Schliessen entsperren.
+  - [Software] Spielerzeilen im KO-Raster kompensieren die Mindesthoehe der getrennten Profilbuttons durch geringere aeussere Vertikalabstaende und behalten dadurch anonym wie angemeldet die fruehere kompakte Matchboxhoehe auf Mobil- und Desktopbreiten.
+
+  Added
+  - [Software] Mobile Browserabnahme fuer ein aus vertikaler Scrollposition geoeffnetes Profilmodal mit sichtbarem Dialog und wiederhergestellter Listenposition erweitert.
+  - [Tests] KO-Raster-Browserabnahme um gleiche kompakte Matchbox- und Rasterhoehen vor und nach der Anmeldung auf Mobil- und Desktopbreiten erweitert; die 24-Pixel-Mindesthoehe der Profilbuttons bleibt abgesichert.

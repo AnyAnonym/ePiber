@@ -106,9 +106,37 @@ function createModal(id, content, { explicitDismiss = false } = {}) {
   return modal;
 }
 
+const modalSelector = ".modal:not(.hidden), .competition-history-modal:not([hidden])";
+let modalScrollPosition = null;
+
+function hasOpenModal() {
+  return Boolean(document.querySelector(modalSelector));
+}
+
+function lockModalScroll() {
+  if (modalScrollPosition) return;
+  modalScrollPosition = { x: window.scrollX, y: window.scrollY };
+  document.body.style.setProperty("--modal-lock-top", `${-modalScrollPosition.y}px`);
+  document.body.style.setProperty("--modal-lock-left", `${-modalScrollPosition.x}px`);
+  document.body.classList.add("modal-open");
+}
+
+function unlockModalScroll() {
+  if (hasOpenModal() || !modalScrollPosition) return;
+  const { x, y } = modalScrollPosition;
+  modalScrollPosition = null;
+  document.body.classList.remove("modal-open");
+  document.body.style.removeProperty("--modal-lock-top");
+  document.body.style.removeProperty("--modal-lock-left");
+  window.scrollTo(x, y);
+}
+
+window.lockModalScroll = lockModalScroll;
+window.unlockModalScroll = unlockModalScroll;
+
 function openModal(modal) {
   modal?.classList.remove("hidden");
-  if (modal) document.body.classList.add("modal-open");
+  if (modal) lockModalScroll();
 }
 
 function setModalBusy(form, busy) {
@@ -184,7 +212,7 @@ function closeModal(modal) {
     if (token) token.textContent = "";
     if (target) target.textContent = "";
   }
-  if (!document.querySelector(".modal:not(.hidden)")) document.body.classList.remove("modal-open");
+  unlockModalScroll();
 }
 
 const loginModal = createModal("loginModal", `

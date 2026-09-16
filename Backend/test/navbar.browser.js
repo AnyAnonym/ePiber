@@ -1386,6 +1386,13 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     await page.goto(`http://127.0.0.1:${address.port}/ranking-test.html?role=player&id=2`, { waitUntil: "domcontentloaded" });
     await page.locator("#rankingContainer .box").nth(27).waitFor({ state: "visible" });
 
+    const initialScrollY = await page.evaluate(() => {
+      document.body.style.minHeight = "2400px";
+      window.scrollTo(0, 1200);
+      return window.scrollY;
+    });
+    assert.equal(initialScrollY > 0, true);
+
     const ranking = await page.locator("#rankingContainer").evaluate((scrollport) => {
       scrollport.scrollLeft = scrollport.scrollWidth - scrollport.clientWidth;
       return {
@@ -1402,7 +1409,7 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     assert.equal(ranking.documentWidth, ranking.viewportWidth);
     assert.equal(ranking.pageScrollX, 0);
 
-    await page.locator("#rankingContainer .box").nth(27).click();
+    await page.evaluate(() => window.openProfileModal({ playerId: "2" }));
     await page.locator("#profileModal").waitFor({ state: "visible" });
     const overlay = await page.locator("#profileModal").evaluate((modal) => {
       const modalRect = modal.getBoundingClientRect();
@@ -1419,6 +1426,10 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
         viewportLeft,
         viewportRight: viewportLeft + viewportWidth,
         viewportCenter: viewportLeft + (viewportWidth / 2),
+        viewportTop: window.visualViewport?.offsetTop || 0,
+        viewportBottom: (window.visualViewport?.offsetTop || 0) + (window.visualViewport?.height || window.innerHeight),
+        dialogTop: dialogRect.top,
+        dialogBottom: dialogRect.bottom,
         pageScrollX: window.scrollX,
         rankingScrollLeft: document.getElementById("rankingContainer").scrollLeft,
         pageLocked: getComputedStyle(document.body).overflow === "hidden",
@@ -1429,12 +1440,15 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     assert.equal(overlay.dialogLeft >= overlay.viewportLeft + 11, true);
     assert.equal(overlay.dialogRight <= overlay.viewportRight - 11, true);
     assert.equal(Math.abs(overlay.dialogCenter - overlay.viewportCenter) <= 1, true);
+    assert.equal(overlay.dialogTop >= overlay.viewportTop, true);
+    assert.equal(overlay.dialogBottom <= overlay.viewportBottom, true);
     assert.equal(overlay.pageScrollX, 0);
     assert.equal(overlay.rankingScrollLeft, ranking.scrollLeft);
     assert.equal(overlay.pageLocked, true);
 
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("#rankingContainer").evaluate((scrollport) => scrollport.scrollLeft), ranking.scrollLeft);
+    assert.equal(await page.evaluate(() => window.scrollY), initialScrollY);
     await page.close();
 
     const busyPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
