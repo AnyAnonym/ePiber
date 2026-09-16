@@ -16,3 +16,13 @@ Commit: 4.9.9-paj-1-2 | Notification-Architektur dokumentiert
 
   Added
   - [Dokumentation] `Project/2do/NOTIFICATIONS-UND-PUSH.md` mit Zielbild, PWA-Einrichtung, Pflicht- und Opt-in-Meldungen, Quittierung, Eigenmeldungsunterdrueckung, Ereigniskatalog, zeitgesteuerten Erinnerungen, Rollen-/Datenschutzvorgaben sowie offenen Entscheidungen angelegt.
+
+[4.9.9-paj-1-3] - 2026-09-16
+Commit: 4.9.9-paj-1-3 | Mandanten- und LLM-Betriebsmodell dokumentiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-2-x` gesetzt.
+
+  Added
+  - [Dokumentation] `Project/2do/MANDANTEN-PLATTFORM-UND-RELEASEARCHITEKTUR.md` als detaillierte nicht-kanonische Arbeitsgrundlage fuer Vereins-Cells, Tenant- und Sektionsmodell, Datenbankisolation, Entwicklungsumgebungen, Release-Ringe, Plattformbetrieb, Sicherheit und schrittweise Umsetzung angelegt.
+  - [Dokumentation] `Project/2do/WIRTSCHAFTLICHKEIT-UND-LLM-BETRIEBSMODELL.md` als detaillierte nicht-kanonische Arbeitsgrundlage fuer Preisannahmen, Umsatz- und Kostenszenarien, LLM-gestuetzte Entwicklung und Support, Personalstufen, Unit Economics, Risiken und Kennzahlen angelegt.
