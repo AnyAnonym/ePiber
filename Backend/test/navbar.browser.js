@@ -11,9 +11,9 @@ const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
 const authStub = `
 const role = new URLSearchParams(window.location.search).get("role");
 const loginError = new URLSearchParams(window.location.search).get("loginError");
+const authStatus = new URLSearchParams(window.location.search).get("authStatus") || (role ? "authenticated" : "anonymous");
 const user = role ? { id: role + "-1", role, login: role + "-login", email: role + "@example.test" } : null;
 export const ready = Promise.resolve(user);
-export const createPasswordReset = async () => ({ resetToken: "token" });
 export const login = async () => {
   if (!loginError) return user;
   const error = new Error(loginError === "LOGIN_RATE_LIMIT" ? "Zu viele Anmeldeversuche" : "Login fehlgeschlagen");
@@ -27,12 +27,11 @@ export const getUser = () => user;
 export const isAuthenticated = () => Boolean(user);
 export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
 export const refreshSession = async () => user;
-export const resetPassword = async () => ({ success: true });
 export const setPasswordSetupAllowed = async () => ({ success: true });
 export const setPasswordForPerson = async () => ({ success: true });
 export const setupPassword = async () => ({ success: true });
 export function subscribeAuth(callback) {
-  queueMicrotask(() => callback(user, { status: user ? "authenticated" : "anonymous" }));
+  queueMicrotask(() => callback(user, { status: authStatus }));
   return () => {};
 }
 `;
@@ -423,19 +422,217 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
         await page.goto(`http://127.0.0.1:${address.port}/index.html?role=${expected.role}`, { waitUntil: "domcontentloaded" });
         await page.locator("#hamburgerBtn").click();
         await page.locator("#mobileNavModal").waitFor({ state: "visible" });
+        assert.equal(await page.locator('#hamburgerBtn [data-icon="menu"]').count(), 1);
+        assert.equal(await page.locator('.mobile-nav-close [data-icon="close"]').count(), 1);
+        assert.equal(await page.locator('.mobile-nav-content svg[viewBox="0 -960 960 960"]').count() > 0, true);
 
-        const players = page.locator('.mobile-nav-links [data-auth="required"]');
-        const adminLinks = page.locator('.mobile-nav-links [data-role="admin"]');
-        const serviceLink = page.locator('.mobile-nav-links a[href="servicebereich.html"]');
-        assert.equal(await players.isVisible(), expected.playersVisible, `${expected.role || "anonymous"}: Spielerlink`);
-        assert.equal(await serviceLink.isVisible(), expected.adminVisible, `${expected.role || "anonymous"}: Servicebereich`);
-        for (const link of await adminLinks.all()) {
-          assert.equal(await link.isVisible(), expected.adminVisible, `${expected.role || "anonymous"}: ${await link.textContent()}`);
+        const clubGroup = page.locator('[aria-controls="mobileNavClub"]').locator("..");
+        const adminGroup = page.locator('[aria-controls="mobileNavAdministration"]').locator("..");
+        assert.equal(await clubGroup.isVisible(), expected.playersVisible, `${expected.role || "anonymous"}: Verein`);
+        assert.equal(await adminGroup.isVisible(), expected.adminVisible, `${expected.role || "anonymous"}: Administration`);
+        assert.equal(await page.locator(".mobile-nav-submenu:visible").count(), 0);
+
+        const competitionToggle = page.locator('[aria-controls="mobileNavCompetition"]');
+        const competitionGroup = competitionToggle.locator("..");
+        assert.equal(await competitionGroup.evaluate((element) => element.tagName), "DIV");
+        assert.deepEqual(await competitionGroup.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            backgroundColor: style.backgroundColor,
+            borderWidth: style.borderWidth,
+            borderRadius: style.borderRadius,
+            padding: style.padding,
+          };
+        }), {
+          backgroundColor: "rgba(0, 0, 0, 0)",
+          borderWidth: "0px",
+          borderRadius: "0px",
+          padding: "0px",
+        });
+        await competitionToggle.click();
+        assert.equal(await competitionToggle.getAttribute("aria-expanded"), "true");
+        await page.waitForTimeout(220);
+        assert.notEqual(await competitionToggle.locator(".mobile-nav-chevron").evaluate((element) => getComputedStyle(element).transform), "none");
+        assert.equal(await page.locator('#mobileNavCompetition a[href="Matches1.html"]').isVisible(), true);
+        assert.equal(await competitionToggle.locator('[data-icon="emoji_events"]').count(), 1);
+        assert.equal(await competitionToggle.locator('[data-icon="expand_more"]').count(), 1);
+        assert.equal(await page.locator('#mobileNavCompetition [data-icon="sports_tennis"]').count(), 1);
+        assert.equal(await page.locator('#mobileNavCompetition [data-icon="swords"]').count(), 1);
+        assert.equal(await page.locator('#mobileNavCompetition [data-icon="scoreboard"]').count(), 1);
+        const rowStyles = await page.locator('.mobile-nav-main > a[href="index.html"], [aria-controls="mobileNavCompetition"], #mobileNavCompetition a').evaluateAll((rows) => rows.map((row) => {
+          const style = getComputedStyle(row);
+          const rect = row.getBoundingClientRect();
+          const iconRect = row.querySelector(".mobile-nav-icon").getBoundingClientRect();
+          return {
+            height: rect.height,
+            width: rect.width,
+            fontWeight: style.fontWeight,
+            color: style.color,
+            borderBottomWidth: style.borderBottomWidth,
+            iconLeft: iconRect.left,
+          };
+        }));
+        assert.equal(new Set(rowStyles.map(({ height }) => height)).size, 1);
+        assert.equal(new Set(rowStyles.map(({ width }) => width)).size, 1);
+        assert.equal(new Set(rowStyles.map(({ fontWeight }) => fontWeight)).size, 1);
+        assert.deepEqual(new Set(rowStyles.map(({ color }) => color)), new Set(["rgb(23, 26, 31)"]));
+        assert.deepEqual(new Set(rowStyles.map(({ borderBottomWidth }) => borderBottomWidth)), new Set(["1px"]));
+        assert.equal(rowStyles[0].iconLeft, rowStyles[1].iconLeft);
+        assert.equal(rowStyles[2].iconLeft > rowStyles[1].iconLeft, true);
+
+        if (expected.playersVisible) {
+          await page.locator('[aria-controls="mobileNavClub"]').click();
+          assert.equal(await page.locator('#mobileNavClub a[href="players.html"]').isVisible(), true);
         }
+        if (expected.adminVisible) {
+          await page.locator('[aria-controls="mobileNavAdministration"]').click();
+          assert.equal(await page.locator('#mobileNavAdministration a[href="servicebereich.html"]').isVisible(), true);
+        }
+
+        const authAction = page.locator(expected.role ? ".mobile-logout-action" : ".mobile-login-action");
+        assert.equal(await authAction.innerText(), expected.role ? "Abmelden" : "Anmelden");
+        assert.equal(await authAction.evaluate((element) => getComputedStyle(element).color), expected.role ? "rgb(180, 35, 24)" : "rgb(24, 114, 68)");
+        assert.equal(await authAction.locator('[data-icon="logout"], [data-icon="login"]').count(), 1);
+        assert.equal(await page.locator("#profileButtonMobile").isVisible(), Boolean(expected.role));
+        assert.equal(await page.locator(".mobile-nav-favorites").count(), 0);
+
+        if (expected.role) {
+          assert.equal(await page.locator("#profileButtonMobile").evaluate((element) => getComputedStyle(element).color), "rgb(23, 26, 31)");
+          const order = await page.locator('#profileButtonMobile, .mobile-nav-main > a[href="index.html"], #signOutButtonMobile').evaluateAll((elements) => elements.map((element) => ({ id: element.id, top: element.getBoundingClientRect().top })));
+          assert.equal(order.find(({ id }) => id === "profileButtonMobile").top < order.find(({ id }) => id === "signOutButtonMobile").top, true);
+          assert.equal(await page.locator('#profileButtonMobile [data-icon="person"]').count(), 1);
+          const logoutPlacement = await page.evaluate(() => {
+            const visibleRows = [...document.querySelectorAll(".mobile-nav-main .mobile-nav-row")]
+              .filter((element) => element.getClientRects().length > 0);
+            const lastRow = visibleRows.at(-1).getBoundingClientRect();
+            const logout = document.getElementById("signOutButtonMobile").getBoundingClientRect();
+            return { lastBottom: lastRow.bottom, logoutTop: logout.top };
+          });
+          assert.equal(Math.abs(logoutPlacement.lastBottom - logoutPlacement.logoutTop) < 1, true);
+        }
+
+        await page.locator(".mobile-nav-close").click();
+        await page.locator("#hamburgerBtn").click();
+        assert.equal(await page.locator(".mobile-nav-group-toggle[aria-expanded=true]").count(), 0);
+        assert.equal(await page.locator(".mobile-nav-submenu:visible").count(), 0);
       } finally {
         await context.close();
       }
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst eigenstaendig", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 300 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=admin`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.scrollTo(0, 300));
+    const initialScroll = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => document.getElementById("hamburgerBtn").click());
+    await page.waitForTimeout(350);
+
+    const layout = await page.evaluate(() => {
+      const drawer = document.querySelector(".mobile-nav-content").getBoundingClientRect();
+      const app = document.querySelector(".app-shift-layer").getBoundingClientRect();
+      const header = document.querySelector("#header-container header").getBoundingClientRect();
+      return {
+        drawer: { left: drawer.left, right: drawer.right, height: drawer.height },
+        appLeft: app.left,
+        headerLeft: header.left,
+        viewport: { width: innerWidth, height: innerHeight },
+        scrollY,
+        appInert: document.querySelector(".app-shift-layer").inert,
+        activeClass: document.activeElement.className,
+        drawerScrollable: document.querySelector(".mobile-nav-scroll").scrollHeight > document.querySelector(".mobile-nav-scroll").clientHeight,
+      };
+    });
+    assert.equal(Math.abs(layout.drawer.left - layout.viewport.width * 0.18) < 2, true);
+    assert.equal(Math.abs(layout.drawer.right - layout.viewport.width) < 1, true);
+    assert.equal(Math.abs(layout.drawer.height - layout.viewport.height) < 1, true);
+    assert.equal(Math.abs(layout.appLeft + layout.viewport.width * 0.82) < 2, true);
+    assert.equal(Math.abs(layout.headerLeft - layout.appLeft) < 1, true);
+    assert.equal(layout.scrollY, initialScroll);
+    assert.equal(layout.appInert, true);
+    assert.equal(layout.drawerScrollable, true);
+    assert.match(layout.activeClass, /mobile-nav-close/);
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "true");
+    assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "false");
+
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "signOutButtonMobile");
+    await page.keyboard.press("Tab");
+    assert.match(await page.evaluate(() => document.activeElement.className), /mobile-nav-close/);
+
+    await page.locator(".mobile-nav-header strong").click();
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "true");
+    await page.mouse.click(20, 200);
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
+    assert.equal(await page.evaluate(() => window.scrollY), initialScroll);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "hamburgerBtn");
+
+    await page.locator("#hamburgerBtn").click();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "true");
+    await page.locator("#hamburgerBtn").click();
+    await page.locator(".mobile-nav-close").click();
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
+
+    await page.locator("#hamburgerBtn").click();
+    await page.evaluate(() => document.querySelector('.mobile-nav-main a[href="index.html"]').addEventListener("click", (event) => event.preventDefault(), { once: true }));
+    await page.locator('.mobile-nav-main a[href="index.html"]').click();
+    assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "true");
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Desktop-Navigation bleibt unveraendert und der mobile Drawer inaktiv", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player`, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator(".desktop-nav").isVisible(), true);
+    assert.equal(await page.locator(".desktop-auth").isVisible(), true);
+    assert.equal(await page.locator("#hamburgerBtn").isHidden(), true);
+    assert.equal(await page.locator("#mobileNavModal").isHidden(), true);
+    const layout = await page.evaluate(() => {
+      const app = document.querySelector(".app-shift-layer").getBoundingClientRect();
+      const header = document.querySelector("#header-container header").getBoundingClientRect();
+      return { appLeft: app.left, appWidth: app.width, headerLeft: header.left, transform: getComputedStyle(document.querySelector(".app-shift-layer")).transform };
+    });
+    assert.deepEqual(layout, { appLeft: 0, appWidth: 1200, headerLeft: 0, transform: "none" });
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Mobile Navigation zeigt einen kontrollierten Auth-Ausfall", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?authStatus=unavailable`, { waitUntil: "domcontentloaded" });
+    await page.locator("#hamburgerBtn").click();
+    assert.equal(await page.locator(".mobile-auth-section .authUnavailable").textContent(), "Anmeldung nicht erreichbar");
+    assert.equal(await page.locator(".mobile-auth-section .authUnavailable").isVisible(), true);
+    assert.equal(await page.locator(".mobile-login-action:visible, .mobile-logout-action:visible").count(), 0);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -631,6 +828,10 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     assert.equal(await playerPage.locator('label[for="login"]').textContent(), "Login:");
     assert.equal(await playerPage.locator("#setupLogin").getAttribute("type"), "text");
     assert.equal(await playerPage.locator("#setupLogin").getAttribute("inputmode"), null);
+    assert.equal(await playerPage.locator("#openPasswordSetup").textContent(), "Passwort vergessen / Neueingabe");
+    assert.equal(await playerPage.locator("#passwordSetupModal h2").textContent(), "Passwort neu vergeben");
+    assert.equal(await playerPage.locator("#passwordSetupModal > .modal-content > p").textContent(), "Diese Funktion muss zuvor von einem Administrator freigegeben werden. Bitte fordern Sie die Freigabe daher vorab bei einem Administrator an.");
+    assert.equal(await playerPage.locator("#resetPasswordModal, #resetProofModal, #openPasswordReset").count(), 0);
 
     await playerPage.evaluate(() => window.openProfileModal());
     await playerPage.locator("#profileModal").waitFor({ state: "visible" });
@@ -849,7 +1050,8 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     assert.match(await adminPage.locator("#profileText").textContent(), /Login: foreign-login/);
     assert.equal(await adminPage.getByRole("tab", { name: "Admin" }).isVisible(), true);
     await adminPage.getByRole("tab", { name: "Admin" }).click();
-    assert.equal(await adminPage.getByRole("button", { name: "Reset-Code erstellen" }).isVisible(), true);
+    assert.equal(await adminPage.getByRole("button", { name: "Passwortvergabe freigeben" }).isVisible(), true);
+    assert.equal(await adminPage.getByRole("button", { name: "Passwort direkt setzen" }).isVisible(), true);
     await adminPage.getByRole("tab", { name: "Aktuell", exact: true }).click();
     await adminPage.getByRole("tab", { name: "Senioren 45 Plus", exact: true }).click();
     const adminCountdown = adminPage.locator("#profileRankingPanel2 .profile-match-date-countdown");

@@ -7,8 +7,7 @@ const FIXED_HTTP_ROUTES = new Set([
   "/internal/messaging-report",
   "/api/frontend-logging-policy", "/api/frontend-events", "/api/session",
   "/api/password", "/api/admin/grafana-auth", "/api/admin/frontend-logging", "/api/admin/frontend-logging/targets",
-  "/api/password-reset", "/api/password-setup", "/api/admin/password-reset",
-  "/api/admin/password-setup", "/api/admin/password", "/api/monitor/session",
+  "/api/password-setup", "/api/admin/password-setup", "/api/admin/password", "/api/monitor/session",
   "/api/emoji-picker/index.js", "/api/emoji-picker/picker.js", "/api/emoji-picker/database.js",
   "/api/emoji-picker/i18n/de.js", "/api/emoji-picker/data/de.json",
 ]);

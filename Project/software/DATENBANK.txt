@@ -180,8 +180,7 @@ historischen Snapshots unveraendert, eine Ergebnisloeschung leert sie.
   PasswdHash         | Neu: `scrypt$v1$N$r$p$salt$key`. Historisch sind
                      | 64-stellige SHA-256-Werte lesbar.
   KennwortVergessen  | `x` ist die Adminfreigabe fuer die einmalige erstmalige
-                     | Passwortvergabe; jeder Passwortwrite leert das Feld. Der
-                     | separate Resetcode-Ablauf verwendet es nicht.
+                     | Passwortvergabe; jeder Passwortwrite leert das Feld.
   TelefonMobil       | Telefonnummer.
   GeburtsDatum       | Geburtsdatum.
   GeschlechtID       | Bevorzugter Fachwert: leer, 1, 2 oder 3.
@@ -248,7 +247,7 @@ Normalisierungsvertrag:
     GeschlechtID/Geschlecht, TelefonMobil, E-Mail, Login, Land, PLZ, Ort,
     Adresse, Aktiv, Role, Mitglied, Admin und Operator. Damit sind Login und die
     getrennten Rollenfelder personweise reparierbar. `PasswdHash`,
-    `KennwortVergessen`, Resetdaten, `CD-ID` und andere Spalten sind von dieser
+    `KennwortVergessen`, Passwortdaten, `CD-ID` und andere Spalten sind von dieser
     Projektion und diesem Write ausgeschlossen.
 
 Login-Loadvertrag:
@@ -324,7 +323,7 @@ Personenprojektionen:
     Kontakt-E-Mail, Telefon, Geburtsdatum, Geschlecht und Rolle; nie PasswdHash.
   - Ein fremdes Mitgliederprofil enthaelt nur fuer Admins zusaetzlich Login und
     den Boolean `passwordSetupAllowed`. Nur die Admin-Oberflaeche darf diese
-    Freigabe aendern, Resetnachweise erzeugen oder ein Passwort direkt setzen.
+    Freigabe aendern oder ein Passwort direkt setzen.
     Login wird weder im Mitgliederverzeichnis noch in fremden Nicht-Adminprofilen
     ausgegeben; Hashes und Geheimnisse werden nie projiziert.
   - `publicProfile` und `myProfile` enthalten zusaetzlich `rankings`. Das Array
@@ -870,12 +869,9 @@ Tabelle `sessions`:
   E-Mail-Fallback: Beim naechsten Zugriff gilt ausschliesslich der Vergleich mit
   `Personen.Login`.
 
-Tabelle `password_reset_proofs`:
-  proof_hash PRIMARY KEY, person_id, created_by, created_at, expires_at,
-  consumed_at, payload_hash, stored_hash, claimed_at, completed_at.
-  Resetcodes werden nur gehasht gespeichert, laufen standardmaessig nach 15
-  Minuten ab, sind einmalig, an den neuen Passwort-Credential gebunden und gegen
-  parallele Verarbeitung geleast.
+Die obsolete Tabelle `password_reset_proofs` ist kein aktiver Bestandteil des
+State-Schemas. Sie wird beim Backendstart samt vorhandener Altdaten gedroppt;
+historische Audit- und Changelogdaten bleiben davon unberuehrt.
 
 Tabelle `monitor_devices`:
   monitor_id PRIMARY KEY, label, token_hash UNIQUE, created_at, updated_at,

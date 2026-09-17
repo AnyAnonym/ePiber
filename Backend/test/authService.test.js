@@ -265,27 +265,6 @@ test("nur Admin setzt das Passwort einer anderen Person und widerruft deren Sitz
   repository.close();
 });
 
-test("Admin erstellt einen einmaligen Reset-Nachweis", async () => {
-  const repository = new StateRepository(":memory:");
-  repository.init();
-  const adminSession = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
-  const playerSession = repository.createSession({ userId: "p2", email: "peter@example.test", login: "peter.login", ttlMs: 60000 });
-  let passwordWrite = null;
-  const auth = new AuthService({
-    repository,
-    sheetService: { async setPasswordHash(personId, storedHash) { passwordWrite = { personId, storedHash }; } },
-  });
-  const proof = auth.createPasswordReset(adminSession.token, "p2");
-  assert.match(proof.resetToken, /^[A-Za-z0-9_-]{32,128}$/);
-  await auth.resetPassword(proof.resetToken, "e".repeat(64));
-  assert.equal(passwordWrite.personId, "p2");
-  assert.match(passwordWrite.storedHash, /^scrypt\$v1\$/);
-  assert.equal(repository.getSession(playerSession.token), null);
-  assert.deepEqual(await auth.resetPassword(proof.resetToken, "e".repeat(64)), { success: true, repeated: true });
-  await assert.rejects(auth.resetPassword(proof.resetToken, "f".repeat(64)), { code: "RESET_PROOF_CONFLICT" });
-  repository.close();
-});
-
 test("Admin verwaltet die dauerhafte Passwortfreigabe", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
@@ -364,10 +343,12 @@ test("globale scrypt-Grenze schuetzt auch abgelehnte Passwortvergaben", async ()
   repository.close();
 });
 
-test("Login mit altem Passwort kann einen laufenden Reset nicht ueberholen", async () => {
+test("Login mit altem Passwort kann eine laufende Passwort-Neuvergabe nicht ueberholen", async () => {
+  const people = structuredClone(dataStore.get("players"));
+  people[2][5] = "x";
+  dataStore.set("players", people, { source: "test" });
   const repository = new StateRepository(":memory:");
   repository.init();
-  const adminSession = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
   let releaseWrite;
   let writeStarted;
   const started = new Promise((resolve) => { writeStarted = resolve; });
@@ -381,18 +362,18 @@ test("Login mit altem Passwort kann einen laufenden Reset nicht ueberholen", asy
         const values = structuredClone(dataStore.get("players"));
         const row = values.slice(1).find((entry) => entry[0] === personId);
         row[4] = storedHash;
+        row[5] = "";
         dataStore.set("players", values, { source: "write" });
       },
     },
   });
-  const proof = auth.createPasswordReset(adminSession.token, "p2");
-  const resetting = auth.resetPassword(proof.resetToken, "e".repeat(64));
+  const setup = auth.setupPassword("peter.login", "e".repeat(64));
   await started;
   const oldLogin = auth.login({ login: "peter.login", passwordHash: "b".repeat(64), ip: "127.0.0.9" });
   const rejectedLogin = assert.rejects(oldLogin, { code: "LOGIN_FAILED" });
   releaseWrite();
 
-  await resetting;
+  await setup;
   await rejectedLogin;
   repository.close();
 });

@@ -53,30 +53,7 @@ test("Sessionmigration ergaenzt Login aus E-Mail und behaelt die Rollback-Spalte
   repository.close();
 });
 
-test("Passwort-Reset-Nachweise sind gehasht, einmalig und zeitlich begrenzt", () => {
-  let now = 1000;
-  const repository = new StateRepository(":memory:", { now: () => now });
-  repository.init();
-  const first = repository.createPasswordResetProof("p1", "admin-1", 1000);
-  const stored = repository.db.prepare("SELECT proof_hash FROM password_reset_proofs").get();
-  assert.equal(stored.proof_hash.includes(first.token), false);
-  assert.equal(repository.getPasswordResetProof(first.token).personId, "p1");
-  const started = repository.beginPasswordResetProof(first.token, "payload-1", "stored-1");
-  assert.equal(started.acquired, true);
-  assert.equal(repository.beginPasswordResetProof(first.token, "payload-1", "stored-1").acquired, false);
-  repository.releasePasswordResetProof(first.token, "payload-1");
-  assert.equal(repository.beginPasswordResetProof(first.token, "payload-1", "stored-1").acquired, true);
-  assert.equal(repository.completePasswordResetProof(first.token, "payload-1"), true);
-  assert.equal(repository.beginPasswordResetProof(first.token, "payload-1", "stored-1").completed, true);
-  assert.throws(() => repository.beginPasswordResetProof(first.token, "payload-2", "stored-2"), { code: "RESET_PROOF_CONFLICT" });
-
-  const expired = repository.createPasswordResetProof("p1", "admin-1", 1000);
-  now = 2001;
-  assert.equal(repository.getPasswordResetProof(expired.token), null);
-  repository.close();
-});
-
-test("Migration verwirft bereits konsumierte Legacy-Reset-Nachweise", (t) => {
+test("Migration entfernt die Legacy-Reset-Tabelle und bewahrt anderen State", (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-reset-migration-"));
   const filename = path.join(directory, "state.sqlite");
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -89,7 +66,15 @@ test("Migration verwirft bereits konsumierte Legacy-Reset-Nachweise", (t) => {
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL,
       consumed_at INTEGER
-    )
+    );
+    CREATE TABLE app_state (
+      key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    INSERT INTO app_state(key, value_json, revision, updated_at)
+    VALUES ('preserved', '{"active":true}', 3, 900);
   `);
   legacy.prepare(`
     INSERT INTO password_reset_proofs(proof_hash, person_id, created_by, created_at, expires_at, consumed_at)
@@ -99,7 +84,9 @@ test("Migration verwirft bereits konsumierte Legacy-Reset-Nachweise", (t) => {
 
   const repository = new StateRepository(filename, { now: () => 1000 });
   repository.init();
-  assert.equal(repository.db.prepare("SELECT COUNT(*) AS count FROM password_reset_proofs").get().count, 0);
+  const resetTable = repository.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'password_reset_proofs'").get();
+  assert.equal(resetTable, undefined);
+  assert.deepEqual(repository.getState("preserved", {}), { value: { active: true }, revision: 3, updatedAt: 900 });
   repository.close();
 });
 

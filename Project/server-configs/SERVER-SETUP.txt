@@ -61,9 +61,7 @@ HTTP-Routen:
   GET /api/admin/grafana-auth  Interner aktueller Adminvertrag fuer Auth-Broker
   GET/POST/DELETE /api/session Sessionstatus, Login und Logout
   POST /api/password           Eigenes Passwort
-  POST /api/password-reset     Reset mit einmaligem Nachweis
   POST /api/password-setup     Erstvergabe nach KennwortVergessen-Freigabe
-  POST /api/admin/password-reset Admin erzeugt Reset-Nachweis
   POST /api/admin/password-setup Admin setzt/entfernt Erstvergabe-Freigabe
   POST /api/admin/password     Admin setzt Passwort direkt
   GET/POST/DELETE /api/monitor/session Monitor-Session
@@ -222,9 +220,10 @@ Empfohlene lokale Rechte pro Instanz:
 Unit gesetzten Modus 0700 an. Node erstellt `state.sqlite`, `scorelog.sqlite`,
 `audit.sqlite` und `messaging.sqlite` getrennt mit WAL, Foreign Keys,
 `synchronous=FULL` und Modus 0600.
-Der State enthaelt Sessions, gehashte Tokens,
-Resetnachweise, Monitorgeraete, idempotente Operationen, Loginlimits, Court-/
-Navigator-State und Metadata-Intents. ScoreLog und Auditlog enthalten die
+Der State enthaelt Sessions, gehashte Tokens, Monitorgeraete, idempotente
+Operationen, Loginlimits, Court-/Navigator-State und Metadata-Intents. Beim Start
+droppt das Backend die obsolete Tabelle `password_reset_proofs` samt etwaiger
+Altdaten. ScoreLog und Auditlog enthalten die
 unbegrenzt aufbewahrte Fachhistorie; Messaging enthaelt Bewerbsereignisse,
 persoenliche Meldungen, Zustellungen und Quittierungen. Jede SQLite-Datei mit
 ihrem `-wal` und

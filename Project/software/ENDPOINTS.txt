@@ -38,7 +38,7 @@ Schutz:
     `PUBLIC_ORIGIN`/`ALLOWED_ORIGINS` freigegebene Origin.
   - JSON-Writes verlangen `Content-Type: application/json`, standardmaessig
     maximal 8192 Byte; Auth-Bodies sind auf maximal 2048 Byte begrenzt.
-  - Login, Passwort/Reset, Monitoranmeldung und Writes besitzen IP-/Principal-
+  - Login, Passwortoperationen, Monitoranmeldung und Writes besitzen IP-/Principal-
     Limits. HTTP- und Socket-Timeouts sowie Headerlimits werden erzwungen.
   - OPTIONS antwortet 204 mit GET, POST, DELETE, OPTIONS, Credentials und
     `Content-Type`; es ist kein pauschal offener CORS-Handler.
@@ -294,7 +294,7 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
     frontendLogging }`.
     `user` ist bei gueltiger Session die private Eigenprojektion
     `{ id, firstName, lastName, email, login, phone, birthDate, gender, role }`,
-    sonst `null`; Passwort- und Resetdaten sind nie sichtbar. `email` ist die
+    sonst `null`; Passwortdaten sind nie sichtbar. `email` ist die
     Kontakt-E-Mail, `login` das davon unabhaengige Anmeldefeld.
 
   POST (public, erlaubte Origin):
@@ -349,18 +349,6 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
   Kontakt-E-Mail, auditiert. Die Route besitzt ein eigenes IP-Limit. Zusaetzlich
   teilen sich alle scrypt-Verifikationen und -Erzeugungen eine globale Grenze von
   vier gleichzeitigen Operationen.
-
------ POST /api/password-reset (public, erlaubte Origin) -----
-  Body `{ resetToken, newPasswordHash }`. Verbraucht einen gehashten, ablaufenden,
-  einmaligen Adminnachweis. Der Nachweis wird an diesen neuen Credential
-  gebunden; sichere Wiederholung desselben abgeschlossenen Resets liefert
-  `{ success: true, repeated: true }`. Sessions der Zielperson werden vor dem
-  Write widerrufen. Die Route besitzt ein eigenes IP-Limit.
-
------ POST /api/admin/password-reset (admin) -----
-  Body `{ personId }`. Erzeugt fuer die Zielperson einen einmaligen Resetcode und
-  liefert `{ success, resetToken, expiresAt, personId }`. Ein neuer Code ersetzt
-  einen noch offenen Code. Nur der Client sieht den Klartextcode einmalig.
 
 ----- POST /api/admin/password-setup (admin) -----
   Body `{ personId, allowed }`, wobei `allowed` boolean ist. Setzt

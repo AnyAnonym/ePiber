@@ -29,8 +29,8 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   fremden Profil gegebenenfalls `Admin`. Nur `Aktuell` und `Archiv` blenden eine
   zweite, horizontal scrollbar erreichbare Bewerbsreiterzeile ein; eine leere
   Kategorie zeigt `Keine Bewerbe enthalten`. System enthaelt Kontaktwerte, beim
-  Eigenprofil Login und Passwortaenderung. Admin enthaelt Passwortfreigabe,
-  Reset-Code und direktes Passwortsetzen. Die Reiterleisten scrollen horizontal;
+  Eigenprofil Login und Passwortaenderung. Admin enthaelt Passwortfreigabe und
+  direktes Passwortsetzen. Die Reiterleisten scrollen horizontal;
   Name und Reiter bleiben fest, nur der auf Viewport und Safe Area begrenzte Inhalt
   scrollt vertikal. Hintergrundscrollen ist waehrend des Dialogs gesperrt, Escape
   schliesst ihn.
@@ -73,6 +73,15 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Persoenliche Forderungsmeldungen nennen fuer Forderer und Geforderten die beim
   Anlegen fixierten Rangpositionen in Klammern; diese Texte werden bei spaeteren
   Namens- oder Rangaenderungen nicht aus aktuellen Daten neu erzeugt.
+  Mobil oeffnet die gemeinsame Navigation als rechtsseitiger, intern scrollbarer
+  Drawer ab Bildschirmoberkante mit etwa 82 Prozent Breite und voller Hoehe und
+  schiebt App samt Header nach links. Linke Restflaeche, X und Escape schliessen
+  ihn. Die Kopfzeile `ePiber` besitzt Headerhoehe. Linksbuendige Listenzeilen mit
+  Icons und Trennlinien ordnen Profil, einen nur bei Inhalt sichtbaren
+  Favoritenbereich, Dashboard und die zunaechst geschlossenen Gruppen
+  `Spielbetrieb`, `Verein` und `Administration`; die rote Abmeldezeile steht am
+  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop bleibt
+  unveraendert.
   Ergebnis- und Korrekturmeldungen sprechen Gewinner und Verlierer jeweils
   empfaengerbezogen an und nennen die gegnerische Seite. Bei W.O. lautet der
   Gewinnsatz `Du gewinnst durch W.O. von <Verliererseite>.`, fuer die selbst nicht

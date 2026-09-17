@@ -57,22 +57,75 @@ Commit: 4.9.9-paj-1-5 | Meldungsquittierung und Profilkontakte erweitert
   - [Tests] Browserabnahme sichert auf Desktop und Mobilgeraeten den dauerhaft sichtbaren Sammelbutton unter einer eigenstaendig scrollbaren Meldungsliste, die unmittelbare Aktualisierung von Tab, Profilbadge und mobilem Menue sowie die Kontakt-App-Links mit normalisierten Zieladressen ab.
   - [Dokumentation] Dateigenaue Uebernahmeliste fuer Profilseite, Endpointvertrag, Datenbankmodell und Architektur zur Behandlung eigener Aktivitaetsmeldungen, Sammelquittierung, Kontakt-App-Links und Messaging-Schema 10 vorbereitet.
 
+[4.9.9-paj-1-6] - 2026-09-17
+Commit: 4.9.9-paj-1-6 | Mobile Navigation und Passwortzugang ueberarbeitet
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-5-x` gesetzt.
+  - [Software] Die mobile Navigation als rechtsseitigen Vollhoehen-Drawer umgesetzt: Sie belegt 82 Prozent des Viewports, verschiebt App und Header synchron nach links, behaelt die Scrollposition und schliesst ueber Restflaeche, X, Escape, Navigation oder Authaktion; Hintergrundbedienung ist gesperrt, Fokusfuehrung, Safe Areas, Reduced Motion und interner Scrollbereich sind abgesichert.
+  - [Software] Die mobile Navigation in linksbuendige, vollbreite und durchgezogene Listenzeilen gegliedert: Profil steht angemeldet fest oben, ein leerer vorbereiteter Favoritenbereich entfaellt vollstaendig, Dashboard bleibt direkt erreichbar, `Spielbetrieb`, `Verein` und rollenabhaengig `Administration` starten immer geschlossen und Abmelden folgt ohne Leerraum als letzte Menuezeile. Nicht berechtigte oder dadurch leere Gruppen werden als Ganzes verborgen.
+  - [Software] Dashboard, Gruppenhauptzeilen und eingerueckte Unterzeilen verwenden dasselbe Raster, dieselbe schwarze Schriftfarbe, Icongroesse und Schriftstaerke; nur Anmelden ist gruen und Abmelden rot. Unterzeilen unterscheiden sich ausschliesslich durch ihren linken Einzug, waehrend ihre Trennlinien ueber die gesamte Drawerbreite laufen.
+  - [Software] Den gesamten mobilen Icon-Satz einschliesslich Hamburger, Schliessen und Gruppenstatus auf lokal eingebettete Google Material Symbols Outlined vereinheitlicht. Spielbetrieb verwendet `emoji_events`, Matches `sports_tennis`, Bewerbe `swords`, Scoreboard `scoreboard`, Anmeldung `login` und Abmeldung `logout`; es entstehen keine externen Font- oder Iconrequests.
+  - [Software] Die adminfreigegebene Passwortaktion auf `Passwort vergessen / Neueingabe` und den Dialog auf `Passwort neu vergeben` umbenannt; der Dialog fordert die betroffene Person auf, zuvor aktiv eine Administratorfreigabe einzuholen. KennwortVergessen-basierte Neuvergabe, Eigenwechsel und direktes Adminsetzen bleiben getrennte, auditierte Ablaeufe mit Sessionwiderruf.
+  - [Software] Den IP-Limiter der verbleibenden Passwort-Neuvergabe eindeutig als Setup-Limiter gefuehrt und dessen kontrollierten Fehlercode auf `PASSWORD_SETUP_RATE_LIMIT` praezisiert.
+  - [Datenbank] Die obsolete Tabelle `password_reset_proofs` wird beim Backendstart samt Altdaten kontrolliert entfernt, ohne andere State- oder historische Auditdaten zu veraendern.
+  - [Observability] Mit den Reset-Code-Routen deren Aktionen `passwordReset` und `adminPasswordResetProof` aus dem aktiven Auditvertrag entfernt; historische Auditdaten bleiben erhalten, und Passwort-Neuvergabe, Eigenwechsel sowie direktes Adminsetzen behalten ihre Abschlusslogs, kontrollierten Auditfelder und Fehlerpfade.
+  - [Dokumentation] Architektur, Endpoints, Datenbank, betroffene Seiten sowie Server-, Rollout- und Backup-/Restore-Unterlagen auf mobile Menuehierarchie, Passwort-Neuvergabe und ersatzlose Reset-Code-Entfernung angeglichen.
+  - [Repository] Die Geheimnispruefung des Commit-Workflows auf neu hinzukommende Diffzeilen begrenzt, damit das Entfernen geheimnisaehnlich benannter Legacy-Zeilen nicht faelschlich blockiert wird; neue potenzielle Geheimnisse, sensible Dateinamen und nicht freigegebene Binaerdateien bleiben gesperrt.
+
+  Added
+  - [Lizenzen] Quelle und vollstaendigen Apache-2.0-Lizenztext der verwendeten Google Material Symbols in `Frontend/MATERIAL_SYMBOLS_LICENSE.txt` aufgenommen.
+  - [Tests] Browserabnahmen fuer Drawer-Geometrie, Desktop-Unveraendertheit, Fokusfalle, Schliesswege, Rollenfilter, Gruppenstatus, Material-Symbol-Zuordnung, volle Zeilen- und Trennlinienbreite, Einrueckung, Farbvertrag sowie unmittelbare Position der Abmeldezeile ergaenzt.
+  - [Tests] Auth-, Repository- und Integrationstests sichern weiterhin serialisierte Passwort-Neuvergabe und Sessionwiderruf, entfernen die Reset-Code-Vertraege, pruefen beide ehemaligen HTTP-Routen auf 404 und bestaetigen, dass die Legacy-Tabelle bei Erhalt des uebrigen State gedroppt wird.
+  - [Tests] Workflowtest fuer die weiterhin blockierte Aufnahme potenzieller Geheimnisse und die zulaessige reine Entfernung geheimnisaehnlich benannter Legacy-Zeilen ergaenzt.
+
+  Removed
+  - [Software] Die Reset-Code-Aktionen `Reset-Code verwenden` und `Reset-Code erstellen`, beide zugehoerigen Modale, Clientmethoden und die HTTP-Routen `POST /api/password-reset` sowie `POST /api/admin/password-reset` ersatzlos entfernt.
+  - [Software] Reset-Code-Service- und Repositorymethoden, TTL-Konfiguration, Umgebungsvariable, feste Metrikrouten und Cleanup-Logik entfernt; direkte Requests an die ehemaligen Routen enden kontrolliert mit 404.
+
 Dokumentationsuebernahme beim Main-Versionssprung
 
   Project/software/ARCHITEKTUR.txt
   - Dokumentieren, dass neue Termin-, Absage- und Ergebnisereignisse die persoenliche Projektion eines beteiligten Akteurs mit dem Ereigniszeitpunkt bereits quittiert und ohne externe Zustellung speichern; die sichtbare Aktivitaet bleibt in Inbox, Reporting und Historie erhalten, erhoeht aber keinen Ungelesenzaehler, waehrend alle anderen Beteiligten ihre Projektion ungelesen erhalten.
   - Messaging-Schema 10 mit der benutzer- und operationId-gebundenen atomaren Sammelquittierung sowie der nur bei tatsaechlicher Aenderung fortgeschriebenen Revision und Ungelesenanzahl aufnehmen.
+  - Den mobilen 82-Prozent-Vollhoehen-Drawer mit verschobener App-Ebene, Scroll- und Fokusschutz, session- und rollenabhaengiger Menuehierarchie, immer geschlossen startenden Gruppen, vorbereitetem nur bei Inhalt sichtbarem Favoritenbereich, vollbreitem Zeilenraster und lokal eingebetteten Material Symbols dokumentieren; Desktop bleibt unveraendert.
+  - Reset-Code-Erzeugung und -Verwendung aus Authentifizierungsarchitektur, StateRepository und Frontendmodulen entfernen; KennwortVergessen-basierte Passwort-Neuvergabe, Eigenwechsel und Admin-Direktsetzung samt Sessionwiderruf und Auditabgrenzung erhalten. Den Start-Drop der obsoleten Proof-Tabelle und den Erhalt historischer Auditdaten festhalten.
 
   Project/software/DATENBANK.txt
   - Messaging-Schema von 9 auf 10 anheben und `message_bulk_ack_operations` mit `user_id + operation_id` als Primaerschluessel sowie `acknowledged_at` und `changed_count` dokumentieren; spaeter eintreffende Meldungen bleiben ungelesen, Bestandsmeldungen und bestehende Quittierungen bleiben bei der additiven Migration unveraendert.
   - Fuer Terminsetzung, Terminaenderung, Terminabsage und Ergebnisereignisse dokumentieren, dass alle Matchteilnehmer erhalten bleiben, die Eigenprojektion des beteiligten Akteurs sichtbar und bereits quittiert gespeichert sowie nicht extern zugestellt wird und Partner beziehungsweise Gegner ihre Projektion ungelesen erhalten.
+  - `password_reset_proofs` aus dem aktiven State-Schema entfernen und als beim Backendstart samt Altdaten gedroppte Legacy-Tabelle dokumentieren; `KennwortVergessen` bleibt die einmalig verbrauchte Adminfreigabe fuer die Passwort-Neuvergabe.
 
   Project/software/ENDPOINTS.txt
   - Bei Terminsetzung, Terminaenderung, Terminabsage und Ergebnisereignissen die sichtbare, initial gelesene Eigenprojektion ohne externe Eigenzustellung sowie die ungelesene Zustellung an Partner und Gegner ergaenzen; Bestandsmeldungen werden nicht rueckwirkend veraendert.
   - `acknowledgeAllMessages { operationId }` als authentifizierten, atomaren und idempotenten Schreibendpoint dokumentieren: Er quittiert alle zum Operationszeitpunkt ungelesenen eigenen Meldungen unabhaengig von der geladenen Seite und liefert `success`, `changedCount`, `acknowledgedAt`, `repeated`, `revision` und `unreadCount`; bei einer Aenderung publiziert er genau einen privaten Summary-Snapshot. Audit umfasst `started` und `success|failed|unknown`, abgewiesene Requests werden als `failed` erfasst; das Abschlusslog transportiert nur Empfaenger-ID, Zaehler, Wiederholungsstatus, Dauer, Ergebnis und Fehlercode.
+  - `POST /api/password-reset` und `POST /api/admin/password-reset` ersatzlos entfernen; `POST /api/password-setup`, `POST /api/admin/password-setup`, Eigenwechsel und Admin-Direktsetzung als verbleibende Passwortvertraege abgrenzen.
+
+  Project/software/seiten/index.txt
+  - Mobile Menuebewegung, 82-Prozent-Breite, Schliesswege, Kopfzeile, Listenraster, Material-Symbol-Zuordnung, Farben, Einrueckung, Gruppenstruktur, Berechtigungsfilter, fehlenden Leer-Favoritenbereich und unmittelbare letzte Abmeldezeile dokumentieren.
+  - Loginaktion `Passwort vergessen / Neueingabe`, Dialog `Passwort neu vergeben` und die proaktive Aufforderung zur vorherigen Administratorfreigabe aufnehmen; Reset-Code-Modal und `one-time-code` entfallen.
 
   Project/software/seiten/players.txt
   - Den eigenen vertikalen Scrollbereich des Meldungsreiters und die dauerhaft darunter sichtbare Aktion `Alle als gelesen markieren` dokumentieren; sie quittiert auch nicht geladene Seiten und bleibt ohne ungelesene Meldung deaktiviert.
   - Dokumentieren, dass eigene Termin- und Ergebnisaktivitaeten sichtbar, initial gelesen, nicht fett, ohne Kenntnisnahme und ohne externe Eigenzustellung erscheinen, waehrend andere Beteiligte ungelesene Meldungen erhalten und die neutrale Bewerbshistorie alle Teilnehmer behaelt; Bestandsmeldungen bleiben unveraendert.
   - Nach erfolgreicher einzelner Kenntnisnahme schliesst der Meldungsdialog sofort und fokussiert die aktualisierte Meldungszeile; bei Fehlern bleibt er mit Fehlerstatus offen.
   - Nichtleere E-Mail-Adressen und Telefonnummern erhalten neben der Kopieraktion einen Briefumschlag beziehungsweise Telefonhoerer. `mailto:` oeffnet eine leere Nachricht mit URI-sicher kodiertem Empfaenger, `tel:` die auf Pluszeichen und Ziffern normalisierte Nummer in der jeweiligen systemseitigen Standard-App; leere Werte erhalten keine Kontaktaktionen.
+  - Mobile Menuehierarchie ergaenzen und `Reset-Code erstellen` aus dem Adminreiter entfernen; Passwortfreigabe und direktes Setzen bleiben erhalten.
+
+  Project/software/seiten/bewerbsRaster.txt
+  - Gemeinsame mobile Menuehierarchie dokumentieren und Reset-Code-Erstellung aus den Profil-Adminaktionen entfernen.
+
+  Project/software/seiten/rangliste.txt
+  - Gemeinsame mobile Menuehierarchie dokumentieren und Reset-Code aus den Profil-Adminaktionen entfernen.
+
+  Project/software/seiten/personenNormalisieren.txt
+  - Obsolete Resetdaten aus der Liste der von der Normalisierung ausgeschlossenen aktiven Felder entfernen; Passwort-Hash und Passwortfreigabe bleiben ausgeschlossen.
+
+  Project/server-configs/SERVER-SETUP.txt
+  - Beide Reset-Code-HTTP-Routen aus dem aktiven Routing entfernen und den State ohne Resetnachweise sowie den Start-Drop von `password_reset_proofs` dokumentieren.
+
+  Project/server-configs/ROLLOUT-CHECKLIST.md
+  - Reset-Code-Pruefungen entfernen und Abnahme fuer Passwort-Neuvergabe, Legacy-Tabellendrop, neue mobile Drawer-Hierarchie, Rollenfilter, Material Symbols, Zeilenraster, Farben, Fokus, Scrollen und Schliesswege aufnehmen.
+
+  Project/server-configs/BACKUP-RESTORE-KONZEPT.md
+  - Resetnachweise aus aktuellem State-, Restore- und Sicherheitsbereinigungsvertrag entfernen; historische Sicherungen duerfen die Legacy-Tabelle enthalten, die der neue Backendstand beim Start entfernt.

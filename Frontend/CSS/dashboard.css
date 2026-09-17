@@ -24,19 +24,16 @@ body {
 
 .club-dashboard a { color: inherit; }
 
-.dashboard-page > #header-container header {
+.dashboard-page #header-container header {
   background: #176b4a;
   box-shadow: 0 5px 22px rgba(24, 52, 45, .14);
 }
 
-.dashboard-page > #header-container nav a.active {
+.dashboard-page #header-container nav a.active {
   border-bottom-color: #f3cf77;
 }
 
-.dashboard-page .mobile-nav-content {
-  border: 1px solid var(--line);
-  background: var(--card);
-}
+.dashboard-page .mobile-nav-content { background: var(--card); }
 
 .club-dashboard {
   display: block;

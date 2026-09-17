@@ -499,33 +499,32 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     body: JSON.stringify({ login: "peter.login", newPasswordHash: "8".repeat(64) }),
   });
   assert.equal(repeatedSetupResponse.status, 401);
+  const finalAllowedSetupAttempt = await fetch(`${httpBase}/api/password-setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://test.local" },
+    body: JSON.stringify({ login: "peter.login", newPasswordHash: "7".repeat(64) }),
+  });
+  assert.equal(finalAllowedSetupAttempt.status, 401);
+  const limitedSetupResponse = await fetch(`${httpBase}/api/password-setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://test.local" },
+    body: JSON.stringify({ login: "peter.login", newPasswordHash: "6".repeat(64) }),
+  });
+  assert.equal(limitedSetupResponse.status, 429);
+  assert.equal((await limitedSetupResponse.json()).error.code, "PASSWORD_SETUP_RATE_LIMIT");
 
-  const resetProofResponse = await fetch(`${httpBase}/api/admin/password-reset`, {
+  const removedAdminResetResponse = await fetch(`${httpBase}/api/admin/password-reset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "http://test.local", Cookie: cookie },
     body: JSON.stringify({ personId: "p2" }),
   });
-  assert.equal(resetProofResponse.status, 200);
-  const resetProof = await resetProofResponse.json();
-  assert.match(resetProof.resetToken, /^[A-Za-z0-9_-]{32,128}$/);
-  const resetResponse = await fetch(`${httpBase}/api/password-reset`, {
+  assert.equal(removedAdminResetResponse.status, 404);
+  const removedPublicResetResponse = await fetch(`${httpBase}/api/password-reset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "http://test.local" },
-    body: JSON.stringify({ resetToken: resetProof.resetToken, newPasswordHash: "d".repeat(64) }),
+    body: JSON.stringify({ resetToken: "obsolete", newPasswordHash: "d".repeat(64) }),
   });
-  assert.equal(resetResponse.status, 200);
-  const replayedReset = await fetch(`${httpBase}/api/password-reset`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "http://test.local" },
-    body: JSON.stringify({ resetToken: resetProof.resetToken, newPasswordHash: "d".repeat(64) }),
-  });
-  assert.equal(replayedReset.status, 200);
-  const conflictingReset = await fetch(`${httpBase}/api/password-reset`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "http://test.local" },
-    body: JSON.stringify({ resetToken: resetProof.resetToken, newPasswordHash: "e".repeat(64) }),
-  });
-  assert.equal(conflictingReset.status, 409);
+  assert.equal(removedPublicResetResponse.status, 404);
 
   const publicClient = createSocketClient(`${wsBase}/ws`, { Origin: "http://test.local" });
   const publicWelcome = await publicClient.handshake();
@@ -1466,8 +1465,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     && fields.result === "rejected" && fields.errorCode === "AUTH_REQUIRED"), true);
   assert.equal(auditRows.some((row) => row.action === "moderateCompetitionHistoryComment" && row.result === "failed" && row.errorCode === "AUTH_REQUIRED"), true);
   for (const action of [
-    "login", "adminPasswordSet", "adminPasswordSetup", "passwordSetup", "adminPasswordResetProof",
-    "passwordReset", "addMatch", "setMatchAppointment", "acknowledgeMessage", "acknowledgeAllMessages", "refreshSheetData", "monitorProvision", "monitorEnroll", "monitorNavigate", "courtAssign", "monitorRotate", "monitorRevoke",
+    "login", "adminPasswordSet", "adminPasswordSetup", "passwordSetup", "addMatch", "setMatchAppointment", "acknowledgeMessage", "acknowledgeAllMessages", "refreshSheetData", "monitorProvision", "monitorEnroll", "monitorNavigate", "courtAssign", "monitorRotate", "monitorRevoke",
     "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction", "addCompetitionHistoryComment", "editCompetitionHistoryComment", "moderateCompetitionHistoryComment", "deleteCompetitionHistoryComment",
     "frontendLoggingSettings", "frontendLoggingTargetSet", "frontendLoggingTargetRemove",
   ]) {

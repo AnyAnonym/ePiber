@@ -2,14 +2,12 @@ import { createEndpoint, getOperationId, releaseOperationId } from "./dataClient
 import { formatWalkoverResult } from "./matchCompletionText.js";
 import {
   ready,
-  createPasswordReset,
   login,
   logout as endSession,
   changePassword,
   getUser,
   isAuthenticated,
   refreshSession,
-  resetPassword,
   setPasswordSetupAllowed,
   setPasswordForPerson,
   setupPassword,
@@ -201,17 +199,10 @@ function closeModal(modal) {
     profileModal.removeAttribute("aria-hidden");
     if (returnFocus?.isConnected && !profileModal.classList.contains("hidden")) returnFocus.focus();
   }
-  if (modal?.id === "resetPasswordModal") document.getElementById("resetPasswordForm")?.reset();
   if (modal?.id === "passwordSetupModal") document.getElementById("passwordSetupForm")?.reset();
   if (modal?.id === "adminPasswordModal") {
     adminPasswordTarget = null;
     document.getElementById("adminPasswordForm")?.reset();
-  }
-  if (modal?.id === "resetProofModal") {
-    const token = document.getElementById("resetProofValue");
-    const target = document.getElementById("resetProofTarget");
-    if (token) token.textContent = "";
-    if (target) target.textContent = "";
   }
   unlockModalScroll();
 }
@@ -231,8 +222,7 @@ const loginModal = createModal("loginModal", `
     <p id="loginStatus" class="login-status" role="alert" aria-live="assertive" aria-atomic="true" hidden></p>
 
     <button type="submit" class="btn-login">Anmelden</button>
-    <button type="button" id="openPasswordSetup" class="btn-login">Erstmals Passwort vergeben</button>
-    <button type="button" id="openPasswordReset" class="btn-login">Reset-Code verwenden</button>
+    <button type="button" id="openPasswordSetup" class="btn-login">Passwort vergessen / Neueingabe</button>
     <button type="button" class="btn-login modal-cancel">Abbrechen</button>
   </form>
 `, { explicitDismiss: true });
@@ -264,23 +254,9 @@ const passwordModal = createModal("changePasswordModal", `
   </form>
 `, { explicitDismiss: true });
 
-const resetPasswordModal = createModal("resetPasswordModal", `
-  <h2>Passwort zurücksetzen</h2>
-  <form id="resetPasswordForm" method="post" action="/api/password-reset" autocomplete="on">
-    <label for="resetToken">Einmaliger Reset-Code:</label>
-    <input type="text" id="resetToken" name="resetToken" autocomplete="one-time-code" minlength="32" maxlength="128" required>
-    <label for="resetNewPassword">Neues Passwort:</label>
-    <input type="password" id="resetNewPassword" name="newPassword" autocomplete="new-password" minlength="6" required>
-    <label for="resetConfirmPassword">Passwort bestätigen:</label>
-    <input type="password" id="resetConfirmPassword" name="confirmPassword" autocomplete="new-password" minlength="6" required>
-    <button type="submit" class="btn-login">Passwort setzen</button>
-    <button type="button" class="btn-login modal-cancel">Abbrechen</button>
-  </form>
-`, { explicitDismiss: true });
-
 const passwordSetupModal = createModal("passwordSetupModal", `
-  <h2>Erstmals Passwort vergeben</h2>
-  <p>Diese Funktion muss zuvor von einem Administrator freigegeben werden.</p>
+  <h2>Passwort neu vergeben</h2>
+  <p>Diese Funktion muss zuvor von einem Administrator freigegeben werden. Bitte fordern Sie die Freigabe daher vorab bei einem Administrator an.</p>
   <form id="passwordSetupForm" method="post" action="/api/password-setup" autocomplete="on">
     <label for="setupLogin">Login:</label>
     <input type="text" id="setupLogin" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
@@ -292,14 +268,6 @@ const passwordSetupModal = createModal("passwordSetupModal", `
     <button type="button" class="btn-login modal-cancel">Abbrechen</button>
   </form>
 `, { explicitDismiss: true });
-
-const resetProofModal = createModal("resetProofModal", `
-  <h2>Einmaliger Reset-Code</h2>
-  <p id="resetProofTarget"></p>
-  <p>Dieser Code ist zeitlich begrenzt und wird nur jetzt angezeigt.</p>
-  <code id="resetProofValue"></code>
-  <button type="button" id="copyResetProof" class="btn-login">Code kopieren</button>
-`);
 
 const adminPasswordModal = createModal("adminPasswordModal", `
   <h2>Passwort direkt setzen</h2>
@@ -1942,29 +1910,6 @@ window.openProfileModal = async (options = {}) => {
       }, { signal: actionSignal });
       adminActionsElement.appendChild(setupButton);
 
-      const resetButton = document.createElement("button");
-      resetButton.type = "button";
-      resetButton.className = "btn-login";
-      resetButton.textContent = "Reset-Code erstellen";
-      resetButton.addEventListener("click", async () => {
-        const generation = profileRequestGeneration;
-        const adminId = sessionUser.id;
-        resetButton.disabled = true;
-        try {
-          const result = await createPasswordReset(profile.id);
-          if (!result?.resetToken) throw new Error("Der Server hat keinen Reset-Code geliefert.");
-          if (generation !== profileRequestGeneration || getUser()?.id !== adminId || getUser()?.role !== "admin") return;
-          document.getElementById("resetProofValue").textContent = result.resetToken;
-          document.getElementById("resetProofTarget").textContent = `Für ${profileName(profile)}`;
-          closeModal(profileModal);
-          openModal(resetProofModal);
-        } catch (error) {
-          window.showToast(errorMessage(error, "Reset-Code konnte nicht erstellt werden."), "error");
-          resetButton.disabled = false;
-        }
-      }, { signal: actionSignal });
-      adminActionsElement.appendChild(resetButton);
-
       const setPasswordButton = document.createElement("button");
       setPasswordButton.type = "button";
       setPasswordButton.className = "btn-login";
@@ -2077,7 +2022,6 @@ subscribeAuth((user) => {
   const identity = user ? `${user.id || ""}:${user.role || ""}` : "anonymous";
   if (modalAuthIdentity !== null && modalAuthIdentity !== identity) {
     closeModal(profileModal);
-    closeModal(resetProofModal);
     closeModal(adminPasswordModal);
     closeModal(adminRankingActionModal);
     closeModal(matchResultModal);
@@ -2087,7 +2031,6 @@ subscribeAuth((user) => {
   withdrawContext = null;
   closeModal(passwordModal);
   closeModal(adminPasswordModal);
-  closeModal(resetProofModal);
   closeModal(matchDateModal);
   closeModal(adminRankingActionModal);
   closeModal(matchResultModal);
@@ -2250,13 +2193,6 @@ document.getElementById("changePasswordForm").addEventListener("submit", async (
   }
 });
 
-document.getElementById("openPasswordReset").addEventListener("click", () => {
-  document.getElementById("resetPasswordForm")?.reset();
-  closeModal(loginModal);
-  openModal(resetPasswordModal);
-  document.getElementById("resetToken")?.focus();
-});
-
 document.getElementById("openPasswordSetup").addEventListener("click", () => {
   document.getElementById("passwordSetupForm")?.reset();
   const loginName = document.getElementById("login")?.value.trim();
@@ -2298,34 +2234,6 @@ document.getElementById("passwordSetupForm").addEventListener("submit", async (e
   }
 });
 
-document.getElementById("resetPasswordForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const submitButton = form.querySelector('button[type="submit"]');
-  const resetToken = form.elements.resetToken.value.trim();
-  const newPassword = form.elements.newPassword.value;
-  const confirmation = form.elements.confirmPassword.value;
-  if (newPassword.length < 6 || newPassword !== confirmation) {
-    const message = newPassword.length < 6
-      ? "Das neue Passwort muss mindestens 6 Zeichen lang sein."
-      : "Die Passwörter stimmen nicht überein.";
-    window.showToast(message, "error");
-    return;
-  }
-  setModalBusy(form, true);
-  try {
-    await resetPassword(resetToken, newPassword);
-    form.reset();
-    closeModal(resetPasswordModal);
-    window.showToast("Passwort wurde gesetzt. Du kannst dich jetzt anmelden.", "success");
-    window.openLoginModal();
-  } catch (error) {
-    window.showToast(errorMessage(error, "Passwort konnte nicht zurückgesetzt werden."), "error");
-  } finally {
-    setModalBusy(form, false);
-  }
-});
-
 document.getElementById("adminPasswordForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2358,17 +2266,6 @@ document.getElementById("adminPasswordForm").addEventListener("submit", async (e
     window.showToast(errorMessage(error, "Passwort konnte nicht gesetzt werden."), "error");
   } finally {
     setModalBusy(form, false);
-  }
-});
-
-document.getElementById("copyResetProof").addEventListener("click", async () => {
-  const token = document.getElementById("resetProofValue").textContent;
-  if (!token) return;
-  try {
-    await navigator.clipboard.writeText(token);
-    window.showToast("Reset-Code wurde kopiert.", "success");
-  } catch {
-    window.showToast("Reset-Code konnte nicht automatisch kopiert werden.", "error");
   }
 });
 

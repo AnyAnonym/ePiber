@@ -116,7 +116,7 @@ Abweichung muss vor der naechsten Betriebsfreigabe geklaert werden.
 
 | Schutzobjekt | Ort | Inhalt und Wiederherstellungsbedeutung |
 |---|---|---|
-| `state.sqlite` | `/var/lib/epiber-<system>/state.sqlite` | Court-/Monitor-State, Sessions, Resetnachweise, Token-Hashes, Operationen, Loginlimits und Metadata-Intents |
+| `state.sqlite` | `/var/lib/epiber-<system>/state.sqlite` | Court-/Monitor-State, Sessions, Token-Hashes, Operationen, Loginlimits und Metadata-Intents |
 | `.env` | Je Checkout unter `Backend/.env` | Systemspezifische Sheet-ID, Court-URL, Port und optionale Betriebsgrenzen |
 | Service-Account-Quelldateien | Root-only-Pfade laut `SERVER-DOKU.txt` | Google-API-Identitaeten; nach Kompromittierung nicht restaurieren, sondern neu ausstellen |
 | Grafana-DB | `/var/lib/grafana/grafana.db` | Grafana-Benutzer, lokaler Zustand und Alert-History |
@@ -200,8 +200,8 @@ validiert werden.
 
 #### Reaktivierung alter Sicherheitszustaende
 
-Ein Restore von `state.sqlite` kann nach dem Backup widerrufene Sessions,
-Resetnachweise oder Monitorgeraete wiederherstellen. Ein Restore ohne
+Ein Restore von `state.sqlite` kann nach dem Backup widerrufene Sessions oder
+Monitorgeraete wiederherstellen. Ein Restore ohne
 Sicherheitsbereinigung kann damit alte Zugriffsmoeglichkeiten reaktivieren.
 
 #### Unvollstaendige Google-Exporte
@@ -499,7 +499,6 @@ reaktivieren. Das Restorewerkzeug muss einen kontrollierten Modus bereitstellen,
 der standardmaessig:
 
 - alle Sessions entfernt;
-- alle Passwort-Resetnachweise entfernt oder invalidiert;
 - Loginlimits kontrolliert zuruecksetzt;
 - Monitorgeraete fuer Neu-Provisionierung markiert oder deren Tokens rotiert;
 - temporaere Frontend-Logging-Ziele prueft und abgelaufene entfernt;
@@ -679,7 +678,7 @@ Alarmweg darf keine Secrets oder personenbezogenen Backupinhalte uebertragen.
    auswaehlen.
 4. Alle fachlich zusammengehoerigen Datenbanken aus demselben Satz bereitstellen.
 5. Restorekopien erneut mit Integrity- und Foreign-Key-Check pruefen.
-6. Sicherheitsbereinigung fuer Sessions, Resetnachweise und Monitorzugriffe
+6. Sicherheitsbereinigung fuer Sessions und Monitorzugriffe
    ausfuehren.
 7. Operationen und Metadata-Intents auf unklare Sheetwrites pruefen.
 8. Dienst starten und `/version`, `/live`, `/ready` und `/health` pruefen.
@@ -730,7 +729,7 @@ Alarmweg darf keine Secrets oder personenbezogenen Backupinhalte uebertragen.
 7. Verschluesselte Konfiguration und zusammengehoerige SQLite-Saetze
    wiederherstellen.
 8. Google-Spreadsheets anbinden oder aus geschuetzten Kopien wiederherstellen.
-9. Sessions, Resetnachweise und Monitoranmeldungen invalidieren beziehungsweise
+9. Sessions und Monitoranmeldungen invalidieren beziehungsweise
    neu provisionieren.
 10. PAJ vollstaendig abnehmen.
 11. Live nach erfolgreicher PAJ-Abnahme starten und eng beobachten.
@@ -743,7 +742,7 @@ Alarmweg darf keine Secrets oder personenbezogenen Backupinhalte uebertragen.
 - neuen sauberen Host aufbauen;
 - immutable Off-site-Sicherung vor dem vermuteten Angriffszeitpunkt verwenden;
 - alle Service-Account-, Backup-, SSH- und sonstigen Hostcredentials rotieren;
-- alle Benutzersessions, Resetnachweise und Monitorcredentials invalidieren;
+- alle Benutzersessions und Monitorcredentials invalidieren;
 - Backuprepository auf Manipulation und unerwartete Loeschversuche untersuchen;
 - wiederhergestellte Daten vor Livefreigabe auf Schadartefakte und unplausible
   Aenderungen pruefen;
@@ -880,7 +879,7 @@ Das Backupkonzept ist erst als produktiv umgesetzt freigegeben, wenn:
 - ein kompletter PAJ-Restore erfolgreich war;
 - ein Host-DR-Test erfolgreich war;
 - Backupfehler aktiv und unabhaengig gemeldet werden;
-- Restore keine alten Sessions, Resetnachweise oder widerrufenen Monitorzugriffe
+- Restore keine alten Sessions oder widerrufenen Monitorzugriffe
   unkontrolliert reaktiviert;
 - Schluesselverlust und Hostkompromittierung als Szenarien behandelt sind;
 - Retention und Datenschutzfreigabe dokumentiert sind;
