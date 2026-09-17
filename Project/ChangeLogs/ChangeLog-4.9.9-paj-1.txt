@@ -144,3 +144,12 @@ Commit: 4.9.9-paj-1-7 | Kontogebundene Favoriten und Plattformplanung erweitert
   - [Observability] Favoriten-Lade-, Speicher- und Matchauswahlfehler als kontrollierte Browserereignisse sowie `favorites_update_completed` ohne freie Ziele oder Personendaten aufgenommen.
   - [Dokumentation] Fachkonzept, Architektur, Datenbank, Endpoints und betroffene Seitendokumentation auf den Favoriten- und Marker-Vertrag angeglichen.
   - [Dokumentation] Nicht-kanonische Mandanten- und Releasearbeitsgrundlage auf den Planungsstand bis Mai 2027 fortgeschrieben: vereinslokale Konten, 20 bis 50 beziehungsweise maximal etwa 100 Mandanten, fruehe PostgreSQL-/Personenmigration, Hallenreservierungs-MVP, Arch-/OpenTofu-/Ansible-/Podman-Plattformpfad, Kapazitaetsstufen sowie Rebuild-and-Restore mit vorlaeufigen RPO-/RTO-Zielen konkretisiert.
+
+[4.9.9-paj-1-8] - 2026-09-17
+Commit: 4.9.9-paj-1-8 | Projekt-Iststand und Zielbild dokumentiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-7-x` gesetzt.
+
+  Added
+  - [Dokumentation] Eigenstaendige Gesamtdokumentation unter `Doku/` mit Quellen- und Verbindlichkeitsregeln, Produkt- und Fachbestand, technischer Architektur, Sicherheit, Betrieb, Qualitaet, Grenzen, Risiken, Zielbild, phasenweiser Roadmap und Uebergabekontext fuer separate Folgeprojekte angelegt.
