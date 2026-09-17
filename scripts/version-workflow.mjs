@@ -408,8 +408,12 @@ function assertNoSecretContent(indexFile, approvedBinaries) {
     cwd: root,
     env: { ...process.env, GIT_INDEX_FILE: indexFile },
   }).stdout;
-  const textDiff = diff.replace(/^Binary files .* differ\n?/gm, "");
-  const matchedPattern = SECRET_CONTENT_RES.find((expression) => expression.test(textDiff));
+  const addedText = diff
+    .replace(/^Binary files .* differ\n?/gm, "")
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .join("\n");
+  const matchedPattern = SECRET_CONTENT_RES.find((expression) => expression.test(addedText));
   if (matchedPattern) fail(`Gestagter Inhalt entspricht einem Geheimnismuster: ${matchedPattern}`);
 }
 

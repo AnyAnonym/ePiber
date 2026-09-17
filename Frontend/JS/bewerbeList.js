@@ -118,9 +118,7 @@ function closeCompetitionHistory({ restoreFocus = true } = {}) {
   modal.hidden = true;
   clearHistoryState();
   historyState.returnFocus = null;
-  if (!document.querySelector('.modal:not(.hidden), .competition-history-modal:not([hidden])')) {
-    document.body.classList.remove("modal-open");
-  }
+  window.unlockModalScroll?.();
   if (restoreFocus && returnFocus?.isConnected && !returnFocus.hidden) returnFocus.focus();
 }
 
@@ -923,7 +921,7 @@ function openCompetitionHistory(competition, button) {
   historyElement("competition-history-competition-name").textContent = historyState.competitionName;
   const modal = historyElement("competition-history-modal");
   modal.hidden = false;
-  document.body.classList.add("modal-open");
+  window.lockModalScroll?.();
   historyElement("competition-history-close")?.focus();
   loadCompetitionHistory().catch(() => {});
 }

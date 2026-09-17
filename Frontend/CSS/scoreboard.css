@@ -110,6 +110,12 @@
   border: 1px solid var(--table-border);
   overflow: hidden;
 }
+#platz1 > .page-favorite-star {
+  position: absolute;
+  z-index: 2;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+}
 #platz2 {
   position: relative;
   grid-row: 2 / 3;
@@ -396,7 +402,7 @@
     position: absolute;
     z-index: 1;
     top: 8px;
-    right: max(8px, env(safe-area-inset-right));
+    right: max(10px, env(safe-area-inset-right));
     display: inline-flex;
     min-height: 36px;
     align-items: center;
@@ -411,7 +417,10 @@
     text-decoration: none;
   }
   #platz1 > .scoreboard-match-link {
-    top: max(8px, env(safe-area-inset-top));
+    top: max(50px, calc(env(safe-area-inset-top) + 50px));
+  }
+  #platz2 > .scoreboard-match-link {
+    right: max(10px, env(safe-area-inset-right));
   }
   #platz1,
   #platz2 {

@@ -67,6 +67,24 @@ function appointmentText(value) {
   return `${match[3]}.${match[2]}.${century}${match[1]}, ${match[4]}:${match[5]} Uhr`;
 }
 
+function reverseResultPerspective(value) {
+  return String(value || "").split("/").map((set) => set.replace(/^(\d{1,2})-(\d{1,2})(\(\d{1,2}\))?$/, "$2-$1$3")).join("/");
+}
+
+function normalizeWinnerPerspective(value) {
+  const result = String(value || "");
+  const sets = result.split("/").map((set) => set.match(/^(\d{1,2})-(\d{1,2})(?:\(\d{1,2}\))?$/));
+  if (!sets.length || sets.some((set) => !set)) return result;
+  const wins = sets.reduce((count, set) => {
+    const first = Number(set[1]);
+    const second = Number(set[2]);
+    if (first > second) count[0]++;
+    if (second > first) count[1]++;
+    return count;
+  }, [0, 0]);
+  return wins[1] > wins[0] ? reverseResultPerspective(result) : result;
+}
+
 class MessagingService {
   constructor({ repository, emailAdapter, whatsappAdapter, publish = () => {}, now = Date.now, log = logger.log }) {
     this.repository = repository;
@@ -107,15 +125,17 @@ class MessagingService {
     });
   }
 
-  participant({ identity, userId, role, displayName = "", type, subject, body, allowMissingPerson = false }) {
+  participant({ identity, userId, role, displayName = "", type, subject, body, allowMissingPerson = false, acknowledgedAt = null, externalDelivery = true }) {
     let external = [];
-    try {
-      external = this.person(userId).channels;
-    } catch (error) {
-      if (!allowMissingPerson || error.code !== "PERSON_NOT_FOUND") throw error;
+    if (externalDelivery) {
+      try {
+        external = this.person(userId).channels;
+      } catch (error) {
+        if (!allowMissingPerson || error.code !== "PERSON_NOT_FOUND") throw error;
+      }
     }
     return {
-      userId, role, displayName, messageId: stableId("msg", identity), type, subject, body,
+      userId, role, displayName, messageId: stableId("msg", identity), type, subject, body, acknowledgedAt,
       deliveries: [{ channel: "Inbox", status: "delivered" }, ...external.map((channel) => ({ channel, status: "pending" }))],
     };
   }
@@ -213,6 +233,8 @@ class MessagingService {
         subject: `${changed ? "Spieltermin geändert" : "Spieltermin festgelegt"} mit ${opponentName}`,
         body: `${changeText}${reason ? ` Administrator ${actorName || actorId} hat als Grund angegeben: ${reason}` : ""}`,
         allowMissingPerson: true,
+        acknowledgedAt: userId === String(actorId) ? createdAt : null,
+        externalDelivery: userId !== String(actorId),
       });
     });
     const firstTeamName = namedTeams[0].join(" / ");
@@ -250,6 +272,8 @@ class MessagingService {
         identity: `${identity}:${userId}`, userId, role: "participant", displayName: participantNames[userId] || userId,
         type: "appointment_cancelled", subject: `Spieltermin abgesagt mit ${opponentName}`,
         body: `Der Spieltermin für dein Match gegen ${opponentName} am ${previousDateText} wurde abgesagt.`, allowMissingPerson: true,
+        acknowledgedAt: userId === String(actorId) ? createdAt : null,
+        externalDelivery: userId !== String(actorId),
       });
     });
     const event = await this.ensureEvent({
@@ -285,7 +309,13 @@ class MessagingService {
       : outcomeChange && completionType === "retirement"
         ? `${controlledResult ? `${controlledResult} ` : ""}(Aufgabe)`
         : controlledResult;
-    const detailParts = [displayResult ? `Ergebnis: ${displayResult}` : "", matchEnd ? `Matchende: ${matchEnd}` : "", reason ? `Grund: ${reason}` : ""].filter(Boolean);
+    const historyResult = outcomeChange && winnerSide === 2 ? reverseResultPerspective(controlledResult) : controlledResult;
+    const historyDisplayResult = outcomeChange && completionType === "walkover"
+      ? "W.O."
+      : outcomeChange && completionType === "retirement"
+        ? `${historyResult ? `${historyResult} ` : ""}(Aufgabe)`
+        : historyResult;
+    const detailParts = [historyDisplayResult ? `Ergebnis: ${historyDisplayResult}` : "", matchEnd ? `Matchende: ${matchEnd}` : "", reason ? `Grund: ${reason}` : ""].filter(Boolean);
     const namedTeams = teams.slice(0, 2).map((team) => (team || []).map(String).filter(Boolean).map((id) => participantNames[id] || id));
     const hasOutcome = outcomeChange
       && [1, 2].includes(winnerSide)
@@ -308,6 +338,8 @@ class MessagingService {
           ? `${completionType === "walkover" ? recipientWon ? `Du gewinnst durch W.O. von ${namedTeams[2 - winnerSide].join(" / ")}.` : "Du verlierst durch W.O." : `${outcomeText}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}`}${reason ? ` Grund: ${reason}` : ""}`
           : `${actorName || actorId} hat das Matchergebnis ${changeType === "result" ? "eingetragen" : changeType === "result_cleared" ? "zurückgenommen" : "korrigiert"}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}${reason ? ` Grund: ${reason}` : ""}`,
         allowMissingPerson: true,
+        acknowledgedAt: userId === String(actorId) ? createdAt : null,
+        externalDelivery: userId !== String(actorId),
       });
     });
     const event = await this.ensureEvent({
@@ -325,7 +357,7 @@ class MessagingService {
           : `${namedTeams[winnerSide - 1].join(" / ")} gewinnt gegen ${namedTeams[2 - winnerSide].join(" / ")}.`
         : `${labels[changeType]} für ${uniqueIds.map((id) => participantNames[id] || id).join(" / ")}.`,
       detail: detailParts.join("; "),
-      result: displayResult,
+      result: historyDisplayResult,
       roundName: competitionRoundName(roundCode),
       completionType,
     }, participants);
@@ -491,7 +523,7 @@ class MessagingService {
         occurredAt: event.createdAt,
         summary: event.summary,
         detail: event.detail,
-        result: event.result,
+        result: ["result", "result_corrected"].includes(event.type) ? normalizeWinnerPerspective(event.result) : event.result,
         actorName: event.actorName,
         participants: event.participants.map(({ participantRole, displayName }) => ({ role: participantRole, name: displayName })),
         interaction: this.projectInteraction(interactions.get(event.id)),
@@ -889,6 +921,31 @@ class MessagingService {
     const result = this.repository.acknowledge(principal.id, operationId, messageId);
     if (result.changed) this.publishSummary(principal.id);
     return { success: true, messageId, acknowledgedAt: result.acknowledgedAt, repeated: result.repeated, changed: result.changed };
+  }
+
+  acknowledgeAll(principal, { operationId }) {
+    const startedAt = this.now();
+    try {
+      const result = this.repository.acknowledgeAll(principal.id, operationId);
+      if (result.changed) this.publishSummary(principal.id);
+      const summary = this.repository.summary(principal.id);
+      this.log("info", "message_bulk_acknowledgment_completed", {
+        recipientId: principal.id,
+        changedCount: result.changedCount,
+        repeated: result.repeated,
+        durationMs: Math.max(0, this.now() - startedAt),
+        result: "success",
+      });
+      return { success: true, ...result, ...summary };
+    } catch (error) {
+      this.log("warn", "message_bulk_acknowledgment_completed", {
+        recipientId: principal.id,
+        durationMs: Math.max(0, this.now() - startedAt),
+        result: error.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : (error.status || 500) < 500 ? "rejected" : "failed",
+        errorCode: error.code || "MESSAGE_BULK_ACKNOWLEDGMENT_FAILED",
+      });
+      throw error;
+    }
   }
 
   publishSummary(recipientId) {

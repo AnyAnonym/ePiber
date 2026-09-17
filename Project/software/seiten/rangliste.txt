@@ -29,8 +29,8 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   fremden Profil gegebenenfalls `Admin`. Nur `Aktuell` und `Archiv` blenden eine
   zweite, horizontal scrollbar erreichbare Bewerbsreiterzeile ein; eine leere
   Kategorie zeigt `Keine Bewerbe enthalten`. System enthaelt Kontaktwerte, beim
-  Eigenprofil Login und Passwortaenderung. Admin enthaelt Passwortfreigabe,
-  Reset-Code und direktes Passwortsetzen. Die Reiterleisten scrollen horizontal;
+  Eigenprofil Login und Passwortaenderung. Admin enthaelt Passwortfreigabe und
+  direktes Passwortsetzen. Die Reiterleisten scrollen horizontal;
   Name und Reiter bleiben fest, nur der auf Viewport und Safe Area begrenzte Inhalt
   scrollt vertikal. Hintergrundscrollen ist waehrend des Dialogs gesperrt, Escape
   schliesst ihn.
@@ -73,6 +73,16 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Persoenliche Forderungsmeldungen nennen fuer Forderer und Geforderten die beim
   Anlegen fixierten Rangpositionen in Klammern; diese Texte werden bei spaeteren
   Namens- oder Rangaenderungen nicht aus aktuellen Daten neu erzeugt.
+  Auf allen Viewports oeffnet die gemeinsame Navigation als rechtsseitiger,
+  intern scrollbarer Drawer ab Bildschirmoberkante mit `min(82vw, 420px)` Breite
+  und voller Hoehe und
+  schiebt App samt Header nach links. Linke Restflaeche, X und Escape schliessen
+  ihn. Die Kopfzeile `ePiber` besitzt Headerhoehe. Linksbuendige Listenzeilen mit
+  Icons und Trennlinien ordnen Profil, einen nur bei Inhalt sichtbaren
+  Favoritenbereich, Dashboard und die zunaechst geschlossenen Gruppen
+  `Spielbetrieb`, `Verein` und `Administration`; die rote Abmeldezeile steht am
+  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop, Tablet und
+  Mobilgeraete verwenden denselben Hamburger und Drawer.
   Ergebnis- und Korrekturmeldungen sprechen Gewinner und Verlierer jeweils
   empfaengerbezogen an und nennen die gegnerische Seite. Bei W.O. lautet der
   Gewinnsatz `Du gewinnst durch W.O. von <Verliererseite>.`, fuer die selbst nicht
@@ -106,9 +116,14 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Tage danach. Spaetere Aenderungen duerfen ab der aktuellen Serverzeit ohne
   obere Datumsgrenze liegen. Das Stundenfeld bietet 06:00 bis 23:00 Uhr.
   Der Monatskalender kann unbegrenzt vor- und zurueck navigiert werden: Der
-  Forderungstag ist blau und fett, der letzte Korridortag rot und fett, alle
+  Forderungstag ist blau und fett, die Sieben-Tage-Terminfrist orange und der
+  letzte Korridortag rot und fett, alle
   Korridortage sind fett und auswaehlbar; andere Tage sind ausgegraut und nicht
-  auswaehlbar. Fehler lassen den Dialog offen, zeigen die kontrollierte Meldung
+  auswaehlbar. Oberhalb der Verfuegbarkeitsmeldung bezeichnet eine farbige Legende
+  Forderungszeitpunkt, Terminfrist und Spielschluss jeweils mit Datum. Die Werte
+  stammen aus dem gemeinsamen serverseitigen `scheduleMarkers`-Vertrag, den
+  spaetere Bewerbsrundenlimits ohne Aenderung des Dialogs ebenfalls verwenden
+  koennen. Fehler lassen den Dialog offen, zeigen die kontrollierte Meldung
   samt Support-ID und erzeugen nur das allowlist-basierte Browserereignis
   `match_date_action_failed`.
 

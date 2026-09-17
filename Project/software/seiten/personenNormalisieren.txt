@@ -71,7 +71,7 @@ Personendaten normalisieren - kontrollierte Admin-Datenpflege
    Legacywert. Sind alle drei leer, bleibt `role` wirksam. `player`, `player A`
    und `player B` besitzen dieselbe Spielerberechtigung.
   `GeschlechtID` ist der bevorzugte Sheetheader; `Geschlecht` bleibt
-  Legacy-Fallback. Passwort-Hash, Passwortfreigabe, Resetdaten, `CD-ID`, interne
+  Legacy-Fallback. Passwort-Hash, Passwortfreigabe, `CD-ID`, interne
   Zusatzkennungen und alle nicht genannten Spalten werden weder projiziert noch
    geschrieben. `Login` ist damit ein sichtbares und editierbares Browserfeld,
    nicht nur ein serverseitiger Projektionswert. Die Personen-ID

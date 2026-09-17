@@ -10,6 +10,7 @@ export function clearProfileModalContent(modal, actionController) {
   const rankingPanelsElement = modal.querySelector("#profileRankingPanels");
   const systemActionsElement = modal.querySelector("#profileSystemActions");
   const messagesPanel = modal.querySelector("#profileMessagesPanel");
+  const profileBody = modal.querySelector("#profileBody");
   const adminActionsElement = modal.querySelector("#profileAdminActions");
   if (nameElement) nameElement.textContent = "Profil";
   textElement?.replaceChildren();
@@ -21,6 +22,7 @@ export function clearProfileModalContent(modal, actionController) {
   rankingPanelsElement?.replaceChildren();
   systemActionsElement?.replaceChildren();
   messagesPanel?.replaceChildren();
+  profileBody?.classList.remove("messages-active");
   adminActionsElement?.replaceChildren();
 }
 

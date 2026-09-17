@@ -217,7 +217,7 @@ function createApplication(overrides = {}) {
   const httpWriteLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 6, idleMs: 900000 });
   const frontendLoggingAdminLimiter = new TokenBucketLimiter({ rate: 1, burst: 20, idleMs: 900000 });
   const deviceLoginLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 10, idleMs: 900000 });
-  const passwordResetLimiter = new TokenBucketLimiter({ rate: 0.1, burst: 5, idleMs: 900000 });
+  const passwordSetupLimiter = new TokenBucketLimiter({ rate: 0.1, burst: 5, idleMs: 900000 });
 
   function limitHttpWrite(request, principalId) {
     if (!httpWriteLimiter.take(`principal:${principalId}`) || !httpWriteLimiter.take(`ip:${getRequestIp(request)}`)) {
@@ -576,26 +576,11 @@ function createApplication(overrides = {}) {
         return sendJson(response, 200, { success: true, ...result });
       }
 
-      if (pathname === "/api/password-reset") {
-        if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
-        assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const ip = getRequestIp(request);
-        if (!passwordResetLimiter.take(ip)) throw new AppError("RESET_RATE_LIMIT", "Zu viele Reset-Versuche", 429);
-        const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-        beginAudit({ action: "passwordReset", targetType: "user" });
-        const result = await authService.resetPassword(
-          stringValue(body.resetToken, "resetToken", { min: 32, max: 128, pattern: /^[A-Za-z0-9_-]+$/ }),
-          passwordHashValue(body.newPasswordHash, "newPasswordHash"),
-        );
-        finishAudit({ targetId: result._audit?.personId || "", after: { credentialChanged: true, sessionsRevoked: true } });
-        return sendJson(response, 200, publicResult(result));
-      }
-
       if (pathname === "/api/password-setup") {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
         const ip = getRequestIp(request);
-        if (!passwordResetLimiter.take(`setup:${ip}`)) throw new AppError("RESET_RATE_LIMIT", "Zu viele Versuche", 429);
+        if (!passwordSetupLimiter.take(ip)) throw new AppError("PASSWORD_SETUP_RATE_LIMIT", "Zu viele Versuche", 429);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
         let attemptedLogin;
         try {
@@ -611,21 +596,6 @@ function createApplication(overrides = {}) {
         );
         finishAudit({ targetId: result._audit?.personId || "", after: { credentialChanged: true, sessionsRevoked: true } });
         return sendJson(response, 200, publicResult(result));
-      }
-
-      if (pathname === "/api/admin/password-reset") {
-        if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
-        assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
-        limitHttpWrite(request, auth.principal.id);
-        const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-        beginAudit({ action: "adminPasswordResetProof", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
-        const result = authService.createPasswordReset(
-          sessionToken,
-          idValue(body.personId, "personId"),
-        );
-        finishAudit({ after: { resetProofCreated: true, expiresAt: result.expiresAt } });
-        return sendJson(response, 200, result);
       }
 
       if (pathname === "/api/admin/password-setup") {

@@ -37,14 +37,14 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   Grafana nur einer aktuell authentifizierten Person mit Rolle `admin`.
 
 -- Anmeldung und Passwort --
-  Die gemeinsamen Modale fuer Anmeldung, Passwortaenderung, Reset-Code,
-  Erstvergabe und direktes administratives Setzen lassen sich nur ueber das X
+  Die gemeinsamen Modale fuer Anmeldung, Passwortaenderung, Erstvergabe und
+  direktes administratives Setzen lassen sich nur ueber das X
   oder `Abbrechen` schliessen, nicht durch Klick auf den Hintergrund oder Escape.
   Waehrend eines Requests sind alle Schaltflaechen des jeweiligen Modals gesperrt;
   dadurch kann es auch nicht geschlossen oder die Aktion doppelt ausgeloest werden.
   Formulare und Felder verwenden Login statt Kontakt-E-Mail als Anmeldekennung
   und besitzen Passwortmanager-Metadaten mit method/action,
-  `username`, `current-password`, `new-password` beziehungsweise `one-time-code`;
+  `username`, `current-password` beziehungsweise `new-password`;
   die Passwortaenderung fuehrt den angemeldeten Login als unsichtbares
   Username-Feld. Passwortfelder werden beim Schliessen zurueckgesetzt und wieder
   verdeckt.
@@ -58,10 +58,11 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   Schliessen des Dialogs sichtbar.
 
   Im Login kann eine zuvor vom Administrator freigegebene Person ueber
-  `Erstmals Passwort vergeben` mit Login und zweimaligem neuen Passwort ihr
-  erstes Passwort setzen. Danach wird die Anmeldung mit uebernommenem Login erneut
-  geoeffnet. Reset-Code und direkte administrative Passwortvergabe bleiben davon
-  getrennte Ablaeufe.
+  `Passwort vergessen / Neueingabe` mit Login und zweimaligem neuen Passwort den
+  Dialog `Passwort neu vergeben` verwenden. Der Hinweis fordert sie proaktiv auf,
+  vorab die Freigabe durch einen Administrator einzuholen. Danach wird die
+  Anmeldung mit uebernommenem Login erneut geoeffnet. Die direkte administrative
+  Passwortvergabe bleibt davon getrennt.
 
 -- Profile --
   Das eigene Profil zeigt Login und Kontakt-E-Mail als getrennte Felder sowie
@@ -90,12 +91,46 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   `epiber-monitor-ready`; die Informationsbereiche blockieren die grundlegende
   Seitenbereitschaft nicht. Gemeinsame Modale bleiben im nach Safe-Areas
   verfuegbaren Viewport horizontal und vertikal zentriert; zu hoher Inhalt scrollt
-  innerhalb des Dialogs. Die mobile Navigation liegt als fixed Modal unabhaengig
-  von der Dokumentposition zentriert im sichtbaren Viewport; Oeffnen und Schliessen
-  veraendern die Scrollposition der Seite nicht. Authentifizierungs- und
-  rollenabhaengige Links bleiben auch bei der Blockdarstellung des mobilen Menues
-  verborgen, solange die Session nicht aufgeloest, nicht erreichbar oder fuer den
-  jeweiligen Link nicht berechtigt ist.
+  innerhalb des Dialogs. Die Navigation oeffnet auf allen Viewports ab der
+  Bildschirmoberkante als rechtsseitiger Drawer mit `min(82vw, 420px)` Breite und
+  voller Hoehe. Sie
+  schiebt die gesamte App einschliesslich Header nach links, besitzt eine
+  intern scrollbare Linkflaeche und eine Kopfzeile `ePiber` in Headerhoehe. Klick
+  auf die linke Restflaeche, X und Escape schliessen den Drawer. Alle Aktionen
+  sind linksbuendige, durch Linien getrennte Listenzeilen mit lokal eingebetteten
+  Google Material Symbols; es gibt keine externe Icon- oder Fontanfrage.
+  Anonym steht `Anmelden` gruen mit einem in die Tuer gerichteten Pfeil oben.
+  Angemeldet folgen das feste Profil mit Personensymbol, der bei leerer Liste
+  vollstaendig entfallende Favoritenbereich, Dashboard sowie die anfangs
+  geschlossenen Gruppen `Spielbetrieb`, `Verein` und fuer Admins
+  `Administration`; `Abmelden` steht rot mit aus der Tuer gerichtetem Pfeil am
+  Listenende. Spielbetrieb verwendet einen Pokal und enthaelt eingerueckt Matches
+  mit `sports_tennis`, Bewerbe mit `swords` und Scoreboard mit `scoreboard`.
+  Gruppen sind keine eigenen Kartenbereiche; ihre Hauptzeile besitzt exakt das
+  Dashboard-Raster und aendert beim Auf- und Zuklappen nur `expand_more`. Die
+  Unterzeilen behalten Raster, Schriftstaerke und Farbe der Haupteintraege und
+  unterscheiden sich nur durch den Einzug; ihre Trennlinien laufen ueber die
+  gesamte Menuebreite. Dashboard und Gruppen beginnen an derselben linken
+  Rasterposition. Alle Eintragstexte sind schwarz, ausschliesslich Anmelden ist
+  gruen und Abmelden rot. Abmelden folgt ohne freien Zwischenraum direkt als
+  letzte Menuezeile. Verein enthaelt Spieler.
+  Oeffnen und Schliessen veraendern die Scrollposition der Seite nicht.
+  Nicht berechtigte oder dadurch leere Gruppen bleiben vollstaendig verborgen.
+  Desktop, Tablet und Mobilgeraete verwenden denselben Hamburger und Drawer; die
+  fruehere separate Desktop-Navigationsleiste bleibt ausgeblendet.
+
+  Angemeldete Benutzer koennen die unterstuetzten Seiten ueber einen Stern direkt
+  neben dem Seitentitel kontogebunden favorisieren. Der Favoritenbereich ist
+  einklappbar; sein Stift klappt ihn auf und aktiviert Drei-Striche-Handles links
+  vor den nach rechts rueckenden Zielicons. Pointerziehen und Pfeiltasten aendern
+  die revisionsgeschuetzt gespeicherte Reihenfolge. Die Overlayfavoriten
+  `Spieleingabe` und `Termin festlegen / aendern` zeigen zuerst ausschliesslich
+  eigene offene Matches mit dem jeweiligen serverseitigen Aktionsrecht. Das
+  Dashboard bleibt als fester Menueeintrag ohne Favoritenstern. Der gemeinsame
+  Stern besitzt genau eine schwarze Kontur und ist innen inaktiv weiss sowie aktiv
+  vollstaendig gelb. Bewerbsbezogene Favoriten zeigen den Bewerbsnamen statt der
+  technischen ID, begrenzen lange Namen auf zwei Zeilen mit Ellipse und stellen
+  den vollstaendigen Namen als zugaengliche Beschriftung und Tooltip bereit.
 
 -- Besonderheiten --
   Vereinstermin und Vereinsmeisterschaftsergebnisse sind derzeit statisch in

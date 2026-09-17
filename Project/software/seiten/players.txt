@@ -25,6 +25,18 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   der umgebende Container scrollt dann horizontal. Die Zeile der angemeldeten
   Person wird anhand der Session-ID vollstaendig fett dargestellt.
 
+-- Navigation --
+  Auf allen Viewports oeffnet die gemeinsame Navigation als rechtsseitiger,
+  intern scrollbarer Drawer ab Bildschirmoberkante mit `min(82vw, 420px)` Breite
+  und voller Hoehe und
+  schiebt App samt Header nach links. Linke Restflaeche, X und Escape schliessen
+  ihn. Die Kopfzeile `ePiber` besitzt Headerhoehe. Linksbuendige Listenzeilen mit
+  Icons und Trennlinien ordnen Profil, einen nur bei Inhalt sichtbaren
+  Favoritenbereich, Dashboard und die zunaechst geschlossenen Gruppen
+  `Spielbetrieb`, `Verein` und `Administration`; die rote Abmeldezeile steht am
+  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop, Tablet und
+  Mobilgeraete verwenden denselben Hamburger und Drawer.
+
 -- Aktualisierung und Fehler --
   Sessionaenderungen rendern die anonyme Login-CTA oder laden das Verzeichnis neu;
   Generationen
@@ -66,8 +78,8 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   Admins erhalten den Login einer fremden Person in der
   Adminprojektion und sehen im Adminreiter die vom aktuellen Profilstatus
   abhaengige Aktion `Passwortvergabe freigeben` oder
-  `Passwortfreigabe aufheben` sowie `Reset-Code erstellen` und `Passwort direkt
-  setzen`; direktes Setzen widerruft die Sitzungen der Zielperson. Alle Tabellen-
+  `Passwortfreigabe aufheben` sowie `Passwort direkt setzen`; direktes Setzen
+  widerruft die Sitzungen der Zielperson. Alle Tabellen-
   und Profilwerte werden per textContent/Textknoten dargestellt.
 
   `Aktuell` enthaelt nur nicht beendete Bewerbe, in denen die Profilperson eine
@@ -98,6 +110,13 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   erfasst.
 
 -- Universelle Matchaktionen im gemeinsamen Profilmodal --
+  Das Profilmodal selbst ist kein Favoritenziel. Ergebnis- und Termindialog tragen
+  dagegen rechts neben ihrer Ueberschrift den gemeinsamen Favoritenstern. Der
+  direkte Overlayfavorit zeigt vor dem Fachdialog eine Auswahl ausschliesslich
+  eigener offener Matches mit `canSetResult` beziehungsweise
+  `canSetMatchAppointment`; auch Administratoren erhalten dort bewusst nur eigene
+  Begegnungen.
+
   Jede offene, vollstaendig besetzte Nicht-BYE-Matchkarte zeigt fuer einen
   beteiligten `player`, `player A` oder `player B` neben `Ergebnis eintragen` die
   Aktion `Termin eintragen` beziehungsweise bei vorhandenem `MatchDate` `Termin

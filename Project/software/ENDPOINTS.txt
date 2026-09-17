@@ -38,7 +38,7 @@ Schutz:
     `PUBLIC_ORIGIN`/`ALLOWED_ORIGINS` freigegebene Origin.
   - JSON-Writes verlangen `Content-Type: application/json`, standardmaessig
     maximal 8192 Byte; Auth-Bodies sind auf maximal 2048 Byte begrenzt.
-  - Login, Passwort/Reset, Monitoranmeldung und Writes besitzen IP-/Principal-
+  - Login, Passwortoperationen, Monitoranmeldung und Writes besitzen IP-/Principal-
     Limits. HTTP- und Socket-Timeouts sowie Headerlimits werden erzwungen.
   - OPTIONS antwortet 204 mit GET, POST, DELETE, OPTIONS, Credentials und
     `Content-Type`; es ist kein pauschal offener CORS-Handler.
@@ -294,7 +294,7 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
     frontendLogging }`.
     `user` ist bei gueltiger Session die private Eigenprojektion
     `{ id, firstName, lastName, email, login, phone, birthDate, gender, role }`,
-    sonst `null`; Passwort- und Resetdaten sind nie sichtbar. `email` ist die
+    sonst `null`; Passwortdaten sind nie sichtbar. `email` ist die
     Kontakt-E-Mail, `login` das davon unabhaengige Anmeldefeld.
 
   POST (public, erlaubte Origin):
@@ -349,18 +349,6 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
   Kontakt-E-Mail, auditiert. Die Route besitzt ein eigenes IP-Limit. Zusaetzlich
   teilen sich alle scrypt-Verifikationen und -Erzeugungen eine globale Grenze von
   vier gleichzeitigen Operationen.
-
------ POST /api/password-reset (public, erlaubte Origin) -----
-  Body `{ resetToken, newPasswordHash }`. Verbraucht einen gehashten, ablaufenden,
-  einmaligen Adminnachweis. Der Nachweis wird an diesen neuen Credential
-  gebunden; sichere Wiederholung desselben abgeschlossenen Resets liefert
-  `{ success: true, repeated: true }`. Sessions der Zielperson werden vor dem
-  Write widerrufen. Die Route besitzt ein eigenes IP-Limit.
-
------ POST /api/admin/password-reset (admin) -----
-  Body `{ personId }`. Erzeugt fuer die Zielperson einen einmaligen Resetcode und
-  liefert `{ success, resetToken, expiresAt, personId }`. Ein neuer Code ersetzt
-  einen noch offenen Code. Nur der Client sieht den Klartextcode einmalig.
 
 ----- POST /api/admin/password-setup (admin) -----
   Body `{ personId, allowed }`, wobei `allowed` boolean ist. Setzt
@@ -558,7 +546,12 @@ AUTHENTICATED (player, operator oder admin):
       `losingSide`, zwei `teams` mit IDs/Namen und bei Ranglistenspielen optionalem
        nichtnegativem `rankAtResult`, `status`, `fingerprint` sowie `canSetResult`,
        `canSetMatchAppointment`, `canClearMatchAppointment`,
-       `canAdminSetMatchEnd` und `canAdminClear`.
+       `canAdminSetMatchEnd` und `canAdminClear`. `scheduleMarkers` ist ein Array
+       aus `{ kind, tone, label, at }`; `tone` ist auf
+       `blue|yellow|red|green` begrenzt und `at` ein Millisekundenzeitpunkt.
+       Ranglisten liefern Forderungszeitpunkt sowie die Fristen nach sieben und
+       vierzehn Tagen; andere Bewerbsarten liefern bis zur Einfuehrung von
+       Rundenlimits ein leeres Array.
       `correctionBlockReason` kann eine erforderliche Ranglistenreparatur
       kennzeichnen. `BYE` ist die einzige kontrollierte Personenausnahme:
       `bye:true`, kein BYE in Team-IDs oder Namen und alle mutierenden
@@ -584,6 +577,26 @@ AUTHENTICATED (player, operator oder admin):
       von `publicProfile`. Kontakt-E-Mail und Login sind getrennt; Passwort- und
       Resetwerte erscheinen nie. Raushaengezeit und -grund folgen dem
       angemeldeten Profilvertrag.
+
+  `myFavorites {}`
+      Liefert `{ success, favorites, revision, updatedAt }` fuer den aktuellen
+      Benutzer. Jedes Ziel besitzt eine serverseitig abgeleitete `targetId` und
+      ist entweder `{ type:"page", page, params? }` oder
+      `{ type:"overlay", overlay:"match-result|match-appointment" }`.
+      Auf `monitor.html` darf dieser Endpoint trotz Geraeteprincipal gezielt die
+      parallel vorhandene gueltige Benutzersitzung verwenden; alle Monitor-RPCs
+      bleiben unveraendert an das Geraet gebunden.
+
+  `setMyFavorites { operationId, expectedRevision, favorites }`
+      Ersetzt die eigene geordnete Liste atomar und idempotent. Erlaubt sind
+      hoechstens 32 eindeutige Ziele aus der festen Seiten-Allowlist. Das
+      Dashboard `index` ist kein Favoritenziel und bleibt fest in der Navigation;
+      Bewerbsseiten verlangen eine kontrollierte `id`, Round Robin erlaubt
+      zusaetzlich `paarungslayout:0..5`, Navigator optional `profil`. Freie URLs,
+      Namen und Beschriftungen sind unzulaessig. Ein Revisionskonflikt liefert
+      `REVISION_CONFLICT`. Als UI-Praeferenz ist der Write kein sportlicher
+      Fachwrite und erzeugt keinen Fachaudit; `favorites_update_completed`
+      protokolliert nur Akteur-ID, Anzahl, Revision und kontrollierten Ausgang.
 
   `myMessageSummary {}`
       Liefert fuer den aktuellen Benutzer `{ success, revision, totalCount,

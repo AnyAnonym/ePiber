@@ -73,6 +73,33 @@ test("MessagingRepository paginiert stabil und begrenzt Cursor auf den Empfaenge
   repository.close();
 });
 
+test("MessagingRepository speichert Eigenaktivitaeten initial gelesen und bestaetigt alle ungelesenen Meldungen atomar", () => {
+  let now = 100;
+  const repository = new MessagingRepository(":memory:", { now: () => now++ });
+  repository.init();
+  const event = { id: "event-own-action", competitionId: "cup", createdAt: 10, type: "appointment", source: "match", sourceId: "m1", actorId: "p1" };
+  const participant = (userId, acknowledgedAt = null) => ({
+    userId, role: "participant", displayName: userId, messageId: `message-${userId}`, type: "appointment", subject: "Termin", body: "Text", acknowledgedAt,
+    deliveries: [{ channel: "Inbox", status: "delivered" }],
+  });
+  const outcome = repository.ensureEvent(event, [participant("p1", 10), participant("p2")]);
+  assert.equal(outcome.event.participants.length, 2);
+  assert.deepEqual(repository.summary("p1"), { revision: 1, totalCount: 1, unreadCount: 0 });
+  assert.equal(repository.getForRecipient("p1", "message-p1").acknowledgedAt, 10);
+  assert.deepEqual(repository.summary("p2"), { revision: 1, totalCount: 1, unreadCount: 1 });
+
+  repository.ensureMessage({ ...message("bulk-2"), createdAt: 20 }, [{ channel: "Inbox", status: "delivered" }]);
+  repository.ensureMessage({ ...message("bulk-3"), createdAt: 30 }, [{ channel: "Inbox", status: "delivered" }]);
+  const operationId = "00000000-0000-4000-8000-000000000099";
+  const acknowledged = repository.acknowledgeAll("p2", operationId);
+  assert.deepEqual(acknowledged, { acknowledgedAt: 103, changedCount: 3, repeated: false, changed: true });
+  assert.deepEqual(repository.summary("p2"), { revision: 4, totalCount: 3, unreadCount: 0 });
+  assert.deepEqual(repository.acknowledgeAll("p2", operationId), { acknowledgedAt: 103, changedCount: 3, repeated: true, changed: false });
+  repository.ensureMessage({ ...message("after-bulk"), createdAt: 40 }, [{ channel: "Inbox", status: "delivered" }]);
+  assert.equal(repository.summary("p2").unreadCount, 1);
+  repository.close();
+});
+
 test("MessagingRepository sortiert ungelesene vor gelesenen und jeweils neueste zuerst", () => {
   let now = 10;
   const repository = new MessagingRepository(":memory:", { now: () => now });
@@ -111,7 +138,7 @@ test("MessagingRepository migriert v1, gruppiert nur exakte Matchquellen und rei
 
   const repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 9);
+  assert.equal(repository.status().schemaVersion, 10);
   assert.equal(repository.status().eventCount, 2);
   const migratedEventId = repository.getForRecipient("p1", "legacy-challenger").eventId;
   assert.equal(migratedEventId, repository.getForRecipient("p2", "legacy-opponent").eventId);
@@ -253,12 +280,32 @@ test("MessagingRepository migriert Schema 8 mit bestehenden Kommentaren auf Komm
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 9);
+  assert.equal(repository.status().schemaVersion, 10);
   assert.equal(repository.getForRecipient("p2", "before-v9").body, "Private body");
   assert.equal(repository.pageComments("event-before-v9").comments[0].body, "Bestehender Kommentar");
   assert.deepEqual(repository.commentReactionSummaries([comment.commentId], "p2").get(comment.commentId), { reactionTotal: 0, reactions: [], myReaction: null });
   assert.deepEqual(repository.interactionSummaries([], "p2"), new Map());
   assert.equal(repository.historyInteractionRevision(), 1);
+  repository.close();
+});
+
+test("MessagingRepository migriert Schema 9 mit unveraenderten Bestandsmeldungen", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-messaging-v9-"));
+  const filename = path.join(directory, "messaging.sqlite");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let repository = new MessagingRepository(filename);
+  repository.init();
+  repository.ensureMessage(message("before-v10", "p2"), [{ channel: "Inbox", status: "delivered" }]);
+  repository.close();
+  const db = new DatabaseSync(filename);
+  db.exec("DROP TABLE message_bulk_ack_operations; PRAGMA user_version = 9;");
+  db.close();
+
+  repository = new MessagingRepository(filename);
+  repository.init();
+  assert.equal(repository.status().schemaVersion, 10);
+  assert.equal(repository.getForRecipient("p2", "before-v10").body, "Private body");
+  assert.equal(repository.summary("p2").unreadCount, 1);
   repository.close();
 });
 
@@ -276,7 +323,7 @@ test("MessagingRepository migriert Schema 3 additiv auf das Ergebnisfeld", (t) =
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 9);
+  assert.equal(repository.status().schemaVersion, 10);
   assert.equal(repository.getForRecipient("p2", "before-v4").subject, "Private subject");
   assert.equal(repository.getEvent("before-v4").result, "");
   repository.close();
@@ -334,7 +381,7 @@ test("MessagingRepository migriert Schema 4 mit Datenbestand auf den globalen Ze
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 9);
+  assert.equal(repository.status().schemaVersion, 10);
   assert.equal(repository.getForRecipient("p2", "before-v5").subject, "Private subject");
   assert.equal(repository.db.prepare("PRAGMA index_list('competition_events')").all().some(({ name }) => name === "competition_events_created"), true);
   repository.close();
@@ -367,7 +414,7 @@ test("MessagingRepository migriert bestehende Walkover- und Aufgabe-Texte", (t) 
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 9);
+  assert.equal(repository.status().schemaVersion, 10);
   assert.equal(repository.getForRecipient("p1", "walkover-old-message").body, "Du gewinnst durch W.O. von Peter Player.");
   assert.equal(repository.getForRecipient("p4", "walkover-old-loser-message").body, "Du verlierst durch W.O.");
   assert.equal(repository.getEvent("walkover-old").summary, "Ada Aufschlag gewinnt durch W.O. von Peter Player.");

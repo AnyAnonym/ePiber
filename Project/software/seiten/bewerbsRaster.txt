@@ -33,13 +33,23 @@ Turnierraster / KO-Baumansicht - Bracket eines Bewerbs
   `BYE`, unbekannte IDs und leere Slots bleiben ohne Profilaktion. Ein veralteter
   oder direkter anonymer Modalaufruf bleibt geschlossen. Nur Admins sehen bei
   fremden Profilen die statusabhaengige Aktion zum Freigeben beziehungsweise Aufheben der
-  erstmaligen Passwortvergabe sowie Reset-Code-Erstellung und direktes
-  Passwortsetzen. Das gemeinsame Profilmodal zeigt ausserdem die in
+  erstmaligen Passwortvergabe sowie direktes Passwortsetzen. Das gemeinsame
+  Profilmodal zeigt ausserdem die in
   `Project/software/seiten/players.txt` dokumentierten Matchkarten und
   Ergebnis- und Terminaktionen; der KO-Baum selbst erhaelt keine Aktionsbuttons.
   Beteiligte terminieren ihr offenes, vollstaendig besetztes Match im Profilmodal
   auf eine zukuenftige volle Stunde von 06:00 bis 23:00 Uhr; Administratoren
   duerfen dies fuer jedes solche Match mit Pflichtgrund.
+  Auf allen Viewports oeffnet die gemeinsame Navigation als rechtsseitiger,
+  intern scrollbarer Drawer ab Bildschirmoberkante mit `min(82vw, 420px)` Breite
+  und voller Hoehe und
+  schiebt App samt Header nach links. Linke Restflaeche, X und Escape schliessen
+  ihn. Die Kopfzeile `ePiber` besitzt Headerhoehe. Linksbuendige Listenzeilen mit
+  Icons und Trennlinien ordnen Profil, einen nur bei Inhalt sichtbaren
+  Favoritenbereich, Dashboard und die zunaechst geschlossenen Gruppen
+  `Spielbetrieb`, `Verein` und `Administration`; die rote Abmeldezeile steht am
+  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop, Tablet und
+  Mobilgeraete verwenden denselben Hamburger und Drawer.
 
 -- Darstellung und Sicherheit --
   Einzel/Doppel, BYE/PRE, die exakt kleingeschriebenen Marker [wo] und [ret],

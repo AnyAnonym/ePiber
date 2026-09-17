@@ -305,6 +305,38 @@ test("commit staging rejects potential secret files", () => {
   }
 });
 
+test("commit staging ignores secret-like content that is only removed", () => {
+  const { base, repo } = createRepository();
+  try {
+    fs.writeFileSync(path.join(repo, "legacy.js"), `const ${"token"} = document.getElementById("resetProofValue");\n`);
+    git(repo, "add", "legacy.js");
+    git(repo, "commit", "-m", "1.2.3 | Legacy fixture");
+    workflow(repo, "branch-start", "--system", "paj", "--apply");
+    fs.rmSync(path.join(repo, "legacy.js"));
+    workflow(repo, "branch-finalize", "--subject", "Legacycode entfernt", "--apply");
+
+    const result = workflow(
+      repo,
+      "branch-commit",
+      "--subject",
+      "Legacycode entfernt",
+      "--path",
+      "legacy.js",
+      "--path",
+      "Backend/package.json",
+      "--path",
+      "Backend/package-lock.json",
+      "--path",
+      "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt",
+    );
+
+    assert.match(result.stdout, /Dry-Run/);
+    assert.equal(git(repo, "diff", "--cached", "--name-only"), "");
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test("commit staging allows secret-free env example templates", () => {
   const { base, repo } = createRepository();
   try {

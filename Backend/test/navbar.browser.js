@@ -11,9 +11,9 @@ const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
 const authStub = `
 const role = new URLSearchParams(window.location.search).get("role");
 const loginError = new URLSearchParams(window.location.search).get("loginError");
+const authStatus = new URLSearchParams(window.location.search).get("authStatus") || (role ? "authenticated" : "anonymous");
 const user = role ? { id: role + "-1", role, login: role + "-login", email: role + "@example.test" } : null;
 export const ready = Promise.resolve(user);
-export const createPasswordReset = async () => ({ resetToken: "token" });
 export const login = async () => {
   if (!loginError) return user;
   const error = new Error(loginError === "LOGIN_RATE_LIMIT" ? "Zu viele Anmeldeversuche" : "Login fehlgeschlagen");
@@ -27,29 +27,45 @@ export const getUser = () => user;
 export const isAuthenticated = () => Boolean(user);
 export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
 export const refreshSession = async () => user;
-export const resetPassword = async () => ({ success: true });
 export const setPasswordSetupAllowed = async () => ({ success: true });
 export const setPasswordForPerson = async () => ({ success: true });
 export const setupPassword = async () => ({ success: true });
 export function subscribeAuth(callback) {
-  queueMicrotask(() => callback(user, { status: user ? "authenticated" : "anonymous" }));
+  queueMicrotask(() => callback(user, { status: authStatus }));
   return () => {};
 }
 `;
 
 const dataClientStub = `
 let messageRevision = 7;
+let favoritesRevision = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1" ? 1 : 0;
+let favorites = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1"
+  ? [{ targetId: "favorite-ranking", type: "page", page: "rangliste", params: { id: "2" } }]
+  : [];
 let messages = [
   { messageId: "unread-new", createdAt: "2026-08-30T10:00:00.000Z", competitionName: "Sommercup", roundName: "Viertelfinale", subject: "Neue Platzinformation", eventType: "result", actorName: "Ergebnis Erfasser", acknowledged: false },
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
   { messageId: "read-new", createdAt: "2026-08-31T11:00:00.000Z", competitionName: "", roundName: "", subject: "Bereits bestätigt", actorName: "System", acknowledged: true, acknowledgedAt: "2026-08-31T11:30:00.000Z" },
 ];
+if (new URLSearchParams(window.location.search).get("longMessages") === "1") {
+  messages.push(...Array.from({ length: 12 }, (_, index) => ({
+    messageId: "read-extra-" + index,
+    createdAt: "2026-08-28T0" + (index % 10) + ":00:00.000Z",
+    competitionName: "Archivcup",
+    roundName: "",
+    subject: "Gelesene Zusatzmeldung " + (index + 1),
+    actorName: "System",
+    acknowledged: true,
+    acknowledgedAt: "2026-08-31T11:30:00.000Z",
+  })));
+}
 const messageBodies = {
   "unread-new": Array.from({ length: 80 }, (_, index) => "Lange Meldungszeile " + (index + 1)).join("\\n"),
   "unread-old": "Bitte den Turnierhinweis beachten.",
   "read-new": "Diese Meldung wurde bereits bestätigt.",
 };
 window.__acknowledgeCalls = [];
+window.__acknowledgeAllCalls = [];
 window.__matchDateCalls = [];
 window.__adminRankingCalls = [];
 window.__matchResultCalls = [];
@@ -159,6 +175,12 @@ export function createEndpoint(name) {
     const ownBusy = new URLSearchParams(window.location.search).get("ownBusy") === "1";
     const noNotifications = new URLSearchParams(window.location.search).get("noNotifications") === "1";
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
+    if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    if (name === "setMyFavorites") {
+      favoritesRevision += 1;
+      favorites = params.favorites.map((favorite, index) => ({ targetId: "favorite-" + favoritesRevision + "-" + index, ...structuredClone(favorite) }));
+      return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision, repeated: false } };
+    }
     if (name === "memberDirectory") {
       const today = new Date();
       const birthDate = String(today.getDate()).padStart(2, "0") + "." + String(today.getMonth() + 1).padStart(2, "0") + "." + (today.getFullYear() - 30);
@@ -183,7 +205,7 @@ export function createEndpoint(name) {
       success: true, complete: true, schonzeit: ownBusy ? [{ id: "player-1", until: "2099-01-01T00:00:00.000Z" }] : [],
       sperrzeit: blockedTarget ? [{ id: "p1", until: "2099-01-01T00:00:00.000Z" }] : [],
     } };
-    if (name === "bewerbe") return { data: { success: true, values: [["ID", "Bezeichnung"], ["2", "Mobile Rangliste"]] } };
+    if (name === "bewerbe") return { data: { success: true, values: [["ID", "Bezeichnung"], ["2", new URLSearchParams(window.location.search).get("longFavorite") === "1" ? "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026" : "Mobile Rangliste"]] } };
     if (name === "rankingChallengeState") return { data: { success: true,
       mode: ineligible ? "ineligible" : (newcomer ? "newcomer" : (withdrawn ? "returning" : "ranked")),
       rank: newcomer || withdrawn || ineligible ? null : 1,
@@ -198,7 +220,7 @@ export function createEndpoint(name) {
     ] } };
     if (name === "myProfile") return { data: { success: true, profile: {
        id: role + "-1", firstName: "Own", lastName: "Player", login: role + "-login",
-        email: "contact@example.test", phone: "", birthDate: "", notifications: noNotifications ? [] : ["Email", "Whatsapp"], competitions: emptyProfile ? [] : competitions.filter(({ competitionId }) => competitionId.startsWith("r")), rankings: emptyProfile ? [] : withdrawn ? [{
+        email: "contact+team?x@example.test", phone: "0043 664 1234567", birthDate: "", notifications: noNotifications ? [] : ["Email", "Whatsapp"], competitions: emptyProfile ? [] : competitions.filter(({ competitionId }) => competitionId.startsWith("r")), rankings: emptyProfile ? [] : withdrawn ? [{
          competitionId: "2", competitionName: "Mobile Rangliste", rank: 0, status: "withdrawn",
          withdrawal: { withdrawnAt: "260829-1200", previousRank: 4, reason: "Pause" },
        }] : rankings,
@@ -209,7 +231,7 @@ export function createEndpoint(name) {
       return { data: { success: true, profile: {
         id: "p2", firstName: "Foreign", lastName: "Player",
         ...(role === "admin" ? { login: "foreign-login", passwordSetupAllowed: false } : {}),
-        email: "directory@example.test", phone: "", birthDate: "", competitions, rankings: newcomer ? [{
+        email: "directory@example.test", phone: "0043 699 7654321", birthDate: "", competitions, rankings: newcomer ? [{
           competitionId: "2", competitionName: "Mobile Rangliste", rank: 2, status: "active", canChallenge: true,
         }] : profileRankings,
       } } };
@@ -243,6 +265,13 @@ export function createEndpoint(name) {
         unreadCount: messages.filter((message) => !message.acknowledged).length,
         revision: messageRevision,
       } };
+    }
+    if (name === "acknowledgeAllMessages") {
+      window.__acknowledgeAllCalls.push({ ...params });
+      const changedCount = messages.filter((message) => !message.acknowledged).length;
+      messages = messages.map((message) => ({ ...message, acknowledged: true, acknowledgedAt: message.acknowledgedAt || "2026-08-31T12:00:00.000Z" }));
+      messageRevision += changedCount > 0 ? 1 : 0;
+      return { data: { success: true, changedCount, unreadCount: 0, revision: messageRevision } };
     }
     if (name === "setMatchAppointment" || name === "adminSetMatchAppointment") {
       window.__matchDateCalls.push({ endpoint: name, ...params });
@@ -278,7 +307,22 @@ function contentType(filePath) {
 
 function startServer() {
   const server = http.createServer((request, response) => {
-    const pathname = new URL(request.url, "http://127.0.0.1").pathname;
+    const requestUrl = new URL(request.url, "http://127.0.0.1");
+    const pathname = requestUrl.pathname;
+    if (pathname === "/Matches1.html" && requestUrl.searchParams.get("favoritesTest") === "1") {
+      const source = '<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><div id="header-container"></div><div id="mobile-nav-container"></div><main><section><h2>Matches - Übersicht</h2></section></main><script type="module" src="/JS/navbar-under-test.js"></script><script type="module" src="/JS/modals-under-test.js"></script></body></html>';
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/rangliste.html" && requestUrl.searchParams.get("favoritesTest") === "1") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "rangliste.html"), "utf8")
+        .replace('src="JS/modals.js"', 'src="/JS/modals-under-test.js"')
+        .replace('src="JS/rangliste.js"', 'src="/JS/rangliste-under-test.js"');
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
     if (pathname === "/modals-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><script type="module" src="/JS/modals-under-test.js"></script></body></html>');
@@ -287,6 +331,14 @@ function startServer() {
     if (pathname === "/ranking-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="rankingSection" class="full-width-section"><h2>Rangliste</h2><div id="rankingContainer" class="pyramid"></div></section></main><script type="module" src="/JS/modals-under-test.js"></script><script type="module" src="/JS/rangliste-under-test.js"></script></body></html>');
+      return;
+    }
+    if (pathname === "/scoreboard-layout-test.html") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "scoreboard.html"), "utf8")
+        .replace('<a class="scoreboard-match-link" href="./Matches1.html?category=open">', '<button class="favorite-star page-favorite-star" type="button"><svg viewBox="0 -960 960 960"><path d="m233-120 65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"></path></svg></button><a class="scoreboard-match-link" href="./Matches1.html?category=open">')
+        .replace(/<script[\s\S]*?<\/script>/g, "");
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
       return;
     }
     if (pathname === "/messages-test.html") {
@@ -319,6 +371,15 @@ function startServer() {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/navbar.js"), "utf8")
         .replace('"./dataClient.js"', '"/test/dataClient.js"')
         .replace('"./authClient.js"', '"/test/authClient.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/JS/favorites.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/favorites.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(source);
       return;
@@ -403,19 +464,365 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
         await page.goto(`http://127.0.0.1:${address.port}/index.html?role=${expected.role}`, { waitUntil: "domcontentloaded" });
         await page.locator("#hamburgerBtn").click();
         await page.locator("#mobileNavModal").waitFor({ state: "visible" });
+        assert.equal(await page.locator('#hamburgerBtn [data-icon="menu"]').count(), 1);
+        assert.equal(await page.locator('.mobile-nav-close [data-icon="close"]').count(), 1);
+        assert.equal(await page.locator('.mobile-nav-content svg[viewBox="0 -960 960 960"]').count() > 0, true);
 
-        const players = page.locator('.mobile-nav-links [data-auth="required"]');
-        const adminLinks = page.locator('.mobile-nav-links [data-role="admin"]');
-        const serviceLink = page.locator('.mobile-nav-links a[href="servicebereich.html"]');
-        assert.equal(await players.isVisible(), expected.playersVisible, `${expected.role || "anonymous"}: Spielerlink`);
-        assert.equal(await serviceLink.isVisible(), expected.adminVisible, `${expected.role || "anonymous"}: Servicebereich`);
-        for (const link of await adminLinks.all()) {
-          assert.equal(await link.isVisible(), expected.adminVisible, `${expected.role || "anonymous"}: ${await link.textContent()}`);
+        const clubGroup = page.locator('[aria-controls="mobileNavClub"]').locator("..");
+        const adminGroup = page.locator('[aria-controls="mobileNavAdministration"]').locator("..");
+        assert.equal(await clubGroup.isVisible(), expected.playersVisible, `${expected.role || "anonymous"}: Verein`);
+        assert.equal(await adminGroup.isVisible(), expected.adminVisible, `${expected.role || "anonymous"}: Administration`);
+        assert.equal(await page.locator(".mobile-nav-submenu:visible").count(), 0);
+
+        const competitionToggle = page.locator('[aria-controls="mobileNavCompetition"]');
+        const competitionGroup = competitionToggle.locator("..");
+        assert.equal(await competitionGroup.evaluate((element) => element.tagName), "DIV");
+        assert.deepEqual(await competitionGroup.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            backgroundColor: style.backgroundColor,
+            borderWidth: style.borderWidth,
+            borderRadius: style.borderRadius,
+            padding: style.padding,
+          };
+        }), {
+          backgroundColor: "rgba(0, 0, 0, 0)",
+          borderWidth: "0px",
+          borderRadius: "0px",
+          padding: "0px",
+        });
+        await competitionToggle.click();
+        assert.equal(await competitionToggle.getAttribute("aria-expanded"), "true");
+        await page.waitForTimeout(220);
+        assert.notEqual(await competitionToggle.locator(".mobile-nav-chevron").evaluate((element) => getComputedStyle(element).transform), "none");
+        assert.equal(await page.locator('#mobileNavCompetition a[href="Matches1.html"]').isVisible(), true);
+        assert.equal(await competitionToggle.locator('[data-icon="emoji_events"]').count(), 1);
+        assert.equal(await competitionToggle.locator('[data-icon="expand_more"]').count(), 1);
+        assert.equal(await page.locator('#mobileNavCompetition [data-icon="sports_tennis"]').count(), 1);
+        assert.equal(await page.locator('#mobileNavCompetition [data-icon="swords"]').count(), 1);
+        assert.equal(await page.locator('#mobileNavCompetition [data-icon="scoreboard"]').count(), 1);
+        const rowStyles = await page.locator('.mobile-nav-main > a[href="index.html"], [aria-controls="mobileNavCompetition"], #mobileNavCompetition a').evaluateAll((rows) => rows.map((row) => {
+          const style = getComputedStyle(row);
+          const rect = row.getBoundingClientRect();
+          const iconRect = row.querySelector(".mobile-nav-icon").getBoundingClientRect();
+          return {
+            height: rect.height,
+            width: rect.width,
+            fontWeight: style.fontWeight,
+            color: style.color,
+            borderBottomWidth: style.borderBottomWidth,
+            iconLeft: iconRect.left,
+          };
+        }));
+        assert.equal(new Set(rowStyles.map(({ height }) => height)).size, 1);
+        assert.equal(new Set(rowStyles.map(({ width }) => width)).size, 1);
+        assert.equal(new Set(rowStyles.map(({ fontWeight }) => fontWeight)).size, 1);
+        assert.deepEqual(new Set(rowStyles.map(({ color }) => color)), new Set(["rgb(23, 26, 31)"]));
+        assert.deepEqual(new Set(rowStyles.map(({ borderBottomWidth }) => borderBottomWidth)), new Set(["1px"]));
+        assert.equal(rowStyles[0].iconLeft, rowStyles[1].iconLeft);
+        assert.equal(rowStyles[2].iconLeft > rowStyles[1].iconLeft, true);
+
+        if (expected.playersVisible) {
+          await page.locator('[aria-controls="mobileNavClub"]').click();
+          assert.equal(await page.locator('#mobileNavClub a[href="players.html"]').isVisible(), true);
         }
+        if (expected.adminVisible) {
+          await page.locator('[aria-controls="mobileNavAdministration"]').click();
+          assert.equal(await page.locator('#mobileNavAdministration a[href="servicebereich.html"]').isVisible(), true);
+        }
+
+        const authAction = page.locator(expected.role ? ".mobile-logout-action" : ".mobile-login-action");
+        assert.equal(await authAction.innerText(), expected.role ? "Abmelden" : "Anmelden");
+        assert.equal(await authAction.evaluate((element) => getComputedStyle(element).color), expected.role ? "rgb(180, 35, 24)" : "rgb(24, 114, 68)");
+        assert.equal(await authAction.locator('[data-icon="logout"], [data-icon="login"]').count(), 1);
+        assert.equal(await page.locator("#profileButtonMobile").isVisible(), Boolean(expected.role));
+        assert.equal(await page.locator(".mobile-nav-favorites").count(), 0);
+
+        if (expected.role) {
+          assert.equal(await page.locator("#profileButtonMobile").evaluate((element) => getComputedStyle(element).color), "rgb(23, 26, 31)");
+          const order = await page.locator('#profileButtonMobile, .mobile-nav-main > a[href="index.html"], #signOutButtonMobile').evaluateAll((elements) => elements.map((element) => ({ id: element.id, top: element.getBoundingClientRect().top })));
+          assert.equal(order.find(({ id }) => id === "profileButtonMobile").top < order.find(({ id }) => id === "signOutButtonMobile").top, true);
+          assert.equal(await page.locator('#profileButtonMobile [data-icon="person"]').count(), 1);
+          const logoutPlacement = await page.evaluate(() => {
+            const visibleRows = [...document.querySelectorAll(".mobile-nav-main .mobile-nav-row")]
+              .filter((element) => element.getClientRects().length > 0);
+            const lastRow = visibleRows.at(-1).getBoundingClientRect();
+            const logout = document.getElementById("signOutButtonMobile").getBoundingClientRect();
+            return { lastBottom: lastRow.bottom, logoutTop: logout.top };
+          });
+          assert.equal(Math.abs(logoutPlacement.lastBottom - logoutPlacement.logoutTop) < 1, true);
+        }
+
+        await page.locator(".mobile-nav-close").click();
+        await page.locator("#hamburgerBtn").click();
+        assert.equal(await page.locator(".mobile-nav-group-toggle[aria-expanded=true]").count(), 0);
+        assert.equal(await page.locator(".mobile-nav-submenu:visible").count(), 0);
       } finally {
         await context.close();
       }
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst eigenstaendig", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 300 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=admin`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.scrollTo(0, 300));
+    const initialScroll = await page.evaluate(() => window.scrollY);
+    await page.evaluate(() => document.getElementById("hamburgerBtn").click());
+    await page.waitForTimeout(350);
+
+    const layout = await page.evaluate(() => {
+      const drawer = document.querySelector(".mobile-nav-content").getBoundingClientRect();
+      const app = document.querySelector(".app-shift-layer").getBoundingClientRect();
+      const header = document.querySelector("#header-container header").getBoundingClientRect();
+      return {
+        drawer: { left: drawer.left, right: drawer.right, height: drawer.height },
+        appLeft: app.left,
+        headerLeft: header.left,
+        viewport: { width: innerWidth, height: innerHeight },
+        scrollY,
+        appInert: document.querySelector(".app-shift-layer").inert,
+        activeClass: document.activeElement.className,
+        drawerScrollable: document.querySelector(".mobile-nav-scroll").scrollHeight > document.querySelector(".mobile-nav-scroll").clientHeight,
+      };
+    });
+    assert.equal(Math.abs(layout.drawer.left - layout.viewport.width * 0.18) < 2, true);
+    assert.equal(Math.abs(layout.drawer.right - layout.viewport.width) < 1, true);
+    assert.equal(Math.abs(layout.drawer.height - layout.viewport.height) < 1, true);
+    assert.equal(Math.abs(layout.appLeft + layout.viewport.width * 0.82) < 2, true);
+    assert.equal(Math.abs(layout.headerLeft - layout.appLeft) < 1, true);
+    assert.equal(layout.scrollY, initialScroll);
+    assert.equal(layout.appInert, true);
+    assert.equal(layout.drawerScrollable, true);
+    assert.match(layout.activeClass, /mobile-nav-close/);
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "true");
+    assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "false");
+
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "signOutButtonMobile");
+    await page.keyboard.press("Tab");
+    assert.match(await page.evaluate(() => document.activeElement.className), /mobile-nav-close/);
+
+    await page.locator(".mobile-nav-header strong").click();
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "true");
+    await page.mouse.click(20, 200);
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
+    assert.equal(await page.evaluate(() => window.scrollY), initialScroll);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "hamburgerBtn");
+
+    await page.locator("#hamburgerBtn").click();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "true");
+    await page.locator("#hamburgerBtn").click();
+    await page.locator(".mobile-nav-close").click();
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
+
+    await page.locator("#hamburgerBtn").click();
+    await page.evaluate(() => document.querySelector('.mobile-nav-main a[href="index.html"]').addEventListener("click", (event) => event.preventDefault(), { once: true }));
+    await page.locator('.mobile-nav-main a[href="index.html"]').click();
+    assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "true");
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfolge ist editierbar", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.setDefaultTimeout(4000);
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/Matches1.html?role=player&favoritesTest=1`, { waitUntil: "domcontentloaded" });
+
+    const pageStar = page.locator(".page-favorite-star");
+    await pageStar.waitFor({ state: "visible" });
+    assert.equal(await pageStar.locator("svg path").count(), 1);
+    assert.equal(await pageStar.getAttribute("aria-pressed"), "false");
+    assert.equal(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).fill), "rgb(255, 255, 255)");
+    await pageStar.click();
+    await page.waitForTimeout(200);
+    assert.equal(await pageStar.getAttribute("aria-pressed"), "true", JSON.stringify({ calls: await page.evaluate(() => window.__endpointCalls), pageErrors }));
+    assert.equal(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).fill), "rgb(245, 197, 24)");
+
+    await page.evaluate(() => window.openFavoriteMatchAction("match-result"));
+    const picker = page.locator("#favoriteMatchPickerModal");
+    await picker.waitFor({ state: "visible" });
+    assert.equal(await picker.locator(".favorite-match-picker-item").count() > 0, true);
+    await picker.locator(".modal-favorite-star:visible").click();
+    await picker.locator(".close").click();
+
+    await page.locator("#hamburgerBtn").click();
+    const favorites = page.locator(".mobile-nav-favorites");
+    await favorites.waitFor({ state: "visible" });
+    await favorites.locator(".mobile-nav-favorites-edit").click();
+    assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
+    const rows = favorites.locator(".mobile-nav-favorite");
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
+    assert.equal(await favorites.locator(".mobile-nav-drag-handle:visible").count(), 2);
+    const firstBox = await favorites.locator(".mobile-nav-drag-handle").nth(0).boundingBox();
+    const secondBox = await favorites.locator(".mobile-nav-drag-handle").nth(1).boundingBox();
+    await page.mouse.move(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + 2, { steps: 4 });
+    await page.mouse.up();
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Matches"]);
+    assert.equal(await favorites.locator(".mobile-nav-favorites-edit").getAttribute("aria-pressed"), "true");
+    await favorites.locator(".mobile-nav-drag-handle").nth(1).focus();
+    await page.keyboard.press("ArrowUp");
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
+
+    assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
+    await rows.nth(1).locator(".mobile-nav-favorite-link").click();
+    await picker.waitFor({ state: "visible" });
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Desktop verwendet denselben Drawer und verschiebt die Anwendung um maximal 420 Pixel", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player`, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator(".desktop-nav").isHidden(), true);
+    assert.equal(await page.locator(".desktop-auth").isHidden(), true);
+    assert.equal(await page.locator("#hamburgerBtn").isVisible(), true);
+    assert.equal(await page.locator("#mobileNavModal").isHidden(), true);
+    await page.locator("#hamburgerBtn").click();
+    await page.waitForTimeout(350);
+    const layout = await page.evaluate(() => {
+      const app = document.querySelector(".app-shift-layer").getBoundingClientRect();
+      const header = document.querySelector("#header-container header").getBoundingClientRect();
+      const drawer = document.querySelector(".mobile-nav-content").getBoundingClientRect();
+      return { appLeft: app.left, appWidth: app.width, headerLeft: header.left, drawerLeft: drawer.left, drawerWidth: drawer.width };
+    });
+    assert.deepEqual(layout, { appLeft: -420, appWidth: 1200, headerLeft: -420, drawerLeft: 780, drawerWidth: 420 });
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendigen Bewerbsnamen", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const expectedName = "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026";
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&longFavorite=1`, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator(".page-favorite-star").count(), 0);
+    await page.locator("#hamburgerBtn").click();
+    const favorites = page.locator(".mobile-nav-favorites");
+    await favorites.locator(".mobile-nav-favorites-toggle").click();
+    const link = favorites.locator(".mobile-nav-favorite-link");
+    await link.waitFor({ state: "visible" });
+    assert.equal(await link.getAttribute("title"), expectedName);
+    assert.equal(await link.getAttribute("aria-label"), expectedName);
+    assert.equal(await link.locator("span").textContent(), expectedName);
+    assert.equal(await link.locator("span").evaluate((element) => getComputedStyle(element).webkitLineClamp), "2");
+    assert.equal((await link.textContent()).includes("(2)"), false);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Ranglistenseite rendert trotz Favoriten-Titelzeile vollstaendig", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/rangliste.html?id=2&role=player&favoritesTest=1&favoriteCompetition=1`, { waitUntil: "domcontentloaded" });
+    await page.locator(".page-favorite-star").waitFor({ state: "visible" });
+    await page.locator("#rankingContainer .box").first().waitFor({ state: "visible" });
+    assert.equal(await page.locator(".ranking-body").count(), 1);
+    const titleLayout = await page.evaluate(() => {
+      const heading = document.querySelector(".favorite-title-row > h2").getBoundingClientRect();
+      const star = document.querySelector(".favorite-title-row > .page-favorite-star").getBoundingClientRect();
+      return {
+        gap: Math.round(star.left - heading.right),
+        centerOffset: Math.round((star.top + star.height / 2) - (heading.top + heading.height / 2)),
+      };
+    });
+    assert.deepEqual(titleLayout, { gap: 4, centerOffset: 0 });
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/scoreboard-layout-test.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => getComputedStyle(document.querySelector(".scoreboard-match-link")).position === "absolute");
+    const layout = await page.evaluate(() => {
+      const star = document.querySelector("#platz1 > .page-favorite-star").getBoundingClientRect();
+      const nextElement = document.querySelector("#platz1 > .scoreboard-match-link");
+      const next = nextElement.getBoundingClientRect();
+      const previous = document.querySelector("#platz2 > .scoreboard-match-link");
+      return {
+        sameRightEdge: Math.abs(star.right - next.right) < 1,
+        nextBelowStar: next.top >= star.bottom,
+        previousRight: getComputedStyle(previous).right,
+      };
+    });
+    assert.deepEqual(layout, { sameRightEdge: true, nextBelowStar: true, previousRight: "10px" });
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Mobile Navigation zeigt einen kontrollierten Auth-Ausfall", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?authStatus=unavailable`, { waitUntil: "domcontentloaded" });
+    await page.locator("#hamburgerBtn").click();
+    assert.equal(await page.locator(".mobile-auth-section .authUnavailable").textContent(), "Anmeldung nicht erreichbar");
+    assert.equal(await page.locator(".mobile-auth-section .authUnavailable").isVisible(), true);
+    assert.equal(await page.locator(".mobile-login-action:visible, .mobile-logout-action:visible").count(), 0);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -611,11 +1018,19 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     assert.equal(await playerPage.locator('label[for="login"]').textContent(), "Login:");
     assert.equal(await playerPage.locator("#setupLogin").getAttribute("type"), "text");
     assert.equal(await playerPage.locator("#setupLogin").getAttribute("inputmode"), null);
+    assert.equal(await playerPage.locator("#openPasswordSetup").textContent(), "Passwort vergessen / Neueingabe");
+    assert.equal(await playerPage.locator("#passwordSetupModal h2").textContent(), "Passwort neu vergeben");
+    assert.equal(await playerPage.locator("#passwordSetupModal > .modal-content > p").textContent(), "Diese Funktion muss zuvor von einem Administrator freigegeben werden. Bitte fordern Sie die Freigabe daher vorab bei einem Administrator an.");
+    assert.equal(await playerPage.locator("#resetPasswordModal, #resetProofModal, #openPasswordReset").count(), 0);
 
     await playerPage.evaluate(() => window.openProfileModal());
     await playerPage.locator("#profileModal").waitFor({ state: "visible" });
     assert.match(await playerPage.locator("#profileText").textContent(), /Login: player-login/);
-    assert.match(await playerPage.locator("#profileText").textContent(), /E-Mail: contact@example\.test/);
+    assert.match(await playerPage.locator("#profileText").textContent(), /E-Mail: contact\+team\?x@example\.test/);
+    assert.equal(await playerPage.getByRole("button", { name: "E-Mail kopieren" }).count(), 1);
+    assert.equal(await playerPage.getByRole("link", { name: "E-Mail verfassen" }).getAttribute("href"), "mailto:contact%2Bteam%3Fx@example.test");
+    assert.equal(await playerPage.getByRole("button", { name: "Telefon kopieren" }).count(), 1);
+    assert.equal(await playerPage.getByRole("link", { name: "Telefon-App öffnen" }).getAttribute("href"), "tel:+436641234567");
     assert.deepEqual(await playerPage.locator("#profileTabs [role=tab]").allTextContents(), [
       "System", "Meldungen (2)", "Aktuell", "Archiv",
     ]);
@@ -749,6 +1164,8 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     await playerPage.locator("#profileModal").waitFor({ state: "visible" });
     assert.doesNotMatch(await playerPage.locator("#profileText").textContent(), /Login:/);
     assert.match(await playerPage.locator("#profileText").textContent(), /E-Mail: directory@example\.test/);
+    assert.equal(await playerPage.getByRole("link", { name: "E-Mail verfassen" }).getAttribute("href"), "mailto:directory@example.test");
+    assert.equal(await playerPage.getByRole("link", { name: "Telefon-App öffnen" }).getAttribute("href"), "tel:+436997654321");
     assert.equal(await playerPage.getByRole("tab", { name: /Meldungen/ }).count(), 0);
     await playerPage.getByRole("tab", { name: "Aktuell", exact: true }).click();
     assert.deepEqual(await playerPage.locator("#profileCurrentCompetitionTabs [role=tab]").allTextContents(), [
@@ -823,7 +1240,8 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     assert.match(await adminPage.locator("#profileText").textContent(), /Login: foreign-login/);
     assert.equal(await adminPage.getByRole("tab", { name: "Admin" }).isVisible(), true);
     await adminPage.getByRole("tab", { name: "Admin" }).click();
-    assert.equal(await adminPage.getByRole("button", { name: "Reset-Code erstellen" }).isVisible(), true);
+    assert.equal(await adminPage.getByRole("button", { name: "Passwortvergabe freigeben" }).isVisible(), true);
+    assert.equal(await adminPage.getByRole("button", { name: "Passwort direkt setzen" }).isVisible(), true);
     await adminPage.getByRole("tab", { name: "Aktuell", exact: true }).click();
     await adminPage.getByRole("tab", { name: "Senioren 45 Plus", exact: true }).click();
     const adminCountdown = adminPage.locator("#profileRankingPanel2 .profile-match-date-countdown");
@@ -1225,10 +1643,10 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
   try {
     const page = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await page.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player`, { waitUntil: "domcontentloaded" });
-    await page.locator("#profileButton .message-count-badge").waitFor({ state: "visible" });
-    assert.equal(await page.locator("#profileButton .message-count-badge").textContent(), "2");
-
-    await page.locator("#profileButton").click();
+    await page.locator("#hamburgerBtn.has-unread-messages").waitFor({ state: "visible" });
+    await page.locator("#hamburgerBtn").click();
+    assert.equal(await page.locator("#profileButtonMobile .message-count-badge").textContent(), "2");
+    await page.locator("#profileButtonMobile").click();
     await page.getByRole("tab", { name: "Meldungen (2)", exact: true }).click();
     const rows = page.locator("#profileMessagesPanel .message-row");
     await rows.first().waitFor({ state: "visible" });
@@ -1267,6 +1685,7 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
     assert.equal(await rows.nth(0).evaluate((row) => row.classList.contains("unread")), true);
     assert.equal(await rows.nth(1).evaluate((row) => row.classList.contains("unread")), true);
     assert.equal(await rows.nth(2).evaluate((row) => row.classList.contains("unread")), false);
+    assert.equal(await page.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).isEnabled(), true);
 
     await rows.first().focus();
     await page.keyboard.press("Enter");
@@ -1318,10 +1737,8 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
 
     await rows.first().click();
     await page.getByRole("button", { name: "Zur Kenntnis genommen", exact: true }).click();
-    await page.locator("#acknowledgeMessageButton").waitFor({ state: "hidden" });
-    assert.equal(await page.locator("#messageDetailStatus").isVisible(), false);
-    assert.equal(await page.locator("#messageDetailAnnouncement").textContent(), "Zur Kenntnis genommen.");
-    assert.equal(await page.locator("#messageDetailModal .close").evaluate((button) => document.activeElement === button), true);
+    await page.locator("#messageDetailModal").waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#profileModal").isVisible(), true);
     assert.deepEqual(await page.evaluate(() => window.__acknowledgeCalls), [{
       operationId: "operation-message:acknowledge:unread-new",
       messageId: "unread-new",
@@ -1330,10 +1747,17 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
     assert.equal(await page.locator("#profileMessagesPanel .message-row.unread").count(), 1);
     assert.equal(await page.locator("#profileButton .message-count-badge").textContent(), "1");
     assert.equal(await page.locator("#profileButtonMobile .message-count-badge").textContent(), "1");
+    assert.equal(await page.locator('#profileMessagesPanel .message-row[data-message-id="unread-new"]').evaluate((row) => document.activeElement === row), true);
+    await page.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => window.__acknowledgeAllCalls), [{ operationId: "operation-messages:acknowledge-all" }]);
+    assert.equal(await page.locator("#profileMessagesPanel .message-row.unread").count(), 0);
+    assert.equal(await page.locator("#profileMessagesPanelTab").textContent(), "Meldungen (0)");
+    assert.equal(await page.locator("#acknowledgeAllMessagesStatus").textContent(), "Alle offenen Meldungen wurden als gelesen markiert.");
+    assert.equal(await page.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).isDisabled(), true);
     await page.close();
 
     const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await mobilePage.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await mobilePage.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player&longMessages=1`, { waitUntil: "domcontentloaded" });
     await mobilePage.locator("#hamburgerBtn.has-unread-messages").waitFor({ state: "visible" });
     assert.equal(await mobilePage.locator("#hamburgerBtn").getAttribute("aria-label"), "Menü öffnen, 2 ungelesene Meldungen");
     assert.equal(await mobilePage.locator("#hamburgerBtn").evaluate((button) => getComputedStyle(button).color), "rgb(255, 77, 79)");
@@ -1351,12 +1775,22 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
       { color: "rgb(0, 0, 0)", fontSize: "14.4px", fontWeight: "700" },
       { color: "rgb(0, 0, 0)", fontSize: "12.8px", fontWeight: "400" },
     ]);
-    for (let unread = 2; unread > 0; unread--) {
-      await mobilePage.locator("#profileMessagesPanel .message-row.unread").first().click();
-      await mobilePage.getByRole("button", { name: "Zur Kenntnis genommen", exact: true }).click();
-      await mobilePage.locator("#acknowledgeMessageButton").waitFor({ state: "hidden" });
-      await mobilePage.locator("#messageDetailModal .close").click();
-    }
+    const mobileMessagesLayout = await mobilePage.locator("#profileMessagesPanel").evaluate((panel) => {
+      const scroll = panel.querySelector("#profileMessagesScroll");
+      const actions = panel.querySelector(".profile-message-actions");
+      scroll.scrollTop = scroll.scrollHeight;
+      const panelRect = panel.getBoundingClientRect();
+      const scrollRect = scroll.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      return {
+        listScrollable: scroll.scrollHeight > scroll.clientHeight,
+        panelContained: actionsRect.bottom <= panelRect.bottom + 1,
+        actionsBelowList: actionsRect.top >= scrollRect.bottom - 1,
+        buttonVisible: actions.querySelector("button").getBoundingClientRect().height > 0,
+      };
+    });
+    assert.deepEqual(mobileMessagesLayout, { listScrollable: true, panelContained: true, actionsBelowList: true, buttonVisible: true });
+    await mobilePage.getByRole("button", { name: "Alle als gelesen markieren", exact: true }).click();
     await mobilePage.waitForFunction(() => !document.getElementById("hamburgerBtn").classList.contains("has-unread-messages"));
     assert.equal(await mobilePage.locator("#hamburgerBtn").getAttribute("aria-label"), "Menü öffnen");
     assert.equal(await mobilePage.locator("#hamburgerBtn").evaluate((button) => getComputedStyle(button).color), "rgb(255, 255, 255)");
@@ -1386,6 +1820,13 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     await page.goto(`http://127.0.0.1:${address.port}/ranking-test.html?role=player&id=2`, { waitUntil: "domcontentloaded" });
     await page.locator("#rankingContainer .box").nth(27).waitFor({ state: "visible" });
 
+    const initialScrollY = await page.evaluate(() => {
+      document.body.style.minHeight = "2400px";
+      window.scrollTo(0, 1200);
+      return window.scrollY;
+    });
+    assert.equal(initialScrollY > 0, true);
+
     const ranking = await page.locator("#rankingContainer").evaluate((scrollport) => {
       scrollport.scrollLeft = scrollport.scrollWidth - scrollport.clientWidth;
       return {
@@ -1402,7 +1843,7 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     assert.equal(ranking.documentWidth, ranking.viewportWidth);
     assert.equal(ranking.pageScrollX, 0);
 
-    await page.locator("#rankingContainer .box").nth(27).click();
+    await page.evaluate(() => window.openProfileModal({ playerId: "2" }));
     await page.locator("#profileModal").waitFor({ state: "visible" });
     const overlay = await page.locator("#profileModal").evaluate((modal) => {
       const modalRect = modal.getBoundingClientRect();
@@ -1419,6 +1860,10 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
         viewportLeft,
         viewportRight: viewportLeft + viewportWidth,
         viewportCenter: viewportLeft + (viewportWidth / 2),
+        viewportTop: window.visualViewport?.offsetTop || 0,
+        viewportBottom: (window.visualViewport?.offsetTop || 0) + (window.visualViewport?.height || window.innerHeight),
+        dialogTop: dialogRect.top,
+        dialogBottom: dialogRect.bottom,
         pageScrollX: window.scrollX,
         rankingScrollLeft: document.getElementById("rankingContainer").scrollLeft,
         pageLocked: getComputedStyle(document.body).overflow === "hidden",
@@ -1429,12 +1874,15 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     assert.equal(overlay.dialogLeft >= overlay.viewportLeft + 11, true);
     assert.equal(overlay.dialogRight <= overlay.viewportRight - 11, true);
     assert.equal(Math.abs(overlay.dialogCenter - overlay.viewportCenter) <= 1, true);
+    assert.equal(overlay.dialogTop >= overlay.viewportTop, true);
+    assert.equal(overlay.dialogBottom <= overlay.viewportBottom, true);
     assert.equal(overlay.pageScrollX, 0);
     assert.equal(overlay.rankingScrollLeft, ranking.scrollLeft);
     assert.equal(overlay.pageLocked, true);
 
     await page.keyboard.press("Escape");
     assert.equal(await page.locator("#rankingContainer").evaluate((scrollport) => scrollport.scrollLeft), ranking.scrollLeft);
+    assert.equal(await page.evaluate(() => window.scrollY), initialScrollY);
     await page.close();
 
     const busyPage = await browser.newPage({ viewport: { width: 390, height: 844 } });

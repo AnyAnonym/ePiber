@@ -174,7 +174,7 @@ test("Profilbereinigung entfernt Namen, Kontaktdaten, Aktionen und Scope", () =>
   const tabs = container([{ textContent: "Rangliste Herren" }]);
   const rankings = container([{ textContent: "Ranglistenaktion" }]);
   const systemActions = container([action]);
-  const adminActions = container([{ textContent: "Reset-Code erstellen" }]);
+  const adminActions = container([{ textContent: "Passwort direkt setzen" }]);
   const modal = {
     dataset: { profileScope: "private" },
     removeAttribute(nameValue) { if (nameValue === "data-profile-scope") delete this.dataset.profileScope; },

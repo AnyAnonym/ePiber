@@ -470,13 +470,13 @@ function renderRankingLegend() {
   const section = document.getElementById("rankingSection");
   if (!section) return;
 
-  const heading = section.querySelector("h2");
   let body = section.querySelector(".ranking-body");
   if (!body) {
     body = document.createElement("div");
     body.className = "ranking-body";
-    if (heading && heading.nextSibling) {
-      section.insertBefore(body, heading.nextSibling);
+    const container = document.getElementById("rankingContainer");
+    if (container?.parentElement === section) {
+      section.insertBefore(body, container);
     } else {
       section.appendChild(body);
     }

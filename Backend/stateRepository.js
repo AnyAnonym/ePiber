@@ -24,6 +24,7 @@ class StateRepository {
     this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA synchronous = FULL");
+    this.db.exec("DROP TABLE IF EXISTS password_reset_proofs");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS app_state (
         key TEXT PRIMARY KEY,
@@ -41,19 +42,6 @@ class StateRepository {
         last_seen_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions(user_id);
-      CREATE TABLE IF NOT EXISTS password_reset_proofs (
-        proof_hash TEXT PRIMARY KEY,
-        person_id TEXT NOT NULL,
-        created_by TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL,
-        consumed_at INTEGER,
-        payload_hash TEXT,
-        stored_hash TEXT,
-        claimed_at INTEGER,
-        completed_at INTEGER
-      );
-      CREATE INDEX IF NOT EXISTS password_reset_person_id ON password_reset_proofs(person_id);
       CREATE TABLE IF NOT EXISTS monitor_devices (
         monitor_id TEXT PRIMARY KEY,
         label TEXT NOT NULL,
@@ -84,11 +72,6 @@ class StateRepository {
       this.db.exec("ALTER TABLE sessions ADD COLUMN login TEXT NOT NULL DEFAULT ''");
     }
     this.db.exec("UPDATE sessions SET login = email WHERE login = ''");
-    const resetColumns = new Set(this.db.prepare("PRAGMA table_info(password_reset_proofs)").all().map((column) => column.name));
-    for (const [name, type] of [["payload_hash", "TEXT"], ["stored_hash", "TEXT"], ["claimed_at", "INTEGER"], ["completed_at", "INTEGER"]]) {
-      if (!resetColumns.has(name)) this.db.exec(`ALTER TABLE password_reset_proofs ADD COLUMN ${name} ${type}`);
-    }
-    this.db.prepare("DELETE FROM password_reset_proofs WHERE consumed_at IS NOT NULL AND payload_hash IS NULL").run();
     if (this.filename !== ":memory:") fs.chmodSync(this.filename, 0o600);
     this.cleanup();
   }
@@ -203,6 +186,33 @@ class StateRepository {
     });
   }
 
+  getUserFavorites(userId) {
+    const snapshot = this.getState(`favorites:${userId}`, []);
+    if (!Array.isArray(snapshot.value)) {
+      throw new AppError("STATE_CORRUPT", "Favoriten-State ist ungueltig", 503);
+    }
+    return { favorites: snapshot.value, revision: snapshot.revision, updatedAt: snapshot.updatedAt };
+  }
+
+  setUserFavorites(userId, { operationId, expectedRevision, favorites }) {
+    const operation = this.applyStateOperation({
+      stateKey: `favorites:${userId}`,
+      fallback: [],
+      expectedRevision,
+      actorKey: `user:${userId}`,
+      operationId,
+      endpoint: "setMyFavorites",
+      payload: { expectedRevision, favorites },
+      update: () => favorites,
+      resultForSnapshot: (snapshot) => ({
+        success: true,
+        favorites: snapshot.value,
+        revision: snapshot.revision,
+      }),
+    });
+    return { ...operation.result, repeated: operation.repeated };
+  }
+
   createSession({ userId, email, login = email, ttlMs }) {
     this.ensureOpen();
     const token = randomToken();
@@ -254,85 +264,6 @@ class StateRepository {
       return this.db.prepare("DELETE FROM sessions WHERE user_id = ? AND sid_hash <> ?").run(userId, exceptTokenHash).changes;
     }
     return this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId).changes;
-  }
-
-  createPasswordResetProof(personId, createdBy, ttlMs) {
-    return this.transaction(() => {
-      const token = randomToken();
-      const now = this.now();
-      const expiresAt = now + ttlMs;
-      this.db.prepare("DELETE FROM password_reset_proofs WHERE person_id = ? AND consumed_at IS NULL").run(personId);
-      this.db.prepare(`
-        INSERT INTO password_reset_proofs(proof_hash, person_id, created_by, created_at, expires_at, consumed_at)
-        VALUES (?, ?, ?, ?, ?, NULL)
-      `).run(hashToken(token), personId, createdBy, now, expiresAt);
-      return { token, personId, expiresAt };
-    });
-  }
-
-  getPasswordResetProof(token) {
-    this.ensureOpen();
-    if (!token) return null;
-    const row = this.db.prepare(`
-      SELECT person_id, expires_at, payload_hash, stored_hash, claimed_at, completed_at
-      FROM password_reset_proofs
-      WHERE proof_hash = ? AND expires_at > ?
-    `).get(hashToken(token), this.now());
-    return row ? {
-      personId: row.person_id,
-      expiresAt: Number(row.expires_at),
-      payloadHash: row.payload_hash,
-      storedHash: row.stored_hash,
-      claimedAt: row.claimed_at === null ? null : Number(row.claimed_at),
-      completedAt: row.completed_at === null ? null : Number(row.completed_at),
-    } : null;
-  }
-
-  beginPasswordResetProof(token, payloadHash, storedHash, leaseMs = 60000) {
-    return this.transaction(() => {
-      const proofHash = hashToken(token);
-      const now = this.now();
-      const row = this.db.prepare(`
-        SELECT person_id, expires_at, payload_hash, stored_hash, claimed_at, completed_at
-        FROM password_reset_proofs WHERE proof_hash = ? AND expires_at > ?
-      `).get(proofHash, now);
-      if (!row) return null;
-      if (row.payload_hash && row.payload_hash !== payloadHash) {
-        throw new AppError("RESET_PROOF_CONFLICT", "Reset-Nachweis ist bereits an ein anderes Passwort gebunden", 409);
-      }
-      if (row.completed_at !== null) {
-        return { personId: row.person_id, storedHash: row.stored_hash, completed: true, acquired: false };
-      }
-      if (row.claimed_at !== null && now - Number(row.claimed_at) < leaseMs) {
-        return { personId: row.person_id, storedHash: row.stored_hash, completed: false, acquired: false };
-      }
-      const result = this.db.prepare(`
-        UPDATE password_reset_proofs
-        SET payload_hash = COALESCE(payload_hash, ?), stored_hash = COALESCE(stored_hash, ?), claimed_at = ?
-        WHERE proof_hash = ? AND completed_at IS NULL
-      `).run(payloadHash, storedHash, now, proofHash);
-      return result.changes
-        ? { personId: row.person_id, storedHash: row.stored_hash || storedHash, completed: false, acquired: true }
-        : null;
-    });
-  }
-
-  releasePasswordResetProof(token, payloadHash) {
-    this.ensureOpen();
-    this.db.prepare(`
-      UPDATE password_reset_proofs SET claimed_at = NULL
-      WHERE proof_hash = ? AND payload_hash = ? AND completed_at IS NULL
-    `).run(hashToken(token), payloadHash);
-  }
-
-  completePasswordResetProof(token, payloadHash) {
-    this.ensureOpen();
-    const now = this.now();
-    const result = this.db.prepare(`
-      UPDATE password_reset_proofs SET completed_at = ?, consumed_at = ?, claimed_at = NULL
-      WHERE proof_hash = ? AND payload_hash = ? AND completed_at IS NULL
-    `).run(now, now, hashToken(token), payloadHash);
-    return result.changes > 0;
   }
 
   provisionMonitor(label, monitorId) {
@@ -519,7 +450,6 @@ class StateRepository {
     this.ensureOpen();
     const now = this.now();
     this.db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(now);
-    this.db.prepare("DELETE FROM password_reset_proofs WHERE expires_at <= ? OR (consumed_at IS NOT NULL AND consumed_at < ?)").run(now, now - 86400000);
     this.db.prepare("DELETE FROM operations WHERE created_at < ?").run(now - 86400000);
     this.db.prepare("DELETE FROM login_failures WHERE blocked_until < ? AND window_start < ?").run(now, now - 86400000);
   }

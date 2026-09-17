@@ -73,7 +73,7 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   Liest Personen nur aus aktuellem Cache, erstellt kontextabhaengige sichere
   Projektionen, prueft scrypt/Legacy-Credentials mit Dummy-Verifikation,
   serialisiert Operationen je Benutzer und orchestriert Login, Migration,
-  Logout, Eigenwechsel, Resetnachweis, adminfreigegebene erstmalige Vergabe und
+  Logout, Eigenwechsel, adminfreigegebene erstmalige Vergabe und
   Admin-Passwortsetzung. Rollen werden nach dem ersten erfolgreichen
   Gesamtsnapshot aus dem aktiven Last-good-Personenstand aufgeloest.
 
@@ -105,9 +105,11 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
 
 `stateRepository.js`
   Kapselt SQLite mit WAL/FULL, Dateirechten, Transaktionen, revisioniertem
-  app_state, Sessions, Resetnachweisen, Monitorgeraeten, Operationsergebnissen
-  und Loginlimits. Tokens werden nur gehasht persistiert. Cleanup entfernt
-  abgelaufene beziehungsweise alte Eintraege.
+  app_state, kontogebundenen Favoriten, Sessions, Monitorgeraeten,
+  Operationsergebnissen und Loginlimits.
+  Beim Start wird die obsolete Tabelle `password_reset_proofs` einschliesslich
+  etwaiger Altdaten gedroppt. Tokens werden nur gehasht persistiert. Cleanup
+  entfernt abgelaufene beziehungsweise alte Eintraege.
 
 `messagingRepository.js`, `messagingService.js`
   Persistieren das versionierte zentrale Bewerbsereignismodell, normalisierte
@@ -278,7 +280,7 @@ Personenzeile ermittelt; fehlt die Person, ist sie inaktiv oder stimmt der Login
   anonymous       | oeffentliche Projektionen, Scoreboard und Public Topics
   player          | zusaetzlich Mitglieder-/Eigenprofil und eigene Fachwrites
   operator        | zusaetzlich Court-, Navigator- und Monitorsteuerung
-  admin           | zusaetzlich Status, Reset/Passwort und Geraeteverwaltung
+  admin           | zusaetzlich Status, Passwort- und Geraeteverwaltung
   device          | nur eigenes Monitorziel, ACK und monitor-command
 
 Die effektive Rolle stammt bei neuem Personenmodell aus den unabhaengigen
@@ -298,8 +300,8 @@ Datenprojektionen:
   - Das loginpflichtige Mitgliederverzeichnis enthaelt fuer aktive Personen auch
     Kontakt-E-Mail und Geburtsdatum, aber keinen Login.
   - Admin erhaelt am fremden Profil zusaetzlich Login und
-    `passwordSetupAllowed`, aber keine fremden Passwortdaten. Freigabe,
-    Reset-Code-Erzeugung und direktes Setzen sind separate Adminaktionen.
+    `passwordSetupAllowed`, aber keine fremden Passwortdaten. Freigabe und
+    direktes Setzen sind separate Adminaktionen.
   - Profil-Ranglisten werden ohne Google-Read aus den bereits importierten
     Tabellen `bewerbe`, `rlPlatzierung`, `matches1` und `players` gebildet.
     `BewerbsartID=2` grenzt Ranglisten ab. Forderbarkeit und offene Forderung
@@ -342,12 +344,12 @@ Requests; `publicProfile` erzwingt serverseitig `authenticated`. Beim Logout ode
 Identitaetswechsel wird ein offenes Modal geschlossen und sein Inhalt samt
 Aktionshandlern entfernt.
 
-Eigenwechsel, Reset und Admin-Direktsetzung laufen je Zielbenutzer geordnet.
+Eigenwechsel, Erstvergabe und Admin-Direktsetzung laufen je Zielbenutzer geordnet.
 Sessions der Zielperson werden vor dem externen Passwortwrite widerrufen, damit
-ein alter Login/Write Reset oder Logout nicht ueberholen kann. Sie bleiben auch
+ein alter Login/Write die Passwortaenderung oder den Logout nicht ueberholen kann.
+Sie bleiben auch
 bei fehlgeschlagenem oder unbekanntem Write ungueltig. Nur nach erfolgreichem
-Eigenwechsel wird eine neue Session erstellt. Ein Resetnachweis ist gehasht,
-ablaufend, einmalig und fest an den Credential des ersten Versuchs gebunden.
+Eigenwechsel wird eine neue Session erstellt.
 
 Die erstmalige Passwortvergabe verwendet `KennwortVergessen=x` als explizite
 Adminfreigabe. Sie verlangt eine aktive Person mit eindeutigem gueltigem Login,
@@ -978,7 +980,10 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
                        Flush- und Retentionvorgaben sowie temporaere Zielpersonen
                        mit Restzeit und revisionsgeschuetzten Aenderungen.
 `navbar.js`           Navigation und sessiongetriebene Login-/Profilanzeige.
-`modals.js`           Profil, Login, Passwort/Reset und Fachdialoge; sichere
+`favorites.js`        Kontogebundener revisionierter Favoritenzustand,
+                      kontrollierter Seiten-/Overlaykatalog, Cross-Tab-Refresh,
+                      gemeinsame Sternaktionen und rollenabhaengige Zielprojektion.
+`modals.js`           Profil, Login, Passwort- und Fachdialoge; sichere
                       kontextabhaengige Profilprojektionen sowie der gemeinsame
                       Match-Ergebnisdialog mit blauen Teilnehmer- und roten
                       Adminaktionen. Profilinhalt und
@@ -1003,7 +1008,7 @@ Externe Font-/Script-Abhaengigkeiten, SDK.js und rankingSidebar.js sind entfernt
 Die fachlichen Seiten- und Administrationsdokumente sind in `SOFTWARE-DOKU.txt`
 indiziert.
 
-Login-, Eigenwechsel-, Reset-, Erstvergabe- und Admin-Passwortdialoge verlangen
+Login-, Eigenwechsel-, Erstvergabe- und Admin-Passwortdialoge verlangen
 eine explizite Schliessen-/Abbrechen-Aktion; Klick auf den Hintergrund und Escape
 schliessen sie nicht. Waehrend eines Requests sind alle Dialogbuttons gesperrt,
 beim Schliessen werden Formulare und Passwortsichtbarkeit zurueckgesetzt. Die
@@ -1013,9 +1018,64 @@ visuell verborgenes `autocomplete=username`-Feld, waehrend Admin-Direktsetzung
 `autocomplete=off` verwendet. JavaScript faengt die Submits weiterhin ab und
 uebertraegt nur SHA-256-Credentials per JSON.
 
-Die mobile Navigation ist ein viewportfuellendes Overlay mit zentriertem,
-breitenbegrenztem Inhalt. Das Oeffnen veraendert die aktuelle Scrollposition
-nicht; Hintergrundklick und Auswahl eines Navigationslinks schliessen das Overlay.
+Die gemeinsame Navigation ist auf Desktop, Tablet und Mobilgeraeten ein
+rechtsseitiger Drawer ab Bildschirmoberkante mit `min(82vw, 420px)` Breite und
+voller Hoehe. Beim Oeffnen schiebt sie die
+gesamte App einschliesslich Header nach links, ohne die aktuelle Scrollposition zu
+veraendern; ihr Inhalt scrollt intern. Die Kopfzeile `ePiber` entspricht der
+Headerhoehe. Linke Restflaeche, X, Escape und die Auswahl eines Navigationslinks
+schliessen den Drawer. Die Navigation verwendet linksbuendige, durch
+Linien getrennte Listenzeilen mit lokal eingebetteten Google Material Symbols
+Outlined. Es gibt keine externe Font- oder Iconanfrage; die Apache-2.0-Lizenz
+liegt in `Frontend/MATERIAL_SYMBOLS_LICENSE.txt`. Anonym steht die gruene
+Anmeldezeile mit `login` oben. Angemeldet folgen fest das Profil mit `person`, nur
+bei vorhandenen Eintraegen der persoenliche Favoritenbereich,
+Dashboard sowie die zunaechst geschlossenen Gruppen `Spielbetrieb` mit
+`emoji_events`, `Verein` mit `groups` und rollenabhaengig `Administration` mit
+`admin_panel_settings`; die rote Abmeldezeile mit `logout` steht am Listenende.
+`expand_more` zeigt den Gruppenstatus. Unterpunkte besitzen dasselbe Zeilenraster
+und dieselbe Hervorhebung wie die Haupteintraege und unterscheiden sich nur durch
+den Einzug. Neutrale `div`-Gruppencontainer verhindern, dass die globale
+`section`-Kartenformatierung in die Navigation einwirkt. Alle Eintragstexte und
+Icons sind schwarz; nur `login` ist gruen und `logout` rot. Bewerbe verwendet das
+offizielle Symbol `swords`. Die Hauptgruppen sind wie Dashboard links ausgerichtet;
+Unterzeilen bleiben ueber die volle Menuebreite angelegt, sodass ihre Trennlinien
+durchlaufen. `logout` folgt ohne Autoabstand direkt nach der letzten sichtbaren
+Menuezeile. Nicht berechtigte oder leere Gruppen werden als Ganzes verborgen. Der
+Hamburger ist auf allen Viewports sichtbar; die separate Desktop-Navigationsleiste
+bleibt ausgeblendet.
+
+Der Favoritenbereich ist eine eigene anfangs geschlossene Gruppe. Ein Stift neben
+dem Gruppenchevron oeffnet sie und aktiviert den Sortiermodus. Dann steht links
+anstelle der bisherigen Symbolposition ein tastatur- und pointerbedienbarer
+Drei-Striche-Handle; das Zielicon rueckt nach rechts. Die Reihenfolge wird als
+vollstaendige Liste revisionsgeschuetzt gespeichert. Seitensterne stehen mit
+kleinem Abstand vertikal mittig direkt neben der Hauptueberschrift, beim
+Scoreboard rechts oben im Feld von Platz 1;
+Ergebnis- und Terminmodal zeigen den Stern rechts neben ihrem Titel.
+Sponsorenanzeige, technische Court-Testseite und Profilmodal besitzen keinen
+Stern. Der Stern besteht aus einem einzelnen schwarz umrandeten Pfad und ist
+inaktiv innen weiss sowie aktiv vollstaendig gelb. Das Dashboard bleibt fester
+Menueeintrag und ist kein Favoritenziel. Bewerbsbezogene Ziele werden ueber den
+oeffentlichen `bewerbe`-Stand auf ihre Bezeichnung projiziert; technische IDs
+werden nie als Beschriftung dargestellt. Lange Bezeichnungen sind visuell auf
+zwei Zeilen begrenzt, bleiben aber als zugaengliche Beschriftung und Tooltip
+vollstaendig erhalten. Fehler der Namensprojektion erzeugen ausschliesslich das
+kontrollierte Browserereignis `favorite_labels_load_failed` ohne Bewerbsdaten.
+Overlayfavoriten laden ausschliesslich eigene offene Matches aus
+`myProfile` und verwenden danach die vorhandenen serverautorisierten Ergebnis-
+beziehungsweise Terminaktionen.
+Auf der provisionierten Monitorseite bleibt der WebSocket-Principal fuer alle
+Monitoroperationen das Geraet. Nur `myFavorites` und `setMyFavorites` duerfen bei
+gleichzeitig vorhandener gueltiger Benutzersitzung diese Sitzung requestlokal
+verwenden; ohne Benutzersitzung bleibt der Stern verborgen beziehungsweise der
+Favoritenzugriff abgelehnt.
+
+Ranglistenmatches projizieren `scheduleMarkers` fuer Forderungszeitpunkt,
+Sieben-Tage-Terminfrist und Vierzehn-Tage-Spielschluss. Jeder Marker besitzt nur
+kontrolliertes `kind`, Farbtoken, Label und Millisekundenzeitpunkt. Der
+Termindialog rendert denselben Vertrag; KO- und Gruppenmatches liefern vorerst
+eine leere Liste und koennen spaetere Rundenfristen ohne neuen UI-Vertrag nutzen.
 
 
 ================================================================================

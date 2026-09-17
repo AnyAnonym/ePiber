@@ -91,6 +91,7 @@ Diese Checkliste ist das verbindliche Gate fuer die aktuelle Reihenfolge **PAJ -
 - [ ] `SCORELOG_FILE` ist `/var/lib/epiber-<system>/scorelog.sqlite`; `AUDITLOG_FILE` ist `/var/lib/epiber-<system>/audit.sqlite`; `MESSAGING_FILE` ist `/var/lib/epiber-<system>/messaging.sqlite`.
 - [ ] `StateDirectory=epiber-<system>`, Verzeichnismodus 0700, SQLite-Modus 0600 und `UMask=0077` bestaetigt.
 - [ ] Alle vier SQLite-Dateien verwenden Foreign Keys, WAL und `synchronous=FULL`; Dateisystem hat fuer die unbegrenzten Fach- und Messagingdaten ausreichend freien Platz.
+- [ ] Nach dem ersten Start dieses Stands ist die obsolete Tabelle `password_reset_proofs` aus `state.sqlite` entfernt; historische Audit- und Changelogdaten bleiben erhalten.
 - [ ] Konsistente Backups aller vier SQLite-Dateien erstellt. Bei gestopptem Dienst wurden jeweilige DB, WAL und SHM gemeinsam behandelt; alternativ wurden SQLite-Onlinebackups verwendet.
 - [ ] journald-Drop-in ist installiert: persistente Speicherung, maximal 1 GiB und 14 Tage; die Werte passen zur Hostkapazitaet.
 - [ ] Jede ePiber-Unit besitzt eindeutigen `SyslogIdentifier`, explizite Journal-Ausgabe und Rate-Limit 1000/30s.
@@ -163,7 +164,7 @@ Gesamtfreigabe.
   weder Personenprofile abrufen noch geschuetzte Writes ausfuehren.
 - [ ] `player` kann sich anmelden/abmelden, eigenes Profil und Mitgliederprofil sehen, eigenes Passwort aendern, Forderung, Spieltermin, eigene Meldungen und EntryList fachregelkonform bedienen.
 - [ ] `operator` kann zusaetzlich Navigator und Courtsteuerung bedienen, aber keine Admin-Monitorverwaltung oder fremde Passwortsetzung.
-- [ ] `admin` kann Resetnachweis erzeugen, Passwort direkt setzen sowie Monitore provisionieren, rotieren und widerrufen.
+- [ ] `admin` kann Passwoerter direkt setzen sowie Monitore provisionieren, rotieren und widerrufen.
 - [ ] Nur `admin` sieht `adminLogging.html`, kann globale Frontend-Level/Sampling/Batch/Flushwerte und temporaere Zielpersonen setzen oder entfernen und sieht die festen Retentionwerte 14/7 Tage; alle drei Mutationstypen erscheinen im Auditlog.
 - [ ] Eine temporaere Zielperson erscheint mit ID, Klarname, Rolle, Level, Ersteller, Ablauf und plausibler Restzeit. Die Policy greift im Collector sofort, erreicht offene Standardseiten spaetestens beim Sessionrefresh, zeigt der Person einen neutralen Ablaufhinweis und faellt nach Ablauf auf die globale Policy zurueck.
 - [ ] Nur `admin` kann ueber `POST /api/admin/password-setup` die Erstvergabe freigeben oder aufheben; Profilanzeige und Sheetwert `KennwortVergessen` wechseln dabei konsistent zwischen `x` und leer.
@@ -172,18 +173,19 @@ Gesamtfreigabe.
 - [ ] Aktivstatus und Freigabe werden auch bei einem konkurrierenden Aenderungsversuch unmittelbar vor dem Setup-Write erneut geprueft.
 - [ ] Erstvergabe widerruft alle bestehenden Sitzungen der Zielperson vor und nach dem Write; offene Tabs wechseln in den abgemeldeten Zustand und das alte Passwort funktioniert nicht mehr.
 - [ ] Falsche Rolle, abgelaufene/ungueltige Session und widerrufenes Monitorgeraet werden serverseitig abgewiesen.
-- [ ] Passwortaenderung/-reset widerruft die vorgesehenen Sitzungen; Cross-Tab Login/Logout bleibt konsistent.
+- [ ] Passwortaenderung, Erstvergabe und administratives Direktsetzen widerrufen die vorgesehenen Sitzungen; Cross-Tab Login/Logout bleibt konsistent.
 - [ ] Personenprofile sind nur angemeldet erreichbar und zeigen dann die
   vorgesehenen Kontakt-/Geburtsdaten; Adminaktionen sind nur fuer Admin sichtbar
   und wirksam. Anonyme direkte Profilaufrufe liefern `AUTH_REQUIRED`.
-- [ ] Login, eigene Passwortaenderung und Erstvergabe funktionieren mit mindestens einem freigegebenen Browser-Passwortmanager; `username`, `current-password`, `new-password` und `one-time-code` werden passend erkannt, ohne Passwortwerte in URL, Logs oder Storage zu schreiben.
+- [ ] Die Loginaktion heisst `Passwort vergessen / Neueingabe`, der zugehoerige Dialog `Passwort neu vergeben`, und der Hinweis fordert vor der Neueingabe proaktiv zur Administratorfreigabe auf.
+- [ ] Login, eigene Passwortaenderung und Erstvergabe funktionieren mit mindestens einem freigegebenen Browser-Passwortmanager; `username`, `current-password` und `new-password` werden passend erkannt, ohne Passwortwerte in URL, Logs oder Storage zu schreiben.
 - [ ] Erfolgreicher und fehlgeschlagener Login erzeugen je einen Auditdatensatz mit Quell-IP und normalisiertem gueltigem Login; nur der erfolgreiche Datensatz enthaelt serverseitige Benutzer-ID, Namenssnapshot und Rolle. Ein syntaktisch ungueltiger Login-Rohtext wird nicht gespeichert.
 - [ ] Der Journalspiegel zeigt fuer Login-Audits den Namen, aber nur maskierten Login und maskierte IP; vollstaendige Werte sind ausschliesslich in der geschuetzten `audit.sqlite` vorhanden und werden weder ueber `/status` noch in oeffentliche Tickets oder Screenshots uebernommen.
 - [ ] Direkte externe Requests koennen `X-Forwarded-For` nicht zur Auditfaelschung verwenden. Forwarded-Header werden nur von `127.0.0.1`/`::1` akzeptiert; lokale Prozesse gehoeren zur Host-Vertrauensgrenze und duerfen den Loopback-Backendport nicht unkontrolliert verwenden.
 - [ ] Frontend-Events akzeptieren nur erlaubte Ereignisse und technische Felder; ID, Klarname, Rolle und IP stammen nachweislich serverseitig aus Session/Verbindung. Inaktive Personen werden nicht weiter als authentifizierte Diagnoseidentitaet behandelt, anonyme Events nur nach expliziter Freigabe.
 - [ ] journald zeigt `frontend_client_event` mit korrekter Support-ID, Diagnoseprofil und Retentionklasse, aber ohne Payloads, DOM-/Profildaten, freie Fehlermeldungen, Stacks, E-Mail, Telefon, Cookies, Tokens oder Passwortwerte. Personenbezogene Felder werden nur autorisierten Betreibern zugaenglich gemacht.
 - [ ] Wiederverwendete oder aktionsfremde Audit-Event-IDs werden mit `AUDIT_LOG_EVENT_CONFLICT` abgewiesen und koennen terminale Zeilen nicht zurueckstufen.
-- [ ] Login-, Passwortaenderungs-, Reset-, Erstvergabe- und Admin-Passwortmodale schliessen nicht durch Backdropklick oder Escape, sondern nur explizit ueber Abbrechen/Schliessen; waehrend eines Requests sind Schliessen und Doppel-Submit gesperrt, danach werden Formulare und sichtbare Passwoerter zurueckgesetzt.
+- [ ] Login-, Passwortaenderungs-, Erstvergabe- und Admin-Passwortmodale schliessen nicht durch Backdropklick oder Escape, sondern nur explizit ueber Abbrechen/Schliessen; waehrend eines Requests sind Schliessen und Doppel-Submit gesperrt, danach werden Formulare und sichtbare Passwoerter zurueckgesetzt.
 - [ ] Matches/Forderungen, EntryList Add/Remove und Ranglistenrestriktionen wurden mit realistischen Daten geprueft; jede Mutation erzeugt den vorgesehenen SQLite-Auditeintrag.
 - [ ] Beide Beteiligten koennen den ersten Ranglistentermin nur im Vierzehntageskorridor und spaetere Termine ab aktueller Zeit setzen; Fremde, geschlossene Forderungen, halbe Stunden und unveraenderte Termine werden abgewiesen. Audit, Abschlusslog, Matchinvalidierung und `appointment|appointment_changed` sind vollstaendig.
 - [ ] Persoenliche Meldungen und der private `messages:<eigene-ID>`-Snapshot sind nur fuer den Empfaenger sichtbar; Kenntnisnahme ist idempotent und aktualisiert Ungelesenanzahl und Revision. Einzel-/Gesamthistorie enthalten keine privaten Texte, Receipts oder Zustellstaende, und ihre Cursor sind nicht austauschbar.
@@ -201,8 +203,13 @@ Gesamtfreigabe.
 ## 9. Browser, Kiosk, Monitor und Scoreboards auf PAJ
 
 - [ ] Aktuelle freigegebene Browser auf Desktop und Mobilgeraeten getestet.
-- [ ] Mobile Navigation oeffnet ueber den Hamburger, zeigt je Sessionzustand korrekt Anmelden oder Profil/Abmelden sowie `Spieler` nur angemeldet und schliesst bei Navigation beziehungsweise Authaktion ohne verdecktes Folgemodal.
-- [ ] Mobile Navigation wurde mit Touch, Tastatur, schmalem Hochformat und kleinem Querformat getestet; Links, Schliessen, Fokus und Scrollen bleiben erreichbar und es entstehen keine doppelten Authaktionen.
+- [ ] Mobile Navigation oeffnet ueber den Hamburger ab Bildschirmoberkante als rechtsseitiger Drawer mit etwa 82 Prozent Breite und voller Hoehe, schiebt App samt Header nach links und zeigt eine Kopfzeile `ePiber` in Headerhoehe.
+- [ ] Alle mobilen Aktionen sind linksbuendige, durch Linien getrennte Listenzeilen mit lokal eingebetteten Google Material Symbols Outlined ohne externe Font-/Iconanfrage; Apache-2.0-Lizenz und Quelle sind in `Frontend/MATERIAL_SYMBOLS_LICENSE.txt` enthalten.
+- [ ] `Spielbetrieb` verwendet `emoji_events`, Matches `sports_tennis`, Bewerbe `swords`, Scoreboard `scoreboard` sowie Anmeldung und Abmeldung `login` und `logout`; neutrale Gruppencontainer besitzen keine Kartenformatierung, Haupt- und Unterzeilen dasselbe Raster, dieselbe Schriftstaerke, Farbe und Icongroesse, Unterzeilen sind nur eingerueckt.
+- [ ] Dashboard und Gruppenzeilen beginnen an derselben linken Rasterposition; eingerueckte Unterzeilen und ihre Trennlinien belegen trotzdem die volle Menuebreite. Abmelden folgt ohne flexiblen Leerraum direkt als letzte Menuezeile.
+- [ ] Alle mobilen Menueintraege und Icons sind schwarz; ausschliesslich Anmelden ist gruen und Abmelden rot. Der aktive Seitenzustand aendert die Schriftfarbe nicht.
+- [ ] Anonym steht die gruene Anmeldezeile oben. Angemeldet folgen Profil, kein leerer Favoritenbereich, Dashboard sowie die anfangs geschlossenen Gruppen `Spielbetrieb`, `Verein` und fuer Admins `Administration`; die rote Abmeldezeile steht am Ende. Nicht berechtigte oder dadurch leere Gruppen sind vollstaendig verborgen. Desktopnavigation und Desktoplayout bleiben unveraendert.
+- [ ] Mobile Navigation wurde mit Touch, Tastatur, schmalem Hochformat und kleinem Querformat getestet; interne Scrollbarkeit, Links und Fokus bleiben erreichbar, linke Restflaeche, X, Escape, Navigation und Authaktion schliessen kontrolliert und es entstehen keine doppelten Authaktionen oder verdeckten Folgemodale.
 - [ ] `players.html` zeigt anonym die Anmeldeaufforderung und angemeldet die erlaubte Spielerliste; Authwechsel, Invalidierung, Leerzustand und Fehlerzustand rendern ohne alte oder fremde Profildaten.
 - [ ] `bewerbsRaster.html?id=...` rendert Einzel und Doppel, BYE, die exakt kleingeschriebenen Marker `[wo]` und `[ret]`, `[gesetzt]`, Ergebnisse und Gewinner korrekt; Varianten wie `[w.o.]`, `[WO]` und `[RET]` werden nicht als Abschlussmarker akzeptiert; fehlende/ungueltige Bewerb-ID, leere Daten, Reload, Authwechsel und Topic-Invalidierung wurden geprueft.
 - [ ] Raster-/Gruppenumschaltung bei RoundRobin-Bewerben funktioniert wiederholt ohne doppelte Inhalte oder Handler; breite Raster bleiben horizontal bedienbar und die eingebettete Gruppenansicht entspricht der Einzelansicht.

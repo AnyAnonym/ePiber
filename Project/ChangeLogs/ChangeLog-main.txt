@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.9.9
+Stand: 4.10.0
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2168,3 +2168,40 @@ Quelle: 4.9.8-paj-1
   - [Software] Spieler und Administratoren koennen offene Ranglisten-, KO- und Gruppenmatchtermine unter geregelten Berechtigungen absagen; Audit, Meldung und Diagnose erfassen den Vorgang.
   - [Software] Ranglistenansichten zeigen Forderungen, Fristen, Termindetails und die fristgerechte Terminsetzung nachvollziehbar an.
   - [Infrastruktur] Personen-Normalisierungsmetriken und Grafana unterscheiden Mitgliedschaften, Administratoren und Operatoren.
+
+[4.10.0] - 2026-09-17
+Commit: 4.10.0 | Favoriten, Navigation und persoenliche Meldungen erweitert
+Quelle: 4.9.9-paj-1
+
+  Added
+  - [Software] Kontogebundene, revisionierte Favoriten fuer kontrollierte Seiten sowie die Overlayaktionen `Spieleingabe` und `Termin festlegen / aendern` mit gemeinsamer Matchauswahl, Pointer- und Tastatursortierung eingefuehrt.
+  - [Software] Persoenliche Meldungen koennen gesammelt als gelesen markiert werden; Termin-, Absage- und Ergebnisaktionen des handelnden Teilnehmers bleiben als bereits gelesene Eigenaktivitaet sichtbar, waehrend Partner und Gegner ungelesene Meldungen erhalten.
+  - [Software] Ranglistenmatches projizieren kontrollierte Fristmarker fuer Forderungszeitpunkt, Terminfrist und Spielschluss.
+  - [Dokumentation] Eigenstaendige Gesamtdokumentation unter `Doku/` mit Projekt-, Fach-, Technik-, Sicherheits-, Betriebs-, Risiko-, Zielbild-, Roadmap- und Uebergabekontext angelegt.
+  - [Dokumentation] Nicht-kanonische Arbeitsgrundlagen fuer Benachrichtigungen und Push, Mandanten-/Releasearchitektur sowie Wirtschaftlichkeit und LLM-Betriebsmodell angelegt.
+  - [Lizenzen] Vollstaendigen Apache-2.0-Lizenztext der lokal eingebetteten Google Material Symbols aufgenommen.
+
+  Changed
+  - [Software] Desktop, Tablet und Mobilgeraete verwenden denselben rechtsseitigen Vollhoehen-Drawer mit `min(82vw, 420px)`, session- und rollenabhaengiger Menuehierarchie, lokal eingebetteten Symbolen, Fokusfuehrung und verschobener App-Ebene.
+  - [Software] Das Dashboard bleibt fester Menueeintrag ohne Favoritenstern. Bewerbsfavoriten zeigen statt technischer IDs den auf zwei Zeilen begrenzten Bewerbsnamen; Sterne verwenden einen einzelnen schwarz umrandeten, inaktiv weissen beziehungsweise aktiv gelben Pfad.
+  - [Software] Mobile Scoreboard-Aktionen stehen rechtsbuendig unter dem Favoritenstern beziehungsweise in Platz 2; Favoritensterne stehen mit kleinem Abstand mittig hinter Seitentiteln und Bewerbsnamen.
+  - [Software] Bewerbshistorien nennen die Gewinnerseite zuerst und zeigen das Satzresultat aus ihrer Perspektive; bestehende regulaere Ergebnisse werden bei der Projektion normalisiert.
+  - [Software] Der Meldungsreiter besitzt einen eigenen Scrollbereich mit dauerhaft sichtbarer Sammelaktion. Einzelne Kenntnisnahmen schliessen den Detaildialog und stellen den Fokus wieder her.
+  - [Software] Profilkontakte erhalten direkte `tel:`- und `mailto:`-Aktionen neben der bestehenden Kopierfunktion.
+  - [Software] Passwort-Neuvergabe, Eigenwechsel und Admin-Direktsetzung bleiben getrennte, auditierte Ablaeufe; die Benutzerfuehrung weist explizit auf die erforderliche Administratorfreigabe hin.
+  - [Datenbank] Messaging-Schema 10 speichert idempotente Sammelquittierungen; Eigenaktivitaeten verwenden bestehende personengebundene Receipts mit initialer Kenntnisnahme.
+  - [Observability] Favoriten-, Meldungs-, Passwort- und Historienablaeufe besitzen kontrollierte Browserdiagnosen, strukturierte Abschlusslogs und datensparsame Auditprojektionen.
+  - [Infrastruktur] Server-, Rollout- und Backup-/Restore-Unterlagen auf Messaging-Schema 10, gemeinsame Navigation und die Entfernung des Reset-Code-Ablaufs angeglichen.
+  - [Repository] Geheimnispruefung des Commit-Workflows auf neu hinzukommende Diffzeilen begrenzt; potenzielle Geheimnisse, sensible Dateinamen und nicht freigegebene Binaerdateien bleiben gesperrt.
+  - [Dokumentation] Fachkonzept, Architektur, Datenbank, Endpoints und betroffene Seitendokumentation auf Favoriten, Meldungsquittierung, Navigation, Passwortzugang, Fristmarker und Gewinnerperspektive angeglichen.
+
+  Fixed
+  - [Software] Gemeinsame Modale sichern und restaurieren die Dokumentscrollposition; Profil- und Historienmodale bleiben auch aus weit unten beziehungsweise horizontal gescrollten Ansichten im sichtbaren Viewport.
+  - [Software] Die Rangliste rendert ihren Inhaltsblock unabhaengig von der durch den Favoritenstern erzeugten Titelzeile wieder vollstaendig.
+  - [Software] KO-Doppelzeilen behalten trotz getrennter Profilbuttons ihre kompakte Matchboxhoehe auf Mobil- und Desktopbreiten.
+  - [Tests] Backend-, Browser- und Workflowabnahmen auf Benutzertrennung, Idempotenz, Datenschutz, Rollenfilter, Navigation, Favoriten, Meldungen, Ergebnisprojektion und sichere Commitmechanik erweitert.
+
+  Removed
+  - [Software] Reset-Code-Erzeugung und -Verwendung samt Modalen, Clientmethoden und den HTTP-Routen `POST /api/password-reset` sowie `POST /api/admin/password-reset` entfernt.
+  - [Datenbank] Obsolete Tabelle `password_reset_proofs` wird beim Backendstart samt Altdaten kontrolliert entfernt; andere State- und historische Auditdaten bleiben erhalten.
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt und Paket- sowie Lockfileversion auf `4.10.0` gesetzt.

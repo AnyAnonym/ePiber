@@ -264,13 +264,6 @@ export function changePassword(currentPassword, newPassword) {
   });
 }
 
-export async function createPasswordReset(personId) {
-  return jsonRequest("/api/admin/password-reset", {
-    method: "POST",
-    body: JSON.stringify({ personId }),
-  });
-}
-
 export async function setPasswordSetupAllowed(personId, allowed) {
   return jsonRequest("/api/admin/password-setup", {
     method: "POST",
@@ -283,14 +276,6 @@ export async function setPasswordForPerson(personId, newPassword) {
   return jsonRequest("/api/admin/password", {
     method: "POST",
     body: JSON.stringify({ personId, newPasswordHash }),
-  });
-}
-
-export async function resetPassword(resetToken, newPassword) {
-  const newPasswordHash = await hashPassword(newPassword);
-  return jsonRequest("/api/password-reset", {
-    method: "POST",
-    body: JSON.stringify({ resetToken, newPasswordHash }),
   });
 }
 

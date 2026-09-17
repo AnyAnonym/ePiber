@@ -1,9 +1,9 @@
 const crypto = require("crypto");
 const { promisify } = require("util");
 const dataStore = require("./dataStore.js");
-const { PASSWORD_RESET_TTL_MS, SESSION_TTL_MS } = require("./config.js");
+const { SESSION_TTL_MS } = require("./config.js");
 const { AppError } = require("./errors.js");
-const { hashPayload, timingSafeTextEqual } = require("./security.js");
+const { timingSafeTextEqual } = require("./security.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const { emailValue, loginValue, passwordHashValue, roleValue } = require("./validators.js");
 const { notificationChannels } = require("./messagingService.js");
@@ -380,14 +380,6 @@ class AuthService {
     });
   }
 
-  createPasswordReset(token, personId) {
-    const admin = this.requireRole(token, ["admin"]);
-    const person = this.findById(personId);
-    if (!person) throw new AppError("PERSON_NOT_FOUND", "Person wurde nicht gefunden", 404);
-    const proof = this.repository.createPasswordResetProof(person.id, admin.principal.id, PASSWORD_RESET_TTL_MS);
-    return { success: true, resetToken: proof.token, expiresAt: proof.expiresAt, personId: person.id };
-  }
-
   async setPasswordSetupAllowed(token, personId, allowed) {
     this.requireRole(token, ["admin"]);
     return this.runForUser(personId, async () => {
@@ -415,37 +407,6 @@ class AuthService {
       }
       this.repository.revokeUserSessions(person.id);
       return { success: true, personId: person.id };
-    });
-  }
-
-  async resetPassword(resetToken, newPasswordHash) {
-    const pending = this.repository.getPasswordResetProof(resetToken);
-    if (!pending) throw new AppError("RESET_PROOF_INVALID", "Reset-Nachweis ist ungueltig oder abgelaufen", 401);
-    const payloadHash = hashPayload({ newPasswordHash });
-    if (pending.payloadHash && pending.payloadHash !== payloadHash) {
-      throw new AppError("RESET_PROOF_CONFLICT", "Reset-Nachweis ist bereits an ein anderes Passwort gebunden", 409);
-    }
-    this.ensurePeopleAvailable();
-    const person = this.findById(pending.personId);
-    if (!person) throw new AppError("PERSON_NOT_FOUND", "Person wurde nicht gefunden", 404);
-    const candidateHash = pending.storedHash || await this.createStoredPasswordHash(newPasswordHash);
-    return this.runForUser(person.id, async () => {
-      const currentPerson = this.findById(person.id);
-      if (!currentPerson) throw new AppError("PERSON_NOT_FOUND", "Person wurde nicht gefunden", 404);
-      const attempt = this.repository.beginPasswordResetProof(resetToken, payloadHash, candidateHash);
-      if (!attempt) throw new AppError("RESET_PROOF_INVALID", "Reset-Nachweis ist ungueltig oder abgelaufen", 401);
-      if (attempt.completed) return withAudit({ success: true, repeated: true }, { personId: currentPerson.id });
-      if (!attempt.acquired) throw new AppError("RESET_IN_PROGRESS", "Passwort-Reset wird bereits verarbeitet", 409, { retryAfterMs: 2000 });
-      this.repository.revokeUserSessions(currentPerson.id);
-      try {
-        await this.sheetService.setPasswordHash(currentPerson.id, attempt.storedHash, { expectedHash: currentPerson.storedPasswordHash });
-      } catch (error) {
-        this.repository.releasePasswordResetProof(resetToken, payloadHash);
-        throw error;
-      }
-      this.repository.revokeUserSessions(currentPerson.id);
-      this.repository.completePasswordResetProof(resetToken, payloadHash);
-      return withAudit({ success: true }, { personId: currentPerson.id });
     });
   }
 
