@@ -1018,12 +1018,13 @@ visuell verborgenes `autocomplete=username`-Feld, waehrend Admin-Direktsetzung
 `autocomplete=off` verwendet. JavaScript faengt die Submits weiterhin ab und
 uebertraegt nur SHA-256-Credentials per JSON.
 
-Die mobile Navigation ist ein rechtsseitiger Drawer ab Bildschirmoberkante mit
-etwa 82 Prozent Viewportbreite und voller Hoehe. Beim Oeffnen schiebt sie die
+Die gemeinsame Navigation ist auf Desktop, Tablet und Mobilgeraeten ein
+rechtsseitiger Drawer ab Bildschirmoberkante mit `min(82vw, 420px)` Breite und
+voller Hoehe. Beim Oeffnen schiebt sie die
 gesamte App einschliesslich Header nach links, ohne die aktuelle Scrollposition zu
 veraendern; ihr Inhalt scrollt intern. Die Kopfzeile `ePiber` entspricht der
 Headerhoehe. Linke Restflaeche, X, Escape und die Auswahl eines Navigationslinks
-schliessen den Drawer. Die mobile Navigation verwendet linksbuendige, durch
+schliessen den Drawer. Die Navigation verwendet linksbuendige, durch
 Linien getrennte Listenzeilen mit lokal eingebetteten Google Material Symbols
 Outlined. Es gibt keine externe Font- oder Iconanfrage; die Apache-2.0-Lizenz
 liegt in `Frontend/MATERIAL_SYMBOLS_LICENSE.txt`. Anonym steht die gruene
@@ -1040,18 +1041,28 @@ Icons sind schwarz; nur `login` ist gruen und `logout` rot. Bewerbe verwendet da
 offizielle Symbol `swords`. Die Hauptgruppen sind wie Dashboard links ausgerichtet;
 Unterzeilen bleiben ueber die volle Menuebreite angelegt, sodass ihre Trennlinien
 durchlaufen. `logout` folgt ohne Autoabstand direkt nach der letzten sichtbaren
-Menuezeile. Nicht berechtigte oder leere Gruppen werden als Ganzes verborgen. Die
-Desktopnavigation bleibt unveraendert.
+Menuezeile. Nicht berechtigte oder leere Gruppen werden als Ganzes verborgen. Der
+Hamburger ist auf allen Viewports sichtbar; die separate Desktop-Navigationsleiste
+bleibt ausgeblendet.
 
 Der Favoritenbereich ist eine eigene anfangs geschlossene Gruppe. Ein Stift neben
 dem Gruppenchevron oeffnet sie und aktiviert den Sortiermodus. Dann steht links
 anstelle der bisherigen Symbolposition ein tastatur- und pointerbedienbarer
 Drei-Striche-Handle; das Zielicon rueckt nach rechts. Die Reihenfolge wird als
-vollstaendige Liste revisionsgeschuetzt gespeichert. Seitensterne stehen direkt
-neben der Hauptueberschrift, beim Scoreboard rechts oben im Feld von Platz 1;
+vollstaendige Liste revisionsgeschuetzt gespeichert. Seitensterne stehen mit
+kleinem Abstand vertikal mittig direkt neben der Hauptueberschrift, beim
+Scoreboard rechts oben im Feld von Platz 1;
 Ergebnis- und Terminmodal zeigen den Stern rechts neben ihrem Titel.
 Sponsorenanzeige, technische Court-Testseite und Profilmodal besitzen keinen
-Stern. Overlayfavoriten laden ausschliesslich eigene offene Matches aus
+Stern. Der Stern besteht aus einem einzelnen schwarz umrandeten Pfad und ist
+inaktiv innen weiss sowie aktiv vollstaendig gelb. Das Dashboard bleibt fester
+Menueeintrag und ist kein Favoritenziel. Bewerbsbezogene Ziele werden ueber den
+oeffentlichen `bewerbe`-Stand auf ihre Bezeichnung projiziert; technische IDs
+werden nie als Beschriftung dargestellt. Lange Bezeichnungen sind visuell auf
+zwei Zeilen begrenzt, bleiben aber als zugaengliche Beschriftung und Tooltip
+vollstaendig erhalten. Fehler der Namensprojektion erzeugen ausschliesslich das
+kontrollierte Browserereignis `favorite_labels_load_failed` ohne Bewerbsdaten.
+Overlayfavoriten laden ausschliesslich eigene offene Matches aus
 `myProfile` und verwenden danach die vorhandenen serverautorisierten Ergebnis-
 beziehungsweise Terminaktionen.
 Auf der provisionierten Monitorseite bleibt der WebSocket-Principal fuer alle

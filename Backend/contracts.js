@@ -90,7 +90,7 @@ const playerIds = (name) => (value) => {
   return value.map((entry) => idValue(entry, name));
 };
 const FAVORITE_PAGES = new Set([
-  "index", "Matches1", "players", "Bewerbe", "scoreboard", "RoundRobin", "entryList", "rangliste",
+  "Matches1", "players", "Bewerbe", "scoreboard", "RoundRobin", "entryList", "rangliste",
   "bewerbsRaster", "adminLogging", "personenNormalisieren", "mitgliederAbgleichen", "servicebereich", "navigator", "monitor",
 ]);
 const FAVORITE_ID_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster"]);

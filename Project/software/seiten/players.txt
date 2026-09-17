@@ -26,15 +26,16 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   Person wird anhand der Session-ID vollstaendig fett dargestellt.
 
 -- Navigation --
-  Mobil oeffnet die gemeinsame Navigation als rechtsseitiger, intern scrollbarer
-  Drawer ab Bildschirmoberkante mit etwa 82 Prozent Breite und voller Hoehe und
+  Auf allen Viewports oeffnet die gemeinsame Navigation als rechtsseitiger,
+  intern scrollbarer Drawer ab Bildschirmoberkante mit `min(82vw, 420px)` Breite
+  und voller Hoehe und
   schiebt App samt Header nach links. Linke Restflaeche, X und Escape schliessen
   ihn. Die Kopfzeile `ePiber` besitzt Headerhoehe. Linksbuendige Listenzeilen mit
   Icons und Trennlinien ordnen Profil, einen nur bei Inhalt sichtbaren
   Favoritenbereich, Dashboard und die zunaechst geschlossenen Gruppen
   `Spielbetrieb`, `Verein` und `Administration`; die rote Abmeldezeile steht am
-  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop bleibt
-  unveraendert.
+  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop, Tablet und
+  Mobilgeraete verwenden denselben Hamburger und Drawer.
 
 -- Aktualisierung und Fehler --
   Sessionaenderungen rendern die anonyme Login-CTA oder laden das Verzeichnis neu;

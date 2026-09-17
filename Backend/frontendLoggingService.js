@@ -59,6 +59,7 @@ const EVENT_LEVELS = new Map([
   ["frontend_unhandled_error", "error"],
   ["frontend_unhandled_rejection", "error"],
   ["favorite_match_picker_load_failed", "error"],
+  ["favorite_labels_load_failed", "error"],
   ["favorites_load_failed", "error"],
   ["favorites_save_failed", "error"],
   ["login_failed", "error"],

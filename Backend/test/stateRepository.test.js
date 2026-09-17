@@ -140,7 +140,7 @@ test("State und Idempotenzdatensatz werden atomar geschrieben", () => {
 test("Favoriten sind pro Benutzer revisioniert und idempotent", () => {
   const repository = new StateRepository(":memory:");
   repository.init();
-  const favorites = [{ targetId: "favorite-a", type: "page", page: "index" }];
+  const favorites = [{ targetId: "favorite-a", type: "page", page: "Matches1" }];
   const request = {
     operationId: "00000000-0000-4000-8000-000000000030",
     expectedRevision: 0,

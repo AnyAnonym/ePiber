@@ -67,6 +67,24 @@ function appointmentText(value) {
   return `${match[3]}.${match[2]}.${century}${match[1]}, ${match[4]}:${match[5]} Uhr`;
 }
 
+function reverseResultPerspective(value) {
+  return String(value || "").split("/").map((set) => set.replace(/^(\d{1,2})-(\d{1,2})(\(\d{1,2}\))?$/, "$2-$1$3")).join("/");
+}
+
+function normalizeWinnerPerspective(value) {
+  const result = String(value || "");
+  const sets = result.split("/").map((set) => set.match(/^(\d{1,2})-(\d{1,2})(?:\(\d{1,2}\))?$/));
+  if (!sets.length || sets.some((set) => !set)) return result;
+  const wins = sets.reduce((count, set) => {
+    const first = Number(set[1]);
+    const second = Number(set[2]);
+    if (first > second) count[0]++;
+    if (second > first) count[1]++;
+    return count;
+  }, [0, 0]);
+  return wins[1] > wins[0] ? reverseResultPerspective(result) : result;
+}
+
 class MessagingService {
   constructor({ repository, emailAdapter, whatsappAdapter, publish = () => {}, now = Date.now, log = logger.log }) {
     this.repository = repository;
@@ -291,7 +309,13 @@ class MessagingService {
       : outcomeChange && completionType === "retirement"
         ? `${controlledResult ? `${controlledResult} ` : ""}(Aufgabe)`
         : controlledResult;
-    const detailParts = [displayResult ? `Ergebnis: ${displayResult}` : "", matchEnd ? `Matchende: ${matchEnd}` : "", reason ? `Grund: ${reason}` : ""].filter(Boolean);
+    const historyResult = outcomeChange && winnerSide === 2 ? reverseResultPerspective(controlledResult) : controlledResult;
+    const historyDisplayResult = outcomeChange && completionType === "walkover"
+      ? "W.O."
+      : outcomeChange && completionType === "retirement"
+        ? `${historyResult ? `${historyResult} ` : ""}(Aufgabe)`
+        : historyResult;
+    const detailParts = [historyDisplayResult ? `Ergebnis: ${historyDisplayResult}` : "", matchEnd ? `Matchende: ${matchEnd}` : "", reason ? `Grund: ${reason}` : ""].filter(Boolean);
     const namedTeams = teams.slice(0, 2).map((team) => (team || []).map(String).filter(Boolean).map((id) => participantNames[id] || id));
     const hasOutcome = outcomeChange
       && [1, 2].includes(winnerSide)
@@ -333,7 +357,7 @@ class MessagingService {
           : `${namedTeams[winnerSide - 1].join(" / ")} gewinnt gegen ${namedTeams[2 - winnerSide].join(" / ")}.`
         : `${labels[changeType]} für ${uniqueIds.map((id) => participantNames[id] || id).join(" / ")}.`,
       detail: detailParts.join("; "),
-      result: displayResult,
+      result: historyDisplayResult,
       roundName: competitionRoundName(roundCode),
       completionType,
     }, participants);
@@ -499,7 +523,7 @@ class MessagingService {
         occurredAt: event.createdAt,
         summary: event.summary,
         detail: event.detail,
-        result: event.result,
+        result: ["result", "result_corrected"].includes(event.type) ? normalizeWinnerPerspective(event.result) : event.result,
         actorName: event.actorName,
         participants: event.participants.map(({ participantRole, displayName }) => ({ role: participantRole, name: displayName })),
         interaction: this.projectInteraction(interactions.get(event.id)),

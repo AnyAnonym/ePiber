@@ -88,22 +88,29 @@ Dokumentationsuebernahme beim Main-Versionssprung
   Project/software/ARCHITEKTUR.txt
   - Dokumentieren, dass neue Termin-, Absage- und Ergebnisereignisse die persoenliche Projektion eines beteiligten Akteurs mit dem Ereigniszeitpunkt bereits quittiert und ohne externe Zustellung speichern; die sichtbare Aktivitaet bleibt in Inbox, Reporting und Historie erhalten, erhoeht aber keinen Ungelesenzaehler, waehrend alle anderen Beteiligten ihre Projektion ungelesen erhalten.
   - Messaging-Schema 10 mit der benutzer- und operationId-gebundenen atomaren Sammelquittierung sowie der nur bei tatsaechlicher Aenderung fortgeschriebenen Revision und Ungelesenanzahl aufnehmen.
-  - Den mobilen 82-Prozent-Vollhoehen-Drawer mit verschobener App-Ebene, Scroll- und Fokusschutz, session- und rollenabhaengiger Menuehierarchie, immer geschlossen startenden Gruppen, vorbereitetem nur bei Inhalt sichtbarem Favoritenbereich, vollbreitem Zeilenraster und lokal eingebetteten Material Symbols dokumentieren; Desktop bleibt unveraendert.
+  - Den auf Desktop, Tablet und Mobilgeraeten gemeinsamen Vollhoehen-Drawer mit `min(82vw, 420px)`, verschobener App-Ebene, Scroll- und Fokusschutz, session- und rollenabhaengiger Menuehierarchie, immer geschlossen startenden Gruppen, nur bei Inhalt sichtbarem Favoritenbereich, vollbreitem Zeilenraster und lokal eingebetteten Material Symbols dokumentieren; die separate Desktopnavigation entfaellt.
+  - Kontogebundene revisionierte Favoriten, erlaubte Seiten- und Overlayziele, Gewinner-/Termin-Matchauswahl, einzelnen weiss/gelb gefuellten Sternpfad, mittige Titelposition, Bewerbsnamensprojektion ohne technische ID, zweizeilige Ellipse, kontrollierte Fehlerdiagnose und Dashboard-Ausschluss dokumentieren.
   - Reset-Code-Erzeugung und -Verwendung aus Authentifizierungsarchitektur, StateRepository und Frontendmodulen entfernen; KennwortVergessen-basierte Passwort-Neuvergabe, Eigenwechsel und Admin-Direktsetzung samt Sessionwiderruf und Auditabgrenzung erhalten. Den Start-Drop der obsoleten Proof-Tabelle und den Erhalt historischer Auditdaten festhalten.
 
   Project/software/DATENBANK.txt
   - Messaging-Schema von 9 auf 10 anheben und `message_bulk_ack_operations` mit `user_id + operation_id` als Primaerschluessel sowie `acknowledged_at` und `changed_count` dokumentieren; spaeter eintreffende Meldungen bleiben ungelesen, Bestandsmeldungen und bestehende Quittierungen bleiben bei der additiven Migration unveraendert.
   - Fuer Terminsetzung, Terminaenderung, Terminabsage und Ergebnisereignisse dokumentieren, dass alle Matchteilnehmer erhalten bleiben, die Eigenprojektion des beteiligten Akteurs sichtbar und bereits quittiert gespeichert sowie nicht extern zugestellt wird und Partner beziehungsweise Gegner ihre Projektion ungelesen erhalten.
   - `password_reset_proofs` aus dem aktiven State-Schema entfernen und als beim Backendstart samt Altdaten gedroppte Legacy-Tabelle dokumentieren; `KennwortVergessen` bleibt die einmalig verbrauchte Adminfreigabe fuer die Passwort-Neuvergabe.
+  - Kontogebundene Favoriten als revisionierten, idempotent ersetzten Anwendungsstate mit kontrollierten Seiten- und Overlayzielen dokumentieren.
 
   Project/software/ENDPOINTS.txt
   - Bei Terminsetzung, Terminaenderung, Terminabsage und Ergebnisereignissen die sichtbare, initial gelesene Eigenprojektion ohne externe Eigenzustellung sowie die ungelesene Zustellung an Partner und Gegner ergaenzen; Bestandsmeldungen werden nicht rueckwirkend veraendert.
   - `acknowledgeAllMessages { operationId }` als authentifizierten, atomaren und idempotenten Schreibendpoint dokumentieren: Er quittiert alle zum Operationszeitpunkt ungelesenen eigenen Meldungen unabhaengig von der geladenen Seite und liefert `success`, `changedCount`, `acknowledgedAt`, `repeated`, `revision` und `unreadCount`; bei einer Aenderung publiziert er genau einen privaten Summary-Snapshot. Audit umfasst `started` und `success|failed|unknown`, abgewiesene Requests werden als `failed` erfasst; das Abschlusslog transportiert nur Empfaenger-ID, Zaehler, Wiederholungsstatus, Dauer, Ergebnis und Fehlercode.
   - `POST /api/password-reset` und `POST /api/admin/password-reset` ersatzlos entfernen; `POST /api/password-setup`, `POST /api/admin/password-setup`, Eigenwechsel und Admin-Direktsetzung als verbleibende Passwortvertraege abgrenzen.
+  - `myFavorites` und `setMyFavorites` mit Revision, Idempotenz, Hoechstzahl, kontrollierten Parametern, Monitor-Sitzungsausnahme und Ausschluss des festen Dashboardziels dokumentieren.
+
+  Project/FACHKONZEPT.txt
+  - Kontogebundene Favoriten fuer erlaubte Seiten sowie Ergebnis- und Terminaktionen als persoenliche Schnellnavigation aufnehmen und ausgenommenes Dashboard, Sponsorenanzeige, Court-Test sowie Profilmodal abgrenzen.
 
   Project/software/seiten/index.txt
   - Mobile Menuebewegung, 82-Prozent-Breite, Schliesswege, Kopfzeile, Listenraster, Material-Symbol-Zuordnung, Farben, Einrueckung, Gruppenstruktur, Berechtigungsfilter, fehlenden Leer-Favoritenbereich und unmittelbare letzte Abmeldezeile dokumentieren.
   - Loginaktion `Passwort vergessen / Neueingabe`, Dialog `Passwort neu vergeben` und die proaktive Aufforderung zur vorherigen Administratorfreigabe aufnehmen; Reset-Code-Modal und `one-time-code` entfallen.
+  - Gemeinsamen Drawer auf allen Viewports, festen Dashboardeintrag ohne Favoritenstern, Favoritengruppe, Sortierung, Sternzustaende und Bewerbsnamen ohne technische IDs dokumentieren.
 
   Project/software/seiten/players.txt
   - Den eigenen vertikalen Scrollbereich des Meldungsreiters und die dauerhaft darunter sichtbare Aktion `Alle als gelesen markieren` dokumentieren; sie quittiert auch nicht geladene Seiten und bleibt ohne ungelesene Meldung deaktiviert.
@@ -111,12 +118,21 @@ Dokumentationsuebernahme beim Main-Versionssprung
   - Nach erfolgreicher einzelner Kenntnisnahme schliesst der Meldungsdialog sofort und fokussiert die aktualisierte Meldungszeile; bei Fehlern bleibt er mit Fehlerstatus offen.
   - Nichtleere E-Mail-Adressen und Telefonnummern erhalten neben der Kopieraktion einen Briefumschlag beziehungsweise Telefonhoerer. `mailto:` oeffnet eine leere Nachricht mit URI-sicher kodiertem Empfaenger, `tel:` die auf Pluszeichen und Ziffern normalisierte Nummer in der jeweiligen systemseitigen Standard-App; leere Werte erhalten keine Kontaktaktionen.
   - Mobile Menuehierarchie ergaenzen und `Reset-Code erstellen` aus dem Adminreiter entfernen; Passwortfreigabe und direktes Setzen bleiben erhalten.
+  - Gemeinsamen Drawer auf allen Viewports sowie Favoritensterne in Ergebnis- und Terminmodal mit eigener offener Matchauswahl dokumentieren.
 
   Project/software/seiten/bewerbsRaster.txt
-  - Gemeinsame mobile Menuehierarchie dokumentieren und Reset-Code-Erstellung aus den Profil-Adminaktionen entfernen.
+  - Gemeinsame Menuehierarchie auf allen Viewports dokumentieren und Reset-Code-Erstellung aus den Profil-Adminaktionen entfernen.
+  - Bewerbsbezogenen Favoritenstern direkt hinter dem Bewerbsnamen mit kontrollierter ID dokumentieren.
 
   Project/software/seiten/rangliste.txt
-  - Gemeinsame mobile Menuehierarchie dokumentieren und Reset-Code aus den Profil-Adminaktionen entfernen.
+  - Gemeinsame Menuehierarchie auf allen Viewports dokumentieren und Reset-Code aus den Profil-Adminaktionen entfernen.
+  - Bewerbsbezogenen Favoritenstern, stabile Titelzeile und Fristmarker fuer Forderungs-, Termin- und Spielschlusszeitpunkte dokumentieren.
+
+  Project/software/seiten/bewerbe.txt
+  - Fuer Bewerbshistorien festhalten, dass die Gewinnerseite zuerst genannt und das Satzresultat aus ihrer Perspektive ausgegeben wird; bestehende regulaere Ergebnisse werden bei der Projektion normalisiert.
+
+  Project/software/seiten/scoreboard.txt
+  - Favoritenstern rechts oben in Platz 1 sowie mobil rechtsbuendig darunter `Naechste Spiele` und in Platz 2 `Letzte Spiele` dokumentieren.
 
   Project/software/seiten/personenNormalisieren.txt
   - Obsolete Resetdaten aus der Liste der von der Normalisierung ausgeschlossenen aktiven Felder entfernen; Passwort-Hash und Passwortfreigabe bleiben ausgeschlossen.
@@ -153,3 +169,19 @@ Commit: 4.9.9-paj-1-8 | Projekt-Iststand und Zielbild dokumentiert
 
   Added
   - [Dokumentation] Eigenstaendige Gesamtdokumentation unter `Doku/` mit Quellen- und Verbindlichkeitsregeln, Produkt- und Fachbestand, technischer Architektur, Sicherheit, Betrieb, Qualitaet, Grenzen, Risiken, Zielbild, phasenweiser Roadmap und Uebergabekontext fuer separate Folgeprojekte angelegt.
+
+[4.9.9-paj-1-9] - 2026-09-17
+Commit: 4.9.9-paj-1-9 | Favoriten und Bewerbshistorie nachgebessert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-8-x` gesetzt.
+  - [Software] Die gemeinsame Navigation verwendet auf Desktop, Tablet und Mobilgeraeten denselben rechtsseitigen Drawer mit `min(82vw, 420px)` Breite; die separate Desktop-Navigation ist ausgeblendet.
+  - [Software] Das Dashboard bleibt fester Menueeintrag und ist kein Favoritenziel mehr. Favoritensterne verwenden einen einzelnen schwarz umrandeten, inaktiv weissen beziehungsweise aktiv gelben Pfad; bewerbsbezogene Favoriten zeigen statt technischer IDs den auf zwei Zeilen begrenzten Bewerbsnamen mit vollstaendiger zugaenglicher Beschriftung.
+  - [Software] Die Rangliste setzt ihren Inhaltsblock unabhaengig von der durch den Favoritenstern erzeugten Titelzeile vor den Ranglistencontainer und rendert dadurch wieder vollstaendig.
+  - [Software] Auf dem mobilen Scoreboard steht `Naechste Spiele` rechtsbuendig unter dem Favoritenstern; `Letzte Spiele` ist ebenfalls rechtsbuendig angeordnet.
+  - [Software] Favoritensterne stehen mit kleinem Abstand vertikal mittig direkt hinter dem Seitentitel beziehungsweise Bewerbsnamen.
+  - [Software] Bewerbshistorien zeigen das Satzergebnis passend zur davor genannten Gewinnerseite; neue Ereignisse speichern diese Gewinnerperspektive, bereits gespeicherte regulaere Ergebnisse werden bei der Projektion normalisiert.
+  - [Observability] Fehler beim Laden kontrollierter Bewerbsnamen fuer Favoriten erzeugen `favorite_labels_load_failed` ohne Bewerbsnamen oder technische IDs.
+
+  Added
+  - [Tests] Vertrags-, Service- und Browserabnahmen sichern Dashboard-Ausschluss, einzelnen Sternpfad, Bewerbsnamen ohne ID, zweizeilige Ellipse, ausgerichtete Titelsterne, Ranglistenrendering, Gewinnerperspektive der Historienergebnisse, gemeinsamen Desktop-Drawer und mobile Scoreboard-Ausrichtung ab.

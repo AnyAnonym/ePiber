@@ -589,7 +589,8 @@ AUTHENTICATED (player, operator oder admin):
 
   `setMyFavorites { operationId, expectedRevision, favorites }`
       Ersetzt die eigene geordnete Liste atomar und idempotent. Erlaubt sind
-      hoechstens 32 eindeutige Ziele aus der festen Seiten-Allowlist;
+      hoechstens 32 eindeutige Ziele aus der festen Seiten-Allowlist. Das
+      Dashboard `index` ist kein Favoritenziel und bleibt fest in der Navigation;
       Bewerbsseiten verlangen eine kontrollierte `id`, Round Robin erlaubt
       zusaetzlich `paarungslayout:0..5`, Navigator optional `profil`. Freie URLs,
       Namen und Beschriftungen sind unzulaessig. Ein Revisionskonflikt liefert

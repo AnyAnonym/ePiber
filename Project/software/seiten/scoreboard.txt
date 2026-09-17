@@ -14,7 +14,9 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
   `Project/Regelwerk/Organisation/PLATZ-UND-ANZEIGEBETRIEB.txt`.
   Bei aktiver Benutzersitzung steht der gemeinsame Favoritenstern als bewusste
   Ausnahme von der Titelposition rechts oben im Feld von Platz 1. Im anonymen
-  Liveticker- oder Monitorbetrieb bleibt er ausgeblendet.
+  Liveticker- oder Monitorbetrieb bleibt er ausgeblendet. Mobil steht `Naechste
+  Spiele` rechtsbuendig direkt unter diesem Stern; `Letzte Spiele` ist im Feld von
+  Platz 2 ebenfalls rechtsbuendig angeordnet.
 
 -- Snapshot, Push und Resync --
   Das fruehere Ein-/Fuenf-Sekunden-Polling ist entfernt. `scoreboardSnapshot`

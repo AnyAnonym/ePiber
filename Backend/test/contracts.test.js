@@ -27,20 +27,21 @@ test("Favoritenvertrag erlaubt nur kontrollierte eindeutige Ziele", () => {
   assert.equal(result.favorites.length, 3);
   assert.equal(result.favorites.every(({ targetId }) => /^favorite-[A-Za-z0-9_-]{43}$/.test(targetId)), true);
   assert.deepEqual(validateEndpointRequest("setMyFavorites", {
-    operationId, expectedRevision: 0, favorites: [{ type: "page", page: "index", params: {} }],
+    operationId, expectedRevision: 0, favorites: [{ type: "page", page: "Matches1", params: {} }],
   }).favorites[0], validateEndpointRequest("setMyFavorites", {
-    operationId, expectedRevision: 0, favorites: [{ type: "page", page: "index" }],
+    operationId, expectedRevision: 0, favorites: [{ type: "page", page: "Matches1" }],
   }).favorites[0]);
 
   for (const favorites of [
     [{ type: "page", page: "unknown" }],
-    [{ type: "page", page: "index", params: { id: "1" } }],
+    [{ type: "page", page: "Matches1", params: { id: "1" } }],
+    [{ type: "page", page: "index" }],
     [{ type: "page", page: "RoundRobin", params: { paarungslayout: 6 } }],
     [{ type: "page", page: "rangliste" }],
     [{ type: "page", page: "navigator", params: { profil: "https://example.test" } }],
     [{ type: "overlay", overlay: "free-form", label: "Nicht erlaubt" }],
     [{ type: "overlay", overlay: "match-result" }, { type: "overlay", overlay: "match-result" }],
-    Array.from({ length: 33 }, () => ({ type: "page", page: "index" })),
+    Array.from({ length: 33 }, () => ({ type: "page", page: "Matches1" })),
   ]) {
     assert.throws(() => validateEndpointRequest("setMyFavorites", { operationId, expectedRevision: 0, favorites }), { code: "VALIDATION_ERROR" });
   }

@@ -1,14 +1,14 @@
 import { getUser, subscribeAuth } from "./authClient.js";
-import { createEndpoint, getOperationId, releaseOperationId } from "./dataClient.js";
+import { createEndpoint, getOperationId, releaseOperationId, subscribe } from "./dataClient.js";
 import { diagnostic } from "./diagnostics.js";
 
 const readFavorites = createEndpoint("myFavorites");
 const writeFavorites = createEndpoint("setMyFavorites");
+const readCompetitions = createEndpoint("bewerbe");
 const listeners = new Set();
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("epiber-favorites") : null;
 
 const PAGE_CONFIG = Object.freeze({
-  "index.html": { page: "index", label: "Dashboard", selector: "#welcome-title", centered: true },
   "Matches1.html": { page: "Matches1", label: "Matches", selector: "main > section > h2", centered: true },
   "players.html": { page: "players", label: "Spieler", selector: "main > section > h2", centered: true },
   "Bewerbe.html": { page: "Bewerbe", label: "Bewerbe", selector: ".bewerbe-page-heading > h2", existingRow: true },
@@ -31,7 +31,9 @@ const OPERATOR_PAGES = new Set(["navigator"]);
 const PARAMETERIZED_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster"]);
 let state = { identity: null, favorites: [], revision: 0, loading: false, ready: false };
 let loadGeneration = 0;
+let competitionGeneration = 0;
 let mutationQueue = Promise.resolve();
+let competitionNames = new Map();
 
 function notify() {
   const snapshot = favoriteSnapshot();
@@ -83,6 +85,8 @@ async function loadForUser(user, { force = false } = {}) {
   const identity = user?.id ? String(user.id) : null;
   if (!identity) {
     loadGeneration += 1;
+    competitionGeneration += 1;
+    competitionNames = new Map();
     state = { identity: null, favorites: [], revision: 0, loading: false, ready: true };
     notify();
     return;
@@ -103,11 +107,43 @@ async function loadForUser(user, { force = false } = {}) {
       ready: true,
     };
     notify();
+    loadCompetitionNames(identity, state.favorites);
   } catch (error) {
     if (generation !== loadGeneration) return;
     state = { identity, favorites: [], revision: 0, loading: false, ready: false };
     diagnostic.error("favorites_load_failed", error);
     notify();
+  }
+}
+
+async function loadCompetitionNames(identity = state.identity, favorites = state.favorites) {
+  const competitionIds = new Set(favorites.map((favorite) => String(favorite?.params?.id || "")).filter(Boolean));
+  const generation = ++competitionGeneration;
+  if (!identity || !competitionIds.size) {
+    if (competitionNames.size) {
+      competitionNames = new Map();
+      notify();
+    }
+    return;
+  }
+  try {
+    const response = await readCompetitions();
+    if (generation !== competitionGeneration || state.identity !== identity) return;
+    const values = response.data?.values;
+    if (!Array.isArray(values) || !Array.isArray(values[0])) throw new Error("Bewerbe sind nicht verfügbar.");
+    const header = values[0].map((value) => String(value || "").trim().toLowerCase());
+    const idIndex = header.indexOf("id");
+    const nameIndex = header.indexOf("bezeichnung");
+    if (idIndex < 0 || nameIndex < 0) throw new Error("Bewerbsnamen sind unvollständig.");
+    competitionNames = new Map(values.slice(1).flatMap((row) => {
+      const id = String(row[idIndex] || "").trim();
+      const name = String(row[nameIndex] || "").trim();
+      return competitionIds.has(id) && name ? [[id, name]] : [];
+    }));
+    notify();
+  } catch (error) {
+    if (generation !== competitionGeneration || state.identity !== identity) return;
+    diagnostic.error("favorite_labels_load_failed", error);
   }
 }
 
@@ -133,6 +169,7 @@ async function saveNow(identity, nextFavorites) {
       ready: true,
     };
     notify();
+    loadCompetitionNames(identity, state.favorites);
     channel?.postMessage({ identity: state.identity, revision: state.revision });
     return favoriteSnapshot();
   } catch (error) {
@@ -200,7 +237,7 @@ export function favoriteLabel(target) {
   if (target?.type === "overlay") return target.overlay === "match-result" ? "Spieleingabe" : "Termin festlegen / ändern";
   const base = PAGE_LABELS[target?.page] || "Seite";
   const id = target?.params?.id;
-  return id ? `${base} (${id})` : base;
+  return id ? competitionNames.get(String(id)) || base : base;
 }
 
 export function favoriteHref(target) {
@@ -214,7 +251,7 @@ export function createFavoriteButton(target, { className = "" } = {}) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `favorite-star${className ? ` ${className}` : ""}`;
-  button.innerHTML = '<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m354-287 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"></path></svg>';
+  button.innerHTML = '<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m233-120 65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"></path></svg>';
   const update = () => {
     const active = isFavorite(target);
     const authenticated = Boolean(getUser());
@@ -274,5 +311,7 @@ subscribeAuth((user, authState) => {
 channel?.addEventListener("message", (event) => {
   if (event.data?.identity === state.identity && event.data?.revision !== state.revision) loadForUser(getUser(), { force: true });
 });
+
+subscribe("bewerbe", () => loadCompetitionNames());
 
 mountPageFavorite();

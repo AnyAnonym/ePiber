@@ -73,15 +73,16 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Persoenliche Forderungsmeldungen nennen fuer Forderer und Geforderten die beim
   Anlegen fixierten Rangpositionen in Klammern; diese Texte werden bei spaeteren
   Namens- oder Rangaenderungen nicht aus aktuellen Daten neu erzeugt.
-  Mobil oeffnet die gemeinsame Navigation als rechtsseitiger, intern scrollbarer
-  Drawer ab Bildschirmoberkante mit etwa 82 Prozent Breite und voller Hoehe und
+  Auf allen Viewports oeffnet die gemeinsame Navigation als rechtsseitiger,
+  intern scrollbarer Drawer ab Bildschirmoberkante mit `min(82vw, 420px)` Breite
+  und voller Hoehe und
   schiebt App samt Header nach links. Linke Restflaeche, X und Escape schliessen
   ihn. Die Kopfzeile `ePiber` besitzt Headerhoehe. Linksbuendige Listenzeilen mit
   Icons und Trennlinien ordnen Profil, einen nur bei Inhalt sichtbaren
   Favoritenbereich, Dashboard und die zunaechst geschlossenen Gruppen
   `Spielbetrieb`, `Verein` und `Administration`; die rote Abmeldezeile steht am
-  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop bleibt
-  unveraendert.
+  Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop, Tablet und
+  Mobilgeraete verwenden denselben Hamburger und Drawer.
   Ergebnis- und Korrekturmeldungen sprechen Gewinner und Verlierer jeweils
   empfaengerbezogen an und nennen die gegnerische Seite. Bei W.O. lautet der
   Gewinnsatz `Du gewinnst durch W.O. von <Verliererseite>.`, fuer die selbst nicht

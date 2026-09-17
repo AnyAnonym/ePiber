@@ -378,6 +378,25 @@ test("Ergebnisereignisse speichern Eigenmeldungen sichtbar gelesen und Fremdmeld
   assert.equal(service.messages({ id: "p2" }, { limit: 10 }).messages[0].subject, "Match verloren: Cup");
   assert.match(outcome.event.detail, /Grund: Falsche Erfassung/);
   assert.equal(outcome.event.detail.includes("Abschlussart"), false);
+  const secondSideWin = await service.ensureMatchResultEvent({
+    operationId: "00000000-0000-4000-8000-000000000504",
+    matchId: "m-second-side-win",
+    competitionId: "cup-1",
+    competitionName: "Cup",
+    participantIds: ["p1", "p2"],
+    participantNames: { p1: "Ada Aufschlag", p2: "Peter Player" },
+    teams: [["p1"], ["p2"]],
+    winnerSide: 2,
+    actorId: "p2",
+    actorName: "Peter Player",
+    changeType: "result",
+    completionType: "regular",
+    result: "1-6/2-6",
+    matchEnd: "260904-1200",
+  });
+  assert.equal(secondSideWin.event.summary, "Peter Player gewinnt gegen Ada Aufschlag.");
+  assert.equal(secondSideWin.event.result, "6-1/6-2");
+  assert.match(secondSideWin.event.detail, /^Ergebnis: 6-1\/6-2;/);
   const walkover = await service.ensureMatchResultEvent({
     operationId: "00000000-0000-4000-8000-000000000502",
     matchId: "m-walkover",
@@ -683,8 +702,8 @@ test("Bewerbshistorie projiziert Ergebnis, Akteur und eine globale Bewerbszuordn
     sourceId: "result-match",
     actorId: "p1",
     actorName: "Ada Admin",
-    summary: "Ergebnis eingetragen",
-    result: "6-4/6-3",
+    summary: "Peter Player gewinnt gegen Ada Admin.",
+    result: "1-6/2-6",
   }, [{
     userId: "p1",
     role: "home",
@@ -692,13 +711,13 @@ test("Bewerbshistorie projiziert Ergebnis, Akteur und eine globale Bewerbszuordn
     messageId: "result-message",
     type: "result",
     subject: "Ergebnis eingetragen",
-    body: "Das Ergebnis lautet 6-4/6-3.",
+    body: "Das Ergebnis lautet 1-6/2-6.",
     deliveries: [{ channel: "Inbox", status: "delivered" }],
   }]);
   const service = new MessagingService({ repository, log() {} });
 
   const history = service.competitionHistory({ id: "p1" }, { bewerbId: "cup-1" });
-  assert.equal(history.entries[0].result, "6-4/6-3");
+  assert.equal(history.entries[0].result, "6-1/6-2");
   assert.equal(history.entries[0].competitionName, "Testcup");
   assert.equal(history.entries[0].roundName, "Viertelfinale");
   assert.equal(Object.hasOwn(history.entries[0], "body"), false);

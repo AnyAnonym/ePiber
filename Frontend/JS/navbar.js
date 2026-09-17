@@ -44,6 +44,12 @@ function mobileNavIcon(name, className = "mobile-nav-icon") {
   return `<svg class="${className}" data-icon="${name}" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="${mobileNavIcons[name]}"></path></svg>`;
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
+}
+
 function favoriteIconName(favorite) {
   if (favorite.type === "overlay") return favorite.overlay === "match-result" ? "sports_tennis" : "description";
   return {
@@ -67,14 +73,16 @@ function renderMobileFavorites(favorites = []) {
       </div>
       <div id="mobileNavFavorites" class="mobile-nav-submenu" role="group" aria-label="Favoriten" hidden>
         ${favorites.map((favorite) => {
+          const label = favoriteLabel(favorite);
+          const safeLabel = escapeHtml(label);
           const attributes = favorite.type === "page"
             ? `href="${favoriteHref(favorite)}"`
             : `href="#" data-favorite-overlay="${favorite.overlay}"`;
           return `<div class="mobile-nav-row mobile-nav-main-row mobile-nav-favorite" data-favorite-id="${favorite.targetId}">
-            <button class="mobile-nav-drag-handle" type="button" tabindex="-1" aria-label="${favoriteLabel(favorite)} verschieben">${mobileNavIcon("drag_handle")}</button>
-            <a ${attributes} class="mobile-nav-favorite-link">
+            <button class="mobile-nav-drag-handle" type="button" tabindex="-1" aria-label="${safeLabel} verschieben">${mobileNavIcon("drag_handle")}</button>
+            <a ${attributes} class="mobile-nav-favorite-link" aria-label="${safeLabel}" title="${safeLabel}">
               ${mobileNavIcon(favoriteIconName(favorite), "mobile-nav-icon mobile-nav-favorite-icon")}
-              <span>${favoriteLabel(favorite)}</span>
+              <span>${safeLabel}</span>
             </a>
           </div>`;
         }).join("")}
@@ -516,9 +524,6 @@ function initMobileNavigation() {
       event.preventDefault();
       first.focus();
     }
-  });
-  window.addEventListener("resize", () => {
-    if (window.matchMedia("(min-width: 769px)").matches) closeNavigation({ restoreFocus: false });
   });
 }
 

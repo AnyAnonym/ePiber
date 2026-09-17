@@ -38,8 +38,10 @@ export function subscribeAuth(callback) {
 
 const dataClientStub = `
 let messageRevision = 7;
-let favoritesRevision = 0;
-let favorites = [];
+let favoritesRevision = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1" ? 1 : 0;
+let favorites = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1"
+  ? [{ targetId: "favorite-ranking", type: "page", page: "rangliste", params: { id: "2" } }]
+  : [];
 let messages = [
   { messageId: "unread-new", createdAt: "2026-08-30T10:00:00.000Z", competitionName: "Sommercup", roundName: "Viertelfinale", subject: "Neue Platzinformation", eventType: "result", actorName: "Ergebnis Erfasser", acknowledged: false },
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
@@ -203,7 +205,7 @@ export function createEndpoint(name) {
       success: true, complete: true, schonzeit: ownBusy ? [{ id: "player-1", until: "2099-01-01T00:00:00.000Z" }] : [],
       sperrzeit: blockedTarget ? [{ id: "p1", until: "2099-01-01T00:00:00.000Z" }] : [],
     } };
-    if (name === "bewerbe") return { data: { success: true, values: [["ID", "Bezeichnung"], ["2", "Mobile Rangliste"]] } };
+    if (name === "bewerbe") return { data: { success: true, values: [["ID", "Bezeichnung"], ["2", new URLSearchParams(window.location.search).get("longFavorite") === "1" ? "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026" : "Mobile Rangliste"]] } };
     if (name === "rankingChallengeState") return { data: { success: true,
       mode: ineligible ? "ineligible" : (newcomer ? "newcomer" : (withdrawn ? "returning" : "ranked")),
       rank: newcomer || withdrawn || ineligible ? null : 1,
@@ -307,9 +309,16 @@ function startServer() {
   const server = http.createServer((request, response) => {
     const requestUrl = new URL(request.url, "http://127.0.0.1");
     const pathname = requestUrl.pathname;
-    if (pathname === "/index.html" && requestUrl.searchParams.get("favoritesTest") === "1") {
-      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "index.html"), "utf8")
-        .replace('src="JS/modals.js"', 'src="/JS/modals-under-test.js"');
+    if (pathname === "/Matches1.html" && requestUrl.searchParams.get("favoritesTest") === "1") {
+      const source = '<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><div id="header-container"></div><div id="mobile-nav-container"></div><main><section><h2>Matches - Übersicht</h2></section></main><script type="module" src="/JS/navbar-under-test.js"></script><script type="module" src="/JS/modals-under-test.js"></script></body></html>';
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/rangliste.html" && requestUrl.searchParams.get("favoritesTest") === "1") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "rangliste.html"), "utf8")
+        .replace('src="JS/modals.js"', 'src="/JS/modals-under-test.js"')
+        .replace('src="JS/rangliste.js"', 'src="/JS/rangliste-under-test.js"');
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end(source);
       return;
@@ -322,6 +331,14 @@ function startServer() {
     if (pathname === "/ranking-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="rankingSection" class="full-width-section"><h2>Rangliste</h2><div id="rankingContainer" class="pyramid"></div></section></main><script type="module" src="/JS/modals-under-test.js"></script><script type="module" src="/JS/rangliste-under-test.js"></script></body></html>');
+      return;
+    }
+    if (pathname === "/scoreboard-layout-test.html") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "scoreboard.html"), "utf8")
+        .replace('<a class="scoreboard-match-link" href="./Matches1.html?category=open">', '<button class="favorite-star page-favorite-star" type="button"><svg viewBox="0 -960 960 960"><path d="m233-120 65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"></path></svg></button><a class="scoreboard-match-link" href="./Matches1.html?category=open">')
+        .replace(/<script[\s\S]*?<\/script>/g, "");
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
       return;
     }
     if (pathname === "/messages-test.html") {
@@ -631,10 +648,11 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     page.setDefaultTimeout(4000);
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoritesTest=1`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/Matches1.html?role=player&favoritesTest=1`, { waitUntil: "domcontentloaded" });
 
     const pageStar = page.locator(".page-favorite-star");
     await pageStar.waitFor({ state: "visible" });
+    assert.equal(await pageStar.locator("svg path").count(), 1);
     assert.equal(await pageStar.getAttribute("aria-pressed"), "false");
     assert.equal(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).fill), "rgb(255, 255, 255)");
     await pageStar.click();
@@ -655,7 +673,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     await favorites.locator(".mobile-nav-favorites-edit").click();
     assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
     const rows = favorites.locator(".mobile-nav-favorite");
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Dashboard", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
     assert.equal(await favorites.locator(".mobile-nav-drag-handle:visible").count(), 2);
     const firstBox = await favorites.locator(".mobile-nav-drag-handle").nth(0).boundingBox();
     const secondBox = await favorites.locator(".mobile-nav-drag-handle").nth(1).boundingBox();
@@ -663,11 +681,11 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     await page.mouse.down();
     await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + 2, { steps: 4 });
     await page.mouse.up();
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Dashboard"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Matches"]);
     assert.equal(await favorites.locator(".mobile-nav-favorites-edit").getAttribute("aria-pressed"), "true");
     await favorites.locator(".mobile-nav-drag-handle").nth(1).focus();
     await page.keyboard.press("ArrowUp");
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Dashboard", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
 
     assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
     await rows.nth(1).locator(".mobile-nav-favorite-link").click();
@@ -679,7 +697,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
   }
 });
 
-test("Desktop-Navigation bleibt unveraendert und der mobile Drawer inaktiv", {
+test("Desktop verwendet denselben Drawer und verschiebt die Anwendung um maximal 420 Pixel", {
   skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
@@ -688,16 +706,104 @@ test("Desktop-Navigation bleibt unveraendert und der mobile Drawer inaktiv", {
   try {
     const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player`, { waitUntil: "domcontentloaded" });
-    assert.equal(await page.locator(".desktop-nav").isVisible(), true);
-    assert.equal(await page.locator(".desktop-auth").isVisible(), true);
-    assert.equal(await page.locator("#hamburgerBtn").isHidden(), true);
+    assert.equal(await page.locator(".desktop-nav").isHidden(), true);
+    assert.equal(await page.locator(".desktop-auth").isHidden(), true);
+    assert.equal(await page.locator("#hamburgerBtn").isVisible(), true);
     assert.equal(await page.locator("#mobileNavModal").isHidden(), true);
+    await page.locator("#hamburgerBtn").click();
+    await page.waitForTimeout(350);
     const layout = await page.evaluate(() => {
       const app = document.querySelector(".app-shift-layer").getBoundingClientRect();
       const header = document.querySelector("#header-container header").getBoundingClientRect();
-      return { appLeft: app.left, appWidth: app.width, headerLeft: header.left, transform: getComputedStyle(document.querySelector(".app-shift-layer")).transform };
+      const drawer = document.querySelector(".mobile-nav-content").getBoundingClientRect();
+      return { appLeft: app.left, appWidth: app.width, headerLeft: header.left, drawerLeft: drawer.left, drawerWidth: drawer.width };
     });
-    assert.deepEqual(layout, { appLeft: 0, appWidth: 1200, headerLeft: 0, transform: "none" });
+    assert.deepEqual(layout, { appLeft: -420, appWidth: 1200, headerLeft: -420, drawerLeft: 780, drawerWidth: 420 });
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendigen Bewerbsnamen", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const expectedName = "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026";
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&longFavorite=1`, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator(".page-favorite-star").count(), 0);
+    await page.locator("#hamburgerBtn").click();
+    const favorites = page.locator(".mobile-nav-favorites");
+    await favorites.locator(".mobile-nav-favorites-toggle").click();
+    const link = favorites.locator(".mobile-nav-favorite-link");
+    await link.waitFor({ state: "visible" });
+    assert.equal(await link.getAttribute("title"), expectedName);
+    assert.equal(await link.getAttribute("aria-label"), expectedName);
+    assert.equal(await link.locator("span").textContent(), expectedName);
+    assert.equal(await link.locator("span").evaluate((element) => getComputedStyle(element).webkitLineClamp), "2");
+    assert.equal((await link.textContent()).includes("(2)"), false);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Ranglistenseite rendert trotz Favoriten-Titelzeile vollstaendig", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/rangliste.html?id=2&role=player&favoritesTest=1&favoriteCompetition=1`, { waitUntil: "domcontentloaded" });
+    await page.locator(".page-favorite-star").waitFor({ state: "visible" });
+    await page.locator("#rankingContainer .box").first().waitFor({ state: "visible" });
+    assert.equal(await page.locator(".ranking-body").count(), 1);
+    const titleLayout = await page.evaluate(() => {
+      const heading = document.querySelector(".favorite-title-row > h2").getBoundingClientRect();
+      const star = document.querySelector(".favorite-title-row > .page-favorite-star").getBoundingClientRect();
+      return {
+        gap: Math.round(star.left - heading.right),
+        centerOffset: Math.round((star.top + star.height / 2) - (heading.top + heading.height / 2)),
+      };
+    });
+    assert.deepEqual(titleLayout, { gap: 4, centerOffset: 0 });
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/scoreboard-layout-test.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => getComputedStyle(document.querySelector(".scoreboard-match-link")).position === "absolute");
+    const layout = await page.evaluate(() => {
+      const star = document.querySelector("#platz1 > .page-favorite-star").getBoundingClientRect();
+      const nextElement = document.querySelector("#platz1 > .scoreboard-match-link");
+      const next = nextElement.getBoundingClientRect();
+      const previous = document.querySelector("#platz2 > .scoreboard-match-link");
+      return {
+        sameRightEdge: Math.abs(star.right - next.right) < 1,
+        nextBelowStar: next.top >= star.bottom,
+        previousRight: getComputedStyle(previous).right,
+      };
+    });
+    assert.deepEqual(layout, { sameRightEdge: true, nextBelowStar: true, previousRight: "10px" });
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -1537,10 +1643,10 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
   try {
     const page = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await page.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player`, { waitUntil: "domcontentloaded" });
-    await page.locator("#profileButton .message-count-badge").waitFor({ state: "visible" });
-    assert.equal(await page.locator("#profileButton .message-count-badge").textContent(), "2");
-
-    await page.locator("#profileButton").click();
+    await page.locator("#hamburgerBtn.has-unread-messages").waitFor({ state: "visible" });
+    await page.locator("#hamburgerBtn").click();
+    assert.equal(await page.locator("#profileButtonMobile .message-count-badge").textContent(), "2");
+    await page.locator("#profileButtonMobile").click();
     await page.getByRole("tab", { name: "Meldungen (2)", exact: true }).click();
     const rows = page.locator("#profileMessagesPanel .message-row");
     await rows.first().waitFor({ state: "visible" });
