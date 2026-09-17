@@ -16,3 +16,22 @@ Commit: 4.10.0-paj-1-2 | Material-Symbole vereinheitlicht
   - [Frontend] Icongroessen, Bedienflaechen, Linkziele, Kopierverhalten und zugaengliche Beschriftungen unveraendert beibehalten.
   - [Tests] Browsertests sichern Symbolidentitaet, Barrierefreiheitsattribute, Kontaktziele sowie Groesse und Zentrierung des mobilen Scoreboard-Pfeils ab.
   - [Dokumentation] Historienbutton sowie Kopier-, E-Mail- und Telefonaktionen im Profilmodal nachgezogen.
+
+[4.10.0-paj-1-3] - 2026-09-18
+Commit: 4.10.0-paj-1-3 | Spielerverzeichnis und Profilkontakte nachgebessert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.0-paj-1-2-x` gesetzt.
+  - [Frontend] Ueberschrift des Spielerverzeichnisses zur Bildschirmbreite zentriert und den Seitenbereich gegen breite Tabelleninhalte begrenzt.
+  - [Frontend] Ausschliesslich den Tabellencontainer horizontal scrollbar gemacht, sodass Seitenheader und restlicher Inhalt im Viewport verankert bleiben.
+  - [Frontend] Material-Symbole im Profilmodal auf 26 Pixel und ihre Bedienflaechen ausgewogen auf 36 Pixel vergroessert.
+  - [Frontend] E-Mail-Beschriftung und Adresse im Profil in einer gemeinsamen Textspalte nur bei Platzmangel umgebrochen und beide Kontaktaktionen ueber die gesamte Feldhoehe zentriert.
+  - [Tests] Browserlayout der Spielertabelle auf mobilen und breiten Viewports gegen Dokumentueberlauf, Headerverschiebung und fehlerhafte Titelzentrierung abgesichert.
+  - [Tests] Profilaktionen auf 36-Pixel-Bedienflaechen, 26-Pixel-Symbole und sicheren Sitz bei 320 Pixel Viewportbreite abgesichert.
+  - [Tests] Einzeilige E-Mail-Darstellung bei ausreichendem Platz, bedarfsweiser Umbruch und vertikale Aktionszentrierung auf breiten und 320 Pixel schmalen Viewports abgesichert.
+
+  Dokumentationsuebernahme beim Main-Versionssprung
+
+    Project/software/seiten/players.txt
+    - Im Abschnitt `Tabelle` festhalten, dass die Seitenueberschrift zur Bildschirmbreite zentriert ist und bei breiten Tabellen ausschliesslich der Tabellencontainer horizontal scrollt, waehrend Seitenheader und restlicher Seiteninhalt im sichtbaren Viewport bleiben.
+    - Im Abschnitt `Profile und Sicherheit` die vergroesserten Kontaktaktionen sowie den nur bei Platzmangel umbrochenen E-Mail-Text mit vertikal zentrierten Aktionen dokumentieren.

@@ -1432,16 +1432,23 @@ async function copyProfileValue(value, label) {
   }
 }
 
-function appendProfileField(container, label, value, copyValue = "", signal, contactAction = null) {
+function appendProfileField(container, label, value, copyValue = "", signal, contactAction = null, stacked = false) {
   const row = document.createElement("p");
   row.className = "profile-field";
+  if (stacked) row.classList.add("profile-field-stacked");
   const strong = document.createElement("strong");
   strong.textContent = `${label}: `;
   const valueElement = document.createElement("span");
   valueElement.className = "profile-field-value";
   valueElement.textContent = String(value || "---");
-  row.appendChild(strong);
-  row.appendChild(valueElement);
+  if (stacked) {
+    const content = document.createElement("span");
+    content.className = "profile-field-content";
+    content.append(strong, valueElement);
+    row.appendChild(content);
+  } else {
+    row.append(strong, valueElement);
+  }
 
   if (copyValue) {
     const copyButton = document.createElement("button");
@@ -1475,7 +1482,7 @@ function appendContactFields(container, profile, signal) {
     href: `mailto:${encodeURIComponent(email).replace("%40", "@")}`,
     label: "E-Mail verfassen",
     iconName: "mail",
-  } : null);
+  } : null, true);
   appendProfileField(container, "Telefon", displayedPhone, phone ? displayedPhone : "", signal, phone ? {
     href: `tel:${displayedPhone.replace(/[^+\d]/g, "")}`,
     label: "Telefon-App öffnen",

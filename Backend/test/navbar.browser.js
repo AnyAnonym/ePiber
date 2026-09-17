@@ -333,6 +333,13 @@ function startServer() {
       response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="rankingSection" class="full-width-section"><h2>Rangliste</h2><div id="rankingContainer" class="pyramid"></div></section></main><script type="module" src="/JS/modals-under-test.js"></script><script type="module" src="/JS/rangliste-under-test.js"></script></body></html>');
       return;
     }
+    if (pathname === "/players-layout-test.html") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "players.html"), "utf8")
+        .replace(/<script[\s\S]*?<\/script>/g, "");
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
     if (pathname === "/scoreboard-layout-test.html") {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "scoreboard.html"), "utf8")
         .replace('<a class="scoreboard-match-link" href="./Matches1.html?category=open">', '<button class="favorite-star page-favorite-star" type="button"><svg viewBox="0 -960 960 960"><path d="m233-120 65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"></path></svg></button><a class="scoreboard-match-link" href="./Matches1.html?category=open">')
@@ -1057,7 +1064,53 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
       focusable: icon.getAttribute("focusable"),
       width: icon.getBoundingClientRect().width,
       height: icon.getBoundingClientRect().height,
-    }))), Array.from({ length: 4 }, () => ({ ariaHidden: "true", focusable: "false", width: 18, height: 18 })));
+    }))), Array.from({ length: 4 }, () => ({ ariaHidden: "true", focusable: "false", width: 26, height: 26 })));
+    assert.deepEqual(await playerPage.locator(".profile-copy-button, .profile-contact-button").evaluateAll((buttons) => buttons.map((button) => ({
+      width: button.getBoundingClientRect().width,
+      height: button.getBoundingClientRect().height,
+    }))), Array.from({ length: 4 }, () => ({ width: 36, height: 36 })));
+    const readEmailLayout = () => playerPage.locator(".profile-field-stacked").evaluate((row) => {
+      const content = row.querySelector(".profile-field-content");
+      const label = row.querySelector("strong").getBoundingClientRect();
+      const valueElement = row.querySelector(".profile-field-value");
+      const value = valueElement.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(valueElement);
+      const rowCenter = rowRect.top + (rowRect.height / 2);
+      const lineHeight = parseFloat(getComputedStyle(content).lineHeight);
+      return {
+        labelAndValueStartTogether: Math.abs(label.top - value.top) <= 1,
+        contentLines: Math.round(content.getBoundingClientRect().height / lineHeight),
+        valueLines: range.getClientRects().length,
+        actionsCentered: [...row.querySelectorAll(".profile-copy-button, .profile-contact-button")].every((button) => {
+          const rect = button.getBoundingClientRect();
+          return Math.abs((rect.top + (rect.height / 2)) - rowCenter) <= 1;
+        }),
+      };
+    });
+    await playerPage.setViewportSize({ width: 800, height: 844 });
+    assert.deepEqual(await readEmailLayout(), {
+      labelAndValueStartTogether: true,
+      contentLines: 1,
+      valueLines: 1,
+      actionsCentered: true,
+    });
+    await playerPage.setViewportSize({ width: 320, height: 844 });
+    assert.equal(await playerPage.locator(".profile-field:has(.profile-copy-button)").evaluateAll((rows) => rows.every((row) => {
+      const rowRect = row.getBoundingClientRect();
+      return [...row.querySelectorAll(".profile-copy-button, .profile-contact-button")].every((button) => {
+        const buttonRect = button.getBoundingClientRect();
+        return buttonRect.left >= rowRect.left && buttonRect.right <= rowRect.right;
+      });
+    })), true);
+    assert.deepEqual(await readEmailLayout(), {
+      labelAndValueStartTogether: true,
+      contentLines: 2,
+      valueLines: 2,
+      actionsCentered: true,
+    });
+    await playerPage.setViewportSize({ width: 390, height: 844 });
     assert.deepEqual(await playerPage.locator("#profileTabs [role=tab]").allTextContents(), [
       "System", "Meldungen (2)", "Aktuell", "Archiv",
     ]);
@@ -1973,6 +2026,62 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     await ineligiblePage.locator("#rankingContainer .box").first().waitFor({ state: "visible" });
     assert.equal(await ineligiblePage.locator("#rankingContainer .box.challengeable").count(), 0);
     await ineligiblePage.close();
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Spielertabelle scrollt horizontal, waehrend Titel und Seitenheader viewportzentriert bleiben", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const address = server.address();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+      const page = await browser.newPage({ viewport });
+      await page.goto(`http://127.0.0.1:${address.port}/players-layout-test.html`, { waitUntil: "load" });
+      const layout = await page.evaluate(() => {
+        document.getElementById("header-container").innerHTML = '<header><div class="header-center"><span class="logo">ASKÖ Piberbach</span></div></header>';
+        const table = document.getElementById("tbl");
+        table.hidden = false;
+        const row = table.tBodies[0].insertRow();
+        ["Mustermann", "Maximilian", "+43 664 123456789", `${"lange-adresse-".repeat(100)}@example.test`, "01.01.2000"]
+          .forEach((value) => row.insertCell().textContent = value);
+
+        const scrollport = document.querySelector(".players-table-scroll");
+        const headerBefore = document.querySelector("header").getBoundingClientRect();
+        scrollport.scrollLeft = scrollport.scrollWidth - scrollport.clientWidth;
+        const headerAfter = document.querySelector("header").getBoundingClientRect();
+        const heading = document.querySelector("#playerDirectorySection > h2").getBoundingClientRect();
+        return {
+          headingCenter: heading.left + (heading.width / 2),
+          viewportCenter: document.documentElement.clientWidth / 2,
+          clientWidth: scrollport.clientWidth,
+          scrollWidth: scrollport.scrollWidth,
+          scrollLeft: scrollport.scrollLeft,
+          overflowX: getComputedStyle(scrollport).overflowX,
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: document.documentElement.clientWidth,
+          pageScrollX: window.scrollX,
+          headerLeftBefore: headerBefore.left,
+          headerLeftAfter: headerAfter.left,
+          headerWidth: headerAfter.width,
+        };
+      });
+
+      assert.equal(Math.abs(layout.headingCenter - layout.viewportCenter) <= 1, true);
+      assert.equal(layout.scrollWidth > layout.clientWidth, true);
+      assert.equal(layout.scrollLeft > 0, true);
+      assert.equal(layout.overflowX, "auto");
+      assert.equal(layout.documentWidth, layout.viewportWidth);
+      assert.equal(layout.pageScrollX, 0);
+      assert.equal(layout.headerLeftAfter, layout.headerLeftBefore);
+      assert.equal(layout.headerWidth, layout.viewportWidth);
+      await page.close();
+    }
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
