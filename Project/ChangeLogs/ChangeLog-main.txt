@@ -2205,3 +2205,23 @@ Quelle: 4.9.9-paj-1
   - [Software] Reset-Code-Erzeugung und -Verwendung samt Modalen, Clientmethoden und den HTTP-Routen `POST /api/password-reset` sowie `POST /api/admin/password-reset` entfernt.
   - [Datenbank] Obsolete Tabelle `password_reset_proofs` wird beim Backendstart samt Altdaten kontrolliert entfernt; andere State- und historische Auditdaten bleiben erhalten.
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt und Paket- sowie Lockfileversion auf `4.10.0` gesetzt.
+
+[4.10.1] - 2026-09-18
+Commit: 4.10.1 | Material-Symbole und Spielerdarstellung nachgebessert
+Quelle: 4.10.0-paj-1
+
+  Added
+  - [Software] Gemeinsamen lokalen Renderer fuer kontrollierte Google Material Symbols in dynamisch erzeugten Profil- und Bewerbselementen eingefuehrt.
+
+  Changed
+  - [Software] Eigene Linien- und Unicodezeichen fuer Historie, Kommentare, Reaktionen, Kontaktaktionen und mobile Scoreboard-Navigation durch lokal eingebettete Material Symbols ersetzt.
+  - [Software] Profilkontakte verwenden 26-Pixel-Symbole in 36-Pixel-Bedienflaechen; E-Mail-Beschriftung und Adresse bleiben bei ausreichendem Platz einzeilig und brechen nur bedarfsweise um, waehrend die Aktionen vertikal zentriert bleiben.
+  - [Software] Die Spielerverzeichnis-Ueberschrift bleibt zur Bildschirmbreite zentriert; bei breiten Tabellen scrollt ausschliesslich der Tabellencontainer horizontal.
+  - [Dokumentation] Bewerbshistorien-, Profilkontakt- und responsive Spielerverzeichnisdarstellung in den betroffenen Seitendokumentationen nachgezogen.
+
+  Fixed
+  - [Software] Breite Inhalte der Spielertabelle verschieben weder Seitenheader noch restlichen Seiteninhalt aus dem sichtbaren Viewport.
+  - [Tests] Browserabdeckung fuer Symbolidentitaet, Barrierefreiheitsattribute, Kontaktziele, responsive Kontaktzeilen und isoliertes Tabellenscrolling erweitert.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt und Paket- sowie Lockfileversion auf `4.10.1` gesetzt.

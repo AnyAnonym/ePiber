@@ -22,8 +22,10 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
 -- Tabelle --
   Tabellenkopf und Werte bleiben ohne Zeilenumbruch. Die Tabelle ist mindestens
   so breit wie ihr Container und darf darueber hinaus auf Inhaltsbreite wachsen;
-  der umgebende Container scrollt dann horizontal. Die Zeile der angemeldeten
-  Person wird anhand der Session-ID vollstaendig fett dargestellt.
+  ausschliesslich der umgebende Container scrollt dann horizontal. Seitenheader,
+  restlicher Inhalt und die zur Bildschirmbreite zentrierte Seitenueberschrift
+  bleiben im sichtbaren Viewport verankert. Die Zeile der angemeldeten Person wird
+  anhand der Session-ID vollstaendig fett dargestellt.
 
 -- Navigation --
   Auf allen Viewports oeffnet die gemeinsame Navigation als rechtsseitiger,
@@ -51,8 +53,16 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   `publicProfile` lehnt anonyme Requests ab, und ein veralteter oder direkter
   anonymer Modalaufruf bleibt geschlossen. Angemeldeten Benutzern liefert es
   E-Mail, Telefon und Geburtsdatum, jedoch keinen Login; `myProfile` liefert fuer das
-  eigene Profil zusaetzlich Login und Passwortaenderung. Das gemeinsame Modal
-  zeigt oben in dieser Reihenfolge `System`, beim Eigenprofil `Meldungen`,
+  eigene Profil zusaetzlich Login und Passwortaenderung. Bei vorhandenen
+  Kontaktwerten bietet das gemeinsame Modal jeweils eine Kopieraktion sowie einen
+  direkten `mailto:`- beziehungsweise `tel:`-Link zur passenden Geraete-App. Die
+  Aktionen besitzen sichtbare 26-Pixel-Material-Symbole in 36-Pixel-Bedienflaechen
+  und eindeutige zugaengliche Namen. E-Mail-Beschriftung und Adresse stehen in
+  einer gemeinsamen Textspalte und brechen nur bei Platzmangel um; Kopier- und
+  Mailaktion bleiben ueber die gesamte ein- oder mehrzeilige Feldhoehe vertikal
+  zentriert.
+  Das gemeinsame Modal zeigt oben in dieser Reihenfolge `System`, beim Eigenprofil
+  `Meldungen`,
   `Aktuell`, `Archiv` und gegebenenfalls `Admin`. Nur `Aktuell` und `Archiv`
   zeigen eine zweite horizontal scrollbare Bewerbsreiterzeile; leere Kategorien
   zeigen `Keine Bewerbe enthalten`. Persoenliche Meldungskarten zeigen

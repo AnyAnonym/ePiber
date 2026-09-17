@@ -161,15 +161,50 @@ body.modal-open {
   overflow-wrap: anywhere;
 }
 
+.profile-field-stacked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px 36px;
+  column-gap: 4px;
+}
+
+.profile-field-content {
+  display: block;
+  min-width: 0;
+  grid-column: 1;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.profile-field-stacked > .profile-copy-button,
+.profile-field-stacked > .profile-contact-button {
+  align-self: center;
+}
+
+.profile-field-stacked > .profile-copy-button {
+  grid-column: 2;
+  margin-left: 0;
+}
+
+.profile-field-stacked > .profile-contact-button {
+  grid-column: 3;
+}
+
+.profile-field-stacked:not(:has(.profile-copy-button)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .profile-copy-button,
 .profile-contact-button {
   position: relative;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 36px;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   border: 1px solid #c5cad3;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #465266;
   background: #f7f8fa;
   cursor: pointer;
@@ -180,9 +215,6 @@ body.modal-open {
 }
 
 .profile-contact-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   text-decoration: none;
 }
 
@@ -195,44 +227,15 @@ body.modal-open {
   background: #eef4ff;
 }
 
-.profile-copy-icon::before,
-.profile-copy-icon::after {
-  content: "";
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-}
-
-.profile-copy-icon::before {
-  top: 7px;
-  left: 7px;
-}
-
-.profile-copy-icon::after {
-  top: 10px;
-  left: 10px;
-  background: #f7f8fa;
-}
-
-.profile-copy-button:hover .profile-copy-icon::after,
-.profile-copy-button:focus-visible .profile-copy-icon::after {
-  background: #eef4ff;
-}
-
-.profile-contact-icon::before {
+.material-symbol {
   display: block;
-  font-size: 18px;
-  line-height: 1;
+  fill: currentColor;
 }
 
-.profile-contact-icon.email::before {
-  content: "\2709";
-}
-
-.profile-contact-icon.phone::before {
-  content: "\260e";
+.profile-copy-icon,
+.profile-contact-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .profile-modal {
@@ -2499,6 +2502,7 @@ main {
 
 main:has(#rankingSection.full-width-section),
 main:has(#bracketSection.full-width-section),
+main:has(#playerDirectorySection.full-width-section),
 main:has(#roundRobinContainer) {
   grid-template-columns: 1fr;
   margin: 8px auto;
@@ -2702,9 +2706,24 @@ input[type="date"] {
   margin-top: 16px;
 }
 
+#playerDirectorySection {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#playerDirectorySection > h2 {
+  text-align: center;
+}
+
 .players-table-scroll {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .players-table th,

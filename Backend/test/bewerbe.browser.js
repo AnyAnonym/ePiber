@@ -265,7 +265,9 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     const globalHistoryButton = page.getByRole("button", { name: "Historie aller Bewerbe öffnen" });
     await globalHistoryButton.waitFor({ state: "visible" });
     assert.equal(await globalHistoryButton.locator("svg").count(), 1);
-    assert.equal(await globalHistoryButton.locator("svg").getAttribute("data-icon"), "megaphone");
+    assert.equal(await globalHistoryButton.locator("svg").getAttribute("data-icon"), "history");
+    assert.equal(await globalHistoryButton.locator("svg").getAttribute("aria-hidden"), "true");
+    assert.equal(await globalHistoryButton.locator("svg").getAttribute("focusable"), "false");
     const pageHeadingGap = await page.locator(".bewerbe-page-heading").evaluate((row) => {
       const heading = row.querySelector("h2").getBoundingClientRect();
       const buttonElement = row.querySelector("button");
@@ -311,10 +313,14 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     }));
     assert.deepEqual(await historyStyles(), expectedHistoryStyles);
     const actionRow = page.locator(".history-entry-actions").first();
-    assert.equal(await actionRow.getByRole("button", { name: "Kommentare öffnen, 1 Kommentare" }).locator("svg").count(), 1);
+    const commentIcon = actionRow.getByRole("button", { name: "Kommentare öffnen, 1 Kommentare" }).locator("svg");
+    assert.equal(await commentIcon.count(), 1);
+    assert.equal(await commentIcon.getAttribute("data-icon"), "chat_bubble");
     assert.deepEqual(await actionRow.locator(".history-reaction-button").allTextContents(), ["👍", "😮"]);
     assert.equal(await actionRow.locator(".history-reaction-summary .history-action-count").innerText(), "3");
-    assert.equal(await actionRow.getByRole("button", { name: "Reaktion hinzufügen" }).locator("svg").count(), 1);
+    const addReactionIcon = actionRow.getByRole("button", { name: "Reaktion hinzufügen" }).locator("svg");
+    assert.equal(await addReactionIcon.count(), 1);
+    assert.equal(await addReactionIcon.getAttribute("data-icon"), "add_reaction");
     const compactGaps = await actionRow.evaluate((row) => {
       const commentIcon = row.querySelector(".history-action-button").getBoundingClientRect();
       const commentCount = row.querySelector(".history-action-group .history-action-count").getBoundingClientRect();
@@ -416,7 +422,7 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     const historyButton = page.getByRole("button", { name: /Historie von/ }).first();
     assert.equal(await historyButton.innerText(), "");
     assert.equal(await historyButton.locator("svg").count(), 1);
-    assert.equal(await historyButton.locator("svg").getAttribute("data-icon"), "megaphone");
+    assert.equal(await historyButton.locator("svg").getAttribute("data-icon"), "history");
     const headingGap = await page.locator(".bewerb-card").first().evaluate((card) => {
       const heading = card.querySelector("h3").getBoundingClientRect();
       const button = card.querySelector(".competition-history-button").getBoundingClientRect();

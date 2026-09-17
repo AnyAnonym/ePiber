@@ -15,6 +15,7 @@ import {
 } from "./authClient.js";
 import { diagnostic } from "./diagnostics.js";
 import { createFavoriteButton } from "./favorites.js";
+import { createMaterialSymbol } from "./materialSymbols.js";
 import { categorizedProfileCompetitions, clearProfileModalContent, mergedProfileCompetitions } from "./profileModalState.js";
 
 const readPublicProfile = createEndpoint("publicProfile");
@@ -1431,16 +1432,23 @@ async function copyProfileValue(value, label) {
   }
 }
 
-function appendProfileField(container, label, value, copyValue = "", signal, contactAction = null) {
+function appendProfileField(container, label, value, copyValue = "", signal, contactAction = null, stacked = false) {
   const row = document.createElement("p");
   row.className = "profile-field";
+  if (stacked) row.classList.add("profile-field-stacked");
   const strong = document.createElement("strong");
   strong.textContent = `${label}: `;
   const valueElement = document.createElement("span");
   valueElement.className = "profile-field-value";
   valueElement.textContent = String(value || "---");
-  row.appendChild(strong);
-  row.appendChild(valueElement);
+  if (stacked) {
+    const content = document.createElement("span");
+    content.className = "profile-field-content";
+    content.append(strong, valueElement);
+    row.appendChild(content);
+  } else {
+    row.append(strong, valueElement);
+  }
 
   if (copyValue) {
     const copyButton = document.createElement("button");
@@ -1448,10 +1456,7 @@ function appendProfileField(container, label, value, copyValue = "", signal, con
     copyButton.className = "profile-copy-button";
     copyButton.setAttribute("aria-label", `${label} kopieren`);
     copyButton.title = `${label} kopieren`;
-    const icon = document.createElement("span");
-    icon.className = "profile-copy-icon";
-    icon.setAttribute("aria-hidden", "true");
-    copyButton.appendChild(icon);
+    copyButton.appendChild(createMaterialSymbol("content_copy", "profile-copy-icon"));
     copyButton.addEventListener("click", () => copyProfileValue(copyValue, label), { signal });
     row.appendChild(copyButton);
   }
@@ -1462,10 +1467,7 @@ function appendProfileField(container, label, value, copyValue = "", signal, con
     actionLink.href = contactAction.href;
     actionLink.setAttribute("aria-label", contactAction.label);
     actionLink.title = contactAction.label;
-    const icon = document.createElement("span");
-    icon.className = `profile-contact-icon ${contactAction.iconClass}`;
-    icon.setAttribute("aria-hidden", "true");
-    actionLink.appendChild(icon);
+    actionLink.appendChild(createMaterialSymbol(contactAction.iconName, "profile-contact-icon"));
     row.appendChild(actionLink);
   }
 
@@ -1479,12 +1481,12 @@ function appendContactFields(container, profile, signal) {
   appendProfileField(container, "E-Mail", email, email, signal, email ? {
     href: `mailto:${encodeURIComponent(email).replace("%40", "@")}`,
     label: "E-Mail verfassen",
-    iconClass: "email",
-  } : null);
+    iconName: "mail",
+  } : null, true);
   appendProfileField(container, "Telefon", displayedPhone, phone ? displayedPhone : "", signal, phone ? {
     href: `tel:${displayedPhone.replace(/[^+\d]/g, "")}`,
     label: "Telefon-App öffnen",
-    iconClass: "phone",
+    iconName: "call",
   } : null);
   appendProfileField(container, "Geburtsdatum", formatBirthDate(profile.birthDate), "", signal);
 }
