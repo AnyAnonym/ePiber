@@ -3,7 +3,7 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
 ================================================================================
 -- Funktion und Dateien --
   HTML: Frontend/scoreboard.html
-  JS:   Frontend/JS/scoreboardPolling.js
+  JS:   Frontend/JS/scoreboardPolling.js, Frontend/JS/favorites.js
   CSS:  Frontend/CSS/scoreboard.css
   Standalone ohne Navbar/Footer. Zeigt zwei Courts mit Einzel-/Doppelnamen, drei
   Saetzen und Punkten sowie am Desktop je sechs naechste und letzte Spiele.
@@ -12,6 +12,9 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
   Betriebsablauf sind in `Project/Scoreboard-Funktion.md` beschrieben.
   Fachliche Betriebsverantwortung und Nutzungsregeln stehen in
   `Project/Regelwerk/Organisation/PLATZ-UND-ANZEIGEBETRIEB.txt`.
+  Bei aktiver Benutzersitzung steht der gemeinsame Favoritenstern als bewusste
+  Ausnahme von der Titelposition rechts oben im Feld von Platz 1. Im anonymen
+  Liveticker- oder Monitorbetrieb bleibt er ausgeblendet.
 
 -- Snapshot, Push und Resync --
   Das fruehere Ein-/Fuenf-Sekunden-Polling ist entfernt. `scoreboardSnapshot`

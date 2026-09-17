@@ -129,3 +129,18 @@ Dokumentationsuebernahme beim Main-Versionssprung
 
   Project/server-configs/BACKUP-RESTORE-KONZEPT.md
   - Resetnachweise aus aktuellem State-, Restore- und Sicherheitsbereinigungsvertrag entfernen; historische Sicherungen duerfen die Legacy-Tabelle enthalten, die der neue Backendstand beim Start entfernt.
+
+[4.9.9-paj-1-7] - 2026-09-17
+Commit: 4.9.9-paj-1-7 | Kontogebundene Favoriten und Plattformplanung erweitert
+
+  Added
+  - [Software] Kontogebundene, revisionierte Favoriten fuer erlaubte Seiten sowie die Overlayaktionen `Spieleingabe` und `Termin festlegen / aendern` mit gemeinsamem schwarz umrandetem Stern eingefuehrt.
+  - [Software] Eigene Matchauswahl fuer direkte Ergebnis- und Terminaktionen sowie serverseitigen `scheduleMarkers`-Vertrag fuer Ranglistenfristen und spaetere Bewerbsrundenlimits ergaenzt.
+  - [Tests] Repository-, Vertrags-, Integrations-, Diagnose- und Browserabnahmen fuer Benutzertrennung, Idempotenz, Reihenfolge, Rollenfilter, Sterne, Overlayauswahl und Fristmarker erweitert.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.9.9-paj-1-6-x` gesetzt.
+  - [Software] Den zuvor leeren mobilen Favoritenbereich als einklappbaren Container mit Stift, Pointer-/Tastatursortierung und Drei-Striche-Handles umgesetzt; Sponsorenanzeige, Court-Test und Profile bleiben ausgenommen.
+  - [Observability] Favoriten-Lade-, Speicher- und Matchauswahlfehler als kontrollierte Browserereignisse sowie `favorites_update_completed` ohne freie Ziele oder Personendaten aufgenommen.
+  - [Dokumentation] Fachkonzept, Architektur, Datenbank, Endpoints und betroffene Seitendokumentation auf den Favoriten- und Marker-Vertrag angeglichen.
+  - [Dokumentation] Nicht-kanonische Mandanten- und Releasearbeitsgrundlage auf den Planungsstand bis Mai 2027 fortgeschrieben: vereinslokale Konten, 20 bis 50 beziehungsweise maximal etwa 100 Mandanten, fruehe PostgreSQL-/Personenmigration, Hallenreservierungs-MVP, Arch-/OpenTofu-/Ansible-/Podman-Plattformpfad, Kapazitaetsstufen sowie Rebuild-and-Restore mit vorlaeufigen RPO-/RTO-Zielen konkretisiert.

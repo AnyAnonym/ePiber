@@ -110,6 +110,12 @@
   border: 1px solid var(--table-border);
   overflow: hidden;
 }
+#platz1 > .page-favorite-star {
+  position: absolute;
+  z-index: 2;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+}
 #platz2 {
   position: relative;
   grid-row: 2 / 3;
@@ -396,7 +402,7 @@
     position: absolute;
     z-index: 1;
     top: 8px;
-    right: max(8px, env(safe-area-inset-right));
+    right: max(52px, calc(env(safe-area-inset-right) + 52px));
     display: inline-flex;
     min-height: 36px;
     align-items: center;

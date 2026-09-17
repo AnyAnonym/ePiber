@@ -105,7 +105,8 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
 
 `stateRepository.js`
   Kapselt SQLite mit WAL/FULL, Dateirechten, Transaktionen, revisioniertem
-  app_state, Sessions, Monitorgeraeten, Operationsergebnissen und Loginlimits.
+  app_state, kontogebundenen Favoriten, Sessions, Monitorgeraeten,
+  Operationsergebnissen und Loginlimits.
   Beim Start wird die obsolete Tabelle `password_reset_proofs` einschliesslich
   etwaiger Altdaten gedroppt. Tokens werden nur gehasht persistiert. Cleanup
   entfernt abgelaufene beziehungsweise alte Eintraege.
@@ -979,6 +980,9 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
                        Flush- und Retentionvorgaben sowie temporaere Zielpersonen
                        mit Restzeit und revisionsgeschuetzten Aenderungen.
 `navbar.js`           Navigation und sessiongetriebene Login-/Profilanzeige.
+`favorites.js`        Kontogebundener revisionierter Favoritenzustand,
+                      kontrollierter Seiten-/Overlaykatalog, Cross-Tab-Refresh,
+                      gemeinsame Sternaktionen und rollenabhaengige Zielprojektion.
 `modals.js`           Profil, Login, Passwort- und Fachdialoge; sichere
                       kontextabhaengige Profilprojektionen sowie der gemeinsame
                       Match-Ergebnisdialog mit blauen Teilnehmer- und roten
@@ -1024,7 +1028,7 @@ Linien getrennte Listenzeilen mit lokal eingebetteten Google Material Symbols
 Outlined. Es gibt keine externe Font- oder Iconanfrage; die Apache-2.0-Lizenz
 liegt in `Frontend/MATERIAL_SYMBOLS_LICENSE.txt`. Anonym steht die gruene
 Anmeldezeile mit `login` oben. Angemeldet folgen fest das Profil mit `person`, nur
-bei vorhandenen Eintraegen der vorbereitete persoenliche Favoritenbereich,
+bei vorhandenen Eintraegen der persoenliche Favoritenbereich,
 Dashboard sowie die zunaechst geschlossenen Gruppen `Spielbetrieb` mit
 `emoji_events`, `Verein` mit `groups` und rollenabhaengig `Administration` mit
 `admin_panel_settings`; die rote Abmeldezeile mit `logout` steht am Listenende.
@@ -1038,6 +1042,29 @@ Unterzeilen bleiben ueber die volle Menuebreite angelegt, sodass ihre Trennlinie
 durchlaufen. `logout` folgt ohne Autoabstand direkt nach der letzten sichtbaren
 Menuezeile. Nicht berechtigte oder leere Gruppen werden als Ganzes verborgen. Die
 Desktopnavigation bleibt unveraendert.
+
+Der Favoritenbereich ist eine eigene anfangs geschlossene Gruppe. Ein Stift neben
+dem Gruppenchevron oeffnet sie und aktiviert den Sortiermodus. Dann steht links
+anstelle der bisherigen Symbolposition ein tastatur- und pointerbedienbarer
+Drei-Striche-Handle; das Zielicon rueckt nach rechts. Die Reihenfolge wird als
+vollstaendige Liste revisionsgeschuetzt gespeichert. Seitensterne stehen direkt
+neben der Hauptueberschrift, beim Scoreboard rechts oben im Feld von Platz 1;
+Ergebnis- und Terminmodal zeigen den Stern rechts neben ihrem Titel.
+Sponsorenanzeige, technische Court-Testseite und Profilmodal besitzen keinen
+Stern. Overlayfavoriten laden ausschliesslich eigene offene Matches aus
+`myProfile` und verwenden danach die vorhandenen serverautorisierten Ergebnis-
+beziehungsweise Terminaktionen.
+Auf der provisionierten Monitorseite bleibt der WebSocket-Principal fuer alle
+Monitoroperationen das Geraet. Nur `myFavorites` und `setMyFavorites` duerfen bei
+gleichzeitig vorhandener gueltiger Benutzersitzung diese Sitzung requestlokal
+verwenden; ohne Benutzersitzung bleibt der Stern verborgen beziehungsweise der
+Favoritenzugriff abgelehnt.
+
+Ranglistenmatches projizieren `scheduleMarkers` fuer Forderungszeitpunkt,
+Sieben-Tage-Terminfrist und Vierzehn-Tage-Spielschluss. Jeder Marker besitzt nur
+kontrolliertes `kind`, Farbtoken, Label und Millisekundenzeitpunkt. Der
+Termindialog rendert denselben Vertrag; KO- und Gruppenmatches liefern vorerst
+eine leere Liste und koennen spaetere Rundenfristen ohne neuen UI-Vertrag nutzen.
 
 
 ================================================================================

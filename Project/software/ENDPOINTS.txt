@@ -546,7 +546,12 @@ AUTHENTICATED (player, operator oder admin):
       `losingSide`, zwei `teams` mit IDs/Namen und bei Ranglistenspielen optionalem
        nichtnegativem `rankAtResult`, `status`, `fingerprint` sowie `canSetResult`,
        `canSetMatchAppointment`, `canClearMatchAppointment`,
-       `canAdminSetMatchEnd` und `canAdminClear`.
+       `canAdminSetMatchEnd` und `canAdminClear`. `scheduleMarkers` ist ein Array
+       aus `{ kind, tone, label, at }`; `tone` ist auf
+       `blue|yellow|red|green` begrenzt und `at` ein Millisekundenzeitpunkt.
+       Ranglisten liefern Forderungszeitpunkt sowie die Fristen nach sieben und
+       vierzehn Tagen; andere Bewerbsarten liefern bis zur Einfuehrung von
+       Rundenlimits ein leeres Array.
       `correctionBlockReason` kann eine erforderliche Ranglistenreparatur
       kennzeichnen. `BYE` ist die einzige kontrollierte Personenausnahme:
       `bye:true`, kein BYE in Team-IDs oder Namen und alle mutierenden
@@ -572,6 +577,25 @@ AUTHENTICATED (player, operator oder admin):
       von `publicProfile`. Kontakt-E-Mail und Login sind getrennt; Passwort- und
       Resetwerte erscheinen nie. Raushaengezeit und -grund folgen dem
       angemeldeten Profilvertrag.
+
+  `myFavorites {}`
+      Liefert `{ success, favorites, revision, updatedAt }` fuer den aktuellen
+      Benutzer. Jedes Ziel besitzt eine serverseitig abgeleitete `targetId` und
+      ist entweder `{ type:"page", page, params? }` oder
+      `{ type:"overlay", overlay:"match-result|match-appointment" }`.
+      Auf `monitor.html` darf dieser Endpoint trotz Geraeteprincipal gezielt die
+      parallel vorhandene gueltige Benutzersitzung verwenden; alle Monitor-RPCs
+      bleiben unveraendert an das Geraet gebunden.
+
+  `setMyFavorites { operationId, expectedRevision, favorites }`
+      Ersetzt die eigene geordnete Liste atomar und idempotent. Erlaubt sind
+      hoechstens 32 eindeutige Ziele aus der festen Seiten-Allowlist;
+      Bewerbsseiten verlangen eine kontrollierte `id`, Round Robin erlaubt
+      zusaetzlich `paarungslayout:0..5`, Navigator optional `profil`. Freie URLs,
+      Namen und Beschriftungen sind unzulaessig. Ein Revisionskonflikt liefert
+      `REVISION_CONFLICT`. Als UI-Praeferenz ist der Write kein sportlicher
+      Fachwrite und erzeugt keinen Fachaudit; `favorites_update_completed`
+      protokolliert nur Akteur-ID, Anzahl, Revision und kontrollierten Ausgang.
 
   `myMessageSummary {}`
       Liefert fuer den aktuellen Benutzer `{ success, revision, totalCount,

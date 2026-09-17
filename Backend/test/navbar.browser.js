@@ -38,6 +38,8 @@ export function subscribeAuth(callback) {
 
 const dataClientStub = `
 let messageRevision = 7;
+let favoritesRevision = 0;
+let favorites = [];
 let messages = [
   { messageId: "unread-new", createdAt: "2026-08-30T10:00:00.000Z", competitionName: "Sommercup", roundName: "Viertelfinale", subject: "Neue Platzinformation", eventType: "result", actorName: "Ergebnis Erfasser", acknowledged: false },
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
@@ -171,6 +173,12 @@ export function createEndpoint(name) {
     const ownBusy = new URLSearchParams(window.location.search).get("ownBusy") === "1";
     const noNotifications = new URLSearchParams(window.location.search).get("noNotifications") === "1";
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
+    if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    if (name === "setMyFavorites") {
+      favoritesRevision += 1;
+      favorites = params.favorites.map((favorite, index) => ({ targetId: "favorite-" + favoritesRevision + "-" + index, ...structuredClone(favorite) }));
+      return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision, repeated: false } };
+    }
     if (name === "memberDirectory") {
       const today = new Date();
       const birthDate = String(today.getDate()).padStart(2, "0") + "." + String(today.getMonth() + 1).padStart(2, "0") + "." + (today.getFullYear() - 30);
@@ -297,7 +305,15 @@ function contentType(filePath) {
 
 function startServer() {
   const server = http.createServer((request, response) => {
-    const pathname = new URL(request.url, "http://127.0.0.1").pathname;
+    const requestUrl = new URL(request.url, "http://127.0.0.1");
+    const pathname = requestUrl.pathname;
+    if (pathname === "/index.html" && requestUrl.searchParams.get("favoritesTest") === "1") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "index.html"), "utf8")
+        .replace('src="JS/modals.js"', 'src="/JS/modals-under-test.js"');
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
     if (pathname === "/modals-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><script type="module" src="/JS/modals-under-test.js"></script></body></html>');
@@ -338,6 +354,15 @@ function startServer() {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/navbar.js"), "utf8")
         .replace('"./dataClient.js"', '"/test/dataClient.js"')
         .replace('"./authClient.js"', '"/test/authClient.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/JS/favorites.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/favorites.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(source);
       return;
@@ -589,6 +614,65 @@ test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst ei
     await page.evaluate(() => document.querySelector('.mobile-nav-main a[href="index.html"]').addEventListener("click", (event) => event.preventDefault(), { once: true }));
     await page.locator('.mobile-nav-main a[href="index.html"]').click();
     assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "true");
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfolge ist editierbar", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.setDefaultTimeout(4000);
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoritesTest=1`, { waitUntil: "domcontentloaded" });
+
+    const pageStar = page.locator(".page-favorite-star");
+    await pageStar.waitFor({ state: "visible" });
+    assert.equal(await pageStar.getAttribute("aria-pressed"), "false");
+    assert.equal(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).fill), "rgb(255, 255, 255)");
+    await pageStar.click();
+    await page.waitForTimeout(200);
+    assert.equal(await pageStar.getAttribute("aria-pressed"), "true", JSON.stringify({ calls: await page.evaluate(() => window.__endpointCalls), pageErrors }));
+    assert.equal(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).fill), "rgb(245, 197, 24)");
+
+    await page.evaluate(() => window.openFavoriteMatchAction("match-result"));
+    const picker = page.locator("#favoriteMatchPickerModal");
+    await picker.waitFor({ state: "visible" });
+    assert.equal(await picker.locator(".favorite-match-picker-item").count() > 0, true);
+    await picker.locator(".modal-favorite-star:visible").click();
+    await picker.locator(".close").click();
+
+    await page.locator("#hamburgerBtn").click();
+    const favorites = page.locator(".mobile-nav-favorites");
+    await favorites.waitFor({ state: "visible" });
+    await favorites.locator(".mobile-nav-favorites-edit").click();
+    assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
+    const rows = favorites.locator(".mobile-nav-favorite");
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Dashboard", "Spieleingabe"]);
+    assert.equal(await favorites.locator(".mobile-nav-drag-handle:visible").count(), 2);
+    const firstBox = await favorites.locator(".mobile-nav-drag-handle").nth(0).boundingBox();
+    const secondBox = await favorites.locator(".mobile-nav-drag-handle").nth(1).boundingBox();
+    await page.mouse.move(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + 2, { steps: 4 });
+    await page.mouse.up();
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Dashboard"]);
+    assert.equal(await favorites.locator(".mobile-nav-favorites-edit").getAttribute("aria-pressed"), "true");
+    await favorites.locator(".mobile-nav-drag-handle").nth(1).focus();
+    await page.keyboard.press("ArrowUp");
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Dashboard", "Spieleingabe"]);
+
+    assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
+    await rows.nth(1).locator(".mobile-nav-favorite-link").click();
+    await picker.waitFor({ state: "visible" });
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

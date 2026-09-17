@@ -117,6 +117,14 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   Nicht berechtigte oder dadurch leere Gruppen bleiben vollstaendig verborgen.
   Die Desktopnavigation bleibt unveraendert.
 
+  Angemeldete Benutzer koennen die unterstuetzten Seiten ueber einen Stern direkt
+  neben dem Seitentitel kontogebunden favorisieren. Der Favoritenbereich ist
+  einklappbar; sein Stift klappt ihn auf und aktiviert Drei-Striche-Handles links
+  vor den nach rechts rueckenden Zielicons. Pointerziehen und Pfeiltasten aendern
+  die revisionsgeschuetzt gespeicherte Reihenfolge. Die Overlayfavoriten
+  `Spieleingabe` und `Termin festlegen / aendern` zeigen zuerst ausschliesslich
+  eigene offene Matches mit dem jeweiligen serverseitigen Aktionsrecht.
+
 -- Besonderheiten --
   Vereinstermin und Vereinsmeisterschaftsergebnisse sind derzeit statisch in
   `Frontend/index.html` gepflegt. Frauen Einzel: Anita Pimminger,

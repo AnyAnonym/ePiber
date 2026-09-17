@@ -804,7 +804,11 @@ Tabelle `app_state`:
   Monitorziele `monitor-target:<id>`, Ergebnis-Rangprovenienz und persistente
   Ergebnis-Recovery-Plaene, Metadaten-Intents sowie die
   Frontend-Logging-Schluessel `frontend-logging:settings` und
-  `frontend-logging:targets`. Compare-and-set meldet bei falscher Revision
+  `frontend-logging:targets`. `favorites:<Personen-ID>` enthaelt die geordnete
+  persoenliche Favoritenliste als ausschliesslich servervalidierte Seitenziele
+  mit kontrollierten Parametern oder die Overlayziele `match-result` und
+  `match-appointment`; freie URLs und Beschriftungen werden nicht gespeichert.
+  Compare-and-set meldet bei falscher Revision
   `REVISION_CONFLICT`.
   Court-Zustaende enthalten unter anderem Match-/Bewerbszuordnung, Spieler,
   Aktivstatus, die bei der Zuweisung aufgeloeste `matchtypId` und `displayRules`

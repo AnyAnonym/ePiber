@@ -1,5 +1,12 @@
 import { hasRole, ready, subscribeAuth } from "./authClient.js";
 import { createEndpoint, subscribe } from "./dataClient.js";
+import {
+  favoriteHref,
+  favoriteLabel,
+  favoriteVisibleForUser,
+  reorderFavorites,
+  subscribeFavorites,
+} from "./favorites.js";
 
 const readMyMessageSummary = createEndpoint("myMessageSummary");
 let stopMessageSubscription = null;
@@ -27,6 +34,8 @@ const mobileNavIcons = {
   description: "M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z",
   dns: "M300-720q-25 0-42.5 17.5T240-660q0 25 17.5 42.5T300-600q25 0 42.5-17.5T360-660q0-25-17.5-42.5T300-720Zm0 400q-25 0-42.5 17.5T240-260q0 25 17.5 42.5T300-200q25 0 42.5-17.5T360-260q0-25-17.5-42.5T300-320ZM160-840h640q17 0 28.5 11.5T840-800v280q0 17-11.5 28.5T800-480H160q-17 0-28.5-11.5T120-520v-280q0-17 11.5-28.5T160-840Zm40 80v200h560v-200H200Zm-40 320h640q17 0 28.5 11.5T840-400v280q0 17-11.5 28.5T800-80H160q-17 0-28.5-11.5T120-120v-280q0-17 11.5-28.5T160-440Zm40 80v200h560v-200H200Zm0-400v200-200Zm0 400v200-200Z",
   monitoring: "M120-120v-80l80-80v160h-80Zm160 0v-240l80-80v320h-80Zm160 0v-320l80 81v239h-80Zm160 0v-239l80-80v319h-80Zm160 0v-400l80-80v480h-80ZM120-327v-113l280-280 160 160 280-280v113L560-447 400-607 120-327Z",
+  edit: "M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56ZM620-620l-29-28 57 57-28-29Z",
+  drag_handle: "M160-250v-80h640v80H160Zm0-190v-80h640v80H160Zm0-190v-80h640v80H160Z",
   login: "M480-120v-80h280v-560H480v-80h280q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H480Zm-80-160-55-58 102-102H120v-80h327L345-622l55-58 200 200-200 200Z",
   logout: "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L585-622l55-58 200 200-200 200Z",
 };
@@ -35,16 +44,42 @@ function mobileNavIcon(name, className = "mobile-nav-icon") {
   return `<svg class="${className}" data-icon="${name}" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="${mobileNavIcons[name]}"></path></svg>`;
 }
 
+function favoriteIconName(favorite) {
+  if (favorite.type === "overlay") return favorite.overlay === "match-result" ? "sports_tennis" : "description";
+  return {
+    index: "dashboard", Matches1: "sports_tennis", players: "person_search", Bewerbe: "swords", scoreboard: "scoreboard",
+    adminLogging: "description", personenNormalisieren: "database", mitgliederAbgleichen: "sync", servicebereich: "dns",
+    navigator: "monitoring", monitor: "monitoring",
+  }[favorite.page] || "emoji_events";
+}
+
 function renderMobileFavorites(favorites = []) {
   if (!favorites.length) return "";
   return `
-    <div class="mobile-nav-favorites" aria-label="Favoriten">
-      ${favorites.map(({ href, label }) => `
-        <a href="${href}" class="mobile-nav-row mobile-nav-favorite">
+    <div class="mobile-nav-favorites mobile-nav-group" aria-label="Favoriten">
+      <div class="mobile-nav-favorites-heading">
+        <button class="mobile-nav-row mobile-nav-main-row mobile-nav-group-toggle mobile-nav-favorites-toggle" type="button" aria-expanded="false" aria-controls="mobileNavFavorites">
           ${mobileNavIcon("star")}
-          <span>${label}</span>
-        </a>
-      `).join("")}
+          <span>Favoriten</span>
+          ${mobileNavIcon("expand_more", "mobile-nav-chevron")}
+        </button>
+        <button class="mobile-nav-favorites-edit" type="button" aria-label="Favoritenreihenfolge bearbeiten" aria-pressed="false">${mobileNavIcon("edit")}</button>
+      </div>
+      <div id="mobileNavFavorites" class="mobile-nav-submenu" role="group" aria-label="Favoriten" hidden>
+        ${favorites.map((favorite) => {
+          const attributes = favorite.type === "page"
+            ? `href="${favoriteHref(favorite)}"`
+            : `href="#" data-favorite-overlay="${favorite.overlay}"`;
+          return `<div class="mobile-nav-row mobile-nav-main-row mobile-nav-favorite" data-favorite-id="${favorite.targetId}">
+            <button class="mobile-nav-drag-handle" type="button" tabindex="-1" aria-label="${favoriteLabel(favorite)} verschieben">${mobileNavIcon("drag_handle")}</button>
+            <a ${attributes} class="mobile-nav-favorite-link">
+              ${mobileNavIcon(favoriteIconName(favorite), "mobile-nav-icon mobile-nav-favorite-icon")}
+              <span>${favoriteLabel(favorite)}</span>
+            </a>
+          </div>`;
+        }).join("")}
+        <p class="sr-only mobile-nav-favorites-announcement" aria-live="polite"></p>
+      </div>
     </div>
   `;
 }
@@ -168,6 +203,50 @@ function renderMobileNav() {
       </aside>
     </div>
   `;
+}
+
+function updateMobileFavorites(favorites) {
+  const scroll = document.querySelector(".mobile-nav-scroll");
+  const main = scroll?.querySelector(".mobile-nav-main");
+  if (!scroll || !main) return;
+  const previous = scroll.querySelector(".mobile-nav-favorites");
+  const expanded = previous?.querySelector(".mobile-nav-favorites-toggle")?.getAttribute("aria-expanded") === "true";
+  const editing = previous?.classList.contains("is-editing") || false;
+  const focusedId = document.activeElement?.closest?.(".mobile-nav-favorite")?.dataset.favoriteId || null;
+  previous?.remove();
+  const visible = favorites.filter((favorite) => favoriteVisibleForUser(favorite));
+  if (!visible.length) return;
+  main.insertAdjacentHTML("beforebegin", renderMobileFavorites(visible));
+  const current = scroll.querySelector(".mobile-nav-favorites");
+  const toggle = current.querySelector(".mobile-nav-favorites-toggle");
+  const submenu = current.querySelector(".mobile-nav-submenu");
+  current.classList.toggle("is-editing", editing);
+  toggle.setAttribute("aria-expanded", String(expanded || editing));
+  submenu.hidden = !(expanded || editing);
+  const editButton = current.querySelector(".mobile-nav-favorites-edit");
+  editButton.setAttribute("aria-pressed", String(editing));
+  editButton.setAttribute("aria-label", editing ? "Bearbeitung der Favoriten beenden" : "Favoritenreihenfolge bearbeiten");
+  updateFavoriteDragLabels(current);
+  if (focusedId) current.querySelector(`[data-favorite-id="${focusedId}"] .mobile-nav-drag-handle`)?.focus();
+}
+
+function updateFavoriteDragLabels(container) {
+  const rows = [...container.querySelectorAll(".mobile-nav-favorite")];
+  rows.forEach((row, index) => {
+    const label = row.querySelector(".mobile-nav-favorite-link span")?.textContent || "Favorit";
+    const handle = row.querySelector(".mobile-nav-drag-handle");
+    handle.tabIndex = container.classList.contains("is-editing") ? 0 : -1;
+    handle.setAttribute("aria-label", `${label}, Position ${index + 1} von ${rows.length}, mit Pfeiltasten verschieben`);
+  });
+}
+
+function announceFavoritePosition(container, row) {
+  updateFavoriteDragLabels(container);
+  const rows = [...container.querySelectorAll(".mobile-nav-favorite")];
+  const position = rows.indexOf(row) + 1;
+  const label = row.querySelector(".mobile-nav-favorite-link span")?.textContent || "Favorit";
+  const announcement = container.querySelector(".mobile-nav-favorites-announcement");
+  if (announcement) announcement.textContent = `${label} ist jetzt an Position ${position} von ${rows.length}.`;
 }
 
 function createAppShiftLayer() {
@@ -307,6 +386,25 @@ function initMobileNavigation() {
 
   mobileNavModal.addEventListener("click", (event) => {
     if (!(event.target instanceof Element)) return;
+    if (event.target.closest(".mobile-nav-drag-handle")) {
+      event.preventDefault();
+      return;
+    }
+    const editButton = event.target.closest(".mobile-nav-favorites-edit");
+    if (editButton) {
+      const favorites = mobileNavModal.querySelector(".mobile-nav-favorites");
+      const toggle = favorites?.querySelector(".mobile-nav-favorites-toggle");
+      const submenu = favorites?.querySelector(".mobile-nav-submenu");
+      const editing = favorites?.classList.toggle("is-editing") || false;
+      editButton.setAttribute("aria-pressed", String(editing));
+      editButton.setAttribute("aria-label", editing ? "Bearbeitung der Favoriten beenden" : "Favoritenreihenfolge bearbeiten");
+      if (editing) {
+        toggle?.setAttribute("aria-expanded", "true");
+        if (submenu) submenu.hidden = false;
+      }
+      if (favorites) updateFavoriteDragLabels(favorites);
+      return;
+    }
     if (event.target === mobileNavModal) closeNavigation();
     const groupToggle = event.target.closest(".mobile-nav-group-toggle");
     if (groupToggle) {
@@ -316,8 +414,87 @@ function initMobileNavigation() {
       if (submenu) submenu.hidden = expanded;
       return;
     }
+    const overlayLink = event.target.closest("[data-favorite-overlay]");
+    if (overlayLink) {
+      event.preventDefault();
+      closeNavigation();
+      window.openFavoriteMatchAction?.(overlayLink.dataset.favoriteOverlay);
+      return;
+    }
     const link = event.target.closest(".mobile-nav-content a");
     if (link) closeNavigation({ restoreFocus: !link.closest(".mobile-nav-main, .mobile-nav-favorites") });
+  });
+
+  let draggedRow = null;
+  let dragPointerId = null;
+  let dragOriginalOrder = null;
+  let dragClientY = null;
+  let dragScrollFrame = null;
+  const autoScrollFavorites = () => {
+    if (!draggedRow || dragClientY === null) {
+      dragScrollFrame = null;
+      return;
+    }
+    const scroll = mobileNavModal.querySelector(".mobile-nav-scroll");
+    const bounds = scroll.getBoundingClientRect();
+    if (dragClientY < bounds.top + 56) scroll.scrollBy({ top: -12 });
+    else if (dragClientY > bounds.bottom - 56) scroll.scrollBy({ top: 12 });
+    dragScrollFrame = requestAnimationFrame(autoScrollFavorites);
+  };
+  mobileNavModal.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest(".mobile-nav-drag-handle");
+    if (!handle || !handle.closest(".mobile-nav-favorites.is-editing")) return;
+    event.preventDefault();
+    draggedRow = handle.closest(".mobile-nav-favorite");
+    dragPointerId = event.pointerId;
+    dragClientY = event.clientY;
+    dragOriginalOrder = [...draggedRow.parentElement.querySelectorAll(".mobile-nav-favorite")].map((row) => row.dataset.favoriteId);
+    handle.setPointerCapture?.(event.pointerId);
+    draggedRow?.classList.add("is-dragging");
+    if (!dragScrollFrame) dragScrollFrame = requestAnimationFrame(autoScrollFavorites);
+  });
+  mobileNavModal.addEventListener("pointermove", (event) => {
+    if (!draggedRow || event.pointerId !== dragPointerId) return;
+    dragClientY = event.clientY;
+    const row = document.elementFromPoint(event.clientX, event.clientY)?.closest(".mobile-nav-favorite");
+    if (!row || row === draggedRow || row.parentElement !== draggedRow.parentElement) return;
+    const bounds = row.getBoundingClientRect();
+    row.parentElement.insertBefore(draggedRow, event.clientY < bounds.top + bounds.height / 2 ? row : row.nextSibling);
+  });
+  const finishFavoriteDrag = async (cancelled = false) => {
+    if (!draggedRow) return;
+    const container = draggedRow.closest(".mobile-nav-favorites");
+    const parent = draggedRow.parentElement;
+    draggedRow.classList.remove("is-dragging");
+    if (cancelled && dragOriginalOrder) {
+      const rows = new Map([...parent.querySelectorAll(".mobile-nav-favorite")].map((row) => [row.dataset.favoriteId, row]));
+      for (const id of dragOriginalOrder) parent.appendChild(rows.get(id));
+    }
+    if (!cancelled) announceFavoritePosition(container, draggedRow);
+    draggedRow = null;
+    dragPointerId = null;
+    dragOriginalOrder = null;
+    dragClientY = null;
+    if (dragScrollFrame) cancelAnimationFrame(dragScrollFrame);
+    dragScrollFrame = null;
+    if (cancelled) return;
+    const ids = [...mobileNavModal.querySelectorAll(".mobile-nav-favorite")].map((row) => row.dataset.favoriteId);
+    try { await reorderFavorites(ids); } catch (error) { window.showToast?.(error.message || "Reihenfolge konnte nicht gespeichert werden.", "error"); }
+  };
+  mobileNavModal.addEventListener("pointerup", () => finishFavoriteDrag(false));
+  mobileNavModal.addEventListener("pointercancel", () => finishFavoriteDrag(true));
+  mobileNavModal.addEventListener("keydown", async (event) => {
+    const handle = event.target.closest(".mobile-nav-drag-handle");
+    if (!handle || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const row = handle.closest(".mobile-nav-favorite");
+    const sibling = event.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+    if (!sibling) return;
+    row.parentElement.insertBefore(row, event.key === "ArrowUp" ? sibling : sibling.nextSibling);
+    const container = row.closest(".mobile-nav-favorites");
+    announceFavoritePosition(container, row);
+    const ids = [...row.parentElement.querySelectorAll(".mobile-nav-favorite")].map((entry) => entry.dataset.favoriteId);
+    try { await reorderFavorites(ids); handle.focus(); } catch (error) { window.showToast?.(error.message || "Reihenfolge konnte nicht gespeichert werden.", "error"); }
   });
 
   document.addEventListener("keydown", (event) => {
@@ -355,6 +532,7 @@ async function initNavigation() {
     renderAuthState(user, authState);
     updateMessageSubscription(authState.status === "authenticated" ? user : null);
   });
+  subscribeFavorites(({ favorites }) => updateMobileFavorites(favorites));
   window.addEventListener("epiber-message-summary-refresh", () => refreshMessageSummary());
 
   await ready;

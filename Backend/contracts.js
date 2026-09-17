@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { AppError } = require("./errors.js");
 const {
   booleanValue,
@@ -88,6 +89,67 @@ const playerIds = (name) => (value) => {
   }
   return value.map((entry) => idValue(entry, name));
 };
+const FAVORITE_PAGES = new Set([
+  "index", "Matches1", "players", "Bewerbe", "scoreboard", "RoundRobin", "entryList", "rangliste",
+  "bewerbsRaster", "adminLogging", "personenNormalisieren", "mitgliederAbgleichen", "servicebereich", "navigator", "monitor",
+]);
+const FAVORITE_ID_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster"]);
+const FAVORITE_OVERLAYS = new Set(["match-result", "match-appointment"]);
+
+function favoriteTargetId(target) {
+  return `favorite-${crypto.createHash("sha256").update(JSON.stringify(target)).digest("base64url")}`;
+}
+
+function favoriteTarget(raw) {
+  const value = requireObject(raw, "favorite");
+  if (value.type === "page") {
+    const pageTarget = objectShape(value, {
+      type: (entry) => text("type", { max: 8, pattern: /^page$/ })(entry),
+      page: text("page", { max: 32 }),
+      params: optional((entry) => requireObject(entry, "params")),
+    });
+    if (!FAVORITE_PAGES.has(pageTarget.page)) throw new AppError("VALIDATION_ERROR", "Favoritenseite ist nicht erlaubt");
+    const rawParams = pageTarget.params || {};
+    let params;
+    if (pageTarget.page === "RoundRobin") {
+      params = objectShape(rawParams, {
+        id: id("id"),
+        paarungslayout: optional(integer("paarungslayout", { min: 0, max: 5 })),
+      });
+    } else if (FAVORITE_ID_PAGES.has(pageTarget.page)) {
+      params = objectShape(rawParams, { id: id("id") });
+    } else if (pageTarget.page === "navigator") {
+      params = objectShape(rawParams, {
+        profil: optional(text("profil", { max: 32, pattern: /^[A-Za-z0-9_.:-]+$/ })),
+      });
+    } else {
+      params = objectShape(rawParams, {});
+    }
+    const target = { type: "page", page: pageTarget.page, ...(Object.keys(params).length ? { params } : {}) };
+    return { targetId: favoriteTargetId(target), ...target };
+  }
+  if (value.type === "overlay") {
+    const overlayTarget = objectShape(value, {
+      type: (entry) => text("type", { max: 8, pattern: /^overlay$/ })(entry),
+      overlay: text("overlay", { max: 32 }),
+    });
+    if (!FAVORITE_OVERLAYS.has(overlayTarget.overlay)) throw new AppError("VALIDATION_ERROR", "Favoritenoverlay ist nicht erlaubt");
+    const target = { type: "overlay", overlay: overlayTarget.overlay };
+    return { targetId: favoriteTargetId(target), ...target };
+  }
+  throw new AppError("VALIDATION_ERROR", "Favoritenzieltyp ist nicht erlaubt");
+}
+
+function favoriteTargets(value) {
+  if (!Array.isArray(value) || value.length > 32) {
+    throw new AppError("VALIDATION_ERROR", "favorites muss ein Array mit maximal 32 Zielen sein");
+  }
+  const targets = value.map(favoriteTarget);
+  if (new Set(targets.map(({ targetId }) => targetId)).size !== targets.length) {
+    throw new AppError("VALIDATION_ERROR", "Favoritenziele muessen eindeutig sein");
+  }
+  return targets;
+}
 
 function courtAssignment(params) {
   const value = objectShape(params, {
@@ -131,6 +193,12 @@ const requestContracts = {
   scoreboardSnapshot: empty,
   memberDirectory: empty,
   myProfile: empty,
+  myFavorites: empty,
+  setMyFavorites: (params) => objectShape(params, {
+    operationId: operation,
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+    favorites: favoriteTargets,
+  }),
   myMessageSummary: empty,
   myMessages: (params) => objectShape(params, {
     cursor: optional(id("cursor")),
@@ -304,4 +372,4 @@ function validateEndpointResponse(endpoint, result) {
   return result;
 }
 
-module.exports = { requestContracts, validateEndpointRequest, validateEndpointResponse };
+module.exports = { requestContracts, validateEndpointRequest, validateEndpointResponse, validateFavoriteTargets: favoriteTargets };

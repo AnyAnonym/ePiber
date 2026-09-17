@@ -109,6 +109,13 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   erfasst.
 
 -- Universelle Matchaktionen im gemeinsamen Profilmodal --
+  Das Profilmodal selbst ist kein Favoritenziel. Ergebnis- und Termindialog tragen
+  dagegen rechts neben ihrer Ueberschrift den gemeinsamen Favoritenstern. Der
+  direkte Overlayfavorit zeigt vor dem Fachdialog eine Auswahl ausschliesslich
+  eigener offener Matches mit `canSetResult` beziehungsweise
+  `canSetMatchAppointment`; auch Administratoren erhalten dort bewusst nur eigene
+  Begegnungen.
+
   Jede offene, vollstaendig besetzte Nicht-BYE-Matchkarte zeigt fuer einen
   beteiligten `player`, `player A` oder `player B` neben `Ergebnis eintragen` die
   Aktion `Termin eintragen` beziehungsweise bei vorhandenem `MatchDate` `Termin

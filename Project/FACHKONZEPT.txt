@@ -383,6 +383,12 @@ angemeldeten Benutzern vorbehalten.
         redaktionell statisch gepflegt werden. Noch offene Platzierungen werden
         eindeutig mit einem Gedankenstrich gekennzeichnet. [Bestaetigt]
 
+  LF-63 Angemeldete Benutzer sollen Seiten und die direkten Matchaktionen
+        `Spieleingabe` sowie `Termin festlegen / aendern` als persoenliche,
+        kontogebundene Favoriten speichern und deren Reihenfolge selbst festlegen
+        koennen. Nicht vorhandene oder nicht berechtigte Ziele duerfen nicht als
+        bedienbare Favoriten erscheinen. [Bestaetigt]
+
 
 ================================================================================
 7. ABGRENZUNG

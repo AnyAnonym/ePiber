@@ -186,6 +186,33 @@ class StateRepository {
     });
   }
 
+  getUserFavorites(userId) {
+    const snapshot = this.getState(`favorites:${userId}`, []);
+    if (!Array.isArray(snapshot.value)) {
+      throw new AppError("STATE_CORRUPT", "Favoriten-State ist ungueltig", 503);
+    }
+    return { favorites: snapshot.value, revision: snapshot.revision, updatedAt: snapshot.updatedAt };
+  }
+
+  setUserFavorites(userId, { operationId, expectedRevision, favorites }) {
+    const operation = this.applyStateOperation({
+      stateKey: `favorites:${userId}`,
+      fallback: [],
+      expectedRevision,
+      actorKey: `user:${userId}`,
+      operationId,
+      endpoint: "setMyFavorites",
+      payload: { expectedRevision, favorites },
+      update: () => favorites,
+      resultForSnapshot: (snapshot) => ({
+        success: true,
+        favorites: snapshot.value,
+        revision: snapshot.revision,
+      }),
+    });
+    return { ...operation.result, repeated: operation.repeated };
+  }
+
   createSession({ userId, email, login = email, ttlMs }) {
     this.ensureOpen();
     const token = randomToken();

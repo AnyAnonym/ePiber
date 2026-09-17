@@ -14,7 +14,8 @@ import {
   subscribeAuth,
 } from "./authClient.js";
 import { diagnostic } from "./diagnostics.js";
-import { categorizedProfileCompetitions, clearProfileModalContent } from "./profileModalState.js";
+import { createFavoriteButton } from "./favorites.js";
+import { categorizedProfileCompetitions, clearProfileModalContent, mergedProfileCompetitions } from "./profileModalState.js";
 
 const readPublicProfile = createEndpoint("publicProfile");
 const readMyProfile = createEndpoint("myProfile");
@@ -51,6 +52,8 @@ let messageState = null;
 let messageDetailReturnFocus = null;
 let adminRankingReturnFocus = null;
 let matchResultReturnFocus = null;
+let favoriteMatchPickerReturnFocus = null;
+let favoriteMatchPickerGeneration = 0;
 let matchResultScore = [];
 let matchResultStatusTimer = null;
 
@@ -198,6 +201,13 @@ function closeModal(modal) {
     profileModal.inert = false;
     profileModal.removeAttribute("aria-hidden");
     if (returnFocus?.isConnected && !profileModal.classList.contains("hidden")) returnFocus.focus();
+  }
+  if (modal?.id === "favoriteMatchPickerModal") {
+    favoriteMatchPickerGeneration += 1;
+    modal.querySelector("#favoriteMatchPickerList")?.replaceChildren();
+    const returnFocus = favoriteMatchPickerReturnFocus;
+    favoriteMatchPickerReturnFocus = null;
+    if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
   }
   if (modal?.id === "passwordSetupModal") document.getElementById("passwordSetupForm")?.reset();
   if (modal?.id === "adminPasswordModal") {
@@ -463,6 +473,35 @@ matchResultModal.setAttribute("role", "dialog");
 matchResultModal.setAttribute("aria-modal", "true");
 matchResultModal.setAttribute("aria-labelledby", "matchResultTitle");
 matchResultModal.querySelector(".close")?.setAttribute("aria-label", "Ergebnisdialog abbrechen");
+
+const favoriteMatchPickerModal = createModal("favoriteMatchPickerModal", `
+  <h2 id="favoriteMatchPickerTitle">Match auswählen</h2>
+  <p id="favoriteMatchPickerStatus" class="match-result-status" role="status" aria-live="polite"></p>
+  <div id="favoriteMatchPickerList" class="favorite-match-picker-list"></div>
+`);
+favoriteMatchPickerModal.setAttribute("role", "dialog");
+favoriteMatchPickerModal.setAttribute("aria-modal", "true");
+favoriteMatchPickerModal.setAttribute("aria-labelledby", "favoriteMatchPickerTitle");
+favoriteMatchPickerModal.querySelector(".close")?.setAttribute("aria-label", "Matchauswahl schließen");
+
+function addModalFavorite(modal, titleId, target) {
+  const title = modal.querySelector(`#${titleId}`);
+  if (!title) return;
+  const row = document.createElement("div");
+  row.className = "modal-title-row";
+  title.parentElement.insertBefore(row, title);
+  row.append(title, createFavoriteButton(target, { className: "modal-favorite-star" }));
+}
+
+addModalFavorite(matchResultModal, "matchResultTitle", { type: "overlay", overlay: "match-result" });
+addModalFavorite(matchDateModal, "matchDateTitle", { type: "overlay", overlay: "match-appointment" });
+const pickerResultStar = createFavoriteButton({ type: "overlay", overlay: "match-result" }, { className: "modal-favorite-star" });
+const pickerAppointmentStar = createFavoriteButton({ type: "overlay", overlay: "match-appointment" }, { className: "modal-favorite-star" });
+const pickerTitle = favoriteMatchPickerModal.querySelector("#favoriteMatchPickerTitle");
+const pickerTitleRow = document.createElement("div");
+pickerTitleRow.className = "modal-title-row";
+pickerTitle.parentElement.insertBefore(pickerTitleRow, pickerTitle);
+pickerTitleRow.append(pickerTitle, pickerResultStar, pickerAppointmentStar);
 document.getElementById("matchDatePreviousMonth").addEventListener("click", () => {
   if (!matchCalendarMonth) return;
   matchCalendarMonth = new Date(matchCalendarMonth.getFullYear(), matchCalendarMonth.getMonth() - 1, 1);
@@ -1063,22 +1102,17 @@ function renderMatchDateLegend() {
   if (!legend || !availability || !matchDateContext) return;
   legend.replaceChildren();
   availability.textContent = "";
-  if (!matchDateContext.ranking || !matchDateContext.challengedAt) {
+  if (!matchDateContext.scheduleMarkers.length) {
     legend.hidden = true;
     availability.hidden = true;
     return;
   }
-  const entries = [
-    ["challenge-start", "Forderung ausgesprochen", matchDateContext.challengedAt],
-    ["challenge-agreement", "Termin festlegen bis", matchDateContext.agreementDeadlineAt],
-    ["challenge-end", "Spieltermin spätestens", matchDateContext.appointmentDeadlineAt],
-  ];
-  for (const [className, label, date] of entries) {
+  for (const entry of matchDateContext.scheduleMarkers) {
     const line = document.createElement("p");
     const marker = document.createElement("span");
-    marker.className = `match-date-legend-marker ${className}`;
+    marker.className = `match-date-legend-marker marker-${entry.tone}`;
     marker.setAttribute("aria-hidden", "true");
-    line.append(marker, `${label}: ${formatCompactDate(compactDateFromDate(date))}`);
+    line.append(marker, `${entry.label}: ${formatCompactDate(compactDateFromDate(entry.date))}`);
     legend.appendChild(line);
   }
   legend.hidden = false;
@@ -1174,6 +1208,18 @@ function openMatchDateModal(match, profile, competition) {
   const challengedAt = ranking ? compactDateValue(match.challengeDate) : null;
   const agreementDeadlineAt = challengedAt ? new Date(challengedAt.getTime() + 7 * 24 * 60 * 60 * 1000) : null;
   const appointmentDeadlineAt = challengedAt ? new Date(challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000) : null;
+  const projectedMarkers = Array.isArray(match.scheduleMarkers) ? match.scheduleMarkers.flatMap((entry) => {
+    const at = Number(entry?.at);
+    const label = String(entry?.label || "").trim();
+    const tone = ["blue", "yellow", "red", "green"].includes(entry?.tone) ? entry.tone : "blue";
+    if (!Number.isFinite(at) || !label) return [];
+    return [{ kind: String(entry.kind || "marker"), tone, label, date: new Date(at) }];
+  }) : [];
+  const scheduleMarkers = projectedMarkers.length ? projectedMarkers : challengedAt ? [
+    { kind: "challenge", tone: "blue", label: "Forderung ausgesprochen", date: challengedAt },
+    { kind: "agreement-deadline", tone: "yellow", label: "Termin festlegen bis", date: agreementDeadlineAt },
+    { kind: "match-deadline", tone: "red", label: "Spieltermin spätestens", date: appointmentDeadlineAt },
+  ] : [];
   const finalDay = appointmentDeadlineAt || today;
   matchDateContext = {
     matchId,
@@ -1192,6 +1238,7 @@ function openMatchDateModal(match, profile, competition) {
     challengedAt,
     agreementDeadlineAt,
     appointmentDeadlineAt,
+    scheduleMarkers,
   };
   reasonFields.hidden = !admin;
   reasonInput.disabled = !admin;
@@ -1214,6 +1261,73 @@ function openMatchDateModal(match, profile, competition) {
   openModal(matchDateModal);
   matchDateModal.querySelector(".match-date-calendar-day.selected:not(:disabled), .match-date-calendar-day:not(:disabled)")?.focus();
 }
+
+function favoriteMatchDescription(competition, match) {
+  const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" gegen ") || "Match";
+  return `${competition.competitionName || "Bewerb"} · ${formatProfileRound(match.round)} · ${teams}`;
+}
+
+window.openFavoriteMatchAction = async (overlay) => {
+  if (!["match-result", "match-appointment"].includes(overlay)) return;
+  await ready;
+  if (!getUser()) {
+    window.showToast("Bitte zuerst anmelden.", "error");
+    window.openLoginModal();
+    return;
+  }
+  const resultAction = overlay === "match-result";
+  const requestGeneration = ++favoriteMatchPickerGeneration;
+  const requestIdentity = String(getUser()?.id || "");
+  document.getElementById("favoriteMatchPickerTitle").textContent = resultAction ? "Spieleingabe" : "Termin festlegen / ändern";
+  pickerResultStar.hidden = !resultAction;
+  pickerAppointmentStar.hidden = resultAction;
+  const status = document.getElementById("favoriteMatchPickerStatus");
+  const list = document.getElementById("favoriteMatchPickerList");
+  status.hidden = false;
+  status.textContent = "Eigene offene Matches werden geladen...";
+  list.replaceChildren();
+  favoriteMatchPickerReturnFocus = document.activeElement;
+  openModal(favoriteMatchPickerModal);
+  favoriteMatchPickerModal.querySelector(".close")?.focus();
+  try {
+    const response = await readMyProfile();
+    if (requestGeneration !== favoriteMatchPickerGeneration
+      || favoriteMatchPickerModal.classList.contains("hidden")
+      || String(getUser()?.id || "") !== requestIdentity) return;
+    if (!response.data?.success || !response.data.profile) throw new Error("Eigene Matches konnten nicht geladen werden.");
+    const profile = response.data.profile;
+    const choices = mergedProfileCompetitions(profile).flatMap((competition) => competition.matches
+      .filter((match) => match.status === "open" && (resultAction ? match.canSetResult : match.canSetMatchAppointment))
+      .map((match) => ({ competition, match })));
+    if (!choices.length) {
+      status.textContent = resultAction
+        ? "Es gibt derzeit kein eigenes offenes Match für eine Spieleingabe."
+        : "Es gibt derzeit kein eigenes offenes Match für eine Terminänderung.";
+      return;
+    }
+    status.hidden = true;
+    for (const { competition, match } of choices) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "favorite-match-picker-item";
+      button.textContent = favoriteMatchDescription(competition, match);
+      button.addEventListener("click", () => {
+        closeModal(favoriteMatchPickerModal);
+        if (resultAction) openMatchResultModal("result", profile, competition, match);
+        else openMatchDateModal(match, profile, competition);
+      });
+      list.appendChild(button);
+    }
+    list.querySelector("button")?.focus();
+  } catch (error) {
+    if (requestGeneration !== favoriteMatchPickerGeneration
+      || favoriteMatchPickerModal.classList.contains("hidden")
+      || String(getUser()?.id || "") !== requestIdentity) return;
+    diagnostic.error("favorite_match_picker_load_failed", error);
+    status.hidden = false;
+    status.textContent = errorMessage(error, "Eigene Matches konnten nicht geladen werden.");
+  }
+};
 
 function openMatchAppointmentClearModal(match, profile, competition) {
   const matchId = String(match?.matchId || "").trim();
@@ -2025,6 +2139,7 @@ subscribeAuth((user) => {
     closeModal(adminPasswordModal);
     closeModal(adminRankingActionModal);
     closeModal(matchResultModal);
+    closeModal(favoriteMatchPickerModal);
   }
   modalAuthIdentity = identity;
   if (user) return;
@@ -2034,6 +2149,7 @@ subscribeAuth((user) => {
   closeModal(matchDateModal);
   closeModal(adminRankingActionModal);
   closeModal(matchResultModal);
+  closeModal(favoriteMatchPickerModal);
   closeModal(withdrawModal);
   closeModal(profileModal);
 });
@@ -2123,7 +2239,7 @@ document.getElementById("loginForm").addEventListener("submit", async (event) =>
   const form = event.currentTarget;
   const submitButton = form.querySelector('button[type="submit"]');
   const loginName = form.elements.username.value.trim();
-  const password = form.elements.password.value;
+  const { value: password } = form.elements.password;
 
   setLoginStatus();
   setModalBusy(form, true);
@@ -2614,6 +2730,18 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Tab" && !favoriteMatchPickerModal.classList.contains("hidden")) {
+    const focusable = [...favoriteMatchPickerModal.querySelectorAll("button:not([hidden]):not(:disabled)")]
+      .filter((element) => !element.closest("[hidden]"));
+    if (!focusable.length) return;
+    const currentIndex = focusable.indexOf(document.activeElement);
+    const nextIndex = event.shiftKey
+      ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+      : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+    event.preventDefault();
+    focusable[nextIndex].focus();
+    return;
+  }
   if (event.key === "Tab" && !matchResultModal.classList.contains("hidden")) {
     const focusable = [...matchResultModal.querySelectorAll("button:not([hidden]):not(:disabled), input:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled), textarea:not([hidden]):not(:disabled)")]
       .filter((element) => !element.closest("[hidden]"));

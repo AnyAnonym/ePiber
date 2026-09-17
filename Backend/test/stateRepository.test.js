@@ -137,6 +137,41 @@ test("State und Idempotenzdatensatz werden atomar geschrieben", () => {
   repository.close();
 });
 
+test("Favoriten sind pro Benutzer revisioniert und idempotent", () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const favorites = [{ targetId: "favorite-a", type: "page", page: "index" }];
+  const request = {
+    operationId: "00000000-0000-4000-8000-000000000030",
+    expectedRevision: 0,
+    favorites,
+  };
+  const first = repository.setUserFavorites("p1", request);
+  assert.deepEqual(first, { success: true, favorites, revision: 1, repeated: false });
+  assert.deepEqual(repository.getUserFavorites("p1"), {
+    favorites,
+    revision: 1,
+    updatedAt: repository.getUserFavorites("p1").updatedAt,
+  });
+  assert.deepEqual(repository.getUserFavorites("p2"), { favorites: [], revision: 0, updatedAt: 0 });
+  assert.deepEqual(repository.setUserFavorites("p1", request), { ...first, repeated: true });
+  assert.equal(repository.getUserFavorites("p1").revision, 1);
+  assert.throws(() => repository.setUserFavorites("p1", {
+    operationId: "00000000-0000-4000-8000-000000000031",
+    expectedRevision: 0,
+    favorites: [],
+  }), { code: "REVISION_CONFLICT" });
+  repository.close();
+});
+
+test("Favoritenstate erkennt eine strukturell beschaedigte Liste", () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  repository.setState("favorites:p1", { invalid: true });
+  assert.throws(() => repository.getUserFavorites("p1"), { code: "STATE_CORRUPT" });
+  repository.close();
+});
+
 test("Monitor-Tokens werden nur gehasht gespeichert und sind widerrufbar", () => {
   const repository = new StateRepository(":memory:");
   repository.init();

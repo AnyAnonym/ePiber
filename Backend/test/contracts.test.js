@@ -7,10 +7,43 @@ test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
     "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
     "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "matchResultSuggestion", "matches", "matches1",
     "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
-    "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myMessage", "myMessageSummary", "myMessages", "myProfile", "navigator", "normalizePerson", "operationStatus",
+    "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myMessage", "myMessageSummary", "myMessages", "myProfile", "navigator", "normalizePerson", "operationStatus",
     "players", "preMatches", "publicProfile", "rankingChallengeState", "readMatchRestrictions", "reconcilePerson", "refreshSheetData", "removeEntryList", "rlPlatzierung",
-    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setMatchAppointment", "setMatchResult", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
+    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setMatchAppointment", "setMatchResult", "setMyFavorites", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
   ]);
+});
+
+test("Favoritenvertrag erlaubt nur kontrollierte eindeutige Ziele", () => {
+  const operationId = "00000000-0000-4000-8000-000000000029";
+  const result = validateEndpointRequest("setMyFavorites", {
+    operationId,
+    expectedRevision: 0,
+    favorites: [
+      { type: "page", page: "RoundRobin", params: { id: "cup-1", paarungslayout: 3 } },
+      { type: "page", page: "navigator", params: { profil: "screen-1" } },
+      { type: "overlay", overlay: "match-result" },
+    ],
+  });
+  assert.equal(result.favorites.length, 3);
+  assert.equal(result.favorites.every(({ targetId }) => /^favorite-[A-Za-z0-9_-]{43}$/.test(targetId)), true);
+  assert.deepEqual(validateEndpointRequest("setMyFavorites", {
+    operationId, expectedRevision: 0, favorites: [{ type: "page", page: "index", params: {} }],
+  }).favorites[0], validateEndpointRequest("setMyFavorites", {
+    operationId, expectedRevision: 0, favorites: [{ type: "page", page: "index" }],
+  }).favorites[0]);
+
+  for (const favorites of [
+    [{ type: "page", page: "unknown" }],
+    [{ type: "page", page: "index", params: { id: "1" } }],
+    [{ type: "page", page: "RoundRobin", params: { paarungslayout: 6 } }],
+    [{ type: "page", page: "rangliste" }],
+    [{ type: "page", page: "navigator", params: { profil: "https://example.test" } }],
+    [{ type: "overlay", overlay: "free-form", label: "Nicht erlaubt" }],
+    [{ type: "overlay", overlay: "match-result" }, { type: "overlay", overlay: "match-result" }],
+    Array.from({ length: 33 }, () => ({ type: "page", page: "index" })),
+  ]) {
+    assert.throws(() => validateEndpointRequest("setMyFavorites", { operationId, expectedRevision: 0, favorites }), { code: "VALIDATION_ERROR" });
+  }
 });
 
 test("Sammelbestaetigung akzeptiert ausschliesslich eine operationId", () => {

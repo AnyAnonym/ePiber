@@ -1,6 +1,6 @@
 # Mandantenplattform, Vereins-Cells und Releasearchitektur
 
-Stand: 15.09.2026
+Stand: 17.09.2026
 Status: Nicht-kanonische fachliche und technische Arbeitsgrundlage; noch nicht
 implementiert, freigegeben oder als verbindliche Sollarchitektur dokumentiert
 Gegenstand: Kommerzielle ePiber-Plattform fuer mehrere Tennisvereine mit
@@ -16,10 +16,12 @@ kanonischen Dokumente uebernommen.
 
 Der aktuelle ePiber-Betrieb ist als Single-Tenant-System gebaut: Ein
 Backendprozess verarbeitet genau einen Vereinsdatenbestand, ein Google
-Spreadsheet, eine Court-Quelle sowie vier lokale SQLite-Dateien. Diese Datei
-beschreibt keine kleine Erweiterung dieses Modells, sondern eine spaetere
-Architekturmigration. Ein optionales `tenantId`-Feld in einzelnen Requests
-waere keine ausreichende Mandantentrennung.
+Spreadsheet, eine Court-Quelle sowie vier lokale SQLite-Dateien. Die Migration
+beginnt nicht mit einem optionalen `tenantId`-Feld in einzelnen Requests, sondern
+mit einem transaktionalen PostgreSQL-Datenmodell fuer den bestehenden
+Heimatverein und einer parallel aufgebauten, reproduzierbaren Plattformbasis.
+Ein frei uebergebenes `tenantId`-Feld waere keine ausreichende
+Mandantentrennung.
 
 ## 1. Bestaetigter Ausgangspunkt
 
@@ -65,8 +67,17 @@ Fussball oder Stocksport und deren unterschiedliche Regelwerke freischalten.
 ### 1.3 Betriebsmodell
 
 ePiber wird zentral als SaaS betrieben. Vereine betreiben nicht selbst ihre
-eigene Infrastruktur. Fuer die ersten zwei bis drei Jahre wird mit etwa 20 bis
-100 Mandanten geplant.
+eigene Infrastruktur. Fuer die ersten drei bis vier Jahre wird mit etwa 20 bis
+50 Mandanten geplant. Die erste Architektur- und Kapazitaetsgrenze liegt bei
+hoechstens etwa 100 Mandanten; eine darueber hinausgehende Skalierung wird erst
+nach nachhaltigem Wachstum geplant.
+
+Ein typischer Verein besitzt etwa 70 bis 250 Mitglieder. Voraussichtlich haben
+etwa 35 bis 125 Personen ein Benutzerkonto, von denen wiederum ungefaehr die
+Haelfte regelmaessig aktiv ist. Die Kapazitaetsplanung richtet sich trotzdem
+nicht nur nach Tenant- oder Mitgliederzahl, sondern nach gemessenen
+gleichzeitigen Benutzern, WebSockets, Buchungsspitzen, Datenbankverbindungen,
+Joblast, Retention und Restorezeiten.
 
 Jeder Verein erhaelt eine logisch und betrieblich isolierte Vereins-Cell. Eine
 Cell besteht nicht aus einem All-in-one-Container. Anwendung, Worker,
@@ -82,6 +93,30 @@ Beta und Stable.
 
 Kundenindividuelle Software-Forks sind nicht vorgesehen. Es sollen immer nur
 wenige, zentral kontrollierte Produktversionen gleichzeitig unterstuetzt werden.
+
+### 1.5 Produkt- und Migrationsrahmen bis Mai 2027
+
+Bis zum Saisonstart im Mai 2027 bleibt ASKÖ Piberbach der reale Test- und
+Referenzverein. Fachliche Entwicklung dient in dieser Phase vorrangig der
+Produktvalidierung im Heimatverein. Parallel entsteht auf einem weiteren
+Hetzner-Cloud-Server die spaetere Plattformbasis.
+
+Die PostgreSQL-Migration ist trotz dieses Featurefokus eine bewusst vorgezogene
+Strukturmassnahme, weil die priorisierten Funktionen transaktionale Datenhaltung
+benoetigen. Die Reihenfolge lautet:
+
+1. Personen-, Mitgliedschafts-, Konto- und Rollenmodell festlegen;
+2. PostgreSQL, Migrationen, Backup und Restore bereitstellen;
+3. Personen, Authentifizierung und Sicherheitsstate migrieren;
+4. Anlagen und Plaetze modellieren;
+5. ein begrenztes Hallenreservierungs-MVP fuer ASKÖ Piberbach umsetzen;
+6. Nutzung, Buchungsspitzen, Supportaufwand und Ressourcenbedarf im Winterbetrieb
+   messen;
+7. verbleibende Sheet- und SQLite-Domaenen kontrolliert migrieren und die
+   Plattformprovisionierung bis zum Saisonstart stabilisieren.
+
+Ein spielerisches Wett- oder virtuelles Waehrungssystem ist nur eine spaetere
+Produktidee und derzeit weder priorisiert noch Bestandteil dieses Zeitplans.
 
 ## 2. Zielbild im Ueberblick
 
@@ -158,7 +193,8 @@ ausgelegt:
 - Betreiber-IAM und Break-glass-Zugang.
 
 Ein eigener PostgreSQL-Prozess, Prometheus-Server oder Grafana-Server pro Verein
-waere bei 20 bis 100 Mandanten unverhaeltnismaessig teuer und schwer wartbar.
+waere bei bis zu etwa 100 Mandanten unverhaeltnismaessig teuer und schwer
+wartbar.
 Die fachlichen Daten, Datenbankrechte, Storageobjekte und Betreiberansichten
 bleiben trotzdem pro Verein getrennt.
 
@@ -208,7 +244,8 @@ blockieren.
 
 | Fachobjekt | Scope |
 |---|---|
-| Plattformbenutzer/Identitaet | Plattform |
+| Betreiberidentitaet | Plattform |
+| Benutzerkonto und Login | Verein/Tenant |
 | Verein/Tenant | Plattform-Control-Plane |
 | Tarif, Vertrag, Entitlement | Verein |
 | Sektion | Verein |
@@ -223,31 +260,46 @@ blockieren.
 ### 4.2 Identitaet, Person und Mitgliedschaft
 
 Die heutige Kopplung von Personenzeile, Login, Passwort und Vereinsrolle muss
-aufgeloest werden.
+aufgeloest werden. In der ersten kommerziellen Ausbaustufe gibt es bewusst keine
+globale Benutzeridentitaet fuer Vereinsmitglieder. Ein Mensch, der mehreren
+Vereinen angehoert, besitzt je Verein ein getrenntes Konto. Derselbe kanonische
+Login darf deshalb in verschiedenen Tenant-Datenbanken vorkommen, muss aber
+innerhalb eines Vereins eindeutig sein.
 
 ```text
-users
-  globale Benutzeridentitaet
-  Login, Credential oder externer IdP-Link
-
 tenants
   Verein, Status, Vertrag und Grundkonfiguration
 
 sections
   Tennis und spaetere Sektionen eines Vereins
 
-memberships
-  user_id + tenant_id
-  Aktivstatus, Mitgliedsklassifikation, Rollen
-
 people
-  tenant_id + person_id
   vereinsbezogene Stamm- und Kontaktdaten
+
+memberships
+  person_id
+  Mitgliedsstatus, Klassifikation, Beginn und Ende
+
+user_accounts
+  person_id
+  vereinslokaler Login, Credential und Sperrstatus
+
+role_assignments
+  person_id beziehungsweise user_account_id
+  vereins- oder spaeter sektionsbezogene Berechtigung
 ```
 
-Dadurch kann ein Mensch mehreren Vereinen angehoeren und in jedem Verein andere
-Rollen besitzen. Eine Plattformidentitaet darf nicht mit einem vereinsinternen
-Personenprofil gleichgesetzt werden.
+Nicht jede Person oder jedes Mitglied benoetigt ein Benutzerkonto. Eine Person
+kann historisch erhalten bleiben, obwohl ihre Mitgliedschaft beendet oder ihr
+Login gesperrt ist. Mitgliederklassifikation und technische Berechtigung bleiben
+getrennt. Kontakt-E-Mail und Login sind weiterhin verschiedene Angaben; eine
+E-Mail-Adresse ist weder tenantuebergreifender Personenschluessel noch Beweis
+derselben Person.
+
+Eine spaetere freiwillige Verknuepfung vereinslokaler Konten bleibt technisch
+moeglich, wird aber nicht vorweggenommen. Sie muesste als eigener, ausdruecklich
+bestaetigter Plattformvertrag umgesetzt werden und duerfte Konten niemals allein
+anhand gleicher E-Mail-Adressen zusammenfuehren.
 
 ### 4.3 Rollen
 
@@ -308,10 +360,10 @@ Regeln:
 - Weder URL-Parameter noch Requestbody duerfen den Tenant frei bestimmen.
 - Unbekannte, gesperrte oder nicht fertig provisionierte Tenants werden vor dem
   Datenzugriff abgewiesen.
-- Jede Session ist an Benutzer und aktive Mitgliedschaft beziehungsweise Tenant
-  gebunden.
-- Ein Vereinswechsel ist eine kontrollierte Serveraktion, kein geaenderter
-  Queryparameter.
+- Jede Session ist an ein vereinslokales Benutzerkonto, dessen aktuelle Rollen
+  und genau einen Tenant gebunden.
+- Ein anderer Verein wird ueber dessen validierte Domain und ein separates Konto
+  verwendet; es gibt zunaechst keinen globalen Vereinswechsel in einer Session.
 - Repositorymethoden erhalten Tenant-Scope explizit, etwa
   `getMatch(tenantId, matchId)` statt `getMatch(matchId)`.
 - `AsyncLocalStorage` darf Logging vereinfachen, aber keine expliziten
@@ -321,7 +373,8 @@ Regeln:
 
 ### 5.1 Entscheidungsvorbereitung
 
-Fuer die erwarteten 20 bis 100 Vereine werden drei Varianten betrachtet.
+Fuer die erwarteten 20 bis 50 und hoechstens etwa 100 Vereine werden drei
+Varianten betrachtet.
 
 | Variante | Beschreibung | Bewertung |
 |---|---|---|
@@ -417,6 +470,11 @@ Die Anwendung fuehrt trotzdem einen Tenant-Kontext. Dieser bleibt fuer Audit,
 Jobs, Storage, Domainerkennung, Support, Backups und zukuenftige gemeinsame
 Plattformdienste erforderlich.
 
+Connection Pools muessen pro Cell klein und begrenzt sein. Ein zentraler
+PgBouncer oder ein gleichwertiger Pooler verhindert, dass beispielsweise 50
+App- und Worker-Cells mit jeweils mehreren ungenutzten Verbindungen die
+PostgreSQL-Grenzen erschoepfen.
+
 ### 5.6 Datenbankanforderungen
 
 PostgreSQL wird langfristig System of Record fuer:
@@ -447,6 +505,34 @@ Google Sheets bleibt waehrend einer Uebergangszeit pro Verein eine kontrollierte
 Import-/Export- oder Legacyintegration. Es ist langfristig nicht die
 transaktionale Primaerdatenbank fuer Reservierungen, Stammdaten, Sessions oder
 Vertragsdaten.
+
+### 5.7 Migrationspfad fuer den bestehenden Heimatverein
+
+ASKÖ Piberbach wird als erster realer Tenant auf das neue Datenmodell migriert.
+Die Umstellung erfolgt domaenenweise, aber ohne dauerhaftes Dual-Write derselben
+Fachdaten nach Google Sheets beziehungsweise SQLite und PostgreSQL:
+
+1. asynchrone Repositoryvertraege und kontrollierte Transaktionsgrenzen
+   einfuehren;
+2. PostgreSQL-Schema, versionierte Migrationen, Connection Pooling, Readiness,
+   Metriken, Backup und Restore bereitstellen;
+3. Personen, Mitgliedschaften, vereinslokale Konten, Rollen, Sessions,
+   Loginlimits und Sicherheitsstate gemeinsam migrieren;
+4. Anlagen, Plaetze und das neue Reservierungsmodell ausschliesslich in
+   PostgreSQL aufbauen;
+5. Audit und Scorehistorie migrieren;
+6. Messaging samt transaktionaler Outbox migrieren;
+7. verbleibenden Anwendungsstate, Idempotenz und Jobs aufteilen und migrieren;
+8. Bewerbe und Eintragungen migrieren;
+9. Matches und Ranglisten wegen ihrer gemeinsamen Ergebnisfolgen zusammen
+   migrieren;
+10. Google Sheets danach nur noch als kontrollierten Import-/Exportweg verwenden.
+
+Fuer jeden Domaenencutover sind ein geprueftes Backup, ein begrenztes
+Schreibfenster, Anzahl- und Referenzvergleiche, eine PAJ-Abnahme, Auditabschluss
+und ein dokumentierter Rueckfallplan erforderlich. Sheet-spezifische
+Zeilenpositionen und Developer Metadata werden nicht zum dauerhaften
+PostgreSQL-Datenmodell.
 
 ## 6. Fachliche Erweiterungen
 
@@ -487,6 +573,24 @@ einer Sheet- oder Browserkonvention beruhen. Es muss insbesondere behandeln:
 Ein Buchungswrite muss atomar pruefen und speichern. Die Datenbank ist dabei
 Autoritaet; die Benutzeroberflaeche zeigt nur den kontrolliert projizierten
 aktuellen Stand.
+
+Das erste Hallenreservierungs-MVP fuer ASKÖ Piberbach soll bewusst auf den
+nachgewiesenen Kern begrenzt werden:
+
+- Anlagen, Hallenplaetze, Oeffnungszeiten und zeitlich begrenzte Platzsperren;
+- freie Zeiten anzeigen;
+- eigene Reservierung erstellen und stornieren;
+- gleichzeitige Doppelbuchungen durch eine PostgreSQL-Constraint verhindern;
+- Buchungsvorlauf, offene Buchungskontingente und Stornofrist serverseitig
+  erzwingen;
+- administrative Aenderungen nur berechtigt, begruendet und auditiert erlauben;
+- mobile Bedienung und interne Benachrichtigung;
+- strukturierte Abschlusslogs und Audit fuer Start, Erfolg, Ablehnung und
+  unklaren Ausgang ohne freie Personen- oder Buchungspayloads.
+
+Gaeste, Zahlungen, Wartelisten, No-show-Regeln, wiederkehrende Trainings und
+weitere Prioritaetsmodelle werden erst nach einer fachlichen Entscheidung in den
+MVP aufgenommen.
 
 ## 7. Echtzeit, Caches und Hintergrundarbeit
 
@@ -794,9 +898,33 @@ Jede Aenderung durchlaeuft mindestens:
 
 ### 13.1 Orchestrierung
 
-Fuer eine kleine erste Flotte kann automatisierter Docker-/Podman-Betrieb mit
-Compose und Infrastructure/Configuration as Code genuegen. Bei 20 bis 100
-Mandanten muss die Architektur aber auf einen Scheduler vorbereitet sein.
+Die erste Plattform laeuft auf Arch Linux, weil dafuer ein eigener betrieblicher
+Grundstandard vorgesehen ist. Das Rolling-Release-Modell verlangt einen
+geschuetzten Test- und Promotionweg; Datenbank- und Anwendungs-Hauptversionen
+werden unabhaengig vom Hostbetriebssystem fest gepinnt und kontrolliert
+aktualisiert.
+
+Fuer eine kleine erste Flotte wird folgender bewusst schlanker Referenzstack
+vorlaeufig empfohlen; die Einzelwerkzeuge sind vor ihrer Umsetzung noch
+praktisch zu bewerten:
+
+- OpenTofu fuer Cloud-Ressourcen, Netzwerk, Firewall und DNS;
+- Cloud-init nur fuer den reproduzierbaren Bootstrap;
+- Ansible fuer Hostkonfiguration und Betriebsdienste;
+- OCI-Images und eine externe Registry fuer Softwareartefakte;
+- Podman mit systemd-Quadlets fuer Cells und zentrale Dienste;
+- Caddy fuer Edge, TLS und validiertes Domainrouting;
+- PostgreSQL mit PgBouncer;
+- SOPS/age und kontrollierte systemd-/Podman-Credentials fuer Secrets;
+- pgBackRest oder WAL-G fuer PostgreSQL-PITR sowie Restic fuer geeignete
+  Datei- und Konfigurationssicherungen;
+- die bestehende Prometheus-, Loki-, Alloy- und Grafana-Ausrichtung fuer
+  Observability.
+
+Ein Provider- oder Golden Image darf den Neuaufbau beschleunigen, ist aber nicht
+die alleinige Quelle der Wahrheit. Ein nacktes vertrauenswuerdiges Arch-Image
+muss durch OpenTofu, Cloud-init, Ansible, OCI-Artefakte, getrennte Secrets und
+gepruefte Datenbackups wiederherstellbar sein.
 
 Pragmatischer Pfad:
 
@@ -810,6 +938,23 @@ Pragmatischer Pfad:
 Kubernetes wird nicht allein wegen der Mandantenfaehigkeit eingefuehrt. Es ist
 erst sinnvoll, wenn Flottengroesse, Hochverfuegbarkeit und Betriebskompetenz den
 zusaetzlichen Aufwand rechtfertigen.
+
+### 13.1.1 Vorlaeufige Kapazitaetsstufen
+
+Die Werte sind Startpunkte und werden durch Messung und Lasttests ersetzt:
+
+| Stufe | Rechenleistung | RAM | Primaerspeicher | Betriebsform |
+|---|---:|---:|---:|---|
+| ASKÖ plus erste Testtenants | 4 vCPU | 8 GB, bevorzugt 16 GB | 160 bis 250 GB NVMe | ein Plattformhost |
+| etwa 10 Tenants | 4 bis 8 vCPU | 16 GB | 160 bis 250 GB NVMe | ein Plattformhost mit externen Backups |
+| etwa 50 Tenants, zusammen | 12 bis 16 vCPU | 32 GB | 300 bis 500 GB NVMe | technisch moeglich, Trennung empfohlen |
+| etwa 50 Tenants, getrennt | App 8 vCPU; DB 4 bis 8 vCPU | App 16 bis 32 GB; DB 16 bis 32 GB | DB 250 bis 500 GB | App-/Edge- und PostgreSQL-Host getrennt |
+
+Vor einer Erweiterung werden mindestens RAM- und Swapdruck, CPU-P95,
+Datenbanklatenz, Poolauslastung, WebSocketzahl, Jobrueckstand, Speicherfuellstand,
+Backupdauer und praktisch gemessene Restorezeit bewertet. Vor zehn, 50 und 100
+Tenants sind synthetische Last- und Isolationstests mit realistischen
+Reservierungsspitzen erforderlich.
 
 ### 13.2 Netzwerk
 
@@ -860,6 +1005,24 @@ Secrets werden zentral verwaltet:
 
 ### 13.5 Backups und Disaster Recovery
 
+Die erste kommerzielle Stufe verlangt keine aktive Hochverfuegbarkeit. Das
+vorlaeufige Betriebsmodell ist Rebuild-and-Restore: Ein ausgefallener oder nicht
+mehr vertrauenswuerdiger Host wird durch einen sauberen neuen Server ersetzt,
+deklarativ aufgebaut und aus geprueften Backups wiederhergestellt. Ein dauerhaft
+laufender redundanter Ersatzserver ist dafuer zunaechst nicht erforderlich.
+
+RPO bezeichnet den maximal akzeptierten Datenverlust seit dem letzten nutzbaren
+Wiederherstellungspunkt. RTO bezeichnet die maximal akzeptierte Zeit bis zum
+wiederhergestellten vereinbarten Betriebsumfang. Als noch freizugebende
+Planungswerte gelten:
+
+| Szenario | RPO | RTO |
+|---|---:|---:|
+| einzelne Tenant-Datenbank | 15 Minuten | 2 bis 4 Stunden |
+| vollstaendiger Produktionshost | 15 bis 60 Minuten | 4 bis 8 Stunden |
+| vollstaendiger Standortausfall | 1 bis 4 Stunden | 8 bis 24 Stunden |
+| Anbieter- oder Accountverlust | bis 24 Stunden | 24 bis 48 Stunden |
+
 Vor kommerziellem Produktivbetrieb erforderlich:
 
 - automatisierte verschluesselte Off-site-Backups;
@@ -873,6 +1036,13 @@ Vor kommerziellem Produktivbetrieb erforderlich:
 - Sitzungs-, Reset- und Geraeteinvalidierung bei Restore;
 - Loeschregister fuer datenschutzrechtliche Loeschungen nach Restore;
 - klare Trennung von Backup-, Prune- und Restoreberechtigungen.
+
+Das DR-Runbook beginnt regelmaessig testweise mit einem nackten Providerimage.
+Es provisioniert Host, Netzwerk und Rechte, laedt bekannte OCI-Artefakte, stellt
+Secrets kontrolliert bereit beziehungsweise rotiert sie, restauriert PostgreSQL,
+prueft alle Tenant-Datenbanken und schaltet DNS oder Routing erst nach
+Integritaets-, Health- und Fachpruefungen um. Die reine VM-Bereitstellungszeit ist
+nicht mit dem erreichten RTO gleichzusetzen.
 
 ### 13.6 Observability und Alerting
 
@@ -950,104 +1120,116 @@ umzusetzen:
 
 ## 15. Priorisierter Umsetzungsplan
 
-### Phase 0: Entscheidungen und verbindliches Zielmodell
+Die Phasen beschreiben fachliche und technische Abhaengigkeiten, aber keine rein
+serielle Projektorganisation. Insbesondere laeuft Phase 3 ab Beginn parallel zu
+den ASKÖ-bezogenen Phasen 1 und 2, ohne deren laufenden Produktivbetrieb zu
+gefaehrden.
 
-- [ ] Mandant verbindlich als Tennisverein festlegen.
-- [ ] Sektion als vorbereitetes Unterobjekt und Tennis als einzige aktive
-      Erstsektion festlegen.
-- [ ] Vereins-, Sektions- und Plattformrollen definieren.
-- [ ] Login- und Mehrvereinsmitgliedschaftsmodell entscheiden.
-- [ ] Tarif-, Entitlement- und Feature-Flag-Modell entscheiden.
-- [ ] Release-Ringe, Betateilnahme, Supportfenster und Versionspolitik
-      beschliessen.
-- [ ] Datenbank pro Tenant als Standardmodell oder eine begruendete Alternative
-      verbindlich festlegen.
-- [ ] RPO/RTO, Retention, Export, Loeschung und Datenregionen festlegen.
-- [ ] Betreiber-, Support-, Datenschutz- und Incidentverantwortung benennen.
+### Phase 0: Entscheidungen und Messbasis
 
-**Exit:** Freigegebenes fachliches, wirtschaftliches und betriebliches
-Zielmodell.
+- [x] Mandant als Tennisverein und Tennis als einzige aktive Erstsektion fuer die
+      erste kommerzielle Stufe festlegen.
+- [x] Vereinslokale Benutzerkonten ohne globale Mitgliederidentitaet als
+      Erstmodell festlegen.
+- [x] ASKÖ Piberbach bis Mai 2027 als realen Referenz- und Testverein festlegen.
+- [x] Etwa 20 bis 50 Mandanten in drei bis vier Jahren und hoechstens etwa 100
+      Mandanten als erste Kapazitaetsgrenze festlegen.
+- [ ] Rollen, Reservierungsregeln, RPO/RTO, Retention, Datenregionen und
+      Verantwortlichkeiten verbindlich freigeben.
+- [ ] Istwerte fuer Prozessspeicher, Benutzer, WebSockets, Datenmengen,
+      Buchungsspitzen, Support und Restorezeiten erfassen.
 
-### Phase 1: Bestehenden Single-Tenant-Betrieb produktionsfest machen
+**Exit:** Fachmodell fuer Personen und Hallenreservierung sowie messbare
+Betriebsziele sind freigegeben.
 
-- [ ] Automatisierte verschluesselte Off-site-Backups umsetzen.
-- [ ] Restoretests und Backupaltermonitoring einrichten.
-- [ ] Aktive Alarmzustellung und Bereitschaftsweg einrichten.
-- [ ] Produktion und Staging in getrennte Ausfallbereiche ueberfuehren.
-- [ ] Reproduzierbares Image und CI-Pipeline aufbauen.
-- [ ] Infrastruktur und Konfiguration als Code verwalten.
-- [ ] Keine Produktion mehr direkt aus veraenderlichen Git-Checkouts betreiben.
+### Phase 1: PostgreSQL- und Personenbasis fuer ASKÖ
 
-**Exit:** Nachgewiesene Wiederherstellbarkeit, Alarmierung und
-artefaktbasierter Releaseprozess.
+- [ ] Personen, Mitgliedschaften, vereinslokale Konten und Rollen modellieren.
+- [ ] PostgreSQL fuer Entwicklung, Test und spaetere Produktion bereitstellen.
+- [ ] Versionierte Migrationen, PgBouncer, Readiness, Metriken und Auditvertrag
+      einrichten.
+- [ ] PostgreSQL-PITR, logischen Tenantexport und Restoretest aufbauen.
+- [ ] Asynchrone Repository- und Transaktionsvertraege einfuehren.
+- [ ] Personen, Authentifizierung, Sessions und Sicherheitsstate kontrolliert
+      migrieren.
+- [ ] Google Sheets fuer diese Domaene nach dem Cutover auf kontrollierten Import
+      beziehungsweise Export begrenzen.
 
-### Phase 2: Container- und Cell-Faehigkeit
+**Exit:** ASKÖ-Personen, Mitgliedschaften, Konten und Rollen sind in PostgreSQL
+autoritative, transaktionale Daten.
 
+### Phase 2: Hallenreservierungs-MVP
+
+- [ ] Anlagen, Plaetze, Oeffnungszeiten und Sperren modellieren.
+- [ ] Buchungsraster, Vorlauf, Kontingente und Stornofristen fachlich festlegen.
+- [ ] Konfliktfreie Reservierung mit Datenbankconstraint umsetzen.
+- [ ] Eigene Stornierung und kontrollierte Adminaenderung umsetzen.
+- [ ] Interne Meldungen, Audit, Abschlusslogs und Datenschutzpfade integrieren.
+- [ ] Mobile Bedienung sowie Konkurrenz-, Berechtigungs- und Regressionstests
+      umsetzen.
+- [ ] Winterbetrieb im Heimatverein beobachten und Kennzahlen auswerten.
+
+**Exit:** ASKÖ kann Hallenplaetze produktiv reservieren; Doppelbuchung,
+Berechtigung, Audit, Backup und Restore sind praktisch abgenommen.
+
+### Phase 3: Parallele Plattformbasis
+
+- [ ] Hetzner-Cloud-Ressourcen mit OpenTofu definieren.
+- [ ] Arch-Linux-Basis mit Cloud-init und Ansible reproduzierbar aufbauen.
+- [ ] OCI-Registry, Podman-Quadlets, Caddy und Secretbereitstellung einrichten.
+- [ ] Automatisierte verschluesselte Off-site-Backups, Backupaltermonitoring und
+      aktive Alarmzustellung umsetzen.
+- [ ] Rebuild-and-Restore ab nacktem Image innerhalb des Ziel-RTO testen.
+- [ ] Deklarative Tenantdefinitionen und Provisionierung ohne Secrets erstellen.
+- [ ] Einen synthetischen zweiten Tenant samt eigener DB und DB-Rolle
+      bereitstellen.
+
+**Exit:** Ein sauberer Ersatzhost und ein neuer Testverein sind ohne manuelle
+Spezialkonfiguration reproduzierbar herstellbar.
+
+### Phase 4: Verbleibende Datenmigration und Cell-Faehigkeit
+
+- [ ] Audit, Scorelog, Messaging, Jobs und Outbox migrieren.
+- [ ] Bewerbe und Eintragungen migrieren.
+- [ ] Matches und Ranglisten gemeinsam migrieren.
 - [ ] Anwendung vollstaendig konfigurierbar und containerfaehig machen.
 - [ ] Persistente Daten aus App-Containern entfernen.
 - [ ] Health, Readiness, Shutdown und Ressourcenlimits standardisieren.
-- [ ] Tenantdefinitionen ohne Secrets erstellen.
-- [ ] Tenant Registry und Secretreferenzen konzipieren.
-- [ ] Domain-, Zertifikats- und Storage-Namespace-Provisionierung automatisieren.
-- [ ] App- und Worker-Deployment pro Verein vorbereiten.
-
-**Exit:** Neuer Verein kann reproduzierbar als isolierte Cell bereitgestellt
-werden.
-
-### Phase 3: Entwicklungs- und Releasechain
-
-- [ ] Ephemere CI-Umgebungen mit synthetischen Daten erstellen.
-- [ ] Integration-, QA- und Testuser-Tenants bereitstellen.
-- [ ] Signierte OCI-Images, SBOM und Provenance einfuehren.
-- [ ] Promotion desselben Image-Digests durch Release-Ringe umsetzen.
-- [ ] Release Controller mit Wellen, Healthgates und Abbruchkriterien erstellen.
-- [ ] Entitlements und Feature Flags getrennt implementieren.
-- [ ] Produktiv-Pilot- und Beta-Onboardingprozess definieren.
-
-**Exit:** Neue Funktionen koennen kontrolliert von Entwicklung bis Stable
-promotet werden.
-
-### Phase 4: Tenantkontext und Servicegrenzen
-
-- [ ] TenantContext und RequestContext definieren.
-- [ ] Host/Domain sicher zu Tenant aufloesen.
-- [ ] Sessions und Principals an Tenant/Membership binden.
-- [ ] Repository-, Cache-, Audit- und Idempotenzschnittstellen tenantpflichtig
-      machen.
-- [ ] WebSocketverbindungen und Topics tenantgebunden modellieren.
-- [ ] Jobs und Outbox mit `tenant_id` einführen.
+- [ ] TenantContext, Domainaufloesung, WebSockettopics, Caches und Jobs
+      tenantpflichtig machen.
 - [ ] Negative Cross-Tenant-Tests als CI-Pflicht etablieren.
 
-**Exit:** Mandantentrennung ist im Code explizit und testbar, auch wenn weiter
-zunaechst eine Cell nur einen Tenant ausfuehrt.
+**Exit:** ASKÖ laeuft als erste isolierte Vereins-Cell; eine zweite synthetische
+Cell kann keine ASKÖ-Daten lesen oder veraendern.
 
-### Phase 5: Identitaet und PostgreSQL
+### Phase 5: Entwicklungs- und Releasechain bis Pilot
 
-- [ ] Users, Tenants, Memberships, Sections und People als neues Modell
+- [ ] Ephemere CI-Umgebungen mit synthetischen Daten erstellen.
+- [ ] Signierte OCI-Images, SBOM und Provenance einfuehren.
+- [ ] Dasselbe Image unveraendert durch Integration, Testuser und Pilot
+      promoten.
+- [ ] Healthgates, Abbruchkriterien und kompatible Expand/Contract-Migrationen
       umsetzen.
-- [ ] PostgreSQL-Cluster fuer Test und Produktion bereitstellen.
-- [ ] Datenbank und DB-Rolle pro Tenant automatisiert anlegen.
-- [ ] Sessions, Idempotenz und Jobs zuerst migrieren.
-- [ ] Messaging, Audit, Scorelog und Geraetezustand migrieren.
-- [ ] Fach- und Stammdaten tenantweise migrieren.
-- [ ] Google Sheets auf kontrollierten Import/Export reduzieren.
 - [ ] Tenantexport, Tenantrestore und Tenantumzug testen.
+- [ ] Produktiv-Pilot- und Beta-Onboardingprozess definieren.
 
-**Exit:** App-Container sind weitgehend zustandslos und einzelne Vereine sind
-vollstaendig aus einer eigenen Datenbank wiederherstellbar.
+**Exit:** Der erste externe Pilotverein kann kontrolliert provisioniert,
+aktualisiert, exportiert und wiederhergestellt werden.
 
-### Phase 6: Skalierung und Hochverfuegbarkeit
+### Phase 6: Skalierung und optionale Hochverfuegbarkeit
 
 - [ ] Mehrere App-Nodes und verteiltes Routing einrichten.
 - [ ] Pub/Sub-Backplane fuer WebSockets einführen.
 - [ ] Persistente Job-Worker mit Lease und Fairness betreiben.
 - [ ] Leader-Mechanismus fuer singletonartige Poller und Jobs umsetzen.
-- [ ] PostgreSQL-HA, PITR und regelmaessige Failovertests etablieren.
+- [ ] PostgreSQL-HA und regelmaessige Failovertests bei wirtschaftlich oder
+      vertraglich begruendetem Bedarf etablieren; PITR besteht bereits vorher.
 - [ ] Tenant Cells auf mehrere Failure Domains verteilen.
 - [ ] Last-, Chaos- und Isolationstests wiederkehrend ausfuehren.
 
 **Exit:** Der Verlust eines einzelnen App-Nodes unterbricht keinen Verein
-dauerhaft.
+dauerhaft. Diese Phase ist fuer die erste Rebuild-and-Restore-Stufe keine
+Voraussetzung.
 
 ### Phase 7: Sektionen und weitere Produktbereiche
 
@@ -1079,27 +1261,34 @@ vermeiden:
 - Secrets, Passwoerter, Tokens oder freie Fachpayloads in Logs, Auditprojekte,
   Tickets oder Changelogs schreiben;
 - Backups nur auf demselben Host speichern;
+- ein Providerimage als einzige Wiederherstellungsquelle behandeln;
+- Arch-Linux-, PostgreSQL- oder Containerupdates ohne vorherige
+  Integrationspruefung direkt in Produktion uebernehmen;
 - eine individuelle Version dauerhaft ohne Sicherheits- und Supportgrenzen
   zulassen.
 
 ## 17. Vor kanonischer Umsetzung zu klaerende Fragen
 
-1. Soll sich ein Benutzer mit einem globalen ePiber-Konto bei mehreren Vereinen
-   anmelden koennen oder bleiben Logins anfangs vereinslokal?
-2. Welche Rollen duerfen ausschliesslich auf Vereinsebene und welche spaeter auf
+1. Welche Rollen duerfen ausschliesslich auf Vereinsebene und welche spaeter auf
    Sektionsebene vergeben werden?
-3. Welche Mindest- und Maximalkonfigurationen gelten je Tarif fuer Mitglieder,
+2. Welche Mindest- und Maximalkonfigurationen gelten je Tarif fuer Mitglieder,
    Plaetze, Geraete, Speicher und Integrationen?
-4. Werden Kundendomains von Beginn an benoetigt oder nur Plattformsubdomains?
-5. Welche RPO/RTO und Supportzeiten werden vertraglich zugesagt?
-6. Welche Datenregionen und Subprozessoren sind zulassig?
-7. Duerfen Beta-Vereine ein Release jederzeit verlassen, wenn eine irreversible
+3. Werden Kundendomains von Beginn an benoetigt oder nur Plattformsubdomains?
+4. Welche der vorlaeufigen RPO/RTO-Werte und welche Supportzeiten werden
+   vertraglich zugesagt?
+5. Welche Datenregionen, Off-site-Backupanbieter und Subprozessoren sind
+   zulassig?
+6. Duerfen Beta-Vereine ein Release jederzeit verlassen, wenn eine irreversible
    Datenmigration bereits erfolgt ist?
-8. Welche Funktionen muessen bei einer Vereins-Suspendierung weiterhin fuer
+7. Welche Funktionen muessen bei einer Vereins-Suspendierung weiterhin fuer
    Datenexport, Datenschutz und Rechnungsabwicklung erreichbar sein?
-9. Welche fachlichen Reservierungsregeln gelten genau fuer Gaeste, Kontingente,
-   Storno, Training, Turniere und Zahlungen?
-10. Ab welcher Flottengroesse oder Verfuegbarkeitszusage wird ein Scheduler oder
+8. Wie viele ASKÖ-Hallenplaetze, welche Buchungsdauer, welcher Vorlauf, welche
+   offenen Kontingente und welche Stornofrist gelten im ersten MVP?
+9. Sind Mitspieler Pflicht, sind Gaeste erlaubt und welche Regeln gelten fuer
+   Training, Turniere, wiederkehrende Sperren und spaetere Zahlungen?
+10. Ab welcher gemessenen Last, Flottengroesse oder Verfuegbarkeitszusage wird
+    PostgreSQL auf einen eigenen Host verschoben?
+11. Ab welcher Flottengroesse oder Verfuegbarkeitszusage wird ein Scheduler oder
     Managed Container Service dem automatisierten Docker-/Podman-Betrieb
     vorgezogen?
 

@@ -23,7 +23,7 @@ const dataPoller = require("./dataPoller.js");
 const stateStore = require("./stateStore.js");
 const courtPoller = require("./courtPoller.js");
 const { AppError, errorData } = require("./errors.js");
-const { validateEndpointRequest, validateEndpointResponse } = require("./contracts.js");
+const { validateEndpointRequest, validateEndpointResponse, validateFavoriteTargets } = require("./contracts.js");
 const { TokenBucketLimiter, assertAllowedOrigin, getRequestIp, parseCookies } = require("./security.js");
 const { analyzeMatchRules, matchCompletionFingerprint, parseMatchDate, parseParticipant } = require("./matchRules.js");
 const { koRoundSuccessor, parseMatchTypeTable, parseParticipantId } = require("./matchResultRules.js");
@@ -630,11 +630,19 @@ function profileCompetitions(personId, principal = null) {
     const matchTypeId = indexes.matchType < 0 ? competition.matchTypeId : String(row[indexes.matchType] || "").trim() || competition.matchTypeId;
     const resultRules = matchTypes.get(matchTypeId);
     if (!resultRules) throw new AppError("SHEET_SCHEMA", "Zugeordneter Matchtyp fehlt", 503);
+    const challengeDate = indexes.challengeDate < 0 ? "" : String(row[indexes.challengeDate] || "").trim();
+    const challengedAt = competition.ranking ? parseMatchDate(challengeDate) : null;
+    const scheduleMarkers = challengedAt ? [
+      { kind: "challenge", tone: "blue", label: "Forderung ausgesprochen", at: challengedAt.getTime() },
+      { kind: "agreement-deadline", tone: "yellow", label: "Termin festlegen bis", at: challengedAt.getTime() + 7 * 24 * 60 * 60 * 1000 },
+      { kind: "match-deadline", tone: "red", label: "Spieltermin spätestens", at: challengedAt.getTime() + 14 * 24 * 60 * 60 * 1000 },
+    ] : [];
     competition.matches.push({
       matchId: String(row[indexes.id] || "").trim(),
       round: String(row[indexes.round] || "").trim(),
       matchDate: String(row[indexes.matchDate] || "").trim(),
-      challengeDate: indexes.challengeDate < 0 ? "" : String(row[indexes.challengeDate] || "").trim(),
+      challengeDate,
+      scheduleMarkers,
       matchStart: String(row[indexes.matchStart] || "").trim(),
       matchEnd: String(row[indexes.matchEnd] || "").trim(),
       result,
@@ -838,6 +846,16 @@ function logHistoryInteractionCompletion({ supportId, principal, endpoint, param
     durationMs: Math.max(0, Date.now() - startedAt),
     result: outcome,
     errorCode: error?.code || null,
+  });
+}
+
+function logFavoritesCompletion(principal, params = {}, result = {}, error = null) {
+  const rejected = error && (error.status || 500) < 500;
+  logger.log(error && !rejected ? "warn" : "info", "favorites_update_completed", {
+    actorId: principal?.type === "user" ? principal.id : "",
+    count: Array.isArray(params.favorites) ? params.favorites.length : 0,
+    revision: Number.isInteger(result.revision) ? result.revision : Number.isInteger(error?.details?.currentRevision) ? error.details.currentRevision : null,
+    outcome: error ? (rejected ? "rejected" : "failed") : result.repeated ? "repeated" : "success",
   });
 }
 
@@ -1269,6 +1287,27 @@ const endpoints = {
         competitions: profileCompetitions(context.principal.id, context.principal),
       },
     }),
+  },
+  myFavorites: {
+    access: "authenticated",
+    sessionAccessOnDevice: true,
+    handler: (_params, context) => {
+      const snapshot = dependencies.repository.getUserFavorites(context.principal.id);
+      try {
+        const favorites = validateFavoriteTargets(snapshot.favorites.map(({ targetId, ...target }) => target));
+        return { success: true, ...snapshot, favorites };
+      } catch {
+        throw new AppError("STATE_CORRUPT", "Favoriten-State ist ungueltig", 503);
+      }
+    },
+  },
+  setMyFavorites: {
+    access: "authenticated",
+    sessionAccessOnDevice: true,
+    write: true,
+    audit: false,
+    writeCost: 0.1,
+    handler: (params, context) => dependencies.repository.setUserFavorites(context.principal.id, params),
   },
   myMessageSummary: {
     access: "authenticated",
@@ -1733,10 +1772,16 @@ async function handleRequest(info, message, supportId) {
   const endpoint = endpoints[message.endpoint];
   if (!endpoint || !Object.hasOwn(endpoints, message.endpoint)) throw new AppError("ENDPOINT_NOT_FOUND", "Unbekannter Endpoint", 404);
   if (info.inflight >= WS_MAX_INFLIGHT) throw new AppError("TOO_MANY_REQUESTS", "Zu viele parallele Requests", 429);
-  const authContext = refreshPrincipal(info);
+  const connectionAuthContext = refreshPrincipal(info);
+  let authContext = connectionAuthContext;
+  if (endpoint.sessionAccessOnDevice && connectionAuthContext.principal?.type === "device" && info.sessionToken) {
+    const sessionAuth = dependencies.authService.getUserForToken(info.sessionToken);
+    if (sessionAuth) authContext = { principal: sessionAuth.principal, auth: sessionAuth };
+  }
   try {
     authorize(endpoint, authContext);
   } catch (error) {
+    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, message.params, {}, error);
     writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
@@ -1744,6 +1789,7 @@ async function handleRequest(info, message, supportId) {
   try {
     params = validateEndpointRequest(message.endpoint, message.params);
   } catch (error) {
+    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, message.params, {}, error);
     writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
@@ -1753,11 +1799,12 @@ async function handleRequest(info, message, supportId) {
     const writeCost = endpoint.writeCost || 1;
     if (!writeLimiter.take(principalKey, writeCost) || !writeLimiter.take(ipKey, writeCost)) {
       const error = new AppError("WRITE_RATE_LIMIT", "Zu viele Schreiboperationen", 429);
+      if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, params, {}, error);
       writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
       throw error;
     }
   }
-  if (endpoint.write) {
+  if (endpoint.write && endpoint.audit !== false) {
     writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, outcome: "started" });
   }
   info.inflight++;
@@ -1769,14 +1816,15 @@ async function handleRequest(info, message, supportId) {
     const publicData = rawData && typeof rawData === "object" ? { ...rawData } : rawData;
     if (publicData && typeof publicData === "object") delete publicData._audit;
     const data = validateEndpointResponse(message.endpoint, publicData);
-    if (endpoint.write) {
+    if (endpoint.write && endpoint.audit !== false) {
       writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, internal, outcome: "success" });
     }
+    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, params, data);
     logHistoryInteractionCompletion({ supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, outcome: "success", startedAt: historyInteractionStartedAt });
     return data;
   } catch (error) {
     let responseError = error;
-    if (endpoint.write) {
+    if (endpoint.write && endpoint.audit !== false) {
       try {
         writeAudit({
           eventId: supportId,
@@ -1803,6 +1851,7 @@ async function handleRequest(info, message, supportId) {
         startedAt: historyInteractionStartedAt,
       });
     }
+    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, params, {}, responseError);
     throw responseError;
   } finally {
     info.inflight--;
