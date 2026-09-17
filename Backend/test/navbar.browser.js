@@ -804,6 +804,19 @@ test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns",
       };
     });
     assert.deepEqual(layout, { sameRightEdge: true, nextBelowStar: true, previousRight: "10px" });
+    const back = page.getByRole("link", { name: "Zurück zum Dashboard" });
+    assert.equal(await back.getAttribute("href"), "./index.html");
+    assert.equal(await back.locator("svg").getAttribute("data-icon"), "arrow_back");
+    assert.equal(await back.locator("svg").getAttribute("aria-hidden"), "true");
+    assert.equal(await back.locator("svg").getAttribute("focusable"), "false");
+    assert.deepEqual(await back.evaluate((element) => {
+      const icon = element.querySelector("svg");
+      return {
+        button: [element.getBoundingClientRect().width, element.getBoundingClientRect().height],
+        icon: [icon.getBoundingClientRect().width, icon.getBoundingClientRect().height],
+        usesCurrentColor: getComputedStyle(icon).fill === getComputedStyle(element).color,
+      };
+    }), { button: [36, 36], icon: [22, 22], usesCurrentColor: true });
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -1027,10 +1040,24 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     await playerPage.locator("#profileModal").waitFor({ state: "visible" });
     assert.match(await playerPage.locator("#profileText").textContent(), /Login: player-login/);
     assert.match(await playerPage.locator("#profileText").textContent(), /E-Mail: contact\+team\?x@example\.test/);
-    assert.equal(await playerPage.getByRole("button", { name: "E-Mail kopieren" }).count(), 1);
-    assert.equal(await playerPage.getByRole("link", { name: "E-Mail verfassen" }).getAttribute("href"), "mailto:contact%2Bteam%3Fx@example.test");
-    assert.equal(await playerPage.getByRole("button", { name: "Telefon kopieren" }).count(), 1);
-    assert.equal(await playerPage.getByRole("link", { name: "Telefon-App öffnen" }).getAttribute("href"), "tel:+436641234567");
+    const emailCopy = playerPage.getByRole("button", { name: "E-Mail kopieren" });
+    const emailLink = playerPage.getByRole("link", { name: "E-Mail verfassen" });
+    const phoneCopy = playerPage.getByRole("button", { name: "Telefon kopieren" });
+    const phoneLink = playerPage.getByRole("link", { name: "Telefon-App öffnen" });
+    assert.equal(await emailCopy.count(), 1);
+    assert.equal(await emailCopy.locator("svg").getAttribute("data-icon"), "content_copy");
+    assert.equal(await emailLink.getAttribute("href"), "mailto:contact%2Bteam%3Fx@example.test");
+    assert.equal(await emailLink.locator("svg").getAttribute("data-icon"), "mail");
+    assert.equal(await phoneCopy.count(), 1);
+    assert.equal(await phoneCopy.locator("svg").getAttribute("data-icon"), "content_copy");
+    assert.equal(await phoneLink.getAttribute("href"), "tel:+436641234567");
+    assert.equal(await phoneLink.locator("svg").getAttribute("data-icon"), "call");
+    assert.deepEqual(await playerPage.locator(".profile-copy-icon, .profile-contact-icon").evaluateAll((icons) => icons.map((icon) => ({
+      ariaHidden: icon.getAttribute("aria-hidden"),
+      focusable: icon.getAttribute("focusable"),
+      width: icon.getBoundingClientRect().width,
+      height: icon.getBoundingClientRect().height,
+    }))), Array.from({ length: 4 }, () => ({ ariaHidden: "true", focusable: "false", width: 18, height: 18 })));
     assert.deepEqual(await playerPage.locator("#profileTabs [role=tab]").allTextContents(), [
       "System", "Meldungen (2)", "Aktuell", "Archiv",
     ]);

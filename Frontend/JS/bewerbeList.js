@@ -3,6 +3,7 @@ import { ready, subscribeAuth } from "./authClient.js";
 import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 import { signalMonitorReady, signalMonitorFailed } from "./monitorReady.js";
 import { diagnostic } from "./diagnostics.js";
+import { createMaterialSymbol } from "./materialSymbols.js";
 
 const readBewerbe = createEndpoint("bewerbe");
 const readBewerbsart = createEndpoint("bewerbsart");
@@ -153,27 +154,6 @@ function appendHistoryText(container, text, className) {
   line.className = className;
   line.textContent = String(text);
   container.appendChild(line);
-}
-
-function createInlineIcon(kind) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  const paths = kind === "comments"
-    ? ["M4 4.5h16v11H9l-5 4v-15Z"]
-    : ["M8.5 10h.01M15.5 10h.01M9 14c1.7 1.4 4.3 1.4 6 0", "M12 3a8 8 0 1 0 7.4 11", "M19 3v6M16 6h6"];
-  for (const value of paths) {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", value);
-    path.setAttribute("fill", "none");
-    path.setAttribute("stroke", "currentColor");
-    path.setAttribute("stroke-width", "1.8");
-    path.setAttribute("stroke-linecap", "round");
-    path.setAttribute("stroke-linejoin", "round");
-    svg.appendChild(path);
-  }
-  return svg;
 }
 
 function historyEntry(eventId) {
@@ -685,7 +665,7 @@ function appendCommentReactionActions(item, comment) {
   add.type = "button";
   add.className = "history-reaction-add";
   add.setAttribute("aria-label", interaction.myReaction ? "Reaktion wechseln" : "Reaktion hinzufügen");
-  add.appendChild(createInlineIcon("add-reaction"));
+  add.appendChild(createMaterialSymbol("add_reaction"));
   add.addEventListener("click", () => openCommentReactionPicker(comment, add));
   reactions.append(count, add);
   row.appendChild(reactions);
@@ -781,7 +761,7 @@ function appendInteractionActions(item, entry) {
   commentButton.type = "button";
   commentButton.className = "history-action-button";
   commentButton.setAttribute("aria-label", `Kommentare öffnen, ${interaction.commentCount} Kommentare`);
-  commentButton.appendChild(createInlineIcon("comments"));
+  commentButton.appendChild(createMaterialSymbol("chat_bubble"));
   commentButton.addEventListener("click", () => openComments(entry.id, commentButton));
   const commentCount = document.createElement("span");
   commentCount.className = "history-action-count";
@@ -808,7 +788,7 @@ function appendInteractionActions(item, entry) {
   add.type = "button";
   add.className = "history-reaction-add";
   add.setAttribute("aria-label", interaction.myReaction ? "Reaktion wechseln" : "Reaktion hinzufügen");
-  add.appendChild(createInlineIcon("add-reaction"));
+  add.appendChild(createMaterialSymbol("add_reaction"));
   add.addEventListener("click", () => openReactionPicker(entry.id, add));
   reactions.appendChild(add);
   row.append(comments, reactions);
@@ -929,7 +909,7 @@ function openCompetitionHistory(competition, button) {
 function initializeCompetitionHistory() {
   const modal = historyElement("competition-history-modal");
   const globalButton = historyElement("all-competition-history-button");
-  globalButton?.appendChild(createHistoryIcon());
+  globalButton?.appendChild(createMaterialSymbol("history"));
   globalButton?.addEventListener("click", () => openCompetitionHistory(null, globalButton));
   historyElement("competition-history-close")?.addEventListener("click", () => closeCompetitionHistory());
   historyElement("competition-history-more")?.addEventListener("click", () => loadCompetitionHistory({
@@ -1069,28 +1049,6 @@ function formatSheetDate(raw) {
   return `${dd}.${mm}.${yyyy}`;
 }
 
-function createHistoryIcon() {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.dataset.icon = "megaphone";
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.8");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  for (const pathData of [
-    "M3 10v4a2 2 0 0 0 2 2h2L20 20V4L7 8H5a2 2 0 0 0-2 2Z",
-    "m7 16 2 5h4l-2.4-3.8",
-  ]) {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", pathData);
-    svg.appendChild(path);
-  }
-  return svg;
-}
-
 // ── Bewerb Cards ────────────────────────────────────────────────────────
 
 function createCard(b) {
@@ -1118,7 +1076,7 @@ function createCard(b) {
   historyButton.className = "competition-history-button";
   historyButton.setAttribute("aria-label", `Historie von ${String(b.bezeichnung || "Bewerb")} öffnen`);
   historyButton.title = "Bewerbshistorie öffnen";
-  historyButton.appendChild(createHistoryIcon());
+  historyButton.appendChild(createMaterialSymbol("history"));
   historyButton.hidden = !historyButtonsVisible;
   historyButton.addEventListener("click", (event) => {
     event.stopPropagation();

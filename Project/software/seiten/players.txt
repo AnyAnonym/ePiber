@@ -51,8 +51,12 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   `publicProfile` lehnt anonyme Requests ab, und ein veralteter oder direkter
   anonymer Modalaufruf bleibt geschlossen. Angemeldeten Benutzern liefert es
   E-Mail, Telefon und Geburtsdatum, jedoch keinen Login; `myProfile` liefert fuer das
-  eigene Profil zusaetzlich Login und Passwortaenderung. Das gemeinsame Modal
-  zeigt oben in dieser Reihenfolge `System`, beim Eigenprofil `Meldungen`,
+  eigene Profil zusaetzlich Login und Passwortaenderung. Bei vorhandenen
+  Kontaktwerten bietet das gemeinsame Modal jeweils eine Kopieraktion sowie einen
+  direkten `mailto:`- beziehungsweise `tel:`-Link zur passenden Geraete-App. Die
+  Aktionen besitzen sichtbare Material-Symbole und eindeutige zugaengliche Namen.
+  Das gemeinsame Modal zeigt oben in dieser Reihenfolge `System`, beim Eigenprofil
+  `Meldungen`,
   `Aktuell`, `Archiv` und gegebenenfalls `Admin`. Nur `Aktuell` und `Archiv`
   zeigen eine zweite horizontal scrollbare Bewerbsreiterzeile; leere Kategorien
   zeigen `Keine Bewerbe enthalten`. Persoenliche Meldungskarten zeigen

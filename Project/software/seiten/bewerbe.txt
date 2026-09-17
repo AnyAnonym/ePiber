@@ -36,7 +36,7 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   Zielseite serverseitig.
   Angemeldete Benutzer sehen unmittelbar neben jedem Bewerbsnamen sowie neben der
   Hauptueberschrift `Bewerbe` einen kompakten, per Tastatur erreichbaren
-  Megafonbutton. Er oeffnet die Einzelhistorie dieses Bewerbs beziehungsweise die
+  Historienbutton. Er oeffnet die Einzelhistorie dieses Bewerbs beziehungsweise die
   Gesamthistorie. Tooltip und zugaengliche Beschriftung nennen den jeweiligen
   Zweck; fuer anonyme Benutzer werden die Buttons nicht angeboten. Das
   Kachellayout und die normale Kartennavigation bleiben unveraendert.

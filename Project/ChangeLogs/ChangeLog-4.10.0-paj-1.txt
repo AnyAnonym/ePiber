@@ -6,3 +6,13 @@ Commit: 4.10.0-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.0-paj-1-1` gesetzt.
+
+[4.10.0-paj-1-2] - 2026-09-18
+Commit: 4.10.0-paj-1-2 | Material-Symbole vereinheitlicht
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.0-paj-1-1-x` gesetzt.
+  - [Frontend] Eigene Linien- und Unicodezeichen fuer Historie, Kommentare, Reaktionen, Kontaktaktionen und Scoreboard-Navigation durch lokal eingebettete Google Material Symbols ersetzt.
+  - [Frontend] Icongroessen, Bedienflaechen, Linkziele, Kopierverhalten und zugaengliche Beschriftungen unveraendert beibehalten.
+  - [Tests] Browsertests sichern Symbolidentitaet, Barrierefreiheitsattribute, Kontaktziele sowie Groesse und Zentrierung des mobilen Scoreboard-Pfeils ab.
+  - [Dokumentation] Historienbutton sowie Kopier-, E-Mail- und Telefonaktionen im Profilmodal nachgezogen.

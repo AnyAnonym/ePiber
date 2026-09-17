@@ -165,8 +165,11 @@ body.modal-open {
 .profile-contact-button {
   position: relative;
   flex: 0 0 28px;
+  display: inline-flex;
   width: 28px;
   height: 28px;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   border: 1px solid #c5cad3;
   border-radius: 6px;
@@ -180,9 +183,6 @@ body.modal-open {
 }
 
 .profile-contact-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   text-decoration: none;
 }
 
@@ -195,44 +195,15 @@ body.modal-open {
   background: #eef4ff;
 }
 
-.profile-copy-icon::before,
-.profile-copy-icon::after {
-  content: "";
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-}
-
-.profile-copy-icon::before {
-  top: 7px;
-  left: 7px;
-}
-
-.profile-copy-icon::after {
-  top: 10px;
-  left: 10px;
-  background: #f7f8fa;
-}
-
-.profile-copy-button:hover .profile-copy-icon::after,
-.profile-copy-button:focus-visible .profile-copy-icon::after {
-  background: #eef4ff;
-}
-
-.profile-contact-icon::before {
+.material-symbol {
   display: block;
-  font-size: 18px;
-  line-height: 1;
+  fill: currentColor;
 }
 
-.profile-contact-icon.email::before {
-  content: "\2709";
-}
-
-.profile-contact-icon.phone::before {
-  content: "\260e";
+.profile-copy-icon,
+.profile-contact-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .profile-modal {
