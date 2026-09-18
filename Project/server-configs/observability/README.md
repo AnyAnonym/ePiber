@@ -116,7 +116,14 @@ dargestellt.
 
 Das Hostressourcen-Dashboard formatiert CPU, RAM, freien Speicher, Inodes und
 Netzwerkdurchsatz mit passenden dynamischen Einheiten und zeigt die aktuellen
-Werte zusaetzlich in den Tabellenlegenden. Readiness und SQLite-Panels fuehren
+Werte zusaetzlich in den Tabellenlegenden. Verfuegbarer RAM und freier
+Dateisystemspeicher werden bereits in den Prometheus-Abfragen in GiB umgerechnet
+und in Achsen sowie Legenden eindeutig mit dieser Einheit dargestellt. Die
+CPU-Abfrage und ihre feste Achse
+sind auf den fachlich gueltigen Bereich von 0 bis 100 Prozent begrenzt; die
+anderen Ressourcenachsen bleiben dynamisch. Die standardmaessig aktivierte
+experimentelle Grafana-Seitenleiste mit temporaeren Skalierungs- und
+Kurvenreglern ist deaktiviert. Readiness und SQLite-Panels fuehren
 Messaging als eigene kontrollierte Komponente beziehungsweise Datenbank. Die
 Metriken `epiber_readiness_component_ready{component="messaging_sqlite"}`,
 `epiber_sqlite_ready{database="messaging"}` und

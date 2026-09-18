@@ -31,3 +31,15 @@ Commit: 4.10.3-paj-1-3 | Browsermatrix und Wiederaufnahme abgesichert
   - [Tests] Drawer-Pruefungen warten engineunabhaengig auf den erreichten CSS-Endzustand statt auf eine feste Animationsdauer; Mobil- und Desktopszenario laufen nur in passenden Zielprofilen und Profilfehler werden nach vollstaendigem Matrixlauf zusammengefasst.
   - [Software] Mobile Navigation stellt die Fensterposition nach dem Fokuswechsel explizit wieder her, damit Firefox den Hintergrund beim Oeffnen des Drawers nicht verschiebt.
   - [Dokumentation] Browser-Supportmatrix, Feature-Detection- und Testregeln sowie PAJ-Installation und Rolloutpruefung verbindlich dokumentiert.
+
+[4.10.3-paj-1-4] - 2026-09-18
+Commit: 4.10.3-paj-1-4 | Hostressourcen verstaendlich skaliert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.3-paj-1-3-x` gesetzt.
+  - [Observability] Experimentelle Grafana-Regler fuer Y-Achsen-Skalierung und Kurvenverlauf in der Panelansicht deaktiviert.
+  - [Observability] CPU-Ressourcenanzeige auf fachlich gueltige Werte und eine stabile Achse von 0 bis 100 Prozent begrenzt.
+  - [Observability] Verfuegbaren RAM bereits in der Prometheus-Abfrage in GiB umgerechnet und Achse sowie Legende eindeutig als GiB formatiert.
+  - [Observability] Freien Speicher fuer Root- und Boot-Dateisystem bereits in der Prometheus-Abfrage in GiB umgerechnet und eindeutig formatiert.
+  - [Tests] Dashboard- und Grafana-Konfigurationsvertrag fuer CPU-Skalierung und deaktivierte Panelansichtsregler ergaenzt.
+  - [Dokumentation] Stabile CPU-Skalierung, weiterhin dynamische Ressourcenachsen und deaktivierte experimentelle Panelansichtsregler dokumentiert.

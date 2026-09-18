@@ -27,6 +27,10 @@ const messagingDashboardFile = path.resolve(
   __dirname,
   "../../Project/server-configs/observability/grafana/dashboards/epiber-messaging.json",
 );
+const grafanaConfigFile = path.resolve(
+  __dirname,
+  "../../Project/server-configs/observability/grafana/grafana.ini",
+);
 const observabilityRoot = path.resolve(__dirname, "../../Project/server-configs/observability");
 
 test("Scoreverlauf-Dashboard verwendet kontrollierte Loki-Felder und Filter", () => {
@@ -79,12 +83,12 @@ test("Ranglistenaktivitaeten trennen Forderungen von nicht angelegten Versuchen"
 test("Hostressourcen zeigen aktuelle Werte mit passenden Einheiten", () => {
   const dashboard = JSON.parse(fs.readFileSync(resourcesDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-resources");
-  assert.equal(dashboard.version, 2);
+  assert.equal(dashboard.version, 5);
 
   const expectedUnits = new Map([
     ["CPU-Auslastung", "percent"],
-    ["Verfuegbarer RAM", "bytes"],
-    ["Freier Speicher", "bytes"],
+    ["Verfuegbarer RAM", "gbytes"],
+    ["Freier Speicher", "gbytes"],
     ["Freie Inodes", "short"],
     ["Netzwerkdurchsatz", "Bps"],
   ]);
@@ -100,10 +104,24 @@ test("Hostressourcen zeigen aktuelle Werte mit passenden Einheiten", () => {
     }
   }
 
+  const cpu = dashboard.panels.find(({ title }) => title === "CPU-Auslastung");
+  assert.equal(cpu.fieldConfig.defaults.min, 0);
+  assert.equal(cpu.fieldConfig.defaults.max, 100);
+  assert.match(cpu.targets[0].expr, /^clamp\(.+, 0, 100\)$/);
   const ram = dashboard.panels.find(({ title }) => title === "Verfuegbarer RAM");
   assert.equal(ram.targets[0].legendFormat, "RAM verfuegbar");
+  assert.equal(ram.targets[0].expr, "node_memory_MemAvailable_bytes / 1024^3");
+  const storage = dashboard.panels.find(({ title }) => title === "Freier Speicher");
+  assert.equal(storage.targets[0].legendFormat, "{{mountpoint}}");
+  assert.equal(storage.targets[0].expr, 'node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs"} / 1024^3');
   const services = dashboard.panels.find(({ title }) => title === "ePiber-Dienstzustand");
   assert.equal(services.fieldConfig.defaults.mappings[0].options["1"].text, "Aktiv");
+});
+
+test("Grafana blendet die experimentellen Panelansichtsregler aus", () => {
+  const config = fs.readFileSync(grafanaConfigFile, "utf8");
+  assert.match(config, /^\[feature_toggles\]$/m);
+  assert.match(config, /^grafana\.viewPanelPane = false$/m);
 });
 
 test("Personennormalisierung zeigt aktive Mitglieder nach Playerklassifikation", () => {
