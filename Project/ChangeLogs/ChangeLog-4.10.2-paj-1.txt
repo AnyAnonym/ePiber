@@ -12,3 +12,9 @@ Commit: 4.10.2-paj-1-2 | Arbeitsstand vorbereitet
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.2-paj-1-1-x` gesetzt.
+
+[4.10.2-paj-1-3] - 2026-09-18
+Commit: 4.10.2-paj-1-3 | Release-Workflow getestet
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.2-paj-1-2-x` gesetzt.
