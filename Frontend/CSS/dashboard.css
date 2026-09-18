@@ -4,7 +4,7 @@
   --line: #dce5dc;
   --paper: #f7f6ef;
   --card: #fffefa;
-  --green: #176b4a;
+  --green: var(--accent);
   --mint: #dff0e4;
   --coral: #d86345;
   --gold: #e0a83b;
@@ -25,7 +25,7 @@ body {
 .club-dashboard a { color: inherit; }
 
 .dashboard-page #header-container header {
-  background: #176b4a;
+  background: var(--accent);
   box-shadow: 0 5px 22px rgba(24, 52, 45, .14);
 }
 

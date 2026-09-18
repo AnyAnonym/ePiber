@@ -57,10 +57,21 @@ function loadingScope(scope) {
   return scope instanceof Element ? scope : document.body;
 }
 
+function initialLoadingOverlay(target) {
+  return target.querySelector?.(".loading-overlay[data-initial-loading-overlay]") || null;
+}
+
 export function showLoadingOverlay(_text = "Lade Daten ...", scope = document.body) {
   const target = loadingScope(scope);
   const activeOverlay = loadingOverlays.get(target);
   if (activeOverlay) return activeOverlay;
+
+  const initialOverlay = initialLoadingOverlay(target);
+  if (initialOverlay) {
+    target.setAttribute("aria-busy", "true");
+    loadingOverlays.set(target, initialOverlay);
+    return initialOverlay;
+  }
 
   const overlay = document.createElement("div");
   overlay.className = "loading-overlay";
@@ -93,7 +104,7 @@ export function showLoadingOverlay(_text = "Lade Daten ...", scope = document.bo
 
 export function hideLoadingOverlay(scope = document.body) {
   const target = loadingScope(scope);
-  const activeOverlay = loadingOverlays.get(target);
+  const activeOverlay = loadingOverlays.get(target) || initialLoadingOverlay(target);
   if (!activeOverlay) return;
   loadingOverlays.delete(target);
   activeOverlay.remove();

@@ -210,7 +210,7 @@ function startServer() {
     }
     if (pathname === "/test/loadingHelper.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-      response.end("export const callWithRetry = (fn) => fn(); export const showLoadingOverlay = () => {}; export const hideLoadingOverlay = () => {}; export const showErrorOverlay = () => {};\n");
+      response.end(fs.readFileSync(path.join(FRONTEND_ROOT, "JS/loadingHelper.js"), "utf8"));
       return;
     }
     if (pathname === "/test/monitorReady.js") {
@@ -220,7 +220,7 @@ function startServer() {
     }
     if (pathname === "/test/diagnostics.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-      response.end("window.__diagnostics = []; export const diagnostic = { error: (...args) => window.__diagnostics.push(args) };\n");
+      response.end("window.__diagnostics = []; export const diagnostic = { info: (...args) => window.__diagnostics.push(args), warn: (...args) => window.__diagnostics.push(args), error: (...args) => window.__diagnostics.push(args) };\n");
       return;
     }
     if (["/JS/modals.js", "/JS/navbar.js", "/JS/global.js", "/JS/clock.js", "/JS/footer.js"].includes(pathname)) {

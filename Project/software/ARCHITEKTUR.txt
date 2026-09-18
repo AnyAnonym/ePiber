@@ -1017,11 +1017,22 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
 `global.js`/`footer.js` Version und gemeinsame Initialisierung/Darstellung.
 
 Fachseiten abonnieren tabellenspezifische Invalidierungen statt kurzer Polltimer.
-Der Lade-Spinner gilt nur bis zum ersten verwertbaren Datenstand. Spaetere
-Invalidierungen und Reconnects behalten den letzten Stand sichtbar und uebernehmen
-vollstaendig vorbereitete Aktualisierungen ohne erneuten Spinner.
+Datenabhaengige Seiten liefern ihren voll deckenden Initialloader bereits im HTML
+vor Inhalt, Footer und Skripten aus; `loadingHelper.js` uebernimmt genau diesen
+Knoten ohne sichtbare Luecke oder zweiten Spinner. Der Lade-Spinner gilt nur bis
+zum ersten verwertbaren Datenstand. Spaetere Invalidierungen und Reconnects
+behalten den letzten Stand sichtbar und uebernehmen vollstaendig vorbereitete
+Aktualisierungen ohne erneuten Spinner.
 Externe Daten werden ueber sichere DOM-Knoten oder begrenztes Escaping gerendert.
 Externe Font-/Script-Abhaengigkeiten, SDK.js und rankingSidebar.js sind entfernt.
+Die interaktiven Fachseiten verknuepfen ein same-origin Web-App-Manifest fuer die
+optionale Installation als `ePiber Tennis`. Es startet unter `/index.html`, darf
+Hoch- und Querformat verwenden, fuehrt die gruene Primaerfarbe `#176b4a` bis in
+die Browserleiste und nutzt das Dashboardmotiv in normalen sowie maskierbaren
+Iconvarianten. Monitor-, Sponsoren-, technische Test- und reine
+Administrationsseiten bieten keinen eigenen Installationseinstieg. Es gibt
+bewusst keinen Service Worker, Offline-Cache oder Offline-Schreibbetrieb; Browser-
+und Backendverhalten bleiben im nicht installierten Betrieb unveraendert.
 Die fachlichen Seiten- und Administrationsdokumente sind in `SOFTWARE-DOKU.txt`
 indiziert.
 

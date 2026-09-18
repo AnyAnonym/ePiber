@@ -65,3 +65,18 @@ Commit: 4.10.3-paj-1-6 | Grafana-Datenquellen reproduzierbar repariert
   - [Observability] Alle Dashboard-Panels und Targets verwenden eine explizite Datasource; ein stiller Rueckfall auf Grafanas synthetische Testdaten ist damit ausgeschlossen.
   - [Observability] CPU-Auslastung wird direkt aus den aktiven CPU-Modi statt ueber den auf diesem Host unzuverlaessigen Idle-Gegenwert berechnet.
   - [Tests] Dashboard- und Installervertraege pruefen vollstaendige Datasource-Zuordnung, Plugin-Pins und die korrigierte CPU-Abfrage.
+
+[4.10.3-paj-1-7] - 2026-09-18
+Commit: 4.10.3-paj-1-7 | PWA-Installation und Ladebild vereinheitlicht
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.3-paj-1-6-x` gesetzt.
+  - [Software] Dashboard und interaktive Fachseiten als installierbare `ePiber Tennis`-WebApp mit gemeinsamem Manifest, gruener Theme-Farbe und Start auf dem Dashboard ausgezeichnet; bestehender Browserbetrieb und Onlineabhaengigkeit bleiben ohne Service Worker unveraendert.
+  - [Darstellung] Die gruene Dashboardfarbe `#176b4a` als gemeinsame Primaerfarbe fuer Header, Navigation, Hauptaktionen, Auswahl- und Fokuszustaende sowie die Browserleiste vereinheitlicht; fachliche Statusfarben bleiben erhalten.
+  - [Darstellung] Datenabhaengige Seiten liefern den voll deckenden Initialloader vor Inhalt, Footer und Skripten aus; der Ladehelfer uebernimmt ihn auch nach dem Aufbau des gemeinsamen App-Wrappers ohne doppelten oder dauerhaft verbleibenden Spinner und verhindert damit ein kurzes Aufblitzen der Fusszeile.
+  - [Dokumentation] Installationsumfang, ausgeschlossene Anzeige-, Test- und Adminseiten sowie der bewusste Verzicht auf Offline-Cache und Offline-Schreibbetrieb festgehalten.
+
+  Added
+  - [Frontend] Aus dem vorhandenen `Piber gruesst`-Motiv Standard-, maskierbare und Apple-Touch-App-Icons erzeugt.
+  - [Tests] Manifestfelder, Icondateien und -abmessungen, Installationseinstiege und fehlende Service-Worker-Registrierung als Vertrag abgesichert.
+  - [Tests] Statische Initialloader auf allen betroffenen Seiten sowie ihre lueckenlose Uebernahme nach dem Navigations-Wrapping, Viewportabdeckung und Footerverdeckung im Browser abgesichert.
