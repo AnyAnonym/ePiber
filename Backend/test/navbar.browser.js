@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { chromium } = require("playwright-core");
+const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -482,6 +483,18 @@ function startServer() {
   });
 }
 
+async function waitForOpenNavigationLayout(page) {
+  await page.waitForFunction(() => {
+    const drawer = document.querySelector(".mobile-nav-content")?.getBoundingClientRect();
+    const app = document.querySelector(".app-shift-layer")?.getBoundingClientRect();
+    if (!drawer || !app) return false;
+    const expectedWidth = Math.min(innerWidth * 0.82, 420);
+    return Math.abs(drawer.right - innerWidth) < 2
+      && Math.abs(drawer.left - (innerWidth - expectedWidth)) < 2
+      && Math.abs(app.left + expectedWidth) < 2;
+  }, null, { timeout: 5000 });
+}
+
 test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern", {
   skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
@@ -606,18 +619,19 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
 });
 
 test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst eigenstaendig", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  let browser;
   try {
-    const page = await browser.newPage({ viewport: { width: 390, height: 300 } });
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 300 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=admin`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => window.scrollTo(0, 300));
     const initialScroll = await page.evaluate(() => window.scrollY);
     await page.evaluate(() => document.getElementById("hamburgerBtn").click());
-    await page.waitForTimeout(350);
+    await waitForOpenNavigationLayout(page);
 
     const layout = await page.evaluate(() => {
       const drawer = document.querySelector(".mobile-nav-content").getBoundingClientRect();
@@ -670,7 +684,7 @@ test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst ei
     await page.locator('.mobile-nav-main a[href="index.html"]').click();
     assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "true");
   } finally {
-    await browser.close();
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });
@@ -736,29 +750,34 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
 });
 
 test("Desktop verwendet denselben Drawer und verschiebt die Anwendung um maximal 420 Pixel", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  let browser;
   try {
-    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 1200, height: 800 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player`, { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator(".desktop-nav").isHidden(), true);
     assert.equal(await page.locator(".desktop-auth").isHidden(), true);
     assert.equal(await page.locator("#hamburgerBtn").isVisible(), true);
     assert.equal(await page.locator("#mobileNavModal").isHidden(), true);
     await page.locator("#hamburgerBtn").click();
-    await page.waitForTimeout(350);
+    await waitForOpenNavigationLayout(page);
     const layout = await page.evaluate(() => {
       const app = document.querySelector(".app-shift-layer").getBoundingClientRect();
       const header = document.querySelector("#header-container header").getBoundingClientRect();
       const drawer = document.querySelector(".mobile-nav-content").getBoundingClientRect();
       return { appLeft: app.left, appWidth: app.width, headerLeft: header.left, drawerLeft: drawer.left, drawerWidth: drawer.width };
     });
-    assert.deepEqual(layout, { appLeft: -420, appWidth: 1200, headerLeft: -420, drawerLeft: 780, drawerWidth: 420 });
+    assert.equal(Math.abs(layout.appLeft + 420) < 2, true);
+    assert.equal(Math.abs(layout.appWidth - 1200) < 2, true);
+    assert.equal(Math.abs(layout.headerLeft - layout.appLeft) < 2, true);
+    assert.equal(Math.abs(layout.drawerLeft - 780) < 2, true);
+    assert.equal(Math.abs(layout.drawerWidth - 420) < 2, true);
   } finally {
-    await browser.close();
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });

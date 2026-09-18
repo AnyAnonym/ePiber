@@ -35,6 +35,7 @@ const eventListeners = new Map();
 const desiredTopics = new Set();
 const retainedOperationIds = new Map();
 let appVersionPromise = null;
+let pageWasHidden = document.hidden;
 function getStoredAppVersion() {
   return typeof window.APP_VERSION === "string" ? window.APP_VERSION : null;
 }
@@ -711,7 +712,12 @@ window.addEventListener("offline", () => {
 });
 window.addEventListener("online", () => restartConnection().catch(() => {}));
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && state === "connected" && Date.now() - lastMessageAt > currentStaleAfterMs() / 2) {
+  if (document.hidden) {
+    pageWasHidden = true;
+    return;
+  }
+  if (pageWasHidden || state !== "connected" || Date.now() - lastMessageAt > currentStaleAfterMs() / 2) {
+    pageWasHidden = false;
     restartConnection().catch(() => {});
   }
 });

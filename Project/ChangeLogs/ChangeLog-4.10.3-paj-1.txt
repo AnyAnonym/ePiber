@@ -19,3 +19,15 @@ Commit: 4.10.3-paj-1-2 | Mehrgeraete-Sessions verlaengert
   Added
   - [Observability] Datenschutzarme Sessionmetriken fuer Erstellung, Verlaengerung, Inaktivitaetsablauf und kontrollierte Widerrufsgruende ergaenzt.
   - [Tests] Repository-, Auth-, HTTP- und Metriktests fuer Sliding Expiry, Cookie-Erneuerung, parallele Geraete und Sessiondiagnose aufgenommen.
+
+[4.10.3-paj-1-3] - 2026-09-18
+Commit: 4.10.3-paj-1-3 | Browsermatrix und Wiederaufnahme abgesichert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.3-paj-1-2-x` gesetzt.
+  - [Tests] Browser-Smokesuite fuer Chrome auf Windows und Android, Safari auf iPhone, iPad und macOS, Firefox auf Windows sowie Edge auf Windows als Linux-Playwright-Profile aufgenommen; die vollstaendige Chromium-Suite bleibt als zweite Stufe erhalten.
+  - [Tests] Playwright-Testabhaengigkeit auf das vollstaendige, exakt versionierte Paket umgestellt und die Drei-Engine-Ausfuehrung wegen des Arch-Hosts an die passende offizielle Linux-Containerumgebung gebunden.
+  - [Tests] Rootless-Docker-Lauf auf genau einen seriellen Smoke-Container begrenzt und standardmaessig mit zwei CPUs, 2 GiB RAM, 512 Prozessen, read-only Repository und deaktiviertem externem Netzwerk eingegrenzt.
+  - [Tests] Drawer-Pruefungen warten engineunabhaengig auf den erreichten CSS-Endzustand statt auf eine feste Animationsdauer; Mobil- und Desktopszenario laufen nur in passenden Zielprofilen und Profilfehler werden nach vollstaendigem Matrixlauf zusammengefasst.
+  - [Software] Mobile Navigation stellt die Fensterposition nach dem Fokuswechsel explizit wieder her, damit Firefox den Hintergrund beim Oeffnen des Drawers nicht verschiebt.
+  - [Dokumentation] Browser-Supportmatrix, Feature-Detection- und Testregeln sowie PAJ-Installation und Rolloutpruefung verbindlich dokumentiert.

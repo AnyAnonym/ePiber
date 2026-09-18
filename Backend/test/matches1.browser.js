@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { chromium } = require("playwright-core");
+const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -99,14 +100,15 @@ function startServer() {
 }
 
 test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergebnis", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  let browser;
   try {
-    const page = await browser.newPage({ viewport: { width: 800, height: 700 } });
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 800, height: 700 } });
     await page.goto(`http://127.0.0.1:${address.port}/matches-test.html`, { waitUntil: "domcontentloaded" });
     await page.locator(".m1-card").nth(3).waitFor({ state: "visible" });
 
@@ -142,7 +144,7 @@ test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergeb
     });
     assert.deepEqual(mobileMeta, { direction: "column", requestBelowDate: true });
   } finally {
-    await browser.close();
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });

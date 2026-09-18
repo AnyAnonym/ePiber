@@ -72,6 +72,10 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
     reload() { reloads.push(Date.now()); },
   };
   const navigatorState = { onLine: online };
+  const documentState = {
+    hidden: false,
+    addEventListener(type, callback) { documentListeners.set(type, callback); },
+  };
   const trackedSetTimeout = (callback, delay, ...args) => {
     const timer = setTimeout(() => {
       timeouts.delete(timer);
@@ -101,10 +105,7 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
     clearTimeout: trackedClearTimeout,
     console,
     crypto: cryptoImplementation || { randomUUID: () => `00000000-0000-4000-8000-${String(++uuidCounter).padStart(12, "0")}` },
-    document: {
-      hidden: false,
-      addEventListener(type, callback) { documentListeners.set(type, callback); },
-    },
+    document: documentState,
     localStorage: storage,
     location,
     navigator: navigatorState,
@@ -131,6 +132,8 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
   new vm.Script(source, { filename }).runInContext(context);
   return {
     api: context.__dataClientExports,
+    document: documentState,
+    documentListeners,
     intervals,
     navigator: navigatorState,
     reloads,
@@ -140,6 +143,41 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
     windowListeners,
   };
 }
+
+test("sichtbar gewordene Seiten ersetzen die moeglicherweise eingefrorene Verbindung", async (t) => {
+  const runtime = loadDataClient();
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+
+  runtime.document.hidden = true;
+  runtime.documentListeners.get("visibilitychange")();
+  assert.equal(runtime.sockets.length, 1);
+
+  runtime.document.hidden = false;
+  runtime.documentListeners.get("visibilitychange")();
+  assert.equal(runtime.sockets.length, 2);
+  assert.equal(runtime.api.isConnected(), false);
+
+  const replacement = runtime.sockets[1];
+  replacement.open();
+  replacement.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  assert.equal(runtime.api.isConnected(), true);
+});
+
+test("sichtbar gewordene Seiten warten bei Backoff nicht auf einen eingefrorenen Timer", (t) => {
+  const runtime = loadDataClient();
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  firstSocket.close(1006, "network lost");
+  assert.equal(runtime.sockets.length, 1);
+
+  runtime.documentListeners.get("visibilitychange")();
+  assert.equal(runtime.sockets.length, 2);
+});
 
 test("dataClient korreliert Requests, propagiert Fehler und stellt Subscriptions wieder her", async (t) => {
   const runtime = loadDataClient();
@@ -314,6 +352,13 @@ test("terminale Close-Codes koennen durch Lifecycle-Events nicht neu gestartet w
   socket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
   socket.close(1008, "policy violation");
 
+  runtime.document.hidden = true;
+  runtime.documentListeners.get("visibilitychange")();
+  runtime.document.hidden = false;
+  runtime.documentListeners.get("visibilitychange")();
+  runtime.windowListeners.get("pageshow")({ persisted: true });
+  await Promise.resolve();
+  assert.equal(runtime.sockets.length, 1);
   await assert.rejects(runtime.api.restartConnection(), (error) => error.code === "TERMINAL_CONNECTION");
   assert.equal(runtime.sockets.length, 1);
   const recovery = runtime.api.restartConnection({ allowTerminal: true });

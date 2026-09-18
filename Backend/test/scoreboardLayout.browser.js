@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const { chromium } = require("playwright-core");
+const { chromium } = require("playwright");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const SCOREBOARD_URL = process.env.SCOREBOARD_TEST_URL || "https://epiber.at:8081/scoreboard.html";

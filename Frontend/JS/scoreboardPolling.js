@@ -853,6 +853,10 @@ function handleResync() {
   queueSnapshot();
 }
 
+function refreshAfterResume() {
+  if (!document.hidden) queueSnapshot();
+}
+
 try {
   subscribe("scores", handleScoreEvent);
   subscribe("scoreboard-state", handleScoreboardStateEvent);
@@ -861,6 +865,10 @@ try {
   subscribe("bewerbe", (data) => handleTableInvalidation("bewerbe", data));
   onConnectionState(handleConnectionState);
   onResync(handleResync);
+  document.addEventListener("visibilitychange", refreshAfterResume);
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) refreshAfterResume();
+  });
   window.addEventListener("resize", schedulePlayerNameSizing);
   window.visualViewport?.addEventListener("resize", schedulePlayerNameSizing);
   const statusTimer = setInterval(updateStatus, 5000);

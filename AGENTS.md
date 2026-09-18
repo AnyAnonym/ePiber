@@ -55,6 +55,13 @@ moeglichst wenigen Datei- und Suchzugriffen.
     nur im Seitenbranch begonnen und umgesetzt. Auf `main` darf eine Aenderung nur
     dann beginnen, wenn der User dies ausdruecklich als direkte Main-Ausnahme
     beauftragt; in allen anderen Faellen ist zuerst ein Seitenbranch anzulegen.
+13. Browserrelevante Frontendaenderungen sind gegen die in
+    `Project/software/ARCHITEKTUR.txt` festgelegte Playwright-Supportmatrix zu
+    bewerten. Neue oder geaenderte Kernablaeufe benoetigen die Drei-Engine-
+    Smokesuite; Touch-, Responsive-, Viewport- oder Navigationsaenderungen
+    zusaetzlich die festgelegten Android-, iPhone- und iPad-Profile. Neue Browser-
+    APIs werden ueber Feature Detection statt User-Agent-Erkennung behandelt;
+    Abweichungen und notwendige Fallbacks sind im selben Auftrag zu pruefen.
 
 ## Projekt
 

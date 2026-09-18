@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { chromium } = require("playwright-core");
+const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -244,14 +245,15 @@ function startServer() {
 }
 
 test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  let browser;
   try {
-    const page = await browser.newPage({ viewport: { width: 390, height: 640 } });
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 640 } });
     await page.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?manualAuth=1`, { waitUntil: "domcontentloaded" });
     await page.locator(".bewerb-card").first().waitFor({ state: "visible" });
     assert.equal(await page.locator(".bewerb-grid").first().evaluate((grid) => getComputedStyle(grid).display), "block");
@@ -508,7 +510,7 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.equal(await page.locator("#competition-history-list").textContent(), "");
     await page.close();
 
-    const errorPage = await browser.newPage();
+    const errorPage = await newProfilePage(browser);
     await errorPage.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?historyError=1`, { waitUntil: "domcontentloaded" });
     await errorPage.getByRole("button", { name: /Historie von/ }).first().click();
     await errorPage.getByText("Historie konnte nicht geladen werden. Bitte erneut versuchen.").waitFor({ state: "visible" });
@@ -517,14 +519,14 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.equal((await errorPage.evaluate(() => window.__historyCalls)).length, 2);
     await errorPage.close();
 
-    const emptyPage = await browser.newPage();
+    const emptyPage = await newProfilePage(browser);
     await emptyPage.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?historyEmpty=1`, { waitUntil: "domcontentloaded" });
     await emptyPage.getByRole("button", { name: /Historie von/ }).first().click();
     await emptyPage.getByText("Keine Historieneinträge vorhanden.").waitFor({ state: "visible" });
     assert.equal(await emptyPage.locator(".competition-history-entry").count(), 0);
     await emptyPage.close();
 
-    const adminPage = await browser.newPage({ viewport: { width: 390, height: 640 } });
+    const adminPage = await newProfilePage(browser, { viewport: { width: 390, height: 640 } });
     await adminPage.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?role=admin`, { waitUntil: "domcontentloaded" });
     await adminPage.getByRole("button", { name: "Historie aller Bewerbe öffnen" }).click();
     await adminPage.locator(".history-entry-actions").first().getByRole("button", { name: /Kommentare öffnen/ }).click();
@@ -537,7 +539,7 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.equal(await adminComments.locator(".history-comment-body").first().innerText(), "Sicherer Kommentar");
     await adminPage.close();
 
-    const stalePage = await browser.newPage({ viewport: { width: 390, height: 640 } });
+    const stalePage = await newProfilePage(browser, { viewport: { width: 390, height: 640 } });
     await stalePage.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?staleComments=1`, { waitUntil: "domcontentloaded" });
     await stalePage.getByRole("button", { name: "Historie aller Bewerbe öffnen" }).click();
     const staleActions = stalePage.locator(".history-entry-actions");
@@ -549,7 +551,7 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.deepEqual(await stalePage.locator("#history-comments-list .history-comment-author").allTextContents(), ["Berta"]);
     await stalePage.close();
 
-    const uncertainPage = await browser.newPage({ viewport: { width: 390, height: 640 } });
+    const uncertainPage = await newProfilePage(browser, { viewport: { width: 390, height: 640 } });
     await uncertainPage.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?uncertainWrite=1`, { waitUntil: "domcontentloaded" });
     await uncertainPage.getByRole("button", { name: "Historie aller Bewerbe öffnen" }).click();
     await uncertainPage.locator(".history-entry-actions").first().getByRole("button", { name: /Kommentare öffnen/ }).click();
@@ -564,7 +566,7 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.deepEqual(await uncertainPage.evaluate(() => window.__commentWriteCalls), ["Ursprünglicher Text"]);
     await uncertainPage.close();
   } finally {
-    await browser.close();
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });

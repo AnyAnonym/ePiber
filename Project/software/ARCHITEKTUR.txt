@@ -1087,7 +1087,56 @@ eine leere Liste und koennen spaetere Rundenfristen ohne neuen UI-Vertrag nutzen
 
 
 ================================================================================
-  9. BETRIEBSGRENZE UND ROLLOUT
+  9. BROWSERUNTERSTUETZUNG UND TESTSTRATEGIE
+================================================================================
+
+Die freigegebene Zielmatrix umfasst Chrome auf Windows-Desktop und Android,
+Safari auf iPhone, iPad und macOS, Firefox auf Windows sowie Edge auf Windows.
+Automatisierte Referenz sind die exakt mit `Backend/package.json` versionierten
+Playwright-Engines und Geraeteprofile:
+
+  Zielplattform             | Linux-Playwright-Abbildung
+  --------------------------|-----------------------------------------------
+  Chrome / Windows Desktop  | Chromium, Desktop-Viewport
+  Chrome / Android          | Chromium, Pixel-7-Profil mit Touch
+  Safari / iPhone           | WebKit, iPhone-13-Profil mit Touch
+  Safari / iPad             | WebKit, iPad-Pro-11-Profil mit Touch
+  Safari / macOS            | WebKit, Desktop-Viewport
+  Firefox / Windows         | Firefox, Desktop-Viewport
+  Edge / Windows            | Chromium, eigener Zielprofil-Lauf
+
+Die Ausfuehrung erfolgt auf Linux. Engine, Viewport, Pixeldichte, mobile
+Darstellung und Touch werden dabei geprueft; Windows, macOS und iOS selbst sowie
+deren Systemschriften, virtuelle Tastaturen, Browserleisten und Betriebssystem-
+integration werden nicht emuliert. WebKit ist deshalb eine Safari-Naeherung und
+keine Zusage fuer jedes native iOS-/macOS-Detail. Feste historische
+Browsermindestversionen werden nicht unterstuetzt; massgeblich sind die mit der
+festgeschriebenen Playwright-Version gepflegten Engines.
+
+`npm run test:browser:smoke` prueft ausgewaehlte reale Kernablaeufe mit lokalen,
+deterministischen Fixtures in allen sieben Zielprofilen. Dazu gehoeren mobile und
+Desktopnavigation samt `inert`, Bewerbshistorie und Kommentar-Graphemzaehlung,
+Matchdarstellung sowie Scoreboard-Ergebnisdarstellung. `npm run
+test:browser:chromium` fuehrt die vollstaendige bestehende Browser-Suite mit dem
+systemweiten Chromium aus; `npm run test:browser` verbindet beide Stufen. Die
+Smokesuite darf bei fehlender Engine nicht als erfolgreich uebersprungen werden.
+Sie laeuft wegen des Arch-Linux-Hosts in der exakt zur Playwright-Version
+passenden offiziellen Linux-Containerumgebung. Browserbinaries und Container sind
+nur Testwerkzeuge und keine Laufzeitabhaengigkeit des Backends.
+
+Neue Browser-APIs werden gegen diese Matrix geprueft und ueber Feature Detection
+statt User-Agent-Erkennung verwendet. Kritische Bedienung erhaelt bei fehlender
+Unterstuetzung einen kontrollierten Fallback oder eine verstaendliche Ablehnung.
+Neue CSS-Funktionen duerfen Kerninhalt und Kernbedienung nur tragen, wenn alle drei
+Engines sie unterstuetzen. Maus, Tastatur und Touch bleiben entsprechend dem
+betroffenen Ablauf bedienbar. Browserrelevante Kernablaeufe erweitern die
+Smokesuite; Touch-, Responsive-, Viewport- und Navigationsaenderungen werden
+zusaetzlich in den Android-, iPhone- und iPad-Profilen geprueft. Der normale
+Backend-Build bleibt von Browserbinaries und Containerlauf unabhaengig.
+
+
+================================================================================
+  10. BETRIEBSGRENZE UND ROLLOUT
 ================================================================================
 
 Node.js 26 und npm 12.0.2 sind festgeschrieben. Vor Produktion muessen Role und

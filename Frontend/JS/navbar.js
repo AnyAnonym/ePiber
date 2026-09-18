@@ -366,6 +366,8 @@ function initMobileNavigation() {
   if (!hamburgerButton || !mobileNavModal || !appLayer || !closeButton) return;
 
   const openNavigation = () => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
     mobileNavModal.querySelectorAll(".mobile-nav-group-toggle").forEach((toggle) => {
       toggle.setAttribute("aria-expanded", "false");
       const submenu = document.getElementById(toggle.getAttribute("aria-controls"));
@@ -377,6 +379,7 @@ function initMobileNavigation() {
     appLayer.inert = true;
     document.body.classList.add("mobile-nav-open");
     closeButton.focus({ preventScroll: true });
+    window.scrollTo(scrollX, scrollY);
   };
 
   const closeNavigation = ({ restoreFocus = true } = {}) => {
