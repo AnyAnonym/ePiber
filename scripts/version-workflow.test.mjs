@@ -222,16 +222,7 @@ test("next-task commits the current work and opens only the next x state", () =>
         "next-task",
         "--subject",
         "Testfunktion umgesetzt",
-        "--path",
-        "Backend/package.json",
-        "--path",
-        "Backend/package-lock.json",
-        "--path",
-        logPath,
-        "--path",
-        "feature.txt",
-        "--path",
-        "bad.txt",
+        "--all-changed",
         "--apply",
       ],
       repo,
@@ -248,21 +239,18 @@ test("next-task commits the current work and opens only the next x state", () =>
       "next-task",
       "--subject",
       "Testfunktion umgesetzt",
-      "--path",
-      "Backend/package.json",
-      "--path",
-      "Backend/package-lock.json",
-      "--path",
-      logPath,
-      "--path",
-      "feature.txt",
+      "--all-changed",
     ];
     const dryRun = workflow(repo, ...args);
+    assert.match(dryRun.stdout, /Alle 4 geaenderten Pfade als geschlossene Abschlussmenge stagen/);
     assert.match(dryRun.stdout, /PLAN: Branch-Commit 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt erstellen/);
     assert.equal(git(repo, "rev-parse", "HEAD"), headBeforeFailure);
     assert.equal(readVersion(repo), "1.2.3-paj-1-1-x");
 
-    workflow(repo, ...args, "--apply");
+    const applied = workflow(repo, ...args, "--apply");
+    assert.match(applied.stdout, /Branch-Commit 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt mit SHA [0-9a-f]{40} erstellt/);
+    assert.match(applied.stdout, /Arbeitsversion 1\.2\.3-paj-1-2-x mit Zielcommit 1\.2\.3-paj-1-3 angelegt/);
+    assert.match(applied.stdout, new RegExp(`Index leer; offene Dateien: Backend/package-lock.json, Backend/package.json, ${logPath.replaceAll(".", "\\.")}`));
     assert.equal(git(repo, "log", "-1", "--pretty=%s"), "1.2.3-paj-1-2 | Testfunktion umgesetzt");
     assert.equal(readVersion(repo), "1.2.3-paj-1-2-x");
     assert.deepEqual(run("git", ["status", "--porcelain"], repo).stdout.trimEnd().split("\n").sort(), [
@@ -274,6 +262,16 @@ test("next-task commits the current work and opens only the next x state", () =>
     assert.match(log, /\[1\.2\.3-paj-1-2\].*\nCommit: 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt/);
     assert.match(log, /\[1\.2\.3-paj-1-2-x\].*\nZielcommit: 1\.2\.3-paj-1-3\nStatus: uncommitted/);
     assert.equal(git(repo, "diff", "--cached", "--name-only"), "");
+
+    const mixedMode = run(
+      process.execPath,
+      [script, "next-task", "--subject", "Nicht erlaubt", "--all-changed", "--path", "Backend/package.json"],
+      repo,
+      1,
+    );
+    assert.match(mixedMode.stderr, /--all-changed und --path duerfen nicht kombiniert werden/);
+    const wrongCommand = run(process.execPath, [script, "branch-commit", "--all-changed"], repo, 1);
+    assert.match(wrongCommand.stderr, /--all-changed ist nur fuer next-task zulaessig/);
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }

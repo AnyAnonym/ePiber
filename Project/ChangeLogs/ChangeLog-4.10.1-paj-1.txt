@@ -26,3 +26,17 @@ Commit: 4.10.1-paj-1-2 | Initialloader und Aufgabenworkflow vereinheitlicht
   Tests
   - [Frontend] Browsertests fuer den nur initial sichtbaren Matches-Loader sowie stabile WebSocket-Aktualisierungen von Matches und Spielerverzeichnis ergaenzt.
   - [Repository] Workflowtests pruefen Dry-Run, erfolgreichen kombinierten Abschluss und die vollstaendige Rueckkehr zum vorherigen `-x`-Stand bei einer abgelehnten Commitpruefung.
+
+[4.10.1-paj-1-3] - 2026-09-18
+Commit: 4.10.1-paj-1-3 | Next-task-Schnellpfad beschleunigt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.1-paj-1-2-x` gesetzt.
+  - [Repository] `next-task --all-changed` uebernimmt nach dem Statusabgleich die vollstaendige aktuelle Aenderungsmenge und vermeidet lange wiederholte Pfadlisten.
+  - [Dokumentation] Der Schnellablauf wiederholt einen in derselben Session bereits geprueften unveraenderten Diff und die vom Skript bestaetigten Abschlusswerte nicht erneut.
+
+  Added
+  - [Repository] Die erfolgreiche `next-task`-Ausgabe nennt Git-SHA, neue `-x`-Arbeitsversion, Zielcommit, leeren Index und die drei offenen Workflowdateien.
+
+  Tests
+  - [Repository] Workflowtests pruefen den `--all-changed`-Dry-Run, die Abschlussausgabe sowie die Ablehnung einer Kombination mit `--path` und der Verwendung bei anderen Aktionen.

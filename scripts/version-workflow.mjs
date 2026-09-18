@@ -22,12 +22,14 @@ function fail(message) {
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
-  const options = { apply: false, json: false, paths: [], binaryPaths: [] };
+  const options = { apply: false, json: false, allChanged: false, paths: [], binaryPaths: [] };
 
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index];
     if (argument === "--apply") {
       options.apply = true;
+    } else if (argument === "--all-changed") {
+      options.allChanged = true;
     } else if (argument === "--json") {
       options.json = true;
     } else if (argument === "--path") {
@@ -49,6 +51,8 @@ function parseArgs(argv) {
       fail(`Unbekanntes Argument: ${argument}`);
     }
   }
+
+  if (options.allChanged && command !== "next-task") fail("--all-changed ist nur fuer next-task zulaessig");
 
   return { command, options };
 }
@@ -525,7 +529,12 @@ function nextTask() {
   const { branch } = assertSideBranch();
   assertNoMergeState();
   const subject = requireSubject();
-  const allowed = [...new Set(normalizeAllowedPaths())];
+  if (options.allChanged && options.paths.length) fail("--all-changed und --path duerfen nicht kombiniert werden");
+  const changed = statusPaths();
+  const allowed = options.allChanged
+    ? changed
+    : [...new Set(normalizeAllowedPaths())];
+  if (!allowed.length) fail("Keine Aenderungen fuer next-task vorhanden");
   const head = headIdentity(branch);
   assertSynchronizedVersions(`${head.id}-x`);
   const targetId = `${branch}-${head.number + 1}`;
@@ -543,16 +552,18 @@ function nextTask() {
   const finalized = content.replace(expression, `[${targetId}] - ${today()}\nCommit: ${targetId} | ${subject}\n`);
   if (finalized === content) fail("Branch-Changelog konnte nicht finalisiert werden");
 
-  const changed = statusPaths();
   const unapproved = changed.find((file) => !allowed.includes(file));
   if (unapproved) fail(`Geaenderter Pfad ist fuer den Abschluss nicht freigegeben: ${unapproved}`);
   const mandatory = ["Backend/package.json", "Backend/package-lock.json", logPath];
+  const stagingPlan = options.allChanged
+    ? `Alle ${allowed.length} geaenderten Pfade als geschlossene Abschlussmenge stagen`
+    : `Nur freigegebene Pfade stagen: ${allowed.join(", ")}`;
 
   if (!options.apply) {
     stageAllowed(allowed, { rejectPreStaged: true, mandatory });
     plan([
       `Paketversionen und Changelog als ${targetId} | ${subject} finalisieren`,
-      `Nur freigegebene Pfade stagen: ${allowed.join(", ")}`,
+      stagingPlan,
       `Branch-Commit ${targetId} | ${subject} erstellen`,
       `Uncommittierten Arbeitsstand ${targetId}-x mit Zielcommit ${nextTargetId} anlegen`,
     ]);
@@ -570,6 +581,7 @@ function nextTask() {
   const originalIndex = fs.existsSync(indexFile) ? fs.readFileSync(indexFile) : null;
   const startingHead = gitText(["rev-parse", "HEAD"]);
   let committed = false;
+  let createdSha = null;
 
   try {
     fs.writeFileSync(logFile, finalized);
@@ -577,6 +589,7 @@ function nextTask() {
     stageAllowed(allowed, { rejectPreStaged: true, mandatory });
     git(["commit", "-m", `${targetId} | ${subject}`]);
     committed = true;
+    createdSha = gitText(["rev-parse", "HEAD"]);
     const created = headIdentity(branch);
     if (created.id !== targetId) fail("Erstellter Branch-Commit hat eine unerwartete Commit-ID");
 
@@ -602,9 +615,10 @@ function nextTask() {
 
   plan([
     `Paketversionen und Changelog als ${targetId} | ${subject} finalisieren`,
-    `Nur freigegebene Pfade stagen: ${allowed.join(", ")}`,
-    `Branch-Commit ${targetId} | ${subject} erstellen`,
-    `Uncommittierten Arbeitsstand ${targetId}-x mit Zielcommit ${nextTargetId} anlegen`,
+    stagingPlan,
+    `Branch-Commit ${targetId} | ${subject} mit SHA ${createdSha} erstellt`,
+    `Arbeitsversion ${targetId}-x mit Zielcommit ${nextTargetId} angelegt`,
+    `Index leer; offene Dateien: Backend/package-lock.json, Backend/package.json, ${logPath}`,
   ]);
 }
 

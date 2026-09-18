@@ -69,14 +69,17 @@ die Vorbereitung des naechsten Arbeitsstands:
 
 1. Branch, Arbeitsbaum, Index, Diff, letzten Commit, Paketversionen, offenen
    Branch-Changelogabschnitt und die fuer den aktuellen Auftrag erforderlichen
-   Testergebnisse pruefen. Das Skript fuehrt selbst keine fachlichen Tests aus.
-2. Aus dem vollstaendigen aktuellen Diff einen knappen Commit-Kurzkommentar und
-   die exakte Liste aller auftragsbezogenen geaenderten Dateien bestimmen.
-   Unerwartete, nicht zuordenbare oder nicht freigegebene Aenderungen blockieren
-   den Schnellablauf.
+   Testergebnisse pruefen. Wurde derselbe unveraenderte Diff in der laufenden
+   Session bereits vollstaendig geprueft und getestet, genuegt ein kurzer
+   Statusabgleich; die inhaltliche Vollpruefung wird nicht wiederholt. In einer
+   neuen Session oder bei einer Abweichung ist der Diff erneut zu pruefen. Das
+   Skript fuehrt selbst keine fachlichen Tests aus.
+2. Aus dem aktuellen Gesamtumfang einen knappen Commit-Kurzkommentar bestimmen.
+   Unerwartete oder nicht zuordenbare Aenderungen blockieren den Schnellablauf.
 3. Den offenen `-x`-Stand auf die naechste lueckenlose Branch-Commit-ID
-   finalisieren, ausschliesslich die einzeln freigegebenen Dateien stagen und den
-   nummerierten Branch-Commit erstellen.
+   finalisieren, alle aktuell geaenderten und zuvor als zusammengehoerig geprueften
+   Dateien als geschlossene Abschlussmenge stagen und den nummerierten
+   Branch-Commit erstellen.
 4. Unmittelbar danach Paketdateien und Branch-Changelog auf
    `<soeben-committete-ID>-x` mit der naechsten lueckenlosen Zielcommit-ID setzen.
    Die neue fachliche Aufgabe wird noch nicht begonnen.
@@ -85,15 +88,25 @@ die Vorbereitung des naechsten Arbeitsstands:
 
 Der Normalablauf wird mit folgendem Repository-Skript ausgefuehrt:
 
-  node scripts/version-workflow.mjs next-task --subject <Kurzkommentar> --path <Datei>... --apply
+  node scripts/version-workflow.mjs next-task --subject <Kurzkommentar> --all-changed --apply
 
-Jede geaenderte Datei wird mit einem eigenen `--path` freigegeben. Das Skript
-prueft vor dem Commit, dass keine weitere geaenderte Datei existiert. Scheitert
+`--all-changed` ist ausschliesslich fuer `next-task` zulaessig und darf nicht mit
+`--path` kombiniert werden. Es uebernimmt nach dem Statusabgleich exakt alle
+aktuellen Aenderungen; Geheimnis-, Binaer-, Diff- und Pflichtdateipruefungen
+bleiben aktiv. Binaerdateien benoetigen weiterhin ein ausdrueckliches
+`--binary-path`. Alternativ bleibt die einzelne Pfadfreigabe mit wiederholtem
+`--path` verfuegbar. Das Skript prueft vor dem Commit, dass keine weitere
+geaenderte Datei existiert. Scheitert
 Finalisierung, Staging oder Commit, stellt es den vorherigen `-x`-Stand und den
 vorherigen Index wieder her. Ist der Commit bereits erfolgreich und nur das
 anschliessende Oeffnen des neuen Arbeitsstands scheitert, bleibt der saubere
 Commitstand erhalten; `work-start --apply` kann danach kontrolliert wiederholt
 werden.
+
+Nach Erfolg gibt das Skript Commit-ID, vollstaendigen Git-SHA, neue
+`-x`-Arbeitsversion, Zielcommit, leeren Index und die drei offenen Workflowdateien
+aus. Eine zusaetzliche mehrfache Nachpruefung derselben Werte ist nicht
+erforderlich.
 
 `nächste Aufgabe` ist die ausdrueckliche Freigabe fuer Finalisierung und genau
 diesen Branch-Commit. Der Auftrag autorisiert keinen Push, Merge,
@@ -174,7 +187,7 @@ Verbindliches Automatisierungsskript:
      Branch committen                 branch-commit --subject <Text>
                                        --path <Pfad>... --apply
      aktuelle Arbeit abschliessen und next-task --subject <Text>
-     naechsten Arbeitsstand oeffnen     --path <Pfad>... --apply
+     naechsten Arbeitsstand oeffnen     --all-changed --apply
      bestaetigten Merge oeffnen       release-open --branch <Branch>
                                       --version <Version>
                                       --main-sha <BestaetigterMainSHA>
@@ -195,9 +208,11 @@ Verbindliches Automatisierungsskript:
    einer gescheiterten Finalisierung wieder inhaltlich gearbeitet werden, stellt
    `branch-reopen` Paketdateien und Abschnitt auf die zugehoerige `-x`-Arbeits-ID
    zurueck.
-   `next-task` bildet den Schnellablauf aus Abschnitt 0A ab, verlangt alle
-   geaenderten Pfade einzeln, erstellt den finalisierten Branch-Commit und oeffnet
-   danach ohne fachliche Folgeaenderung den naechsten `-x`-Stand.
+   `next-task` bildet den Schnellablauf aus Abschnitt 0A ab, uebernimmt mit
+   `--all-changed` die zuvor als zusammengehoerig gepruefte aktuelle
+   Aenderungsmenge, erstellt den finalisierten Branch-Commit und oeffnet danach
+   ohne fachliche Folgeaenderung den naechsten `-x`-Stand. Die einzelne
+   Pfadfreigabe bleibt als kontrollierte Alternative verfuegbar.
 6. `branch-commit` und `release-commit` akzeptieren mit jedem `--path` exakt eine
    einzelne, zuvor vom LLM als auftragsbezogen bestimmte Datei. Verzeichnisse und
    Repository-Root sind unzulaessig. `branch-commit` verlangt einen anfangs leeren

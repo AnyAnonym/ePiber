@@ -196,6 +196,10 @@ Schnellauftrag `nächste Aufgabe`:
 - Dafuer ist nur der Abschnitt `0A. SCHNELLABLAUF NAECHSTE AUFGABE` am Anfang von
   `Project/DokuVersGit.txt` zu lesen. Weitere Abschnitte werden nur bei einer dort
   genannten Abweichung gelesen.
+- Ist der unveraenderte Gesamtstand in derselben Session bereits geprueft und
+  getestet, wird nur der Status kurz abgeglichen und danach der dort definierte
+  `next-task --all-changed`-Schnellpfad verwendet. Bereits gepruefte Diffs und
+  Abschlusswerte werden nicht redundant erneut ausgelesen.
 - Der Auftrag startet noch keine neue fachliche Umsetzung und autorisiert keinen
   Push, Merge, Netzwerkabgleich oder Main-Versionssprung.
 - Ohne den eindeutigen Auftrag `nächste Aufgabe` gelten die normalen Freigabe- und
