@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.10.2
+Stand: 4.10.3
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2264,3 +2264,16 @@ Quelle: 4.10.1-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.10.2` gesetzt.
+
+[4.10.3] - 2026-09-18
+Commit: 4.10.3 | Release-Workflow getestet
+Quelle: 4.10.2-paj-1
+
+  Changed
+  - [Repository] Branchvorbereitung, Aufgabenwechsel, Branchabschluss und
+    SHA-gebundene Releaseintegration als vollstaendigen Workflow-Test
+    durchlaufen; alle neun Workflowtests waren erfolgreich.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.10.3` gesetzt.
