@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 const { AppError } = require("./errors.js");
+const metrics = require("./metrics.js");
 const { hashPayload, hashToken, randomToken } = require("./security.js");
 
 class StateRepository {
@@ -213,19 +214,39 @@ class StateRepository {
     return { ...operation.result, repeated: operation.repeated };
   }
 
-  createSession({ userId, email, login = email, ttlMs }) {
+  createSession({ userId, email, login = email, ttlMs, reason = "login" }) {
     this.ensureOpen();
     const token = randomToken();
+    const tokenHash = hashToken(token);
     const now = this.now();
     const expiresAt = now + ttlMs;
     this.db.prepare(`
       INSERT INTO sessions(sid_hash, user_id, email, login, created_at, expires_at, last_seen_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(hashToken(token), userId, email, login, now, expiresAt, now);
+    `).run(tokenHash, userId, email, login, now, expiresAt, now);
+    metrics.recordSessionEvent("created", reason);
     return { token, expiresAt };
   }
 
-  getSession(token) {
+  limitUserSessions(userId, keepToken, maxSessions) {
+    this.ensureOpen();
+    const keepTokenHash = hashToken(keepToken);
+    const expired = this.db.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at <= ?").run(userId, this.now()).changes;
+    if (expired > 0) metrics.recordSessionEvent("expired", "inactivity", expired);
+    const revoked = this.db.prepare(`
+      DELETE FROM sessions
+      WHERE user_id = ? AND sid_hash NOT IN (
+        SELECT sid_hash FROM sessions
+        WHERE user_id = ?
+        ORDER BY CASE WHEN sid_hash = ? THEN 0 ELSE 1 END, created_at DESC, sid_hash
+        LIMIT ?
+      )
+    `).run(userId, userId, keepTokenHash, maxSessions).changes;
+    if (revoked > 0) metrics.recordSessionEvent("revoked", "session_limit", revoked);
+    return revoked;
+  }
+
+  getSession(token, { ttlMs = 0, refreshIntervalMs = 0 } = {}) {
     this.ensureOpen();
     if (!token) return null;
     const tokenHash = hashToken(token);
@@ -237,9 +258,17 @@ class StateRepository {
     const now = this.now();
     if (Number(row.expires_at) <= now) {
       this.db.prepare("DELETE FROM sessions WHERE sid_hash = ?").run(tokenHash);
+      metrics.recordSessionEvent("expired", "inactivity");
       return null;
     }
-    if (now - Number(row.last_seen_at) > 60000) {
+    let expiresAt = Number(row.expires_at);
+    let refreshed = false;
+    if (ttlMs > 0 && refreshIntervalMs > 0 && expiresAt - now <= ttlMs - refreshIntervalMs) {
+      expiresAt = now + ttlMs;
+      this.db.prepare("UPDATE sessions SET expires_at = ?, last_seen_at = ? WHERE sid_hash = ?").run(expiresAt, now, tokenHash);
+      metrics.recordSessionEvent("refreshed", "activity");
+      refreshed = true;
+    } else if (now - Number(row.last_seen_at) > 60000) {
       this.db.prepare("UPDATE sessions SET last_seen_at = ? WHERE sid_hash = ?").run(now, tokenHash);
     }
     return {
@@ -248,22 +277,29 @@ class StateRepository {
       email: row.email,
       login: row.login,
       createdAt: Number(row.created_at),
-      expiresAt: Number(row.expires_at),
+      expiresAt,
+      refreshed,
     };
   }
 
-  revokeSession(token) {
+  revokeSession(token, reason = "security_change") {
     this.ensureOpen();
     if (!token) return false;
-    return this.db.prepare("DELETE FROM sessions WHERE sid_hash = ?").run(hashToken(token)).changes > 0;
+    const revoked = this.db.prepare("DELETE FROM sessions WHERE sid_hash = ?").run(hashToken(token)).changes > 0;
+    if (revoked) metrics.recordSessionEvent("revoked", reason);
+    return revoked;
   }
 
-  revokeUserSessions(userId, exceptTokenHash = null) {
+  revokeUserSessions(userId, exceptTokenHash = null, reason = "security_change") {
     this.ensureOpen();
+    let revoked;
     if (exceptTokenHash) {
-      return this.db.prepare("DELETE FROM sessions WHERE user_id = ? AND sid_hash <> ?").run(userId, exceptTokenHash).changes;
+      revoked = this.db.prepare("DELETE FROM sessions WHERE user_id = ? AND sid_hash <> ?").run(userId, exceptTokenHash).changes;
+    } else {
+      revoked = this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId).changes;
     }
-    return this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId).changes;
+    if (revoked > 0) metrics.recordSessionEvent("revoked", reason, revoked);
+    return revoked;
   }
 
   provisionMonitor(label, monitorId) {
@@ -449,7 +485,8 @@ class StateRepository {
   cleanup() {
     this.ensureOpen();
     const now = this.now();
-    this.db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(now);
+    const expiredSessions = this.db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(now).changes;
+    if (expiredSessions > 0) metrics.recordSessionEvent("expired", "inactivity", expiredSessions);
     this.db.prepare("DELETE FROM operations WHERE created_at < ?").run(now - 86400000);
     this.db.prepare("DELETE FROM login_failures WHERE blocked_until < ? AND window_start < ?").run(now, now - 86400000);
   }

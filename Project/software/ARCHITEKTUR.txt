@@ -272,8 +272,12 @@ Produktion Secure-Cookie. SQLite speichert nur dessen SHA-256-Hash und bindet di
 Session an Personen-ID und den beim Login gueltigen kanonischen Login. Bei jedem
 HTTP-/RPC-Zugriff werden Login, Aktivstatus und Rolle aus der aktuellen
 Personenzeile ermittelt; fehlt die Person, ist sie inaktiv oder stimmt der Login
-  nicht mehr, wird die Session verworfen. Ohne jemals erfolgreich geladenen
-  Personenstand bleiben geschuetzte Zugriffe gesperrt:
+  nicht mehr, wird die Session verworfen. Bis zu zehn Geraetesessions einer Person
+  bleiben parallel gueltig; ein weiterer Login entfernt nur die aeltesten.
+  `GET /api/session` verlaengert nach erfolgreicher Personenpruefung Serverablauf
+  und Cookie hoechstens einmal pro Tag auf 30 Tage Inaktivitaet. Andere HTTP- oder
+  WebSocket-Zugriffe verlaengern nicht einseitig nur den Serverzustand. Ohne jemals
+  erfolgreich geladenen Personenstand bleiben geschuetzte Zugriffe gesperrt:
 
   Rolle/Principal | Rechte
   ----------------|-------------------------------------------------------------

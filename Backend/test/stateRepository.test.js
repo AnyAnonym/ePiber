@@ -33,6 +33,58 @@ test("Sessions laufen ab und werden widerrufen", () => {
   repository.close();
 });
 
+test("Aktive Sessions werden gedrosselt verlaengert", () => {
+  let now = 1000;
+  const repository = new StateRepository(":memory:", { now: () => now });
+  repository.init();
+  const session = repository.createSession({ userId: "p1", email: "contact@example.test", login: "person.login", ttlMs: 3000 });
+
+  now = 1999;
+  assert.equal(repository.getSession(session.token, { ttlMs: 3000, refreshIntervalMs: 1000 }).refreshed, false);
+  now = 2000;
+  const refreshed = repository.getSession(session.token, { ttlMs: 3000, refreshIntervalMs: 1000 });
+  assert.equal(refreshed.refreshed, true);
+  assert.equal(refreshed.expiresAt, 5000);
+  now = 2001;
+  assert.equal(repository.getSession(session.token, { ttlMs: 3000, refreshIntervalMs: 1000 }).refreshed, false);
+  now = 5001;
+  assert.equal(repository.getSession(session.token), null);
+  repository.close();
+});
+
+test("Parallele Sessions werden pro Benutzer auf die neuesten begrenzt", () => {
+  let now = 1000;
+  const repository = new StateRepository(":memory:", { now: () => now++ });
+  repository.init();
+  const sessions = Array.from({ length: 4 }, () => repository.createSession({
+    userId: "p1", email: "contact@example.test", login: "person.login", ttlMs: 3000,
+  }));
+
+  assert.equal(repository.limitUserSessions("p1", sessions[3].token, 3), 1);
+  assert.equal(repository.getSession(sessions[0].token), null);
+  assert.equal(repository.getSession(sessions[1].token).userId, "p1");
+  assert.equal(repository.getSession(sessions[3].token).userId, "p1");
+  repository.close();
+});
+
+test("Sessionlimit entfernt abgelaufene Zeilen vor gueltigen Geraetesessions", () => {
+  let now = 1000;
+  const repository = new StateRepository(":memory:", { now: () => now });
+  repository.init();
+  const activeOld = repository.createSession({ userId: "p1", email: "contact@example.test", login: "person.login", ttlMs: 10000 });
+  now = 2000;
+  const expiredNewer = repository.createSession({ userId: "p1", email: "contact@example.test", login: "person.login", ttlMs: 500 });
+  now = 3000;
+  const activeNew = repository.createSession({ userId: "p1", email: "contact@example.test", login: "person.login", ttlMs: 10000 });
+  now = 4000;
+
+  assert.equal(repository.limitUserSessions("p1", activeNew.token, 2), 0);
+  assert.equal(repository.getSession(expiredNewer.token), null);
+  assert.equal(repository.getSession(activeOld.token).userId, "p1");
+  assert.equal(repository.getSession(activeNew.token).userId, "p1");
+  repository.close();
+});
+
 test("Sessionmigration ergaenzt Login aus E-Mail und behaelt die Rollback-Spalte", (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-session-migration-"));
   const filename = path.join(directory, "state.sqlite");

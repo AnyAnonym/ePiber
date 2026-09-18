@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const { promisify } = require("util");
 const dataStore = require("./dataStore.js");
-const { SESSION_TTL_MS } = require("./config.js");
+const { SESSION_MAX_PER_USER, SESSION_REFRESH_INTERVAL_MS, SESSION_TTL_MS } = require("./config.js");
 const { AppError } = require("./errors.js");
 const { timingSafeTextEqual } = require("./security.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
@@ -287,14 +287,17 @@ class AuthService {
         await this.sheetService.setPasswordHash(person.id, upgraded, { expectedHash: person.storedPasswordHash });
         person.storedPasswordHash = upgraded;
       }
-      this.repository.revokeUserSessions(person.id);
-      const session = this.repository.createSession({ userId: person.id, email: person.email, login: person.login, ttlMs: SESSION_TTL_MS });
+      const session = this.repository.transaction(() => {
+        const created = this.repository.createSession({ userId: person.id, email: person.email, login: person.login, ttlMs: SESSION_TTL_MS });
+        this.repository.limitUserSessions(person.id, created.token, SESSION_MAX_PER_USER);
+        return created;
+      });
       return { session, user: this.privateProfile(person) };
     });
   }
 
-  getUserForToken(token, { allowLastKnownGoodRole = false } = {}) {
-    const session = this.repository.getSession(token);
+  getUserForToken(token, { allowLastKnownGoodRole = false, refreshSession = false } = {}) {
+    let session = this.repository.getSession(token);
     if (!session) return null;
     const peopleCurrent = dataStore.isTableCurrent("players");
     if (!peopleCurrent) {
@@ -304,8 +307,15 @@ class AuthService {
     const person = this.findById(session.userId);
     if (!person || !person.active || !person.login || session.login !== person.login) {
       if (!peopleCurrent) throw new AppError("PERSON_DATA_UNAVAILABLE", "Personendaten sind derzeit nicht aktuell", 503);
-      this.repository.revokeSession(token);
+      this.repository.revokeSession(token, "identity_changed");
       return null;
+    }
+    if (refreshSession) {
+      session = this.repository.getSession(token, {
+        ttlMs: SESSION_TTL_MS,
+        refreshIntervalMs: SESSION_REFRESH_INTERVAL_MS,
+      });
+      if (!session) return null;
     }
     return {
       session,
@@ -333,7 +343,7 @@ class AuthService {
       person = this.findById(session.userId);
     } catch {}
     if (!person?.active || !person.login || session.login !== person.login) {
-      if (peopleCurrent) this.repository.revokeSession(token);
+      if (peopleCurrent) this.repository.revokeSession(token, "identity_changed");
       return null;
     }
     return {
@@ -356,7 +366,7 @@ class AuthService {
   }
 
   logout(token) {
-    this.repository.revokeSession(token);
+    this.repository.revokeSession(token, "logout");
   }
 
   async changeOwnPassword(token, currentPasswordHash, newPasswordHash) {
@@ -367,15 +377,15 @@ class AuthService {
       const current = await this.verifyStoredPassword(currentPasswordHash, person.storedPasswordHash);
       if (!current.valid) throw new AppError("PASSWORD_INVALID", "Aktuelles Passwort ist falsch", 403);
       const stored = await this.createStoredPasswordHash(newPasswordHash);
-      this.repository.revokeUserSessions(person.id);
+      this.repository.revokeUserSessions(person.id, null, "password_change");
       try {
         await this.sheetService.setPasswordHash(person.id, stored, { expectedHash: person.storedPasswordHash });
       } catch (error) {
         error.details = { ...(error.details || {}), sessionInvalidated: true };
         throw error;
       }
-      this.repository.revokeUserSessions(person.id);
-      const session = this.repository.createSession({ userId: person.id, email: person.email, login: person.login, ttlMs: SESSION_TTL_MS });
+      this.repository.revokeUserSessions(person.id, null, "password_change");
+      const session = this.repository.createSession({ userId: person.id, email: person.email, login: person.login, ttlMs: SESSION_TTL_MS, reason: "password_change" });
       return { success: true, session, user: this.privateProfile(person) };
     });
   }
@@ -398,14 +408,14 @@ class AuthService {
       const person = this.findById(personId);
       if (!person) throw new AppError("PERSON_NOT_FOUND", "Person wurde nicht gefunden", 404);
       const storedHash = await this.createStoredPasswordHash(newPasswordHash);
-      this.repository.revokeUserSessions(person.id);
+      this.repository.revokeUserSessions(person.id, null, "admin_password");
       try {
         await this.sheetService.setPasswordHash(person.id, storedHash, { expectedHash: person.storedPasswordHash });
       } catch (error) {
         error.details = { ...(error.details || {}), sessionsRevoked: true };
         throw error;
       }
-      this.repository.revokeUserSessions(person.id);
+      this.repository.revokeUserSessions(person.id, null, "admin_password");
       return { success: true, personId: person.id };
     });
   }
@@ -426,7 +436,7 @@ class AuthService {
         throw new AppError("PASSWORD_SETUP_INVALID", "Passwortvergabe ist nicht freigegeben", 401);
       }
       const storedHash = await this.createStoredPasswordHash(credential);
-      this.repository.revokeUserSessions(person.id);
+      this.repository.revokeUserSessions(person.id, null, "password_setup");
       try {
         await this.sheetService.setPasswordHash(person.id, storedHash, {
           expectedHash: person.storedPasswordHash,
@@ -436,7 +446,7 @@ class AuthService {
         error.details = { ...(error.details || {}), sessionsRevoked: true };
         throw error;
       }
-      this.repository.revokeUserSessions(person.id);
+      this.repository.revokeUserSessions(person.id, null, "password_setup");
       return withAudit({ success: true }, { personId: person.id });
     });
   }

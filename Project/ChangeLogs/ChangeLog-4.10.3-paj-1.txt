@@ -6,3 +6,16 @@ Commit: 4.10.3-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.3-paj-1-1` gesetzt.
+
+[4.10.3-paj-1-2] - 2026-09-18
+Commit: 4.10.3-paj-1-2 | Mehrgeraete-Sessions verlaengert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.3-paj-1-1-x` gesetzt.
+  - [Software] Benutzersitzungen auf eine gleitende Inaktivitaetslaufzeit von 30 Tagen umgestellt; aktive Browser verlaengern Serverablauf und Cookie gedrosselt einmal pro Tag.
+  - [Software] Bis zu zehn parallele Sitzungen eines Kontos bleiben bei weiteren erfolgreichen Logins bestehen; danach werden die aeltesten entfernt. Passwort-, Login-, Aktiv- und Rollenaenderungen widerrufen sie weiterhin sicherheitsbedingt.
+  - [Dokumentation] Endpoint-, Datenbank- und Architekturvertrag auf Inaktivitaetsablauf, Cookie-Erneuerung, Geraetelimit und unveraenderte Sicherheitswiderrufe abgeglichen.
+
+  Added
+  - [Observability] Datenschutzarme Sessionmetriken fuer Erstellung, Verlaengerung, Inaktivitaetsablauf und kontrollierte Widerrufsgruende ergaenzt.
+  - [Tests] Repository-, Auth-, HTTP- und Metriktests fuer Sliding Expiry, Cookie-Erneuerung, parallele Geraete und Sessiondiagnose aufgenommen.
