@@ -9,6 +9,8 @@ const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
 
 const dataClientStub = `
+window.__endpointCalls = [];
+window.__triggerInvalidation = async () => {};
 const responses = {
   matches1: { data: { success: true, values: [
     ["ID", "MatchDate", "MatchStart", "MatchEnde", "ForderungDate", "BewerbID", "BewerbRunde", "Spieler1ID", "Spieler2ID", "Spieler3ID", "Spieler4ID", "Ergebnis"],
@@ -27,8 +29,20 @@ const responses = {
     ["cup", "Vereinsmeisterschaft"],
   ] } },
 };
-export const createEndpoint = (name) => async () => structuredClone(responses[name]);
-export const subscribeInvalidations = () => () => {};
+export const createEndpoint = (name) => async () => {
+  window.__endpointCalls.push(name);
+  const params = new URLSearchParams(location.search);
+  const callNumber = window.__endpointCalls.filter((entry) => entry === name).length;
+  if ((params.get("slowInitial") === "1" && callNumber === 1)
+    || (params.get("slowRefresh") === "1" && callNumber > 1)) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return structuredClone(responses[name]);
+};
+export const subscribeInvalidations = (_topics, callback) => {
+  window.__triggerInvalidation = callback;
+  return () => {};
+};
 `;
 
 function startServer() {
@@ -55,7 +69,13 @@ function startServer() {
     }
     if (pathname === "/test/loadingHelper.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-      response.end("export const callWithRetry = (fn) => fn(); export const showLoadingOverlay = () => {}; export const hideLoadingOverlay = () => {}; export const showErrorOverlay = () => {};\n");
+      response.end(fs.readFileSync(path.join(FRONTEND_ROOT, "JS/loadingHelper.js"), "utf8")
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"'));
+      return;
+    }
+    if (pathname === "/test/diagnostics.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end("export const diagnostic = { info() {}, warn() {}, error() {} };\n");
       return;
     }
     if (pathname === "/test/monitorReady.js") {
@@ -121,6 +141,36 @@ test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergeb
       return { direction: getComputedStyle(meta).flexDirection, requestBelowDate: request.top >= date.bottom };
     });
     assert.deepEqual(mobileMeta, { direction: "column", requestBelowDate: true });
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Matches zeigen den deckenden Loader nur beim ersten Datenstand", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 700 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/matches-test.html?slowInitial=1&slowRefresh=1`, { waitUntil: "domcontentloaded" });
+    const loader = page.locator(".loading-overlay");
+    await loader.waitFor({ state: "visible" });
+    assert.equal(await loader.locator(".loading-text").textContent(), "Lade Daten ...");
+    assert.equal(await loader.evaluate((element) => getComputedStyle(element).backgroundColor), "rgb(255, 255, 255)");
+    await page.locator(".m1-card").first().waitFor({ state: "visible" });
+    await loader.waitFor({ state: "detached" });
+
+    await page.locator("#filterBewerb").check();
+    await page.locator("#filterBewerbSelect").selectOption("cup");
+    const refresh = page.evaluate(() => window.__triggerInvalidation());
+    await page.waitForTimeout(50);
+    assert.equal(await loader.count(), 0);
+    assert.equal(await page.locator(".m1-card").first().isVisible(), true);
+    await refresh;
+    assert.equal(await page.locator("#filterBewerbSelect").inputValue(), "cup");
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

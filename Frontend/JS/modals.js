@@ -17,6 +17,7 @@ import { diagnostic } from "./diagnostics.js";
 import { createFavoriteButton } from "./favorites.js";
 import { createMaterialSymbol } from "./materialSymbols.js";
 import { categorizedProfileCompetitions, clearProfileModalContent, mergedProfileCompetitions } from "./profileModalState.js";
+import { showLoadingOverlay, hideLoadingOverlay } from "./loadingHelper.js";
 
 const readPublicProfile = createEndpoint("publicProfile");
 const readMyProfile = createEndpoint("myProfile");
@@ -152,6 +153,8 @@ function setModalBusy(form, busy) {
 }
 
 function closeModal(modal) {
+  const loadingScope = modal?.querySelector(".modal-content");
+  if (loadingScope) hideLoadingOverlay(loadingScope);
   modal?.classList.add("hidden");
   if (modal?.classList.contains("explicit-dismiss")) {
     modal.querySelector("form")?.reset();
@@ -1289,6 +1292,8 @@ window.openFavoriteMatchAction = async (overlay) => {
   list.replaceChildren();
   favoriteMatchPickerReturnFocus = document.activeElement;
   openModal(favoriteMatchPickerModal);
+  const loadingScope = favoriteMatchPickerModal.querySelector(".modal-content");
+  showLoadingOverlay(undefined, loadingScope);
   favoriteMatchPickerModal.querySelector(".close")?.focus();
   try {
     const response = await readMyProfile();
@@ -1327,6 +1332,8 @@ window.openFavoriteMatchAction = async (overlay) => {
     diagnostic.error("favorite_match_picker_load_failed", error);
     status.hidden = false;
     status.textContent = errorMessage(error, "Eigene Matches konnten nicht geladen werden.");
+  } finally {
+    if (requestGeneration === favoriteMatchPickerGeneration) hideLoadingOverlay(loadingScope);
   }
 };
 
@@ -1629,7 +1636,9 @@ async function loadMessages({ append = false } = {}) {
   messageState.loading = true;
   const generation = profileRequestGeneration;
   const panel = document.getElementById("profileMessagesScroll");
-  if (!append) panel.textContent = "Lade Meldungen...";
+  const loadingScope = profileModal.querySelector(".modal-content");
+  const initialLoad = !append && !messageState.loaded;
+  if (initialLoad) showLoadingOverlay(undefined, loadingScope);
   updateAcknowledgeAllButton();
   try {
     const params = { limit: 50 };
@@ -1651,6 +1660,7 @@ async function loadMessages({ append = false } = {}) {
       panel.textContent = errorMessage(error, "Meldungen konnten nicht geladen werden.");
     }
   } finally {
+    if (initialLoad && generation === profileRequestGeneration) hideLoadingOverlay(loadingScope);
     if (messageState) messageState.loading = false;
     updateAcknowledgeAllButton();
   }
@@ -1702,6 +1712,8 @@ async function openMessageDetail(id, returnFocus) {
   profileModal.inert = true;
   profileModal.setAttribute("aria-hidden", "true");
   openModal(messageDetailModal);
+  const loadingScope = messageDetailModal.querySelector(".modal-content");
+  showLoadingOverlay(undefined, loadingScope);
   messageDetailModal.querySelector(".close")?.focus();
   try {
     const result = await readMyMessage({ messageId: id });
@@ -1723,6 +1735,8 @@ async function openMessageDetail(id, returnFocus) {
   } catch (error) {
     document.getElementById("messageDetailSubject").textContent = "Fehler beim Laden";
     document.getElementById("messageDetailStatus").textContent = errorMessage(error, "Meldung konnte nicht geladen werden.");
+  } finally {
+    if (generation === profileRequestGeneration) hideLoadingOverlay(loadingScope);
   }
 }
 
@@ -1865,6 +1879,8 @@ window.openProfileModal = async (options = {}) => {
   adminPanel.hidden = true;
   document.getElementById("profileSystemPanel").hidden = false;
   openModal(profileModal);
+  const loadingScope = profileModal.querySelector(".modal-content");
+  showLoadingOverlay(undefined, loadingScope);
 
   try {
     const result = ownProfile
@@ -2123,6 +2139,8 @@ window.openProfileModal = async (options = {}) => {
     diagnostic.error("profile_load_failed", error);
     nameElement.textContent = "Fehler beim Laden";
     textElement.textContent = errorMessage(error, "Profil konnte nicht geladen werden.");
+  } finally {
+    if (requestGeneration === profileRequestGeneration) hideLoadingOverlay(loadingScope);
   }
 };
 
@@ -2190,6 +2208,8 @@ window.openWithdrawnRankingPlayers = async (bewerbId) => {
   title.textContent = "Rausgehängte Spieler";
   body.textContent = "Lade Daten...";
   openModal(withdrawnPlayersModal);
+  const loadingScope = withdrawnPlayersModal.querySelector(".modal-content");
+  showLoadingOverlay(undefined, loadingScope);
   try {
     const result = await readWithdrawnRankingPlayers({ bewerbId: normalizedBewerbId });
     const data = result.data;
@@ -2233,6 +2253,8 @@ window.openWithdrawnRankingPlayers = async (bewerbId) => {
     }
   } catch (error) {
     body.textContent = errorMessage(error, "Liste konnte nicht geladen werden.");
+  } finally {
+    hideLoadingOverlay(loadingScope);
   }
 };
 

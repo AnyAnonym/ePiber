@@ -11,6 +11,7 @@ const readPlayersList = createEndpoint("players");
 const readBewerbe     = createEndpoint("bewerbe");
 const readBewerbsart  = createEndpoint("bewerbsart");
 let renderGeneration = 0;
+let roundRobinLoaded = false;
 const profileLinkContainers = new WeakSet();
 let layoutResizeObserver = null;
 
@@ -480,10 +481,13 @@ function observeRoundRobinLayouts(container) {
 
 export async function renderRoundRobin(bewerbId, container, paarungslayout) {
   const generation = ++renderGeneration;
+  const initialLoad = !roundRobinLoaded;
   bindProfileLinks(container);
   layoutResizeObserver?.disconnect();
-  container.replaceChildren();
-  showLoadingOverlay("Lade Gruppen...");
+  if (initialLoad) {
+    container.replaceChildren();
+    showLoadingOverlay();
+  }
 
   try {
     await ready;
@@ -565,7 +569,8 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
     if (sortedGroups.length === 0) {
       if (generation !== renderGeneration) return null;
       renderMessage(container, "Keine Gruppen für diesen Bewerb gefunden.");
-      hideLoadingOverlay();
+      roundRobinLoaded = true;
+      if (initialLoad) hideLoadingOverlay();
       return true;
     }
 
@@ -673,11 +678,12 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
     // Backend-derived text is escaped before it is added to this markup string.
     container.innerHTML = html;
     observeRoundRobinLayouts(container);
-    hideLoadingOverlay();
+    roundRobinLoaded = true;
+    if (initialLoad) hideLoadingOverlay();
     return true;
   } catch {
     if (generation !== renderGeneration) return null;
-    showErrorOverlay("Fehler beim Laden der Gruppen", () => renderRoundRobin(bewerbId, container, paarungslayout));
+    if (initialLoad) showErrorOverlay("Fehler beim Laden der Gruppen", () => renderRoundRobin(bewerbId, container, paarungslayout));
     return false;
   }
 }

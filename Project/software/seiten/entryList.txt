@@ -16,8 +16,10 @@ Eintragungsliste - Anmeldung / Nennung fuer einen Bewerb
   Schreibend `addEntryList` und `removeEntryList`. Invalidierungen der Topics
   `entryList`, `players`, `bewerbe` und `ranking` laden Bewerb und Liste neu.
   Sessionaenderungen, Sichtbarwerden und Timer an Start/Deadline aktualisieren die
-  Toolbar. Loading-/Fehleroverlay mit Retry sowie Monitor-Ready/Failed liefern
-  einen definierten Initialzustand.
+  Toolbar. Der voll deckende Spinner `Lade Daten ...` und das Fehleroverlay mit
+  Retry gelten fuer den Initialzustand. Spaetere Invalidierungen behalten die
+  vorhandene Liste ohne Spinner bis zum vollstaendigen Austausch sichtbar.
+  Monitor-Ready/Failed schliesst den Initialzustand ab.
 
 -- Anmeldung und Vertrag --
   Authentifizierung und Personen-ID stammen ausschliesslich aus der serverseitigen

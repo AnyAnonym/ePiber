@@ -202,6 +202,107 @@ test("branch-finalize and branch-commit enforce numbering and explicit paths", (
   }
 });
 
+test("next-task commits the current work and opens only the next x state", () => {
+  const { base, repo } = createRepository();
+  try {
+    workflow(repo, "branch-start", "--system", "paj", "--apply");
+    const logPath = "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt";
+    fs.writeFileSync(path.join(repo, "feature.txt"), "implemented\n");
+    fs.appendFileSync(path.join(repo, logPath), "  - [Software] Testfunktion umgesetzt.\n");
+
+    const badPath = path.join(repo, "bad.txt");
+    fs.writeFileSync(badPath, "trailing whitespace  \n");
+    const headBeforeFailure = git(repo, "rev-parse", "HEAD");
+    const versionBeforeFailure = readVersion(repo);
+    const logBeforeFailure = fs.readFileSync(path.join(repo, logPath), "utf8");
+    const failed = run(
+      process.execPath,
+      [
+        script,
+        "next-task",
+        "--subject",
+        "Testfunktion umgesetzt",
+        "--all-changed",
+        "--apply",
+      ],
+      repo,
+      1,
+    );
+    assert.match(failed.stderr, /trailing whitespace/);
+    assert.equal(git(repo, "rev-parse", "HEAD"), headBeforeFailure);
+    assert.equal(readVersion(repo), versionBeforeFailure);
+    assert.equal(fs.readFileSync(path.join(repo, logPath), "utf8"), logBeforeFailure);
+    assert.equal(git(repo, "diff", "--cached", "--name-only"), "");
+    fs.rmSync(badPath);
+
+    const args = [
+      "next-task",
+      "--subject",
+      "Testfunktion umgesetzt",
+      "--all-changed",
+    ];
+    const dryRun = workflow(repo, ...args);
+    assert.match(dryRun.stdout, /Alle 4 geaenderten Pfade als geschlossene Abschlussmenge stagen/);
+    assert.match(dryRun.stdout, /PLAN: Branch-Commit 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt erstellen/);
+    assert.equal(git(repo, "rev-parse", "HEAD"), headBeforeFailure);
+    assert.equal(readVersion(repo), "1.2.3-paj-1-1-x");
+
+    const applied = workflow(repo, ...args, "--apply");
+    assert.match(applied.stdout, /Branch-Commit 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt mit SHA [0-9a-f]{40} erstellt/);
+    assert.match(applied.stdout, /Arbeitsversion 1\.2\.3-paj-1-2-x mit Zielcommit 1\.2\.3-paj-1-3 angelegt/);
+    assert.match(applied.stdout, new RegExp(`Index leer; offene Dateien: Backend/package-lock.json, Backend/package.json, ${logPath.replaceAll(".", "\\.")}`));
+    assert.equal(git(repo, "log", "-1", "--pretty=%s"), "1.2.3-paj-1-2 | Testfunktion umgesetzt");
+    assert.equal(readVersion(repo), "1.2.3-paj-1-2-x");
+    assert.deepEqual(run("git", ["status", "--porcelain"], repo).stdout.trimEnd().split("\n").sort(), [
+      " M Backend/package-lock.json",
+      " M Backend/package.json",
+      ` M ${logPath}`,
+    ]);
+    const log = fs.readFileSync(path.join(repo, logPath), "utf8");
+    assert.match(log, /\[1\.2\.3-paj-1-2\].*\nCommit: 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt/);
+    assert.match(log, /\[1\.2\.3-paj-1-2-x\].*\nZielcommit: 1\.2\.3-paj-1-3\nStatus: uncommitted/);
+    assert.equal(git(repo, "diff", "--cached", "--name-only"), "");
+
+    const mixedMode = run(
+      process.execPath,
+      [script, "next-task", "--subject", "Nicht erlaubt", "--all-changed", "--path", "Backend/package.json"],
+      repo,
+      1,
+    );
+    assert.match(mixedMode.stderr, /--all-changed und --path duerfen nicht kombiniert werden/);
+    const wrongCommand = run(process.execPath, [script, "branch-commit", "--all-changed"], repo, 1);
+    assert.match(wrongCommand.stderr, /--all-changed ist nur fuer next-task, finish-branch oder release-commit zulaessig/);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("finish-branch creates the final branch commit without opening another x state", () => {
+  const { base, repo } = createRepository();
+  try {
+    workflow(repo, "branch-start", "--system", "paj", "--apply");
+    const logPath = "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt";
+    fs.writeFileSync(path.join(repo, "feature.txt"), "finished\n");
+    fs.appendFileSync(path.join(repo, logPath), "  - [Repository] Abschlussworkflow umgesetzt.\n");
+
+    const args = ["finish-branch", "--subject", "Abschlussworkflow umgesetzt", "--all-changed"];
+    const dryRun = workflow(repo, ...args);
+    assert.match(dryRun.stdout, /PLAN: Seitenbranch sauber auf 1\.2\.3-paj-1-2 abschliessen/);
+    assert.equal(readVersion(repo), "1.2.3-paj-1-1-x");
+
+    const applied = workflow(repo, ...args, "--apply");
+    assert.match(applied.stdout, /Branch-Commit 1\.2\.3-paj-1-2 \| Abschlussworkflow umgesetzt mit SHA [0-9a-f]{40} erstellt/);
+    assert.match(applied.stdout, /Seitenbranch 1\.2\.3-paj-1 sauber auf 1\.2\.3-paj-1-2 abgeschlossen/);
+    assert.match(applied.stdout, /Index leer; Arbeitsbaum sauber/);
+    assert.equal(git(repo, "log", "-1", "--pretty=%s"), "1.2.3-paj-1-2 | Abschlussworkflow umgesetzt");
+    assert.equal(readVersion(repo), "1.2.3-paj-1-2");
+    assert.equal(git(repo, "status", "--porcelain"), "");
+    assert.doesNotMatch(fs.readFileSync(path.join(repo, logPath), "utf8"), /Status: uncommitted/);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test("commit staging rejects potential secret files", () => {
   const { base, repo } = createRepository();
   try {
@@ -533,7 +634,7 @@ test("release workflow creates and verifies a real merge commit", () => {
       1,
     );
     assert.match(wrongMerge.stderr, /MERGE_HEAD entspricht nicht/);
-    workflow(
+    const released = workflow(
       repo,
       "release-commit",
       "--branch",
@@ -546,18 +647,11 @@ test("release workflow creates and verifies a real merge commit", () => {
       branchSha,
       "--subject",
       "Releasefunktion umgesetzt",
-      "--path",
-      "Backend/package.json",
-      "--path",
-      "Backend/package-lock.json",
-      "--path",
-      "Project/ChangeLogs/ChangeLog-main.txt",
-      "--path",
-      "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt",
-      "--path",
-      "feature.txt",
+      "--all-changed",
       "--apply",
     );
+    assert.match(released.stdout, /Alle \d+ geaenderten Merge- und Dokumentationspfade stagen/);
+    assert.match(released.stdout, /Merge-Commit 1\.3\.0 \| Releasefunktion umgesetzt mit SHA [0-9a-f]{40} und zwei Eltern erstellt/);
     assert.equal(readVersion(repo), "1.3.0");
     assert.equal(git(repo, "show", "--no-patch", "--pretty=%s", "HEAD"), "1.3.0 | Releasefunktion umgesetzt");
     assert.equal(git(repo, "show", "--no-patch", "--pretty=%P", "HEAD").split(" ").length, 2);

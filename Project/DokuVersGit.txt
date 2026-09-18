@@ -60,6 +60,135 @@ gelten die folgenden Detailregeln.
 
 
 ================================================================================
+0A. SCHNELLABLAUF NAECHSTE AUFGABE
+================================================================================
+
+Der eindeutige Userauftrag `nächste Aufgabe` auf einem Seitenbranch autorisiert
+in einem Durchlauf ausschliesslich den Abschluss des aktuellen Arbeitsstands und
+die Vorbereitung des naechsten Arbeitsstands:
+
+1. Branch, Arbeitsbaum, Index, Diff, letzten Commit, Paketversionen, offenen
+   Branch-Changelogabschnitt und die fuer den aktuellen Auftrag erforderlichen
+   Testergebnisse pruefen. Wurde derselbe unveraenderte Diff in der laufenden
+   Session bereits vollstaendig geprueft und getestet, genuegt ein kurzer
+   Statusabgleich; die inhaltliche Vollpruefung wird nicht wiederholt. In einer
+   neuen Session oder bei einer Abweichung ist der Diff erneut zu pruefen. Das
+   Skript fuehrt selbst keine fachlichen Tests aus.
+2. Aus dem aktuellen Gesamtumfang einen knappen Commit-Kurzkommentar bestimmen.
+   Unerwartete oder nicht zuordenbare Aenderungen blockieren den Schnellablauf.
+3. Den offenen `-x`-Stand auf die naechste lueckenlose Branch-Commit-ID
+   finalisieren, alle aktuell geaenderten und zuvor als zusammengehoerig geprueften
+   Dateien als geschlossene Abschlussmenge stagen und den nummerierten
+   Branch-Commit erstellen.
+4. Unmittelbar danach Paketdateien und Branch-Changelog auf
+   `<soeben-committete-ID>-x` mit der naechsten lueckenlosen Zielcommit-ID setzen.
+   Die neue fachliche Aufgabe wird noch nicht begonnen.
+5. Branch, Commit, leeren Index, `-x`-Version und genau die drei erwarteten
+   uncommittierten Dateien pruefen und knapp melden.
+
+Der Normalablauf wird mit folgendem Repository-Skript ausgefuehrt:
+
+  node scripts/version-workflow.mjs next-task --subject <Kurzkommentar> --all-changed --apply
+
+`--all-changed` ist ausschliesslich fuer `next-task` zulaessig und darf nicht mit
+`--path` kombiniert werden. Es uebernimmt nach dem Statusabgleich exakt alle
+aktuellen Aenderungen; Geheimnis-, Binaer-, Diff- und Pflichtdateipruefungen
+bleiben aktiv. Binaerdateien benoetigen weiterhin ein ausdrueckliches
+`--binary-path`. Alternativ bleibt die einzelne Pfadfreigabe mit wiederholtem
+`--path` verfuegbar. Das Skript prueft vor dem Commit, dass keine weitere
+geaenderte Datei existiert. Scheitert
+Finalisierung, Staging oder Commit, stellt es den vorherigen `-x`-Stand und den
+vorherigen Index wieder her. Ist der Commit bereits erfolgreich und nur das
+anschliessende Oeffnen des neuen Arbeitsstands scheitert, bleibt der saubere
+Commitstand erhalten; `work-start --apply` kann danach kontrolliert wiederholt
+werden.
+
+Nach Erfolg gibt das Skript Commit-ID, vollstaendigen Git-SHA, neue
+`-x`-Arbeitsversion, Zielcommit, leeren Index und die drei offenen Workflowdateien
+aus. Eine zusaetzliche mehrfache Nachpruefung derselben Werte ist nicht
+erforderlich.
+
+`nächste Aufgabe` ist die ausdrueckliche Freigabe fuer Finalisierung und genau
+diesen Branch-Commit. Der Auftrag autorisiert keinen Push, Merge,
+Netzwerkabgleich, Main-Versionssprung und keine Umsetzung einer neuen fachlichen
+Aufgabe.
+
+
+================================================================================
+0B. SCHNELLABLAUF FERTIGMACHEN
+================================================================================
+
+Der eindeutige Userauftrag `fertigmachen` auf einem Seitenbranch autorisiert den
+vollstaendigen Abschluss und die Integration des erledigten Seitenbranches. Die
+konkrete Main-Zielversion bleibt eine verpflichtende Freigabeschranke.
+
+Phase 1 - Seitenbranch abschliessen:
+
+1. Gesamten Branchumfang, Arbeitsbaum, offenen `-x`-Stand, Branch-Changelog,
+   Dokumentationsuebernahmeliste und alle erforderlichen Testergebnisse pruefen.
+   Fehlende Dokumentation oder Tests werden vor dem letzten Commit ergaenzt
+   beziehungsweise ausgefuehrt.
+2. Einen offenen letzten `-x`-Stand mit
+
+     node scripts/version-workflow.mjs finish-branch --subject <Kurzkommentar> --all-changed --apply
+
+   finalisieren und committen. Anders als `next-task` oeffnet `finish-branch`
+   keinen neuen Arbeitsstand; Paketversion, Commit-ID und Branch-Changelog bleiben
+   auf dem sauberen letzten Branch-Commit. Ist der Branch bereits passend sauber
+   committed, entfaellt dieser Schritt.
+3. Den Seitenbranch mit `push --target branch --apply` pushen und den Remote-SHA
+   gegen den lokalen SHA pruefen. `fertigmachen` erteilt dafuer die ausdrueckliche
+   Push-Freigabe.
+4. Aktuellen Remote-Main-Stand, Main-Version, Main-SHA und finalen Branch-SHA
+   bestimmen, den gesamten Branchumfang nach SemVer bewerten und eine konkrete
+   Zielversion nennen.
+5. Enthaelt der Auftrag noch keine konkrete, fuer diesen unveraenderten Stand
+   gueltige Zielversion, mit
+
+     Aktuelle Main-Version: <version>
+     Erkannte Aenderungsart: <MAJOR|MINOR|PATCH>
+     Vorgeschlagene Version: <neue-version>
+     Begruendung: <kurze Begruendung>
+
+     Soll Version <neue-version> erstellt werden?
+
+   anhalten. Branch-Commit und Branch-Push bleiben bestehen. Ohne konkrete
+   Antwort werden weder Merge noch Main-Aenderung begonnen.
+
+Phase 2 - bestaetigte Version integrieren:
+
+6. Eine im urspruenglichen Auftrag genannte oder anschliessend bestaetigte
+   konkrete Zielversion autorisiert fuer den unveraenderten Main- und Branch-SHA
+   die restlichen Schritte dieses Schnellablaufs. Vor jedem schreibenden Schritt
+   werden beide SHAs erneut geprueft; jede Abweichung laesst die Freigabe
+   verfallen und fuehrt zu einer neuen Versionsfrage.
+7. Mit `release-open` Remote-Referenzen aktualisieren, Main und Seitenbranch gegen
+   die bestaetigten SHAs pruefen, auf `main` wechseln und den echten Merge mit
+   `--no-ff --no-commit` oeffnen. Konflikte brechen den Merge kontrolliert ab.
+8. Branch-Changelog vollstaendig in `ChangeLog-main.txt` uebernehmen, alle Punkte
+   der Dokumentationsuebernahmeliste in die kanonischen Dokumente einarbeiten und
+   danach das temporaere Branch-Changelog entfernen. Paketdateien werden durch
+   den Release-Commit auf die bestaetigte Main-Version gesetzt.
+9. Gesamten offenen Merge, permanente Dokumentation und erforderliche Tests
+   pruefen. Danach den Merge mit
+
+     node scripts/version-workflow.mjs release-commit --branch <Branch> --version <Version> --main-sha <MainSHA> --branch-sha <BranchSHA> --subject <Kurzkommentar> --all-changed --apply
+
+   committen. `--all-changed` umfasst hier die kontrollierte Merge- und
+   Dokumentationsmenge; Geheimnis-, Binaer-, Diff-, Pflichtdatei-, SHA- und
+   Zwei-Eltern-Pruefungen bleiben aktiv.
+10. `main` mit `push --target main --apply` pushen und Remote-SHA, Main-Version,
+    Commit-Betreff sowie zwei Merge-Eltern pruefen. Der Checkout bleibt danach
+    auf `main`; lokale und Remote-Seitenbranches werden nicht geloescht.
+
+`fertigmachen` autorisiert damit den letzten Branch-Commit, Branch-Push,
+kontrollierten Merge, permanente Dokumentationsuebernahme, Main-Commit und
+Main-Push, aber erst nach konkreter Zielversionsbestaetigung die Main-Aenderungen.
+Nicht autorisiert sind Force-Push, Rebase, Tag-Erstellung, Branchloeschung,
+Konfliktentscheidung oder eine direkte Main-Ausnahme.
+
+
+================================================================================
 1. GRUNDREGELN UND FREIGABEN
 ================================================================================
 
@@ -130,7 +259,11 @@ Verbindliches Automatisierungsskript:
      Branch finalisieren              branch-finalize --subject <Text> --apply
      Finalisierung wieder oeffnen     branch-reopen --apply
      Branch committen                 branch-commit --subject <Text>
-                                      --path <Pfad>... --apply
+                                       --path <Pfad>... --apply
+     aktuelle Arbeit abschliessen und next-task --subject <Text>
+     naechsten Arbeitsstand oeffnen     --all-changed --apply
+     letzten Branch-Commit erstellen  finish-branch --subject <Text>
+                                      --all-changed --apply
      bestaetigten Merge oeffnen       release-open --branch <Branch>
                                       --version <Version>
                                       --main-sha <BestaetigterMainSHA>
@@ -142,6 +275,7 @@ Verbindliches Automatisierungsskript:
                                       --branch-sha <BestaetigterBranchSHA>
                                       --subject <Text>
                                       --path <Pfad>... --apply
+                                      oder --all-changed --apply
      freigegebenen Stand pushen       push --target <branch|main> --apply
 
 5. `branch-start` bildet den Schnellablauf aus Abschnitt 0 vollstaendig ab.
@@ -151,6 +285,13 @@ Verbindliches Automatisierungsskript:
    einer gescheiterten Finalisierung wieder inhaltlich gearbeitet werden, stellt
    `branch-reopen` Paketdateien und Abschnitt auf die zugehoerige `-x`-Arbeits-ID
    zurueck.
+   `next-task` bildet den Schnellablauf aus Abschnitt 0A ab, uebernimmt mit
+   `--all-changed` die zuvor als zusammengehoerig gepruefte aktuelle
+   Aenderungsmenge, erstellt den finalisierten Branch-Commit und oeffnet danach
+   ohne fachliche Folgeaenderung den naechsten `-x`-Stand. Die einzelne
+   Pfadfreigabe bleibt als kontrollierte Alternative verfuegbar.
+   `finish-branch` verwendet dieselben Abschluss- und Rollbackpruefungen, erstellt
+   aber fuer den letzten Seitenbranch-Commit keinen neuen `-x`-Stand.
 6. `branch-commit` und `release-commit` akzeptieren mit jedem `--path` exakt eine
    einzelne, zuvor vom LLM als auftragsbezogen bestimmte Datei. Verzeichnisse und
    Repository-Root sind unzulaessig. `branch-commit` verlangt einen anfangs leeren
@@ -162,6 +303,8 @@ Verbindliches Automatisierungsskript:
    als `--binary-path <Pfad>` freigegeben werden. Die Freigabe ist nur gueltig,
    wenn der Pfad zugleich als `--path` zugelassen und im Staged Diff tatsaechlich
    binaer ist; alle anderen Binaeraenderungen bleiben gesperrt.
+   Im `fertigmachen`-Schnellablauf darf `release-commit --all-changed` stattdessen
+   die vollstaendige kontrollierte Merge- und Dokumentationsmenge verwenden.
 7. `release-open` wird erst nach bestaetigter konkreter Main-Version ausgefuehrt.
    Der bei der Versionsfrage ausgegebene volle Main-SHA und Branch-SHA wird mit
    `--main-sha` und `--branch-sha` uebergeben. Das Skript aktualisiert die

@@ -2,6 +2,7 @@ import { createEndpoint, subscribeInvalidations } from "./dataClient.js";
 import { ready, getUser, subscribeAuth } from "./authClient.js";
 import { signalMonitorReady, signalMonitorFailed } from "./monitorReady.js";
 import { diagnostic } from "./diagnostics.js";
+import { showLoadingOverlay, hideLoadingOverlay } from "./loadingHelper.js";
 
 const readMemberDirectory = createEndpoint("memberDirectory");
 let directoryRenderGeneration = 0;
@@ -80,10 +81,6 @@ async function renderDirectory(user = getUser()) {
     throw error;
   }
 
-  table.hidden = true;
-  message.hidden = false;
-  message.textContent = "Spieler werden geladen...";
-
   let result;
   try {
     result = await readMemberDirectory();
@@ -104,7 +101,7 @@ async function renderDirectory(user = getUser()) {
   }
 
   const values = result.data.values || [];
-  tbody.replaceChildren();
+  const rowsFragment = document.createDocumentFragment();
 
   if (values.length < 2) {
     const row = document.createElement("tr");
@@ -113,7 +110,7 @@ async function renderDirectory(user = getUser()) {
     cell.style.textAlign = "center";
     cell.textContent = "Keine Spieler gefunden.";
     row.appendChild(cell);
-    tbody.appendChild(row);
+    rowsFragment.appendChild(row);
   } else {
     const header = values[0].map((value) => String(value || "").trim().toLowerCase());
     const firstNameIndex = header.indexOf("vorname");
@@ -153,10 +150,11 @@ async function renderDirectory(user = getUser()) {
           openProfile();
         });
       }
-      tbody.appendChild(row);
+      rowsFragment.appendChild(row);
     });
   }
 
+  tbody.replaceChildren(rowsFragment);
   message.hidden = true;
   message.replaceChildren();
   table.hidden = false;
@@ -186,14 +184,17 @@ subscribeAuth((user) => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
+  showLoadingOverlay();
   try {
     const user = await ready;
     observedUserId = String(user?.id || "");
     directoryInitialized = true;
     await renderDirectory(user);
+    hideLoadingOverlay();
     subscribeInvalidations(["players"], () => renderDirectory(getUser()));
     signalMonitorReady();
   } catch (error) {
+    hideLoadingOverlay();
     diagnostic.error("player_directory_initialization_failed", error);
     renderError(error);
     signalMonitorFailed(error.code || "PLAYER_DIRECTORY_LOAD_FAILED");

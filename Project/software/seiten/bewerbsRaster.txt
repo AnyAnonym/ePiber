@@ -16,9 +16,11 @@ Turnierraster / KO-Baumansicht - Bracket eines Bewerbs
   Oeffentliche Endpoints `matches`, `players`, `bewerbe` und `bewerbsart`.
   Invalidierungen aller vier gleichnamigen Topics aktualisieren die aktive
   Bracket- oder Gruppenansicht. Der obsolete Zwei-Sekunden-Timer existiert nicht
-  mehr. Loading-/Fehleroverlay mit Retry schliessen jeden Ladeversuch sichtbar ab;
-  ein erfolgreicher Erstaufbau meldet Monitor-Ready, Fehler oder fehlende ID
-  Monitor-Failed. Der Erstaufbau wartet auf `authClient.ready`. Aendert sich die
+  mehr. Der voll deckende Spinner `Lade Daten ...` und das Fehleroverlay mit Retry
+  gelten fuer den Erstaufbau. Spaetere Invalidierungen und Sessionrefreshs lassen
+  die vorhandene Ansicht bis zum Austausch ohne Spinner sichtbar. Ein erfolgreicher
+  Erstaufbau meldet Monitor-Ready, Fehler oder fehlende ID Monitor-Failed. Der
+  Erstaufbau wartet auf `authClient.ready`. Aendert sich die
   Session-ID, wird die aktive Raster- oder Gruppenansicht neu gerendert, damit die
   Hervorhebung der aktuellen Person unmittelbar dem Sessionstand entspricht.
 

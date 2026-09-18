@@ -14,8 +14,10 @@ RoundRobin-Gruppenphase - Tabellen und Paarungslisten
 -- Daten und Aktualisierung --
   Oeffentliche Endpoints und Topics `matches`, `players`, `bewerbe`, `bewerbsart`.
   Jede Invalidierung laedt alle vier Quellen und den Bewerbsnamen neu; es gibt kein
-  lokales Matchpolling. Loading-/Fehleroverlay mit Retry liefern einen definierten
-  Abschluss. Fehlender Pflichtparameter oder fehlgeschlagener Erstaufbau meldet
+  lokales Matchpolling. Der voll deckende Spinner `Lade Daten ...` und das
+  Fehleroverlay mit Retry gelten fuer den Erstaufbau. Spaetere Invalidierungen
+  behalten die vorhandenen Gruppen ohne Spinner bis zum Austausch sichtbar.
+  Fehlender Pflichtparameter oder fehlgeschlagener Erstaufbau meldet
   Monitor-Failed, erfolgreich gerenderte Daten Monitor-Ready. Die Ansicht wartet
   auf `authClient.ready`; bei einer geaenderten Session-ID wird sie neu gerendert.
 

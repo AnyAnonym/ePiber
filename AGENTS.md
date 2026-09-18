@@ -187,3 +187,37 @@ Schnellauftrag `herrichten`:
   Push, Merge, Netzwerkabgleich oder direkte Main-Aenderung.
 - Ohne den eindeutigen Auftrag `herrichten` gelten die normalen Freigabe- und
   Rueckfrageregeln aus `Project/DokuVersGit.txt`.
+
+Schnellauftrag `nächste Aufgabe`:
+
+- Auf einem Seitenbranch autorisiert `nächste Aufgabe` den vollstaendigen
+  Abschluss des aktuellen `-x`-Stands mit Finalisierung und Branch-Commit sowie
+  das anschliessende Oeffnen des naechsten `-x`-Arbeitsstands.
+- Dafuer ist nur der Abschnitt `0A. SCHNELLABLAUF NAECHSTE AUFGABE` am Anfang von
+  `Project/DokuVersGit.txt` zu lesen. Weitere Abschnitte werden nur bei einer dort
+  genannten Abweichung gelesen.
+- Ist der unveraenderte Gesamtstand in derselben Session bereits geprueft und
+  getestet, wird nur der Status kurz abgeglichen und danach der dort definierte
+  `next-task --all-changed`-Schnellpfad verwendet. Bereits gepruefte Diffs und
+  Abschlusswerte werden nicht redundant erneut ausgelesen.
+- Der Auftrag startet noch keine neue fachliche Umsetzung und autorisiert keinen
+  Push, Merge, Netzwerkabgleich oder Main-Versionssprung.
+- Ohne den eindeutigen Auftrag `nächste Aufgabe` gelten die normalen Freigabe- und
+  Rueckfrageregeln aus `Project/DokuVersGit.txt`.
+
+Schnellauftrag `fertigmachen`:
+
+- Auf einem Seitenbranch autorisiert `fertigmachen` den letzten Branch-Commit,
+  Branch-Push und nach konkreter Zielversionsbestaetigung den kontrollierten
+  Merge, die permanente Dokumentationsuebernahme, den Main-Commit und Main-Push.
+- Dafuer ist nur der Abschnitt `0B. SCHNELLABLAUF FERTIGMACHEN` am Anfang von
+  `Project/DokuVersGit.txt` zu lesen. Weitere Abschnitte werden nur bei einer dort
+  genannten Abweichung gelesen.
+- Fehlt im Auftrag eine konkrete Zielversion, wird der Seitenbranch zuerst
+  vollstaendig abgeschlossen und gepusht; danach werden SemVer-Vorschlag,
+  Begruendung und Versionsfrage ausgegeben und vor jeder Main-Aenderung angehalten.
+- Eine bestaetigte Version gilt nur fuer die dabei genannten unveraenderten Main-
+  und Branch-SHAs. Konflikte oder Abweichungen stoppen den Schnellablauf und
+  benoetigen eine neue Freigabe.
+- `fertigmachen` autorisiert keinen Force-Push, Rebase, Tag, keine Branchloeschung
+  und keine eigenmaechtige Konfliktentscheidung.

@@ -166,11 +166,14 @@ async function loadEntries() {
     throw error;
   }
 
-  container.replaceChildren();
-  showLoadingOverlay("Lade Einträge...");
+  const initialLoad = !entriesLoaded;
+  if (initialLoad) {
+    container.replaceChildren();
+    showLoadingOverlay();
+  }
 
   if (!BEWERB_ID) {
-    hideLoadingOverlay();
+    if (initialLoad) hideLoadingOverlay();
     const message = document.createElement("p");
     message.textContent = "Keine Bewerb-ID übergeben.";
     container.appendChild(message);
@@ -298,8 +301,9 @@ async function loadEntries() {
     if (entries.length === 0) {
       const message = document.createElement("p");
       message.textContent = "Noch keine Einträge für diesen Bewerb.";
-      container.appendChild(message);
-      hideLoadingOverlay();
+      container.replaceChildren(message);
+      entriesLoaded = true;
+      if (initialLoad) hideLoadingOverlay();
       return;
     }
 
@@ -335,14 +339,16 @@ async function loadEntries() {
     });
     table.appendChild(tbody);
 
-    container.replaceChildren();
-    container.appendChild(table);
-    hideLoadingOverlay();
+    container.replaceChildren(table);
+    entriesLoaded = true;
+    if (initialLoad) hideLoadingOverlay();
   } catch (err) {
     diagnostic.error("entry_list_load_failed", err);
-    showErrorOverlay(errorMessage(err, "Fehler beim Laden der Einträge"), () => {
-      loadEntries().catch(() => {});
-    });
+    if (initialLoad) {
+      showErrorOverlay(errorMessage(err, "Fehler beim Laden der Einträge"), () => {
+        loadEntries().catch(() => {});
+      });
+    }
     throw err;
   }
 }
@@ -525,7 +531,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     await ready;
     await loadBewerbsName();
     await loadEntries();
-    entriesLoaded = true;
     subscribeInvalidations(["entryList", "players", "bewerbe", "ranking"], async () => {
       await loadBewerbsName();
       await loadEntries();
