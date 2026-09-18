@@ -6,3 +6,23 @@ Commit: 4.10.1-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.1-paj-1-1` gesetzt.
+
+[4.10.1-paj-1-2] - 2026-09-18
+Commit: 4.10.1-paj-1-2 | Initialloader und Aufgabenworkflow vereinheitlicht
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.1-paj-1-1-x` gesetzt.
+  - [Frontend] Datenansichten und datenladende Dialoge zeigen den einheitlichen voll deckenden Spinner `Lade Daten ...` nur bis zum ersten verwertbaren Datenstand.
+  - [Frontend] WebSocket-, Reconnect- und sonstige Hintergrundaktualisierungen behalten den bisherigen Inhalt ohne Spinner sichtbar und uebernehmen neue Daten erst vollstaendig vorbereitet.
+  - [Frontend] Ranglistenfarben, Spielerverzeichnis, Bewerbekarten und Matchfilter werden ohne sichtbare Zwischenzustaende beziehungsweise Filterverlust aktualisiert.
+  - [Dokumentation] Der Schnellauftrag `nächste Aufgabe` schliesst den aktuellen Branch-Arbeitsstand ab und bereitet ohne Beginn neuer Facharbeit den naechsten `-x`-Stand vor.
+
+  Added
+  - [Repository] Die Workflow-Aktion `next-task` finalisiert und committet alle einzeln freigegebenen Aenderungen und oeffnet danach den naechsten `-x`-Arbeitsstand.
+
+  Fixed
+  - [Frontend] Mehrfaches Aufblenden des Ladeoverlays und progressive Farbwechsel beim initialen beziehungsweise nachfolgenden Rendern vermieden.
+
+  Tests
+  - [Frontend] Browsertests fuer den nur initial sichtbaren Matches-Loader sowie stabile WebSocket-Aktualisierungen von Matches und Spielerverzeichnis ergaenzt.
+  - [Repository] Workflowtests pruefen Dry-Run, erfolgreichen kombinierten Abschluss und die vollstaendige Rueckkehr zum vorherigen `-x`-Stand bei einer abgelehnten Commitpruefung.

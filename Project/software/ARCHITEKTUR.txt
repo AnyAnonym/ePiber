@@ -989,8 +989,9 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
                       Adminaktionen. Profilinhalt und
                       Aktionshandler werden beim Schliessen und Identitaetswechsel
                       vollstaendig entfernt.
-`loadingHelper.js`    Abschlussgarantien sowie fokussierbare, schliessbare
-                      Fehleranzeigen mit erhaltener Support-ID.
+`loadingHelper.js`    Einheitlicher voll deckender Initialloader mit dem Text
+                      `Lade Daten ...` fuer Seiten und Dialoge sowie fokussierbare,
+                      schliessbare Fehleranzeigen mit erhaltener Support-ID.
 `personValues.js`     Gemeinsame Browserkanonisierung der sechzehn erlaubten
                       Personenfelder fuer Vorschau und Request.
 `memberImport.js`     Lokaler begrenzter ClubDesk-CSV-Parser, Feldabbildung,
@@ -1003,6 +1004,9 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
 `global.js`/`footer.js` Version und gemeinsame Initialisierung/Darstellung.
 
 Fachseiten abonnieren tabellenspezifische Invalidierungen statt kurzer Polltimer.
+Der Lade-Spinner gilt nur bis zum ersten verwertbaren Datenstand. Spaetere
+Invalidierungen und Reconnects behalten den letzten Stand sichtbar und uebernehmen
+vollstaendig vorbereitete Aktualisierungen ohne erneuten Spinner.
 Externe Daten werden ueber sichere DOM-Knoten oder begrenztes Escaping gerendert.
 Externe Font-/Script-Abhaengigkeiten, SDK.js und rankingSidebar.js sind entfernt.
 Die fachlichen Seiten- und Administrationsdokumente sind in `SOFTWARE-DOKU.txt`

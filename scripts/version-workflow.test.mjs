@@ -202,6 +202,83 @@ test("branch-finalize and branch-commit enforce numbering and explicit paths", (
   }
 });
 
+test("next-task commits the current work and opens only the next x state", () => {
+  const { base, repo } = createRepository();
+  try {
+    workflow(repo, "branch-start", "--system", "paj", "--apply");
+    const logPath = "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt";
+    fs.writeFileSync(path.join(repo, "feature.txt"), "implemented\n");
+    fs.appendFileSync(path.join(repo, logPath), "  - [Software] Testfunktion umgesetzt.\n");
+
+    const badPath = path.join(repo, "bad.txt");
+    fs.writeFileSync(badPath, "trailing whitespace  \n");
+    const headBeforeFailure = git(repo, "rev-parse", "HEAD");
+    const versionBeforeFailure = readVersion(repo);
+    const logBeforeFailure = fs.readFileSync(path.join(repo, logPath), "utf8");
+    const failed = run(
+      process.execPath,
+      [
+        script,
+        "next-task",
+        "--subject",
+        "Testfunktion umgesetzt",
+        "--path",
+        "Backend/package.json",
+        "--path",
+        "Backend/package-lock.json",
+        "--path",
+        logPath,
+        "--path",
+        "feature.txt",
+        "--path",
+        "bad.txt",
+        "--apply",
+      ],
+      repo,
+      1,
+    );
+    assert.match(failed.stderr, /trailing whitespace/);
+    assert.equal(git(repo, "rev-parse", "HEAD"), headBeforeFailure);
+    assert.equal(readVersion(repo), versionBeforeFailure);
+    assert.equal(fs.readFileSync(path.join(repo, logPath), "utf8"), logBeforeFailure);
+    assert.equal(git(repo, "diff", "--cached", "--name-only"), "");
+    fs.rmSync(badPath);
+
+    const args = [
+      "next-task",
+      "--subject",
+      "Testfunktion umgesetzt",
+      "--path",
+      "Backend/package.json",
+      "--path",
+      "Backend/package-lock.json",
+      "--path",
+      logPath,
+      "--path",
+      "feature.txt",
+    ];
+    const dryRun = workflow(repo, ...args);
+    assert.match(dryRun.stdout, /PLAN: Branch-Commit 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt erstellen/);
+    assert.equal(git(repo, "rev-parse", "HEAD"), headBeforeFailure);
+    assert.equal(readVersion(repo), "1.2.3-paj-1-1-x");
+
+    workflow(repo, ...args, "--apply");
+    assert.equal(git(repo, "log", "-1", "--pretty=%s"), "1.2.3-paj-1-2 | Testfunktion umgesetzt");
+    assert.equal(readVersion(repo), "1.2.3-paj-1-2-x");
+    assert.deepEqual(run("git", ["status", "--porcelain"], repo).stdout.trimEnd().split("\n").sort(), [
+      " M Backend/package-lock.json",
+      " M Backend/package.json",
+      ` M ${logPath}`,
+    ]);
+    const log = fs.readFileSync(path.join(repo, logPath), "utf8");
+    assert.match(log, /\[1\.2\.3-paj-1-2\].*\nCommit: 1\.2\.3-paj-1-2 \| Testfunktion umgesetzt/);
+    assert.match(log, /\[1\.2\.3-paj-1-2-x\].*\nZielcommit: 1\.2\.3-paj-1-3\nStatus: uncommitted/);
+    assert.equal(git(repo, "diff", "--cached", "--name-only"), "");
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test("commit staging rejects potential secret files", () => {
   const { base, repo } = createRepository();
   try {

@@ -71,13 +71,17 @@ window.__adminRankingCalls = [];
 window.__matchResultCalls = [];
 window.__suggestionCalls = [];
 window.__endpointCalls = [];
+window.__invalidationCallbacks = new Map();
 const operationIds = new Map();
 export const getOperationId = (key) => {
   if (!operationIds.has(key)) operationIds.set(key, "operation-" + key);
   return operationIds.get(key);
 };
 export const releaseOperationId = () => {};
-export const subscribeInvalidations = () => () => {};
+export const subscribeInvalidations = (topics, callback) => {
+  for (const topic of topics) window.__invalidationCallbacks.set(topic, callback);
+  return () => topics.forEach((topic) => window.__invalidationCallbacks.delete(topic));
+};
 export const subscribe = () => () => {};
 const rankings = [
   { competitionId: "r1", competitionName: "Herren", competitionEndAt: 1, competitionEnded: false, rank: 1, status: "active", canChallenge: true, canWithdraw: true },
@@ -182,6 +186,10 @@ export function createEndpoint(name) {
       return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision, repeated: false } };
     }
     if (name === "memberDirectory") {
+      window.__memberDirectoryCalls = (window.__memberDirectoryCalls || 0) + 1;
+      if (new URLSearchParams(window.location.search).get("slowDirectoryRefresh") === "1" && window.__memberDirectoryCalls > 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
       const today = new Date();
       const birthDate = String(today.getDate()).padStart(2, "0") + "." + String(today.getMonth() + 1).padStart(2, "0") + "." + (today.getFullYear() - 30);
       return { data: { success: true, values: [
@@ -340,6 +348,11 @@ function startServer() {
       response.end(source);
       return;
     }
+    if (pathname === "/players-data-test.html") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="playerDirectorySection"><h2>Spieler</h2><div id="playerDirectoryMessage" aria-live="polite"></div><div class="players-table-scroll"><table id="tbl" class="players-table" hidden><thead><tr><th>Nachname</th><th>Vorname</th><th>Telefon</th><th>E-Mail</th><th>Geburtsdatum</th></tr></thead><tbody></tbody></table></div></section></main><script type="module" src="/JS/playerList-under-test.js"></script></body></html>');
+      return;
+    }
     if (pathname === "/scoreboard-layout-test.html") {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "scoreboard.html"), "utf8")
         .replace('<a class="scoreboard-match-link" href="./Matches1.html?category=open">', '<button class="favorite-star page-favorite-star" type="button"><svg viewBox="0 -960 960 960"><path d="m233-120 65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"></path></svg></button><a class="scoreboard-match-link" href="./Matches1.html?category=open">')
@@ -358,7 +371,8 @@ function startServer() {
         .replace('"./dataClient.js"', '"/test/dataClient.js"')
         .replace('"./authClient.js"', '"/test/authClient.js"')
         .replace('"./diagnostics.js"', '"/test/diagnostics.js"')
-        .replace('"./profileModalState.js"', '"/test/profileModalState.js"');
+        .replace('"./profileModalState.js"', '"/test/profileModalState.js"')
+        .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"');
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(source);
       return;
@@ -369,7 +383,19 @@ function startServer() {
         .replace('"./authClient.js"', '"/test/authClient.js"')
         .replace('"./monitorReady.js"', '"/test/monitorReady.js"')
         .replace('"./diagnostics.js"', '"/test/diagnostics.js"')
-        .replace('"./rankingMatchState.js"', '"/JS/rankingMatchState.js"');
+        .replace('"./rankingMatchState.js"', '"/JS/rankingMatchState.js"')
+        .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/JS/playerList-under-test.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/playerList.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./monitorReady.js"', '"/test/monitorReady.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"')
+        .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"');
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(source);
       return;
@@ -418,6 +444,11 @@ function startServer() {
     if (pathname === "/test/monitorReady.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end("export const signalMonitorReady = () => {}; export const signalMonitorFailed = () => {};\n");
+      return;
+    }
+    if (pathname === "/test/loadingHelper.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end("export const showLoadingOverlay = () => {}; export const hideLoadingOverlay = () => {};\n");
       return;
     }
     if (pathname === "/test/profileModalState.js") {
@@ -2082,6 +2113,30 @@ test("Spielertabelle scrollt horizontal, waehrend Titel und Seitenheader viewpor
       assert.equal(layout.headerWidth, layout.viewportWidth);
       await page.close();
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Spielerverzeichnis bleibt waehrend WebSocket-Nachladen sichtbar", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/players-data-test.html?role=player&slowDirectoryRefresh=1`, { waitUntil: "domcontentloaded" });
+    const row = page.locator("#tbl tbody tr").first();
+    await row.waitFor({ state: "visible" });
+    const refresh = page.evaluate(() => window.__invalidationCallbacks.get("players")?.());
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator("#tbl").isVisible(), true);
+    assert.equal(await row.isVisible(), true);
+    assert.equal(await page.locator("#playerDirectoryMessage").isHidden(), true);
+    await refresh;
+    assert.equal(await page.locator("#tbl tbody tr").count(), 1);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

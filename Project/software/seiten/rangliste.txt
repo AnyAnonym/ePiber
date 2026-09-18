@@ -15,8 +15,12 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   `rankingChallengeState`. Restriktions- und Eigenstatus muessen vollstaendig
   sein; andernfalls werden Forderungen sichtbar deaktiviert. Invalidierungen
   `ranking`, `matches`, `players`, `bewerbe`, Sessionaenderungen und das naechste
-  Restriktionsende serialisieren einen kompletten Refresh. Initialer Erfolg meldet
-  Monitor-Ready, Fehler werden im Inhalt gezeigt und als Monitor-Failed gemeldet.
+  Restriktionsende serialisieren einen kompletten Refresh. Der voll deckende
+  Spinner `Lade Daten ...` bleibt beim Erstaufbau sichtbar, bis Pyramide und alle
+  Statusfarben vollstaendig vorbereitet sind. Spaetere Refreshes behalten den
+  bisherigen Stand ohne Spinner bis zum atomaren Austausch sichtbar. Initialer
+  Erfolg meldet Monitor-Ready, Fehler werden im Inhalt gezeigt und als
+  Monitor-Failed gemeldet.
 
 -- Sitzung, Profile und Aktionen --
   Die eigene Position kommt aus der serverseitigen Sitzung, nicht aus Browserdaten.

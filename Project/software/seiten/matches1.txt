@@ -13,9 +13,12 @@ Matches-Uebersicht mit Filtern - Zentrale Match-Seite
 -- Daten und Aktualisierung --
   Oeffentliche Endpoints `matches1`, `players` (minimale Projektion) und `bewerbe`.
   Invalidierungen der Topics `matches`, `players` oder `bewerbe` laden den
-  gemeinsamen Datenstand neu. Loading-Overlay, begrenzte Read-Retries und
-  Fehleroverlay mit Retry sorgen auch bei Fehlern fuer einen definierten Zustand.
-  Erfolgreiches Rendern meldet Monitor-Ready, ein Initialfehler Monitor-Failed.
+  gemeinsamen Datenstand neu. Der voll deckende Spinner `Lade Daten ...` erscheint
+  nur bis zum ersten verwertbaren Datenstand. Spaetere Aktualisierungen behalten
+  Karten und Filter sichtbar, bewahren die Filterauswahl und tauschen den neuen
+  Stand ohne Spinner aus. Begrenzte Read-Retries und ein initiales Fehleroverlay
+  mit Retry sorgen bei Fehlern fuer einen definierten Zustand. Erfolgreiches
+  Rendern meldet Monitor-Ready, ein Initialfehler Monitor-Failed.
 
 -- Bedienung und Layout --
   Der optionale URL-Parameter `?category=played|open` waehlt die anfangs aktive

@@ -16,15 +16,19 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   Invalidierungstopics `bewerbe` und `bewerbsart` und laedt danach beide Tabellen
   neu. Ein Timer aktualisiert exakt an EntryStart-, EntryDeadline-, Bewerbsbeginn-
   und Bewerbsende-Grenzen; bei erneut sichtbarer Seite wird im Hintergrund
-  nachgeladen. Nach dem ersten erfolgreichen Aufbau bleiben bestehende Karten und
-  ein geoeffnetes Historienmodal waehrend spaeterer Refreshes sichtbar; das
-  Ladeoverlay erscheint nur fuer den Erstaufbau, nicht fuer Resume-Refreshs.
+  nachgeladen. Der voll deckende Spinner `Lade Daten ...` erscheint nur bis zum
+  ersten verwertbaren Datenstand. Danach bleiben bestehende Karten und ein
+  geoeffnetes Historienmodal waehrend spaeterer Refreshes sichtbar; der neue
+  Kartenstand wird ohne Spinner in einem Schritt uebernommen.
   Im Historienmodal sitzt `Weitere Einträge laden` am Ende der scrollbaren Liste,
   damit es erst nach dem Herunterscrollen sichtbar wird.
   Angemeldete Benutzer koennen zusaetzlich die cursorpaginierte
   `competitionHistory` eines einzelnen Bewerbs oder aller Bewerbe laden. Das
   authentifizierte Topic `competition-history` invalidiert Kommentar- und
   Reaktionsprojektionen anhand kontrollierter Revision, Ereignis- und Bewerb-ID.
+  Beim ersten Datenabruf eines Historien-, Kommentar- oder Reaktionsdialogs deckt
+  derselbe Spinner nur den aktiven Dialog ab; Nachladen und Invalidierungen zeigen
+  keinen erneuten Spinner.
 
 -- Bedienung --
   Keine URL-Parameter. Ranglisten fuehren zu `rangliste.html?id=...`. Gestartete

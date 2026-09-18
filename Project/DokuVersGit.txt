@@ -60,6 +60,48 @@ gelten die folgenden Detailregeln.
 
 
 ================================================================================
+0A. SCHNELLABLAUF NAECHSTE AUFGABE
+================================================================================
+
+Der eindeutige Userauftrag `nächste Aufgabe` auf einem Seitenbranch autorisiert
+in einem Durchlauf ausschliesslich den Abschluss des aktuellen Arbeitsstands und
+die Vorbereitung des naechsten Arbeitsstands:
+
+1. Branch, Arbeitsbaum, Index, Diff, letzten Commit, Paketversionen, offenen
+   Branch-Changelogabschnitt und die fuer den aktuellen Auftrag erforderlichen
+   Testergebnisse pruefen. Das Skript fuehrt selbst keine fachlichen Tests aus.
+2. Aus dem vollstaendigen aktuellen Diff einen knappen Commit-Kurzkommentar und
+   die exakte Liste aller auftragsbezogenen geaenderten Dateien bestimmen.
+   Unerwartete, nicht zuordenbare oder nicht freigegebene Aenderungen blockieren
+   den Schnellablauf.
+3. Den offenen `-x`-Stand auf die naechste lueckenlose Branch-Commit-ID
+   finalisieren, ausschliesslich die einzeln freigegebenen Dateien stagen und den
+   nummerierten Branch-Commit erstellen.
+4. Unmittelbar danach Paketdateien und Branch-Changelog auf
+   `<soeben-committete-ID>-x` mit der naechsten lueckenlosen Zielcommit-ID setzen.
+   Die neue fachliche Aufgabe wird noch nicht begonnen.
+5. Branch, Commit, leeren Index, `-x`-Version und genau die drei erwarteten
+   uncommittierten Dateien pruefen und knapp melden.
+
+Der Normalablauf wird mit folgendem Repository-Skript ausgefuehrt:
+
+  node scripts/version-workflow.mjs next-task --subject <Kurzkommentar> --path <Datei>... --apply
+
+Jede geaenderte Datei wird mit einem eigenen `--path` freigegeben. Das Skript
+prueft vor dem Commit, dass keine weitere geaenderte Datei existiert. Scheitert
+Finalisierung, Staging oder Commit, stellt es den vorherigen `-x`-Stand und den
+vorherigen Index wieder her. Ist der Commit bereits erfolgreich und nur das
+anschliessende Oeffnen des neuen Arbeitsstands scheitert, bleibt der saubere
+Commitstand erhalten; `work-start --apply` kann danach kontrolliert wiederholt
+werden.
+
+`nächste Aufgabe` ist die ausdrueckliche Freigabe fuer Finalisierung und genau
+diesen Branch-Commit. Der Auftrag autorisiert keinen Push, Merge,
+Netzwerkabgleich, Main-Versionssprung und keine Umsetzung einer neuen fachlichen
+Aufgabe.
+
+
+================================================================================
 1. GRUNDREGELN UND FREIGABEN
 ================================================================================
 
@@ -130,7 +172,9 @@ Verbindliches Automatisierungsskript:
      Branch finalisieren              branch-finalize --subject <Text> --apply
      Finalisierung wieder oeffnen     branch-reopen --apply
      Branch committen                 branch-commit --subject <Text>
-                                      --path <Pfad>... --apply
+                                       --path <Pfad>... --apply
+     aktuelle Arbeit abschliessen und next-task --subject <Text>
+     naechsten Arbeitsstand oeffnen     --path <Pfad>... --apply
      bestaetigten Merge oeffnen       release-open --branch <Branch>
                                       --version <Version>
                                       --main-sha <BestaetigterMainSHA>
@@ -151,6 +195,9 @@ Verbindliches Automatisierungsskript:
    einer gescheiterten Finalisierung wieder inhaltlich gearbeitet werden, stellt
    `branch-reopen` Paketdateien und Abschnitt auf die zugehoerige `-x`-Arbeits-ID
    zurueck.
+   `next-task` bildet den Schnellablauf aus Abschnitt 0A ab, verlangt alle
+   geaenderten Pfade einzeln, erstellt den finalisierten Branch-Commit und oeffnet
+   danach ohne fachliche Folgeaenderung den naechsten `-x`-Stand.
 6. `branch-commit` und `release-commit` akzeptieren mit jedem `--path` exakt eine
    einzelne, zuvor vom LLM als auftragsbezogen bestimmte Datei. Verzeichnisse und
    Repository-Root sind unzulaessig. `branch-commit` verlangt einen anfangs leeren

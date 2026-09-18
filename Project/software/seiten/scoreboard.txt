@@ -81,8 +81,10 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
   zugewiesen werden.
 
 -- Lade- und Statusverhalten --
-  Inhalt wird erst nach validiertem Erst-Snapshot eingeblendet und dann als
-  Monitor-Ready gemeldet. Terminale Snapshot-/DOM-Fehler bleiben als Ladefehler mit
+  Bis zum validierten Erst-Snapshot zeigt die Seite ausschliesslich den voll
+  deckenden Spinner `Lade Daten ...`; danach wird der Inhalt eingeblendet und als
+  Monitor-Ready gemeldet. Spaetere Synchronisationen zeigen keinen erneuten
+  Spinner. Terminale Snapshot-/DOM-Fehler bleiben als Ladefehler mit
   optionaler Support-ID sichtbar und melden Monitor-Failed. Verbindung,
   Synchronisation, Court-Quellenalter und Stale-Zustand werden intern ausgewertet;
   es gibt bewusst keine sichtbaren Connection-, Sync- oder Quellenstatus-Badges.

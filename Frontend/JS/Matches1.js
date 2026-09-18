@@ -10,6 +10,7 @@ let allMatches = [];
 let playerMap = new Map();
 let playerFilterList = []; // {id, display: "Nachname Vorname"} für Filter-Dropdown
 let bewerbMap = new Map();
+let matchesLoaded = false;
 const requestedCategory = new URLSearchParams(window.location.search).get("category");
 let currentCategory = ["played", "open"].includes(requestedCategory) ? requestedCategory : "played";
 
@@ -136,7 +137,8 @@ function formatSetResult(raw) {
 // ── Daten laden ──
 
 async function loadData() {
-  showLoadingOverlay("Lade Matches...");
+  const initialLoad = !matchesLoaded;
+  if (initialLoad) showLoadingOverlay();
   try {
     const [matchRes, playerRes, bewerbRes] = await Promise.all([
       callWithRetry(readMatches1),
@@ -241,10 +243,11 @@ async function loadData() {
 
     populateFilterDropdowns();
     renderMatches();
-    hideLoadingOverlay();
+    matchesLoaded = true;
+    if (initialLoad) hideLoadingOverlay();
     return true;
   } catch {
-    showErrorOverlay("Fehler beim Laden der Matches", loadData);
+    if (initialLoad) showErrorOverlay("Fehler beim Laden der Matches", loadData);
     return false;
   }
 }
@@ -254,6 +257,8 @@ async function loadData() {
 function populateFilterDropdowns() {
   const bewerbSelect = document.getElementById("filterBewerbSelect");
   const spielerSelect = document.getElementById("filterSpielerSelect");
+  const selectedBewerb = bewerbSelect.value;
+  const selectedSpieler = spielerSelect.value;
 
   const allBewerbeOption = document.createElement("option");
   allBewerbeOption.value = "";
@@ -266,6 +271,7 @@ function populateFilterDropdowns() {
     option.textContent = name;
     bewerbSelect.appendChild(option);
   });
+  if ([...bewerbSelect.options].some(({ value }) => value === selectedBewerb)) bewerbSelect.value = selectedBewerb;
 
   const allPlayersOption = document.createElement("option");
   allPlayersOption.value = "";
@@ -277,6 +283,7 @@ function populateFilterDropdowns() {
     option.textContent = display;
     spielerSelect.appendChild(option);
   });
+  if ([...spielerSelect.options].some(({ value }) => value === selectedSpieler)) spielerSelect.value = selectedSpieler;
 }
 
 // ── Filtern + Sortieren ──

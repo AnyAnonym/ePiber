@@ -3,6 +3,7 @@ import { ready, getUser, isAuthenticated, subscribeAuth } from "./authClient.js"
 import { signalMonitorReady, signalMonitorFailed } from "./monitorReady.js";
 import { diagnostic } from "./diagnostics.js";
 import { isActiveRankingRank, isOpenRankingMatch, parseRankingParticipant, rankingPlayerState } from "./rankingMatchState.js";
+import { showLoadingOverlay, hideLoadingOverlay } from "./loadingHelper.js";
 
 const readRlPlatzierung     = createEndpoint("rlPlatzierung");
 const readPlayersList       = createEndpoint("players");
@@ -78,10 +79,8 @@ function startProtectionTimer(box, endDate) {
   }
 
   tick();
-  if (el.isConnected) {
-    intervalId = setInterval(tick, 60_000); // jede Minute, wie clock.js
-    protectionIntervals.add(intervalId);
-  }
+  intervalId = setInterval(tick, 60_000); // jede Minute, wie clock.js
+  protectionIntervals.add(intervalId);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -178,7 +177,7 @@ async function fetchMyState() {
 //   6. Nicht forderbar      → keine Klasse (grau)
 //      Ausnahme: hat Schonzeit → lila (sichtbar für alle)
 // ═══════════════════════════════════════════════════════════════════════════
-async function applyAllRules(container, pyramid, rankedList) {
+async function applyAllRules(container, pyramid, rankedList, warningHost = container.parentElement) {
 
   // ── Schritt 1: Alle Daten PARALLEL laden (Promise.allSettled = kein Fail)
   diagnostic.info("ranking_rules_load_started");
@@ -213,7 +212,8 @@ async function applyAllRules(container, pyramid, rankedList) {
     warning.id = "rankingDataWarning";
     warning.className = "ranking-data-warning";
     warning.setAttribute("role", "alert");
-    container.parentElement?.insertBefore(warning, container);
+    const liveContainer = document.getElementById("rankingContainer");
+    warningHost?.insertBefore(warning, liveContainer || warningHost.firstChild);
   }
   if (warning) {
     warning.textContent = ruleDataComplete
@@ -563,12 +563,11 @@ export async function renderRanking() {
   renderRankingLegend();
 
   const rankedList = await loadRanking();
-  container.replaceChildren();
 
   if (!rankedList.length) {
     const message = document.createElement("p");
     message.textContent = "Es gibt noch keine Spieler für diese Rangliste.";
-    container.appendChild(message);
+    container.replaceChildren(message);
     return;
   }
 
@@ -576,7 +575,8 @@ export async function renderRanking() {
 
   const pyramidContent = document.createElement("div");
   pyramidContent.className = "pyramid-content";
-  container.appendChild(pyramidContent);
+  const stagedContainer = document.createElement("div");
+  stagedContainer.appendChild(pyramidContent);
   const pyramid = [];
   let current = 0, level = 1;
 
@@ -648,7 +648,8 @@ export async function renderRanking() {
   }
 
   // Alle Regeln anwenden (Daten zuerst, dann DOM)
-  const myState = await applyAllRules(container, pyramid, rankedList);
+  await applyAllRules(stagedContainer, pyramid, rankedList, container.parentElement);
+  container.replaceChildren(...stagedContainer.childNodes);
   renderRankingLegend();
 }
 
@@ -677,6 +678,7 @@ subscribeAuth((user) => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
+  showLoadingOverlay();
   try {
     await ready;
     const initialUserId = String(getUser()?.id || "");
@@ -699,8 +701,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     subscribeInvalidations(["ranking", "matches", "players", "bewerbe"], () => {
       return queueRankingRefresh();
     });
+    hideLoadingOverlay();
     signalMonitorReady();
   } catch (error) {
+    hideLoadingOverlay();
     diagnostic.error("ranking_initialization_failed", error);
     const container = document.getElementById("rankingContainer");
     if (container) {

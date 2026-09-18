@@ -555,6 +555,7 @@ function renderBracket(rounds) {
 }
 
 let playerMap = new Map();
+let bracketLoaded = false;
 
 async function loadBracket() {
   const container = document.getElementById("bracketContainer");
@@ -565,8 +566,11 @@ async function loadBracket() {
   }
 
   if (!container) return false;
-  container.replaceChildren();
-  showLoadingOverlay("Lade Turnierraster...");
+  const initialLoad = !bracketLoaded;
+  if (initialLoad) {
+    container.replaceChildren();
+    showLoadingOverlay();
+  }
 
   try {
     const [bewerbRes, bewbsRes, matchRes, playerRes] = await Promise.all([
@@ -641,7 +645,8 @@ async function loadBracket() {
 
     if (rounds.length === 0) {
       renderMessage(container, "Keine Rasterdaten für diesen Bewerb.");
-      hideLoadingOverlay();
+      bracketLoaded = true;
+      if (initialLoad) hideLoadingOverlay();
       return true;
     }
 
@@ -689,10 +694,11 @@ async function loadBracket() {
       info.appendChild(btnRow);
     }
 
-    hideLoadingOverlay();
+    bracketLoaded = true;
+    if (initialLoad) hideLoadingOverlay();
     return true;
   } catch {
-    showErrorOverlay("Fehler beim Laden des Turnierrasters", loadBracket);
+    if (initialLoad) showErrorOverlay("Fehler beim Laden des Turnierrasters", loadBracket);
     return false;
   }
 }

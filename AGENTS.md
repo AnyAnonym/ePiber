@@ -187,3 +187,16 @@ Schnellauftrag `herrichten`:
   Push, Merge, Netzwerkabgleich oder direkte Main-Aenderung.
 - Ohne den eindeutigen Auftrag `herrichten` gelten die normalen Freigabe- und
   Rueckfrageregeln aus `Project/DokuVersGit.txt`.
+
+Schnellauftrag `nächste Aufgabe`:
+
+- Auf einem Seitenbranch autorisiert `nächste Aufgabe` den vollstaendigen
+  Abschluss des aktuellen `-x`-Stands mit Finalisierung und Branch-Commit sowie
+  das anschliessende Oeffnen des naechsten `-x`-Arbeitsstands.
+- Dafuer ist nur der Abschnitt `0A. SCHNELLABLAUF NAECHSTE AUFGABE` am Anfang von
+  `Project/DokuVersGit.txt` zu lesen. Weitere Abschnitte werden nur bei einer dort
+  genannten Abweichung gelesen.
+- Der Auftrag startet noch keine neue fachliche Umsetzung und autorisiert keinen
+  Push, Merge, Netzwerkabgleich oder Main-Versionssprung.
+- Ohne den eindeutigen Auftrag `nächste Aufgabe` gelten die normalen Freigabe- und
+  Rueckfrageregeln aus `Project/DokuVersGit.txt`.

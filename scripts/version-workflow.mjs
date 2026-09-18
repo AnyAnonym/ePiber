@@ -521,6 +521,93 @@ function branchCommit() {
   plan([`Nur freigegebene Pfade stagen: ${allowed.join(", ")}`, `Branch-Commit ${targetId} | ${subject} erstellen`]);
 }
 
+function nextTask() {
+  const { branch } = assertSideBranch();
+  assertNoMergeState();
+  const subject = requireSubject();
+  const allowed = [...new Set(normalizeAllowedPaths())];
+  const head = headIdentity(branch);
+  assertSynchronizedVersions(`${head.id}-x`);
+  const targetId = `${branch}-${head.number + 1}`;
+  const nextTargetId = `${branch}-${head.number + 2}`;
+  const logFile = changelogPath(branch);
+  const logPath = relative(logFile);
+  if (!fs.existsSync(logFile)) fail(`Branch-Changelog fehlt: ${logPath}`);
+  const content = fs.readFileSync(logFile, "utf8");
+  const marker = `[${head.id}-x] - In Arbeit seit `;
+  if (!content.includes(marker) || !content.includes(`Zielcommit: ${targetId}\nStatus: uncommitted`)) {
+    fail("Offener Branch-Changelogabschnitt passt nicht zum aktuellen Entwicklungsstand");
+  }
+  const escapedId = head.id.replace(/\./g, "\\.");
+  const expression = new RegExp(`\\[${escapedId}-x\\] - In Arbeit seit [^\\n]+\\nZielcommit: ${targetId.replace(/\./g, "\\.")}\\nStatus: uncommitted\\n`);
+  const finalized = content.replace(expression, `[${targetId}] - ${today()}\nCommit: ${targetId} | ${subject}\n`);
+  if (finalized === content) fail("Branch-Changelog konnte nicht finalisiert werden");
+
+  const changed = statusPaths();
+  const unapproved = changed.find((file) => !allowed.includes(file));
+  if (unapproved) fail(`Geaenderter Pfad ist fuer den Abschluss nicht freigegeben: ${unapproved}`);
+  const mandatory = ["Backend/package.json", "Backend/package-lock.json", logPath];
+
+  if (!options.apply) {
+    stageAllowed(allowed, { rejectPreStaged: true, mandatory });
+    plan([
+      `Paketversionen und Changelog als ${targetId} | ${subject} finalisieren`,
+      `Nur freigegebene Pfade stagen: ${allowed.join(", ")}`,
+      `Branch-Commit ${targetId} | ${subject} erstellen`,
+      `Uncommittierten Arbeitsstand ${targetId}-x mit Zielcommit ${nextTargetId} anlegen`,
+    ]);
+    return;
+  }
+
+  const { packageFile, lockFile } = packagePaths();
+  const originals = new Map([
+    [packageFile, fs.readFileSync(packageFile)],
+    [lockFile, fs.readFileSync(lockFile)],
+    [logFile, fs.readFileSync(logFile)],
+  ]);
+  const gitDirectory = path.resolve(root, gitText(["rev-parse", "--git-dir"]));
+  const indexFile = path.join(gitDirectory, "index");
+  const originalIndex = fs.existsSync(indexFile) ? fs.readFileSync(indexFile) : null;
+  const startingHead = gitText(["rev-parse", "HEAD"]);
+  let committed = false;
+
+  try {
+    fs.writeFileSync(logFile, finalized);
+    setVersions(targetId);
+    stageAllowed(allowed, { rejectPreStaged: true, mandatory });
+    git(["commit", "-m", `${targetId} | ${subject}`]);
+    committed = true;
+    const created = headIdentity(branch);
+    if (created.id !== targetId) fail("Erstellter Branch-Commit hat eine unerwartete Commit-ID");
+
+    setVersions(`${targetId}-x`);
+    fs.appendFileSync(logFile, openSection(targetId, nextTargetId));
+    const expectedOpenPaths = ["Backend/package-lock.json", "Backend/package.json", logPath].sort();
+    const actualOpenPaths = statusPaths().sort();
+    if (JSON.stringify(actualOpenPaths) !== JSON.stringify(expectedOpenPaths)) {
+      fail(`Unerwarteter Arbeitsstand nach next-task: ${actualOpenPaths.join(", ") || "sauber"}`);
+    }
+    if (statusPaths("staged").length) fail("Index ist nach next-task nicht leer");
+  } catch (error) {
+    if (!committed && gitText(["rev-parse", "HEAD"]) === startingHead) {
+      for (const [file, value] of originals) fs.writeFileSync(file, value);
+      if (originalIndex) fs.writeFileSync(indexFile, originalIndex);
+      else fs.rmSync(indexFile, { force: true });
+    } else if (committed) {
+      setVersions(targetId);
+      fs.writeFileSync(logFile, finalized);
+    }
+    throw error;
+  }
+
+  plan([
+    `Paketversionen und Changelog als ${targetId} | ${subject} finalisieren`,
+    `Nur freigegebene Pfade stagen: ${allowed.join(", ")}`,
+    `Branch-Commit ${targetId} | ${subject} erstellen`,
+    `Uncommittierten Arbeitsstand ${targetId}-x mit Zielcommit ${nextTargetId} anlegen`,
+  ]);
+}
+
 function requireReleaseOptions() {
   const branch = options.branch;
   const version = options.version;
@@ -678,6 +765,7 @@ const commands = {
   "branch-finalize": branchFinalize,
   "branch-reopen": branchReopen,
   "branch-commit": branchCommit,
+  "next-task": nextTask,
   "release-open": releaseOpen,
   "release-commit": releaseCommit,
   push,

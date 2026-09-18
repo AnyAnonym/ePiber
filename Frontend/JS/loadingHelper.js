@@ -51,35 +51,54 @@ function delay(ms) {
 
 // ── Lade-Overlay ──
 
-let activeOverlay = null;
+const loadingOverlays = new WeakMap();
 
-export function showLoadingOverlay(text = "Daten werden geladen...") {
-  if (activeOverlay) return;
+function loadingScope(scope) {
+  return scope instanceof Element ? scope : document.body;
+}
+
+export function showLoadingOverlay(_text = "Lade Daten ...", scope = document.body) {
+  const target = loadingScope(scope);
+  const activeOverlay = loadingOverlays.get(target);
+  if (activeOverlay) return activeOverlay;
+
   const overlay = document.createElement("div");
   overlay.className = "loading-overlay";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.setAttribute("aria-atomic", "true");
+  if (target !== document.body) {
+    target.classList.add("loading-overlay-scope");
+    overlay.classList.add("loading-overlay-scoped");
+  }
 
   const content = document.createElement("div");
   content.className = "loading-overlay-content";
 
   const spinner = document.createElement("div");
   spinner.className = "loading-spinner";
+  spinner.setAttribute("aria-hidden", "true");
 
   const textElement = document.createElement("div");
   textElement.className = "loading-text";
-  textElement.textContent = text;
+  textElement.textContent = "Lade Daten ...";
 
   content.append(spinner, textElement);
   overlay.appendChild(content);
-  document.body.appendChild(overlay);
-  activeOverlay = overlay;
+  target.appendChild(overlay);
+  target.setAttribute("aria-busy", "true");
+  loadingOverlays.set(target, overlay);
+  return overlay;
 }
 
-export function hideLoadingOverlay() {
+export function hideLoadingOverlay(scope = document.body) {
+  const target = loadingScope(scope);
+  const activeOverlay = loadingOverlays.get(target);
   if (!activeOverlay) return;
-  const overlay = activeOverlay;
-  activeOverlay = null;
-  overlay.classList.add("fade-out");
-  setTimeout(() => overlay.remove(), 400);
+  loadingOverlays.delete(target);
+  activeOverlay.remove();
+  target.removeAttribute("aria-busy");
+  if (target !== document.body) target.classList.remove("loading-overlay-scope");
 }
 
 export function showErrorOverlay(message = "Fehler beim Laden der Daten", reloadFn = null) {
@@ -107,13 +126,12 @@ export function showErrorOverlay(message = "Fehler beim Laden der Daten", reload
   actionButton.textContent = reloadFn ? "Erneut laden" : "Schließen";
   actionButton.addEventListener("click", () => {
     overlay.remove();
-    if (activeOverlay === overlay) activeOverlay = null;
     reloadFn?.();
   });
   content.appendChild(actionButton);
   overlay.appendChild(content);
   document.body.appendChild(overlay);
-  activeOverlay = overlay;
+  document.body.removeAttribute("aria-busy");
   actionButton.focus();
 }
 

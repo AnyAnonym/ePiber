@@ -74,6 +74,8 @@ function setHistoryButtonsVisible(visible) {
 
 function clearHistoryState() {
   historyRequestGeneration++;
+  const historyDialog = historyElement("competition-history-modal")?.querySelector(".competition-history-dialog");
+  if (historyDialog) hideLoadingOverlay(historyDialog);
   historyState.open = false;
   historyState.global = false;
   historyState.bewerbId = null;
@@ -86,6 +88,8 @@ function clearHistoryState() {
   for (const id of ["history-comments-modal", "history-comment-editor-modal", "history-reactions-modal"]) {
     const interactionModal = historyElement(id);
     if (interactionModal) {
+      const interactionDialog = interactionModal.querySelector(".competition-history-dialog, .history-editor-dialog, .history-reactions-dialog");
+      if (interactionDialog) hideLoadingOverlay(interactionDialog);
       interactionModal.hidden = true;
       interactionModal.inert = false;
       interactionModal.removeAttribute("aria-hidden");
@@ -173,6 +177,8 @@ function formatInteractionTime(value) {
 function closeInteractionModal(id, returnFocusKey) {
   const modal = historyElement(id);
   if (!modal || modal.hidden) return;
+  const dialog = modal.querySelector(".competition-history-dialog, .history-editor-dialog, .history-reactions-dialog");
+  if (dialog) hideLoadingOverlay(dialog);
   modal.hidden = true;
   const returnFocus = interactionState[returnFocusKey];
   interactionState[returnFocusKey] = null;
@@ -380,8 +386,11 @@ async function loadComments({ older = false } = {}) {
   }
   const eventId = interactionState.eventId;
   const generation = interactionState.commentsGeneration;
+  const initialLoad = !older && interactionState.comments.length === 0;
+  const loadingScope = historyElement("history-comments-modal")?.querySelector(".competition-history-dialog");
   interactionState.commentsLoading = true;
-  historyElement("history-comments-status").textContent = older ? "Ältere Kommentare werden geladen..." : "Kommentare werden geladen...";
+  if (initialLoad) showLoadingOverlay(undefined, loadingScope);
+  else if (older) historyElement("history-comments-status").textContent = "Ältere Kommentare werden geladen...";
   try {
     const params = { eventId };
     if (older && interactionState.commentsNextCursor) params.cursor = interactionState.commentsNextCursor;
@@ -397,6 +406,7 @@ async function loadComments({ older = false } = {}) {
     historyElement("history-comments-status").textContent = "Kommentare konnten nicht geladen werden. Bitte erneut versuchen.";
   } finally {
     if (generation === interactionState.commentsGeneration && eventId === interactionState.eventId) {
+      if (initialLoad) hideLoadingOverlay(loadingScope);
       interactionState.commentsLoading = false;
       const more = historyElement("history-comments-more");
       if (more) more.disabled = false;
@@ -603,6 +613,8 @@ async function openCommentReactionDetails(comment, button) {
   body.replaceChildren();
   status.textContent = "Reaktionen werden geladen...";
   modal.hidden = false;
+  const loadingScope = modal.querySelector(".history-reactions-dialog");
+  showLoadingOverlay(undefined, loadingScope);
   historyElement("history-reactions-close")?.focus();
   try {
     const response = await readHistoryCommentReactions({ commentId: comment.id });
@@ -637,6 +649,8 @@ async function openCommentReactionDetails(comment, button) {
     if (generation !== interactionState.reactionsGeneration || interactionState.reactionTarget?.id !== comment.id || modal.hidden) return;
     diagnostic.error("competition_history_comment_reactions_load_failed", error);
     status.textContent = "Reaktionen konnten nicht geladen werden.";
+  } finally {
+    if (generation === interactionState.reactionsGeneration) hideLoadingOverlay(loadingScope);
   }
 }
 
@@ -713,6 +727,8 @@ async function openReactionDetails(eventId, button) {
   body.replaceChildren();
   status.textContent = "Reaktionen werden geladen...";
   modal.hidden = false;
+  const loadingScope = modal.querySelector(".history-reactions-dialog");
+  showLoadingOverlay(undefined, loadingScope);
   historyElement("history-reactions-close")?.focus();
   try {
     const response = await readHistoryReactions({ eventId });
@@ -747,6 +763,8 @@ async function openReactionDetails(eventId, button) {
     if (generation !== interactionState.reactionsGeneration || eventId !== interactionState.eventId || modal.hidden) return;
     diagnostic.error("competition_history_reactions_load_failed", error);
     status.textContent = "Reaktionen konnten nicht geladen werden.";
+  } finally {
+    if (generation === interactionState.reactionsGeneration) hideLoadingOverlay(loadingScope);
   }
 }
 
@@ -852,8 +870,11 @@ async function loadCompetitionHistory({ append = false } = {}) {
   const generation = ++historyRequestGeneration;
   const status = historyElement("competition-history-status");
   const more = historyElement("competition-history-more");
+  const initialLoad = !append && historyState.entries.length === 0;
+  const loadingScope = historyElement("competition-history-modal")?.querySelector(".competition-history-dialog");
   historyState.loading = true;
-  if (status) status.textContent = append ? "Weitere Einträge werden geladen..." : "Historie wird geladen...";
+  if (initialLoad) showLoadingOverlay(undefined, loadingScope);
+  else if (status) status.textContent = "Weitere Einträge werden geladen...";
   if (more) more.disabled = true;
 
   try {
@@ -883,6 +904,7 @@ async function loadCompetitionHistory({ append = false } = {}) {
     }
   } finally {
     if (generation === historyRequestGeneration) {
+      if (initialLoad) hideLoadingOverlay(loadingScope);
       historyState.loading = false;
       if (more) more.disabled = false;
     }
@@ -1191,10 +1213,11 @@ async function loadBewerbe() {
     error.code = "COMPETITIONS_CONTAINER_MISSING";
     throw error;
   }
+  const content = document.createDocumentFragment();
 
   if (!preserveContent) {
     container.replaceChildren();
-    showLoadingOverlay("Lade Bewerbe...");
+    showLoadingOverlay();
   }
 
   try {
@@ -1305,7 +1328,7 @@ async function loadBewerbe() {
 
     if (active.length > 0) {
       const section = createSection("Aktive Bewerbe", "grid-active");
-      container.appendChild(section);
+      content.appendChild(section);
       const grid = section.querySelector(".bewerb-grid");
       active.forEach((b) => {
         grid.appendChild(createCard(b));
@@ -1314,7 +1337,7 @@ async function loadBewerbe() {
 
     if (upcoming.length > 0) {
       const section = createSection("Bevorstehende Bewerbe", "grid-upcoming");
-      container.appendChild(section);
+      content.appendChild(section);
       const grid = section.querySelector(".bewerb-grid");
       upcoming.forEach((b) => {
         grid.appendChild(createCard(b));
@@ -1323,7 +1346,7 @@ async function loadBewerbe() {
 
     if (finished.length > 0) {
       const section = createSection("Beendete Bewerbe", "grid-finished");
-      container.appendChild(section);
+      content.appendChild(section);
       const grid = section.querySelector(".bewerb-grid");
       finished.forEach((b) => {
         grid.appendChild(createCard(b));
@@ -1333,8 +1356,9 @@ async function loadBewerbe() {
     if (active.length === 0 && upcoming.length === 0 && finished.length === 0) {
       const message = document.createElement("p");
       message.textContent = "Keine Bewerbe gefunden.";
-      container.appendChild(message);
+      content.appendChild(message);
     }
+    container.replaceChildren(content);
     bewerbeLoadedOnce = true;
     if (!preserveContent) hideLoadingOverlay();
   } catch (err) {

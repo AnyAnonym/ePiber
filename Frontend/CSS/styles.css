@@ -5051,20 +5051,24 @@ button.bracket-player-name:focus-visible {
   height: 100vh;
   height: 100dvh;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--bg, #fff);
   display: grid;
   place-items: center;
   overflow: auto;
   overscroll-behavior: contain;
   z-index: 9500;
-  transition: opacity 0.4s ease;
 }
-.loading-overlay.fade-out {
-  opacity: 0;
-  pointer-events: none;
+.loading-overlay-scope {
+  position: relative;
+}
+.loading-overlay.loading-overlay-scoped {
+  position: absolute;
+  width: auto;
+  height: auto;
+  min-height: 160px;
 }
 .loading-overlay.error {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--bg, #fff);
 }
 .loading-overlay-content {
   max-width: 100%;

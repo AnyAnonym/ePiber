@@ -43,9 +43,12 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   Sessionaenderungen rendern die anonyme Login-CTA oder laden das Verzeichnis neu;
   Generationen
   verhindern, dass alte Antworten einen neueren Login/Logout ueberholen.
-  `players`-Invalidierungen aktualisieren die Liste. Lade-, Leer- und Fehlerstatus
-  sind explizit; nach erfolgreichem Initialzustand wird Monitor-Ready, bei Fehlern
-  Monitor-Failed gemeldet.
+  `players`-Invalidierungen aktualisieren die Liste. Der voll deckende Spinner
+  `Lade Daten ...` erscheint nur beim Initialzustand. Spaetere Aktualisierungen
+  behalten die vorhandene Tabelle ohne Spinner sichtbar und ersetzen ihre Zeilen
+  erst nach dem vollstaendigen Aufbau. Leer- und Fehlerstatus sind explizit; nach
+  erfolgreichem Initialzustand wird Monitor-Ready, bei Fehlern Monitor-Failed
+  gemeldet.
 
 -- Profile und Sicherheit --
   Jede Zeile ist per Maus sowie Enter/Leertaste als Profilaktion bedienbar.
