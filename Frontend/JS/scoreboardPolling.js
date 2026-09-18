@@ -6,6 +6,8 @@ import { largestPlayerNameSize } from "./scoreboardSizing.js";
 const readScoreboardSnapshot = createEndpoint("scoreboardSnapshot");
 const SNAPSHOT_DEBOUNCE_MS = 75;
 const SNAPSHOT_RETRY_MAX_MS = 30000;
+const RESUME_WATCHDOG_INTERVAL_MS = 5000;
+const RESUME_GAP_THRESHOLD_MS = 15000;
 
 let matchRasterMap = new Map();
 let connectionStatus = { state: "idle", connected: false };
@@ -21,6 +23,8 @@ let snapshotInFlight = false;
 let snapshotQueued = false;
 let snapshotGeneration = 0;
 let playerNameSizingFrame = null;
+let lastActiveCheckAt = Date.now();
+let lastResumeRefreshAt = 0;
 const requiredRevisions = { players: null, bewerbe: null, matchtyp: null, matches1: null };
 
 let courtEventSequence = 0;
@@ -854,7 +858,12 @@ function handleResync() {
 }
 
 function refreshAfterResume() {
-  if (!document.hidden) queueSnapshot();
+  if (document.hidden) return;
+  const now = Date.now();
+  lastActiveCheckAt = now;
+  if (now - lastResumeRefreshAt < 500) return;
+  lastResumeRefreshAt = now;
+  queueSnapshot();
 }
 
 try {
@@ -869,9 +878,17 @@ try {
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) refreshAfterResume();
   });
+  window.addEventListener("focus", refreshAfterResume);
   window.addEventListener("resize", schedulePlayerNameSizing);
   window.visualViewport?.addEventListener("resize", schedulePlayerNameSizing);
-  const statusTimer = setInterval(updateStatus, 5000);
+  const statusTimer = setInterval(() => {
+    updateStatus();
+    if (document.hidden) return;
+    const now = Date.now();
+    const activeGapMs = Math.max(0, now - lastActiveCheckAt);
+    lastActiveCheckAt = now;
+    if (activeGapMs >= RESUME_GAP_THRESHOLD_MS) refreshAfterResume();
+  }, RESUME_WATCHDOG_INTERVAL_MS);
   window.addEventListener("pagehide", (event) => {
     if (!event.persisted) clearInterval(statusTimer);
   }, { once: true });

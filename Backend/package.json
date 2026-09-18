@@ -1,11 +1,12 @@
 {
   "name": "epiber-backend",
-  "version": "4.10.3-paj-1-4",
+  "version": "4.10.3-paj-1-5",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + Google Sheets)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node scripts/check.js",
+    "check:runtime-version": "node scripts/check-runtime-version.js",
     "test": "node --test test/*.test.js",
     "test:browser": "npm run test:browser:smoke && npm run test:browser:chromium",
     "test:browser:smoke": "bash scripts/run-browser-smoke-container.sh",

@@ -30,6 +30,11 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
   Luecken oder veraltete Invalidierungsrevisionen erzwingen einen neuen Snapshot;
   Fehler werden mit exponentiellem Retry bis 30 Sekunden erneut versucht. Neuere
   Pushes waehrend eines Snapshots gewinnen gegen dessen Stand.
+  Beim Wiederanzeigen, Fensterfokus oder einer erkannten JavaScript-Ausfuehrungs-
+  pause ab 15 Sekunden fordert das Scoreboard unabhaengig von einem neuen Push
+  einen autoritativen Snapshot an. Nahezu gleichzeitige Aufwachsignale werden
+  zusammengefasst. Der zuletzt sichtbare Stand bleibt dabei ohne neuen
+  Vollbild-Lader stehen, bis der Snapshot angewendet werden kann.
 
 -- Court-Aktivitaet und Score-Uebernahme --
   Scores inaktiver Plaetze bleiben auf ihrem letzten Stand eingefroren und werden
@@ -140,7 +145,7 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
 
 -- Browser-Layouttest --
   `Backend/test/scoreboardLayout.browser.js` steuert ueber das als Dev-Abhaengigkeit
-  installierte `playwright-core` 1.62.1 das systemweite Chromium headless gegen die
+  installierte `playwright` 1.62.1 das systemweite Chromium headless gegen die
   PAJ-Scoreboard-Origin. `npm run test:browser` prueft Namensbreite, Mindestschrift,
   Court-Ueberlauf, vertikale Grenzen von Namen und Scores, Doppelzeilen sowie die
   Mindesthoehe leerer Namensfelder bei 320x568, 375x667, 390x664, 360x800,
@@ -155,3 +160,6 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
   Einzelnamen 35 bis 36 CSS-Pixel und fuer Doppelnamen hoechstens 29 CSS-Pixel
   Scoregroesse sowie maximal 3 CSS-Pixel Abstand vor und nach dem Scoreblock
   erzwungen.
+  Die profiluebergreifende Playwright-Smokesuite prueft zusaetzlich, dass
+  Visibility und Focus einen waehrend der Unterbrechung geaenderten Stand ohne
+  Seitenreload und ohne erneut eingeblendeten Erstlader uebernehmen.

@@ -43,3 +43,15 @@ Commit: 4.10.3-paj-1-4 | Hostressourcen verstaendlich skaliert
   - [Observability] Freien Speicher fuer Root- und Boot-Dateisystem bereits in der Prometheus-Abfrage in GiB umgerechnet und eindeutig formatiert.
   - [Tests] Dashboard- und Grafana-Konfigurationsvertrag fuer CPU-Skalierung und deaktivierte Panelansichtsregler ergaenzt.
   - [Dokumentation] Stabile CPU-Skalierung, weiterhin dynamische Ressourcenachsen und deaktivierte experimentelle Panelansichtsregler dokumentiert.
+
+[4.10.3-paj-1-5] - 2026-09-18
+Commit: 4.10.3-paj-1-5 | Scoreboard-Aufwachen und Versionswechsel abgesichert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.3-paj-1-4-x` gesetzt.
+  - [Software] Browserclients erkennen Visibility, Focus, BFCache, Online-Rueckkehr und lange JavaScript-Ausfuehrungspausen, pruefen die Laufzeitversion unabhaengig vom WebSocket und verbinden mit geschuetztem Einmal-Reload neu.
+  - [Software] Das Scoreboard fordert nach Aufwachsignalen und erkannten Timerpausen einen autoritativen Snapshot an, ohne den vorhandenen Stand durch den Erstlader zu verdecken.
+  - [Observability] Kontrollierte Aufwachdiagnose mit Ausloeser und Pausendauer in die serverseitige Event-Allowlist aufgenommen.
+  - [Betrieb] Maschinenpruefung fuer die exakte Uebereinstimmung von Paket- und laufender `/version`-Antwort samt Rollout-Gate ergaenzt.
+  - [Tests] Timerluecke, Fokus-Versionswechsel, Reloadschutz und Laufzeitversionsvertrag sowie Scoreboard-Resume ueber die Playwright-Zielmatrix abgedeckt.
+  - [Dokumentation] Aufwach-, Versions-, Snapshot- und Rolloutverhalten in Architektur-, Seiten- und Betriebsdokumentation festgehalten.

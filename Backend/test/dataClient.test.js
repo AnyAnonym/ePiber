@@ -53,9 +53,10 @@ class FakeWebSocket {
   }
 }
 
-function loadDataClient({ cryptoImplementation, online = true, sessionStorage, storageValues = new Map() } = {}) {
+function loadDataClient({ cryptoImplementation, fetchImplementation, now, online = true, sessionStorage, storageValues = new Map() } = {}) {
   FakeWebSocket.instances = [];
   const intervals = new Set();
+  const intervalCallbacks = new Map();
   const timeouts = new Set();
   const windowListeners = new Map();
   const documentListeners = new Map();
@@ -91,16 +92,23 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
   const trackedSetInterval = (callback, delay, ...args) => {
     const timer = setInterval(callback, delay, ...args);
     intervals.add(timer);
+    intervalCallbacks.set(timer, () => callback(...args));
     return timer;
   };
   const trackedClearInterval = (timer) => {
     intervals.delete(timer);
+    intervalCallbacks.delete(timer);
     clearInterval(timer);
   };
+  const RuntimeDate = now
+    ? class extends Date { static now() { return now.value; } }
+    : Date;
   let uuidCounter = 0;
   const context = vm.createContext({
     URL,
     WebSocket: FakeWebSocket,
+    AbortController,
+    Date: RuntimeDate,
     clearInterval: trackedClearInterval,
     clearTimeout: trackedClearTimeout,
     console,
@@ -109,10 +117,12 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
     localStorage: storage,
     location,
     navigator: navigatorState,
+    fetch: fetchImplementation,
     setInterval: trackedSetInterval,
     setTimeout: trackedSetTimeout,
     window: {
       APP_VERSION: "test",
+      fetch: fetchImplementation,
       localStorage: storage,
       location,
       sessionStorage: sessionStorage || storage,
@@ -137,6 +147,9 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
     intervals,
     navigator: navigatorState,
     reloads,
+    runIntervals() {
+      for (const callback of [...intervalCallbacks.values()]) callback();
+    },
     sockets: FakeWebSocket.instances,
     storageValues,
     timeouts,
@@ -177,6 +190,44 @@ test("sichtbar gewordene Seiten warten bei Backoff nicht auf einen eingefrorenen
 
   runtime.documentListeners.get("visibilitychange")();
   assert.equal(runtime.sockets.length, 2);
+});
+
+test("Timerluecke erkennt Android-Standby auch nach einer frischen WebSocket-Nachricht", (t) => {
+  const now = { value: 1000 };
+  const runtime = loadDataClient({ now });
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+
+  now.value += 8 * 60 * 1000;
+  firstSocket.receive({ type: "ping", v: 2, ts: now.value });
+  runtime.runIntervals();
+  assert.equal(runtime.sockets.length, 2);
+});
+
+test("Fokus prueft die Serverversion und laedt bei einem Update genau einmal neu", async (t) => {
+  const requests = [];
+  const runtime = loadDataClient({
+    fetchImplementation: async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => ({ version: "test-next" }) };
+    },
+  });
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+
+  runtime.windowListeners.get("focus")();
+  await new Promise((resolve) => setImmediate(resolve));
+  runtime.windowListeners.get("focus")();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "/version");
+  assert.equal(requests[0].options.cache, "no-store");
+  assert.equal(runtime.reloads.length, 1);
 });
 
 test("dataClient korreliert Requests, propagiert Fehler und stellt Subscriptions wieder her", async (t) => {

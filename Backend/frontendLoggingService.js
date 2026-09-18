@@ -32,6 +32,7 @@ const EVENT_LEVELS = new Map([
   ["admin_logging_settings_save_failed", "error"],
   ["admin_logging_target_add_failed", "error"],
   ["admin_logging_target_remove_failed", "error"],
+  ["app_resume_detected", "info"],
   ["auth_listener_failed", "error"],
   ["auth_session_refresh_failed", "error"],
   ["auth_socket_reauthentication_failed", "error"],

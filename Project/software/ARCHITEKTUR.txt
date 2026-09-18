@@ -818,7 +818,10 @@ der Client stellt groessere Mengen nach Reconnect in Batches wieder her.
 `dataClient.js` ist eine explizite Zustandsmaschine: idle, connecting, connected,
 stale, backoff, offline, stopped. Socketgenerationen sperren alte Events aus;
 Reconnect verwendet exponentiellen Backoff mit Jitter, Stale-Watchdog und einen
-stabilen 30-Sekunden-Zeitraum. Pendingrequests werden bei Disconnect sofort
+stabilen 30-Sekunden-Zeitraum. Ein aktiver Fuenf-Sekunden-Waechter erkennt
+Ausfuehrungspausen ab 15 Sekunden auch dann, wenn Android beim Aufwachen kein
+verwertbares Lifecycle-Ereignis liefert oder bereits eine neue Pingnachricht
+zugestellt hat. Pendingrequests werden bei Disconnect sofort
 abgelehnt. Neue Requests im Zustand offline und bereits auf einen Verbindungsaufbau
 wartende Requests bei einem Offline-Ereignis werden sofort mit dem internen Code
 `OFFLINE` abgelehnt. Terminalcodes werden nicht automatisch umgangen.
@@ -834,7 +837,13 @@ App-Versionskonflikt und generische 4406-Protokollfehler stoppen terminal ohne
 Reconnectschleife. Sichtbare Verbindungszustaende bleiben kurz, neutral und
 nichttechnisch; technische Gruende werden nicht direkt als UI-Text ausgegeben.
 
-Online/offline, Visibility, pagehide/pageshow und BFCache werden behandelt.
+Bei Visibility-, Focus-, Online-, BFCache- und erkannten Timerpausen wird
+`GET /version` zusaetzlich unabhaengig vom Socket mit `no-store` gelesen. Weicht
+die zuvor vom Dokument geladene Version ab, verwendet dieser Pfad denselben
+tabbezogenen Reloadschutz. Gleiche oder nicht abrufbare Versionen loesen keinen
+Reload aus.
+
+Online/offline, Visibility, Focus, pagehide/pageshow und BFCache werden behandelt.
 Reconnect stellt Subscriptions wieder her und meldet Resync. Nur sichere Reads
 werden begrenzt bei Timeout/Shutdown wiederholt. Writes werden nie automatisch
 wiederholt; operationIds bleiben bei unklarem Ausgang erhalten.

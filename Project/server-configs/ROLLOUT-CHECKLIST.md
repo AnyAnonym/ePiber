@@ -103,6 +103,7 @@ Diese Checkliste ist das verbindliche Gate fuer die aktuelle Reihenfolge **PAJ -
 ## 6. Health, Status und Transport
 
 - [ ] `/version` liefert HTTP 200 und exakt Version `<FREIGEGEBENE_VERSION>` aus dem eingetragenen Release-Commit.
+- [ ] `npm run check:runtime-version -- <ORIGIN>/version` bestaetigt nach dem Dienststart maschinenpruefbar dieselbe Paket- und Laufzeitversion.
 - [ ] `/live` liefert HTTP 200 mit `status: ok`.
 - [ ] `/ready` und `/health` liefern nach Initialisierung HTTP 200 mit `status: ready`.
 - [ ] Anonymes `/status` wird mit 401 abgewiesen.

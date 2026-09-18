@@ -157,6 +157,14 @@ test("Scoreboard holt beim Aufwachen ohne Seitenreload einen aktuellen Snapshot"
 
     await page.waitForFunction(() => document.getElementById("p1-h-p")?.textContent === "30");
     assert.equal(await page.evaluate(() => globalThis.__scoreboardTest.snapshotCalls()), 2);
+
+    await page.waitForTimeout(550);
+    await page.evaluate(() => {
+      globalThis.__scoreboardTest.setScore(40);
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForFunction(() => document.getElementById("p1-h-p")?.textContent === "40");
+    assert.equal(await page.evaluate(() => globalThis.__scoreboardTest.snapshotCalls()), 3);
     assert.equal(await page.evaluate(() => {
       const loader = document.getElementById("scoreboard-loader");
       return !loader || loader.classList.contains("hidden");

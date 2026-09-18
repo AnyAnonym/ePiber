@@ -153,6 +153,13 @@ Build fuehrt den statischen Check und die Tests aus. `package.json`,
 `package-lock.json` und die spaetere `/version`-Antwort muessen exakt
 `<FREIGEGEBENE_VERSION>` melden und zum freigegebenen Commit gehoeren. Ein
 Branchsuffix oder eine geaenderte Lockdatei stoppt den Rollout.
+Nach jedem Dienststart wird die Uebereinstimmung fuer die jeweilige Origin
+maschinenpruefbar bestaetigt, zum Beispiel auf PAJ:
+
+  npm run check:runtime-version -- https://epiber.at:8081/version
+
+Der Befehl endet bei HTTP-, Struktur- oder Versionsabweichungen ungleich null;
+eine Promotion darf dann nicht fortgesetzt werden.
 
 PAJ-Browsertests:
 
