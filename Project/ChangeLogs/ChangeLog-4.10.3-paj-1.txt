@@ -55,3 +55,13 @@ Commit: 4.10.3-paj-1-5 | Scoreboard-Aufwachen und Versionswechsel abgesichert
   - [Betrieb] Maschinenpruefung fuer die exakte Uebereinstimmung von Paket- und laufender `/version`-Antwort samt Rollout-Gate ergaenzt.
   - [Tests] Timerluecke, Fokus-Versionswechsel, Reloadschutz und Laufzeitversionsvertrag sowie Scoreboard-Resume ueber die Playwright-Zielmatrix abgedeckt.
   - [Dokumentation] Aufwach-, Versions-, Snapshot- und Rolloutverhalten in Architektur-, Seiten- und Betriebsdokumentation festgehalten.
+
+[4.10.3-paj-1-6] - 2026-09-18
+Commit: 4.10.3-paj-1-6 | Grafana-Datenquellen reproduzierbar repariert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.3-paj-1-5-x` gesetzt.
+  - [Observability] Prometheus-, Loki- und Infinity-Datasource-Plugins werden vom Installer reproduzierbar gepinnt, installiert und vor dem Grafana-Start auf ihre exakte Version geprueft.
+  - [Observability] Alle Dashboard-Panels und Targets verwenden eine explizite Datasource; ein stiller Rueckfall auf Grafanas synthetische Testdaten ist damit ausgeschlossen.
+  - [Observability] CPU-Auslastung wird direkt aus den aktiven CPU-Modi statt ueber den auf diesem Host unzuverlaessigen Idle-Gegenwert berechnet.
+  - [Tests] Dashboard- und Installervertraege pruefen vollstaendige Datasource-Zuordnung, Plugin-Pins und die korrigierte CPU-Abfrage.

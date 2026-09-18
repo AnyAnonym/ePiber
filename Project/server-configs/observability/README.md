@@ -63,6 +63,13 @@ Loopback und mit demselben Maschinen-Bearer. Caddy beantwortet `/internal/*` auf
 Live, PAJ und PK explizit mit 404; der Bericht ist kein Browser- oder externes
 Admin-API.
 
+Seit Grafana 13.2 werden auch die zuvor eingebauten Prometheus- und Loki-
+Datasources als separate Plugins ausgeliefert. Weil automatische Plugininstallation
+und -updates deaktiviert bleiben, installiert und prueft der Installer Prometheus
+exakt in Version `13.1.9` und Loki exakt in Version `13.2.0`. Alle Dashboard-Panels
+und ihre Targets referenzieren die jeweilige provisionierte Datasource explizit;
+ein Rueckfall auf Grafanas synthetische Testdaten ist nicht zulaessig.
+
 ## Daten und Aufbewahrung
 
 Alloy sammelt ausschliesslich:
@@ -118,10 +125,12 @@ Das Hostressourcen-Dashboard formatiert CPU, RAM, freien Speicher, Inodes und
 Netzwerkdurchsatz mit passenden dynamischen Einheiten und zeigt die aktuellen
 Werte zusaetzlich in den Tabellenlegenden. Verfuegbarer RAM und freier
 Dateisystemspeicher werden bereits in den Prometheus-Abfragen in GiB umgerechnet
-und in Achsen sowie Legenden eindeutig mit dieser Einheit dargestellt. Die
-CPU-Abfrage und ihre feste Achse
-sind auf den fachlich gueltigen Bereich von 0 bis 100 Prozent begrenzt; die
-anderen Ressourcenachsen bleiben dynamisch. Die standardmaessig aktivierte
+und in Achsen sowie Legenden eindeutig mit dieser Einheit dargestellt. Die CPU-
+Abfrage summiert die aktiven Modi `user`, `system`, `nice`, `irq`, `softirq` und
+`steal` pro logischer CPU direkt, weil der exportierte Idle-Zuwachs auf diesem
+Host zeitweise rechnerisch ueber 100 Prozent liegt. Abfrage und feste Achse sind
+auf den fachlich gueltigen Bereich von 0 bis 100 Prozent begrenzt; die anderen
+Ressourcenachsen bleiben dynamisch. Die standardmaessig aktivierte
 experimentelle Grafana-Seitenleiste mit temporaeren Skalierungs- und
 Kurvenreglern ist deaktiviert. Readiness und SQLite-Panels fuehren
 Messaging als eigene kontrollierte Komponente beziehungsweise Datenbank. Die
@@ -229,11 +238,12 @@ reloaded. In diesem kurzen Wartungsfenster ist Grafana nicht erreichbar; ePiber
 bleibt unabhaengig. Bei Fehler muss der Betreiber Caddy- und Observability-
 Vorlagen aus dem geprueften unmittelbaren Backup gemeinsam zurueckrollen.
 Der Installer verweigert fehlende oder von `root:root:0600` abweichende
-Messaging-Credentials und ungueltige Tokenformate. Er installiert das signierte
-Infinity-Plugin reproduzierbar nur als `yesoreyeram-infinity-datasource` Version
-`4.0.0`, bricht bei einer vorhandenen abweichenden Version ab und prueft danach
-beide Reporting-Endpunkte mit dem Maschinen-Bearer. Paket- und Pluginversion
-werden am Ende ohne Geheimniswert ausgegeben.
+Messaging-Credentials und ungueltige Tokenformate. Er installiert die Datasource-
+Plugins reproduzierbar als Prometheus `13.1.9`, Loki `13.2.0` und signiertes
+`yesoreyeram-infinity-datasource` `4.0.0`, bricht bei einer vorhandenen
+abweichenden Version ab und prueft danach beide Reporting-Endpunkte mit dem
+Maschinen-Bearer. Paket- und Pluginversionen werden am Ende ohne Geheimniswert
+ausgegeben.
 
 Das lokale Grafana-Adminpasswort ist ausschliesslich Break-glass. Es wird nur in
 einem Wartungsfenster mit gestopptem Normaldienst, deaktiviertem Auth Proxy,

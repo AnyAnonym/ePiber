@@ -3,12 +3,12 @@
   "editable": false,
   "graphTooltip": 1,
   "panels": [
-    { "type": "timeseries", "title": "HTTP-Ergebnisse", "id": 1, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "targets": [{ "expr": "sum by (route, result) (rate(epiber_http_requests_total{deployment=\"$deployment\"}[5m]))", "legendFormat": "{{route}} {{result}}", "refId": "A" }] },
-    { "type": "timeseries", "title": "HTTP-Latenz p95", "id": 2, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }, "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, route) (rate(epiber_http_request_duration_seconds_bucket{deployment=\"$deployment\"}[5m])))", "legendFormat": "{{route}}", "refId": "A" }] },
-    { "type": "timeseries", "title": "WebSocket-Ergebnisse", "id": 3, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }, "targets": [{ "expr": "sum by (endpoint, result) (rate(epiber_ws_requests_total{deployment=\"$deployment\"}[5m]))", "legendFormat": "{{endpoint}} {{result}}", "refId": "A" }] },
-    { "type": "timeseries", "title": "Sheet-Fehlerfolgen", "id": 4, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }, "targets": [{ "expr": "epiber_sheet_table_consecutive_errors{deployment=\"$deployment\"}", "legendFormat": "{{table}}", "refId": "A" }] },
-    { "type": "timeseries", "title": "Court-Zustand", "id": 5, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }, "targets": [{ "expr": "epiber_court_poll_consecutive_failures{deployment=\"$deployment\"}", "legendFormat": "Folgefehler", "refId": "A" }, { "expr": "epiber_court_source_stale{deployment=\"$deployment\"}", "legendFormat": "Stale", "refId": "B" }] },
-    { "type": "timeseries", "title": "SQLite-Fehler", "id": 6, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }, "targets": [{ "expr": "epiber_sqlite_failures_total{deployment=\"$deployment\"}", "legendFormat": "{{database}}", "refId": "A" }] }
+    { "type": "timeseries", "title": "HTTP-Ergebnisse", "id": 1, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (route, result) (rate(epiber_http_requests_total{deployment=\"$deployment\"}[5m]))", "legendFormat": "{{route}} {{result}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "HTTP-Latenz p95", "id": 2, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.95, sum by (le, route) (rate(epiber_http_request_duration_seconds_bucket{deployment=\"$deployment\"}[5m])))", "legendFormat": "{{route}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "WebSocket-Ergebnisse", "id": 3, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (endpoint, result) (rate(epiber_ws_requests_total{deployment=\"$deployment\"}[5m]))", "legendFormat": "{{endpoint}} {{result}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "Sheet-Fehlerfolgen", "id": 4, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "epiber_sheet_table_consecutive_errors{deployment=\"$deployment\"}", "legendFormat": "{{table}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "Court-Zustand", "id": 5, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "epiber_court_poll_consecutive_failures{deployment=\"$deployment\"}", "legendFormat": "Folgefehler", "refId": "A" }, { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "epiber_court_source_stale{deployment=\"$deployment\"}", "legendFormat": "Stale", "refId": "B" }] },
+    { "type": "timeseries", "title": "SQLite-Fehler", "id": 6, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "epiber_sqlite_failures_total{deployment=\"$deployment\"}", "legendFormat": "{{database}}", "refId": "A" }] }
   ],
   "schemaVersion": 41,
   "tags": ["epiber", "errors"],
@@ -17,5 +17,5 @@
   "timezone": "browser",
   "title": "ePiber Fehler und Recovery",
   "uid": "epiber-errors",
-  "version": 1
+  "version": 2
 }

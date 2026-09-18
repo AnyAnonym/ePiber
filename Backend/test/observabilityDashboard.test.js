@@ -83,7 +83,7 @@ test("Ranglistenaktivitaeten trennen Forderungen von nicht angelegten Versuchen"
 test("Hostressourcen zeigen aktuelle Werte mit passenden Einheiten", () => {
   const dashboard = JSON.parse(fs.readFileSync(resourcesDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-resources");
-  assert.equal(dashboard.version, 5);
+  assert.equal(dashboard.version, 6);
 
   const expectedUnits = new Map([
     ["CPU-Auslastung", "percent"],
@@ -108,6 +108,9 @@ test("Hostressourcen zeigen aktuelle Werte mit passenden Einheiten", () => {
   assert.equal(cpu.fieldConfig.defaults.min, 0);
   assert.equal(cpu.fieldConfig.defaults.max, 100);
   assert.match(cpu.targets[0].expr, /^clamp\(.+, 0, 100\)$/);
+  assert.match(cpu.targets[0].expr, /mode=~"user\|system\|nice\|irq\|softirq\|steal"/);
+  assert.match(cpu.targets[0].expr, /count\(node_cpu_seconds_total\{mode="idle"\}\)/);
+  assert.equal(cpu.targets[0].expr.includes("100 -"), false);
   const ram = dashboard.panels.find(({ title }) => title === "Verfuegbarer RAM");
   assert.equal(ram.targets[0].legendFormat, "RAM verfuegbar");
   assert.equal(ram.targets[0].expr, "node_memory_MemAvailable_bytes / 1024^3");
@@ -124,10 +127,30 @@ test("Grafana blendet die experimentellen Panelansichtsregler aus", () => {
   assert.match(config, /^grafana\.viewPanelPane = false$/m);
 });
 
+test("Alle Grafana-Panels und Targets verwenden eine explizite Datenquelle", () => {
+  const dashboardDir = path.join(observabilityRoot, "grafana/dashboards");
+  const dashboardFiles = fs.readdirSync(dashboardDir).filter((file) => file.endsWith(".json"));
+  assert.equal(dashboardFiles.length, 9);
+  for (const file of dashboardFiles) {
+    const dashboard = JSON.parse(fs.readFileSync(path.join(dashboardDir, file), "utf8"));
+    for (const panel of dashboard.panels) {
+      assert.ok(panel.datasource?.type, `${file}: Panel ${panel.id} ohne Datasource-Typ`);
+      assert.ok(panel.datasource?.uid, `${file}: Panel ${panel.id} ohne Datasource-UID`);
+      for (const target of panel.targets || []) {
+        assert.deepEqual(
+          target.datasource,
+          panel.datasource,
+          `${file}: Target ${panel.id}/${target.refId} verwendet nicht die Panel-Datasource`,
+        );
+      }
+    }
+  }
+});
+
 test("Personennormalisierung zeigt aktive Mitglieder nach Playerklassifikation", () => {
   const dashboard = JSON.parse(fs.readFileSync(peopleNormalizationDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-people-normalization");
-  assert.equal(dashboard.version, 2);
+  assert.equal(dashboard.version, 3);
 
   const expectedPanels = new Map([
     ["Aktive Mitglieder", null],
@@ -246,8 +269,13 @@ test("Infinity-Provisionierung pinnt Plugin und haelt das Credential ausserhalb 
   assert.match(datasource, /http:\/\/127\.0\.0\.1:8080/);
   assert.match(datasource, /http:\/\/127\.0\.0\.1:8083/);
   const installer = fs.readFileSync(path.join(observabilityRoot, "install-observability.sh"), "utf8");
+  assert.match(installer, /^PROMETHEUS_PLUGIN_VERSION=13\.1\.9$/m);
+  assert.match(installer, /^LOKI_PLUGIN_VERSION=13\.2\.0$/m);
   assert.match(installer, /INFINITY_PLUGIN_VERSION=4\.0\.0/);
-  assert.match(installer, /plugins install "\$INFINITY_PLUGIN_ID" "\$INFINITY_PLUGIN_VERSION"/);
+  assert.match(installer, /grafana cli --homepath \/usr\/share\/grafana --pluginsDir \/var\/lib\/grafana\/plugins plugins install "\$plugin_id" "\$plugin_version"/);
+  assert.match(installer, /ensure_grafana_plugin "\$PROMETHEUS_PLUGIN_ID" "\$PROMETHEUS_PLUGIN_VERSION"/);
+  assert.match(installer, /ensure_grafana_plugin "\$LOKI_PLUGIN_ID" "\$LOKI_PLUGIN_VERSION"/);
+  assert.match(installer, /ensure_grafana_plugin "\$INFINITY_PLUGIN_ID" "\$INFINITY_PLUGIN_VERSION"/);
   assert.equal(installer.includes("--insecure"), false);
   const template = fs.readFileSync(path.join(observabilityRoot, "grafana/messaging-api.env.example"), "utf8");
   assert.match(template, /EPIBER_OBSERVABILITY_API_TOKEN=CHANGE_ME/);

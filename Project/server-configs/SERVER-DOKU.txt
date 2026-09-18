@@ -86,6 +86,10 @@ projiziert fuer hoechstens 31 Tage vertrauliche Meldungsdetails direkt aus der
 jeweiligen `messaging.sqlite`; private Empfaenger-, Text-, Ereignis-,
 Quittierungs- und Zustellfelder werden weder nach Loki noch nach Prometheus
 exportiert.
+Prometheus und Loki werden seit Grafana 13.2 ebenfalls als separate Datasource-
+Plugins betrieben und bei deaktivierter automatischer Plugininstallation exakt
+auf `13.1.9` beziehungsweise `13.2.0` gepinnt. Alle Dashboard-Panels und Targets
+referenzieren ihre provisionierte Datasource explizit.
 
 PK bleibt als Anwendungssystem und Caddy-Origin dokumentiert, ist im aktuellen
 Observability-Stand aber deaktiviert: Port 8084 wird nicht gescraped, PK-Journale
