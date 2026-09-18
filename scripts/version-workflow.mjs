@@ -52,7 +52,9 @@ function parseArgs(argv) {
     }
   }
 
-  if (options.allChanged && command !== "next-task") fail("--all-changed ist nur fuer next-task zulaessig");
+  if (options.allChanged && !["next-task", "finish-branch", "release-commit"].includes(command)) {
+    fail("--all-changed ist nur fuer next-task, finish-branch oder release-commit zulaessig");
+  }
 
   return { command, options };
 }
@@ -525,7 +527,7 @@ function branchCommit() {
   plan([`Nur freigegebene Pfade stagen: ${allowed.join(", ")}`, `Branch-Commit ${targetId} | ${subject} erstellen`]);
 }
 
-function nextTask() {
+function completeBranchWork({ openNext }) {
   const { branch } = assertSideBranch();
   assertNoMergeState();
   const subject = requireSubject();
@@ -534,7 +536,7 @@ function nextTask() {
   const allowed = options.allChanged
     ? changed
     : [...new Set(normalizeAllowedPaths())];
-  if (!allowed.length) fail("Keine Aenderungen fuer next-task vorhanden");
+  if (!allowed.length) fail(`Keine Aenderungen fuer ${openNext ? "next-task" : "finish-branch"} vorhanden`);
   const head = headIdentity(branch);
   assertSynchronizedVersions(`${head.id}-x`);
   const targetId = `${branch}-${head.number + 1}`;
@@ -565,7 +567,9 @@ function nextTask() {
       `Paketversionen und Changelog als ${targetId} | ${subject} finalisieren`,
       stagingPlan,
       `Branch-Commit ${targetId} | ${subject} erstellen`,
-      `Uncommittierten Arbeitsstand ${targetId}-x mit Zielcommit ${nextTargetId} anlegen`,
+      openNext
+        ? `Uncommittierten Arbeitsstand ${targetId}-x mit Zielcommit ${nextTargetId} anlegen`
+        : `Seitenbranch sauber auf ${targetId} abschliessen`,
     ]);
     return;
   }
@@ -593,14 +597,20 @@ function nextTask() {
     const created = headIdentity(branch);
     if (created.id !== targetId) fail("Erstellter Branch-Commit hat eine unerwartete Commit-ID");
 
-    setVersions(`${targetId}-x`);
-    fs.appendFileSync(logFile, openSection(targetId, nextTargetId));
-    const expectedOpenPaths = ["Backend/package-lock.json", "Backend/package.json", logPath].sort();
-    const actualOpenPaths = statusPaths().sort();
-    if (JSON.stringify(actualOpenPaths) !== JSON.stringify(expectedOpenPaths)) {
-      fail(`Unerwarteter Arbeitsstand nach next-task: ${actualOpenPaths.join(", ") || "sauber"}`);
+    if (openNext) {
+      setVersions(`${targetId}-x`);
+      fs.appendFileSync(logFile, openSection(targetId, nextTargetId));
+      const expectedOpenPaths = ["Backend/package-lock.json", "Backend/package.json", logPath].sort();
+      const actualOpenPaths = statusPaths().sort();
+      if (JSON.stringify(actualOpenPaths) !== JSON.stringify(expectedOpenPaths)) {
+        fail(`Unerwarteter Arbeitsstand nach next-task: ${actualOpenPaths.join(", ") || "sauber"}`);
+      }
+      if (statusPaths("staged").length) fail("Index ist nach next-task nicht leer");
+    } else {
+      assertClean();
+      assertSynchronizedVersions(targetId);
+      if (statusPaths("staged").length) fail("Index ist nach finish-branch nicht leer");
     }
-    if (statusPaths("staged").length) fail("Index ist nach next-task nicht leer");
   } catch (error) {
     if (!committed && gitText(["rev-parse", "HEAD"]) === startingHead) {
       for (const [file, value] of originals) fs.writeFileSync(file, value);
@@ -613,13 +623,28 @@ function nextTask() {
     throw error;
   }
 
-  plan([
+  const result = [
     `Paketversionen und Changelog als ${targetId} | ${subject} finalisieren`,
     stagingPlan,
     `Branch-Commit ${targetId} | ${subject} mit SHA ${createdSha} erstellt`,
-    `Arbeitsversion ${targetId}-x mit Zielcommit ${nextTargetId} angelegt`,
-    `Index leer; offene Dateien: Backend/package-lock.json, Backend/package.json, ${logPath}`,
-  ]);
+  ];
+  if (openNext) {
+    result.push(
+      `Arbeitsversion ${targetId}-x mit Zielcommit ${nextTargetId} angelegt`,
+      `Index leer; offene Dateien: Backend/package-lock.json, Backend/package.json, ${logPath}`,
+    );
+  } else {
+    result.push(`Seitenbranch ${branch} sauber auf ${targetId} abgeschlossen`, "Index leer; Arbeitsbaum sauber");
+  }
+  plan(result);
+}
+
+function nextTask() {
+  completeBranchWork({ openNext: true });
+}
+
+function finishBranch() {
+  completeBranchWork({ openNext: false });
 }
 
 function requireReleaseOptions() {
@@ -701,7 +726,9 @@ function releaseOpen() {
 function releaseCommit() {
   const { branch, version, mainSha, branchSha } = requireReleaseOptions();
   const subject = requireSubject();
-  const allowed = normalizeAllowedPaths();
+  if (options.allChanged && options.paths.length) fail("--all-changed und --path duerfen nicht kombiniert werden");
+  const allowed = options.allChanged ? statusPaths() : normalizeAllowedPaths();
+  if (!allowed.length) fail("Keine Aenderungen fuer release-commit vorhanden");
   if (currentBranch() !== "main") fail("release-commit ist nur auf main zulaessig");
   if (gitText(["rev-parse", "MERGE_HEAD"]) !== branchSha) fail("MERGE_HEAD entspricht nicht dem bestaetigten Branch-SHA");
   if (gitText(["rev-parse", "HEAD"]) !== mainSha) fail("Erster Merge-Elternstand entspricht nicht dem bestaetigten Main-SHA");
@@ -723,6 +750,7 @@ function releaseCommit() {
     originalLock = fs.readFileSync(lockFile);
   }
   let staged;
+  let createdSha = null;
   try {
     if (options.apply) setVersions(version);
     staged = stageAllowed(allowed, {
@@ -738,13 +766,23 @@ function releaseCommit() {
   }
   if (options.apply) {
     git(["commit", "-m", `${version} | ${subject}`]);
+    createdSha = gitText(["rev-parse", "HEAD"]);
     const parents = gitText(["show", "--no-patch", "--pretty=%P", "HEAD"]).split(/\s+/).filter(Boolean);
     if (parents.length !== 2) fail("Erstellter Release-Commit besitzt nicht genau zwei Eltern");
     assertSynchronizedVersions(version);
     const createdSubject = gitText(["show", "--no-patch", "--pretty=%s", "HEAD"]);
     if (createdSubject !== `${version} | ${subject}`) fail("Release-Commit-Betreff ist inkonsistent");
   }
-  plan([`Paketversionen auf ${version} setzen`, `Nur freigegebene Pfade stagen: ${allowed.join(", ")}`, `Merge-Commit ${version} | ${subject} erstellen und Zwei-Eltern-Vertrag pruefen`]);
+  const stagingPlan = options.allChanged
+    ? `Alle ${allowed.length} geaenderten Merge- und Dokumentationspfade stagen`
+    : `Nur freigegebene Pfade stagen: ${allowed.join(", ")}`;
+  plan([
+    `Paketversionen auf ${version} setzen`,
+    stagingPlan,
+    options.apply
+      ? `Merge-Commit ${version} | ${subject} mit SHA ${createdSha} und zwei Eltern erstellt`
+      : `Merge-Commit ${version} | ${subject} erstellen und Zwei-Eltern-Vertrag pruefen`,
+  ]);
 }
 
 function push() {
@@ -780,6 +818,7 @@ const commands = {
   "branch-reopen": branchReopen,
   "branch-commit": branchCommit,
   "next-task": nextTask,
+  "finish-branch": finishBranch,
   "release-open": releaseOpen,
   "release-commit": releaseCommit,
   push,

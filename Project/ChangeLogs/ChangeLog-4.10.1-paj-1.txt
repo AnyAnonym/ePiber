@@ -40,3 +40,17 @@ Commit: 4.10.1-paj-1-3 | Next-task-Schnellpfad beschleunigt
 
   Tests
   - [Repository] Workflowtests pruefen den `--all-changed`-Dry-Run, die Abschlussausgabe sowie die Ablehnung einer Kombination mit `--path` und der Verwendung bei anderen Aktionen.
+
+[4.10.1-paj-1-4] - 2026-09-18
+Commit: 4.10.1-paj-1-4 | Fertigmachen-Workflow ergaenzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.10.1-paj-1-3-x` gesetzt.
+  - [Dokumentation] Der Schnellauftrag `fertigmachen` schliesst einen erledigten Seitenbranch ab, fragt bei fehlender Angabe die konkrete Main-Zielversion ab und integriert erst nach deren Bestaetigung.
+  - [Repository] `release-commit --all-changed` uebernimmt im bestaetigten Release die kontrollierte Merge- und Dokumentationsmenge ohne lange Pfadliste.
+
+  Added
+  - [Repository] `finish-branch` erstellt den letzten nummerierten Branch-Commit mit den Schutzpruefungen von `next-task`, ohne danach einen neuen `-x`-Stand zu oeffnen.
+
+  Tests
+  - [Repository] Workflowtests pruefen den sauberen letzten Branch-Commit ohne neuen Arbeitsstand sowie den beschleunigten kontrollierten Merge-Commit mit vollstaendigem Git-SHA.
