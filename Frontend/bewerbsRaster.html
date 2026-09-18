@@ -3,10 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#176b4a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ePiber" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/Images/pwa/apple-touch-icon.png" />
   <title>ASKÖ Piberbach – Turnierraster</title>
   <link rel="stylesheet" href="./CSS/styles.css" />
 </head>
-<body class="bracket-page">
+<body class="bracket-page" aria-busy="true">
+
+  <div class="loading-overlay" data-initial-loading-overlay role="status" aria-live="polite" aria-atomic="true">
+    <div class="loading-overlay-content">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <div class="loading-text">Lade Daten ...</div>
+    </div>
+  </div>
 
   <div id="header-container"></div>
   <div id="mobile-nav-container"></div>

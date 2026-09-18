@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { chromium } = require("playwright-core");
+const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -50,7 +51,7 @@ function startServer() {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     if (pathname === "/matches-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      response.end(`<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"><link rel="stylesheet" href="/CSS/Matches1.css"></head><body><main><section><div id="matches1-controls"><div class="m1-category-bar"><button class="m1-cat-btn active" data-cat="played">Gespielt</button><button class="m1-cat-btn" data-cat="open">Offen</button><button class="m1-cat-btn" data-cat="all">Alle</button></div><button id="filterToggle"></button><div id="filterPanel" class="hidden"><input type="checkbox" id="filterCompleteWithoutDate"><input type="checkbox" id="filterBewerb"><select id="filterBewerbSelect" disabled></select><input type="checkbox" id="filterSpieler"><select id="filterSpielerSelect" disabled></select><input type="checkbox" id="filterDatum"><div id="datumRow" class="hidden"><input id="datumVon"><input id="datumBis"></div><input type="checkbox" id="filterMissing"></div></div><div id="matches1-count"></div><div id="matches1-container"></div></section></main><script type="module" src="/JS/Matches1-under-test.js"></script></body></html>`);
+      response.end(`<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"><link rel="stylesheet" href="/CSS/Matches1.css"></head><body aria-busy="true"><div class="app-shift-layer"><div class="loading-overlay" data-initial-loading-overlay role="status" aria-live="polite" aria-atomic="true"><div class="loading-overlay-content"><div class="loading-spinner" aria-hidden="true"></div><div class="loading-text">Lade Daten ...</div></div></div></div><main><section><div id="matches1-controls"><div class="m1-category-bar"><button class="m1-cat-btn active" data-cat="played">Gespielt</button><button class="m1-cat-btn" data-cat="open">Offen</button><button class="m1-cat-btn" data-cat="all">Alle</button></div><button id="filterToggle"></button><div id="filterPanel" class="hidden"><input type="checkbox" id="filterCompleteWithoutDate"><input type="checkbox" id="filterBewerb"><select id="filterBewerbSelect" disabled></select><input type="checkbox" id="filterSpieler"><select id="filterSpielerSelect" disabled></select><input type="checkbox" id="filterDatum"><div id="datumRow" class="hidden"><input id="datumVon"><input id="datumBis"></div><input type="checkbox" id="filterMissing"></div></div><div id="matches1-count"></div><div id="matches1-container"></div></section></main><footer id="test-footer">Footer darf initial nicht aufblitzen</footer><script type="module" src="/JS/Matches1-under-test.js"></script></body></html>`);
       return;
     }
     if (pathname === "/JS/Matches1-under-test.js") {
@@ -99,14 +100,15 @@ function startServer() {
 }
 
 test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergebnis", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  let browser;
   try {
-    const page = await browser.newPage({ viewport: { width: 800, height: 700 } });
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 800, height: 700 } });
     await page.goto(`http://127.0.0.1:${address.port}/matches-test.html`, { waitUntil: "domcontentloaded" });
     await page.locator(".m1-card").nth(3).waitFor({ state: "visible" });
 
@@ -142,7 +144,7 @@ test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergeb
     });
     assert.deepEqual(mobileMeta, { direction: "column", requestBelowDate: true });
   } finally {
-    await browser.close();
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });
@@ -158,10 +160,21 @@ test("Matches zeigen den deckenden Loader nur beim ersten Datenstand", {
     await page.goto(`http://127.0.0.1:${server.address().port}/matches-test.html?slowInitial=1&slowRefresh=1`, { waitUntil: "domcontentloaded" });
     const loader = page.locator(".loading-overlay");
     await loader.waitFor({ state: "visible" });
+    assert.equal(await loader.count(), 1);
+    assert.equal(await loader.getAttribute("data-initial-loading-overlay"), "");
+    assert.equal(await page.locator("body").getAttribute("aria-busy"), "true");
     assert.equal(await loader.locator(".loading-text").textContent(), "Lade Daten ...");
     assert.equal(await loader.evaluate((element) => getComputedStyle(element).backgroundColor), "rgb(255, 255, 255)");
+    assert.deepEqual(await loader.boundingBox(), { x: 0, y: 0, width: 390, height: 700 });
+    assert.equal(await page.locator("#test-footer").evaluate((footer) => {
+      const bounds = footer.getBoundingClientRect();
+      const x = Math.max(0, Math.min(innerWidth - 1, bounds.left + bounds.width / 2));
+      const y = Math.max(0, Math.min(innerHeight - 1, bounds.top + Math.min(bounds.height / 2, 1)));
+      return document.elementFromPoint(x, y)?.closest(".loading-overlay") !== null;
+    }), true);
     await page.locator(".m1-card").first().waitFor({ state: "visible" });
     await loader.waitFor({ state: "detached" });
+    assert.equal(await page.locator("body").getAttribute("aria-busy"), null);
 
     await page.locator("#filterBewerb").check();
     await page.locator("#filterBewerbSelect").selectOption("cup");

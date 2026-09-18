@@ -21,13 +21,15 @@ Cookies:
   - Benutzersession: `epiber_<INSTANCE_ID>_session`.
   - Monitorsession: `epiber_<INSTANCE_ID>_monitor`.
   - Beide sind `Path=/; HttpOnly; SameSite=Strict`, in HTTPS-Instanzen `Secure`.
-  - Benutzersessions laufen standardmaessig nach 8 Stunden ab; Monitorcookies
-    nach einem Jahr. In SQLite stehen nur SHA-256-Tokenhashes.
+  - Benutzersessions laufen standardmaessig nach 30 Tagen Inaktivitaet ab;
+    Monitorcookies nach einem Jahr. Ein erfolgreicher `GET /api/session` verlaengert
+    Serverablauf und Cookie hoechstens einmal pro Tag. In SQLite stehen nur
+    SHA-256-Tokenhashes.
   - Eine Benutzersession ist an Personen-ID und kanonischen Login gebunden. Jede
     Aufloesung verlangt eine weiterhin vorhandene aktive Person und denselben
     gueltigen Login; bei aktuellen Personendaten wird eine nicht mehr passende
-    Session widerrufen. Ein erfolgreicher Login widerruft alle aelteren Sessions
-    dieser Person.
+    Session widerrufen. Ein erfolgreicher Login behaelt bis zu zehn parallele
+    Sessions dieser Person; beim Ueberschreiten werden die aeltesten entfernt.
   - Kontrollierte Personenwrites widerrufen alle Sessions der Zielperson, wenn
     `login`, `active` oder `role` geschrieben werden. Bei unklarem Ausgang eines
     solchen Writes erfolgt der Widerruf vorsorglich und bleibt bestehen; eine
@@ -295,7 +297,10 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
     `user` ist bei gueltiger Session die private Eigenprojektion
     `{ id, firstName, lastName, email, login, phone, birthDate, gender, role }`,
     sonst `null`; Passwortdaten sind nie sichtbar. `email` ist die
-    Kontakt-E-Mail, `login` das davon unabhaengige Anmeldefeld.
+    Kontakt-E-Mail, `login` das davon unabhaengige Anmeldefeld. Eine gueltige
+    erfolgreich aufgeloeste Sitzung wird hoechstens einmal pro Tag auf die volle
+    Inaktivitaetslaufzeit verlaengert; nur dann erneuert die Antwort dasselbe
+    sichere Sessioncookie und liefert das neue `expiresAt`.
 
   POST (public, erlaubte Origin):
     Kanonischer Body `{ login, passwordHash }`; temporaer wird alternativ exakt
@@ -307,8 +312,8 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
     verlangt genau einen Treffer; es gibt keinen Fallback auf die Kontaktspalte
     `E-Mail`. `passwordHash` ist exakt 64 Hexzeichen (clientseitiger SHA-256-
     Credential). Prueft Loginlimits, aktive Person und Rolle, migriert einen
-    Legacy-SHA-256-Sheetwert zu scrypt, widerruft alte Sessions und setzt ein
-    neues Sessioncookie. 200 liefert
+    Legacy-SHA-256-Sheetwert zu scrypt, behaelt vorhandene Geraetesessions bis zur
+    konfigurierten Obergrenze und setzt ein neues Sessioncookie. 200 liefert
     `{ success, user, expiresAt, serverTime, frontendLogging }`. Jeder nach der Bodyannahme
     verarbeitete Versuch wird auditiert. SQLite speichert einen syntaktisch
     gueltigen normalisierten Anmeldewert in `attempted_login` sowie die

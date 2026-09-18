@@ -9,6 +9,8 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
         modals.js, global.js, clock.js und footer.js
   CSS:  Frontend/CSS/styles.css, Frontend/CSS/dashboard.css
   Bild: Frontend/Images/dashboard/piber-gruesst.png
+  PWA:  Frontend/manifest.json sowie aus dem Dashboardmotiv abgeleitete
+        Standard-, maskierbare und Apple-Touch-Icons unter Frontend/Images/pwa/
 
 -- Daten und Zugriff --
   Der Geburtstagsbereich liest nach erfolgreicher Anmeldung den bestehenden
@@ -133,6 +135,12 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   den vollstaendigen Namen als zugaengliche Beschriftung und Tooltip bereit.
 
 -- Besonderheiten --
+  Dashboard und interaktive Fachseiten bieten ueber das gemeinsame Manifest die
+  optionale Installation als `ePiber Tennis` mit Start auf `/index.html` an. Die
+  gemeinsame gruene Primaerfarbe `#176b4a` gilt fuer Header, Navigation,
+  Hauptaktionen und Browserleiste. Die installierte Variante bleibt vollstaendig
+  online; es gibt keinen Service Worker, Offline-Cache oder Offline-Schreibbetrieb.
+
   Vereinstermin und Vereinsmeisterschaftsergebnisse sind derzeit statisch in
   `Frontend/index.html` gepflegt. Frauen Einzel: Anita Pimminger,
   Sabine Stocker, Sara Graf. Offene Maenner-Doppelplaetze erscheinen als

@@ -201,7 +201,7 @@
 }
 
 .rr-current-user td:not(:first-child) {
-  color: #0b57d0;
+  color: var(--accent);
 }
 
 /* ── Paarungen ── */

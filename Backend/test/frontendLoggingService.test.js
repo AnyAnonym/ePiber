@@ -141,6 +141,34 @@ test("Collector reichert erlaubte Events serverseitig an und nimmt keine freien 
   }), { code: "VALIDATION_ERROR" });
 });
 
+test("Aufwachdiagnose akzeptiert nur Ausloeser und kontrollierte Pausendauer", () => {
+  const now = { value: 2100000 };
+  const { logs, service } = fixture(now);
+  service.updateSettings(settings(0, { level: "debug", sampleRatePercent: 100 }));
+  const body = {
+    appVersion: "4.3.0-test",
+    clientSessionId: "00000000-0000-4000-8000-000000000020",
+    pageType: "scoreboard",
+    events: [{
+      event: "app_resume_detected",
+      level: "info",
+      timestamp: "2026-09-18T10:00:00.000Z",
+      phase: "timer-gap",
+      durationMs: 480000,
+    }],
+  };
+
+  assert.deepEqual(service.recordBatch({ sourceIp: "203.0.113.8", identity: { id: "p2", name: "Peter Player", role: "player" }, body }), { success: true, accepted: 1, dropped: 0 });
+  assert.equal(logs[0].fields.frontendEvent, "app_resume_detected");
+  assert.equal(logs[0].fields.phase, "timer-gap");
+  assert.equal(logs[0].fields.durationMs, 480000);
+  assert.throws(() => service.recordBatch({
+    sourceIp: "203.0.113.8",
+    identity: { id: "p2", name: "Peter Player", role: "player" },
+    body: { ...body, events: [{ ...body.events[0], payload: "nicht erlaubt" }] },
+  }), { code: "VALIDATION_ERROR" });
+});
+
 test("Bewerbshistorienfehler akzeptiert nur kontrollierte Browserdiagnosefelder", () => {
   const now = { value: 2250000 };
   const { logs, service } = fixture(now);

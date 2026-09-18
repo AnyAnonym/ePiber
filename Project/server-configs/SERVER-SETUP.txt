@@ -153,30 +153,63 @@ Build fuehrt den statischen Check und die Tests aus. `package.json`,
 `package-lock.json` und die spaetere `/version`-Antwort muessen exakt
 `<FREIGEGEBENE_VERSION>` melden und zum freigegebenen Commit gehoeren. Ein
 Branchsuffix oder eine geaenderte Lockdatei stoppt den Rollout.
+Nach jedem Dienststart wird die Uebereinstimmung fuer die jeweilige Origin
+maschinenpruefbar bestaetigt, zum Beispiel auf PAJ:
 
-Optionale PAJ-Browserlayouttests:
+  npm run check:runtime-version -- https://epiber.at:8081/version
 
-  pacman -S --needed chromium
+Der Befehl endet bei HTTP-, Struktur- oder Versionsabweichungen ungleich null;
+eine Promotion darf dann nicht fortgesetzt werden.
+
+PAJ-Browsertests:
+
+  pacman -S --needed chromium docker rootlesskit slirp4netns fuse-overlayfs
   cd /srv/http/ePiber/paj/Backend
   npm ci --include=dev
-  npm ls playwright-core --depth=0
+  npm ls playwright --depth=0
+  npm run test:browser:smoke
+  npm run test:browser:chromium
   npm run test:browser
 
-Chromium ist ausschliesslich ein systemweites Testwerkzeug und wird durch root
-ueber pacman installiert und aktualisiert. Im PAJ-Testcheckout installiert der
-Benutzer `paj` die Dev-Abhaengigkeiten einschliesslich des exakt versionierten
-`playwright-core` 1.62.1 mit `npm ci --include=dev`; Playwright laedt keinen eigenen
-Browser herunter. Der Test verwendet standardmaessig `/usr/bin/chromium` und die
-PAJ-Origin; abweichende sichere Testpfade beziehungsweise Origins koennen mit
-`CHROMIUM_PATH` und `SCOREBOARD_TEST_URL` gesetzt werden.
+Chromium und Rootless Docker sind ausschliesslich systemweite Testwerkzeuge und werden
+durch root ueber pacman installiert und aktualisiert. Im PAJ-Testcheckout
+installiert der Benutzer `paj` die Dev-Abhaengigkeiten einschliesslich der exakt
+versionierten Playwright-Bibliothek mit `npm ci --include=dev`.
+
+`npm run test:browser:smoke` startet ueber Rootless Docker das exakt passende
+offizielle Image `mcr.microsoft.com/playwright:v1.62.1-noble` und prueft die
+freigegebenen Chrome-/Android-, Safari-/iPhone-/iPad-/macOS-, Firefox-/Windows-
+und Edge-/Windows-Zielprofile. Das Image stellt die drei abgestimmten Engines
+Chromium, Firefox und WebKit bereit. Arch Linux wird von den heruntergeladenen
+Playwright-Browserbuilds nicht offiziell unterstuetzt; ein direkter Hostlauf ist
+daher kein Freigabenachweis. Die Rootless-Docker-Einrichtung benoetigt fuer `paj`
+einen Bereich von mindestens 65536 Sub-UIDs und Sub-GIDs, aktiviertes User-
+Lingering, den AUR-Baustein `docker-rootless-extras` und einen Rootless-Kontext
+auf `/run/user/<uid>/docker.sock`. Der Benutzer `paj` wird nicht in die praktisch
+rootgleiche Gruppe `docker` aufgenommen; der systemweite Docker-Daemon bleibt
+deaktiviert.
+
+Eine hostweite Dateisperre und ein fester Containername verhindern parallele
+Smoke-Container. Innerhalb des Containers laufen Zielprofile und Testdateien
+seriell. Standardlimits sind zwei CPUs, 2 GiB RAM und 512 Prozesse; sie koennen
+kontrolliert ueber `PLAYWRIGHT_SMOKE_CPUS`, `PLAYWRIGHT_SMOKE_MEMORY` und
+`PLAYWRIGHT_SMOKE_PIDS` reduziert oder erweitert werden. Das Repository wird nur
+lesbar eingebunden und der Testcontainer besitzt keinen externen Netzwerkzugriff.
+
+`npm run test:browser:chromium` verwendet weiterhin standardmaessig
+`/usr/bin/chromium` fuer die vollstaendige bestehende Browser-Suite und die
+PAJ-Origin. Abweichende sichere Testpfade beziehungsweise Origins koennen mit
+`CHROMIUM_PATH` und `SCOREBOARD_TEST_URL` gesetzt werden. `npm run test:browser`
+fuehrt zuerst die Zielprofil-Smokesuite und danach die vollstaendige Chromium-
+Suite aus.
 
 Der Browserlauf erfolgt unprivilegiert als Benutzer `paj`, nie als root, nicht im
 systemd-Backenddienst und ohne `--no-sandbox`. Er prueft Smartphone-Hoch- und
 -Querformat, mobile Breakpointkanten und Desktopgroessen der live geladenen
 Scoreboardseite; bei einem Fehler legt er einen Screenshot nur temporaer unter
 `/tmp/opencode/` ab. PK und Live benoetigen
-Chromium nicht. `npm ci --omit=dev`, der normale Backendprozess und
-`npm run build` bleiben von der optionalen Browserinstallation unabhaengig.
+Chromium oder Docker nicht. `npm ci --omit=dev`, der normale Backendprozess und
+`npm run build` bleiben von den Browser-Testwerkzeugen unabhaengig.
 
 
 ================================================================================

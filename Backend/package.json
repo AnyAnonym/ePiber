@@ -1,13 +1,17 @@
 {
   "name": "epiber-backend",
-  "version": "4.10.3",
+  "version": "4.11.0",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + Google Sheets)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node scripts/check.js",
+    "check:runtime-version": "node scripts/check-runtime-version.js",
     "test": "node --test test/*.test.js",
-    "test:browser": "node --test test/*.browser.js",
+    "test:browser": "npm run test:browser:smoke && npm run test:browser:chromium",
+    "test:browser:smoke": "bash scripts/run-browser-smoke-container.sh",
+    "test:browser:smoke:host": "node scripts/run-browser-smoke.js",
+    "test:browser:chromium": "node --test test/*.browser.js",
     "test:workflow": "node --test ../scripts/*.test.mjs",
     "test:coverage": "node --test --experimental-test-coverage",
     "build": "npm run check && npm test && npm run test:workflow"
@@ -26,6 +30,6 @@
     "gaxios": "7.3.0"
   },
   "devDependencies": {
-    "playwright-core": "1.62.1"
+    "playwright": "1.62.1"
   }
 }

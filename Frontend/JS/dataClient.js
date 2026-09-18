@@ -9,6 +9,9 @@ const APP_VERSION_UNKNOWN = "...";
 const APP_VERSION_FETCH_TIMEOUT_MS = 2500;
 const VERSION_MISMATCH_CODE = 4406;
 const VERSION_MISMATCH_RELOAD_KEY = "epiber-app-version-reload";
+const ACTIVE_WATCHDOG_INTERVAL_MS = 5000;
+const ACTIVE_GAP_THRESHOLD_MS = 15000;
+const RESUME_DEBOUNCE_MS = 500;
 
 let socket = null;
 let socketGeneration = 0;
@@ -17,6 +20,7 @@ let stopped = false;
 let reconnectTimer = null;
 let connectTimer = null;
 let staleTimer = null;
+let lifecycleTimer = null;
 let stableTimer = null;
 let connectAttempt = 0;
 let requestCounter = 0;
@@ -35,6 +39,10 @@ const eventListeners = new Map();
 const desiredTopics = new Set();
 const retainedOperationIds = new Map();
 let appVersionPromise = null;
+let appVersionCheckPromise = null;
+let pageWasHidden = document.hidden;
+let lastActiveCheckAt = Date.now();
+let lastResumeAt = 0;
 function getStoredAppVersion() {
   return typeof window.APP_VERSION === "string" ? window.APP_VERSION : null;
 }
@@ -49,7 +57,7 @@ function setFooterVersion(version) {
   footer.textContent = `v${version}`;
 }
 
-function fetchAppVersion() {
+function requestAppVersion() {
   return new Promise((resolve) => {
     if (!window.fetch) {
       resolve(null);
@@ -60,16 +68,41 @@ function fetchAppVersion() {
     fetch("/version", { cache: "no-store", signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Version endpoint failed"))))
       .then((data) => {
-        const next = typeof data?.version === "string" ? data.version : null;
-        if (next) {
-          window.APP_VERSION = next;
-          setFooterVersion(next);
-        }
-        resolve(next);
+        resolve(typeof data?.version === "string" ? data.version : null);
       })
-      .catch(() => resolve(getStoredAppVersion()))
+      .catch(() => resolve(null))
       .finally(() => clearTimeout(timer));
   });
+}
+
+function fetchAppVersion() {
+  return requestAppVersion().then((next) => {
+    if (next) {
+      window.APP_VERSION = next;
+      setFooterVersion(next);
+    }
+    return next || getStoredAppVersion();
+  });
+}
+
+function checkForAppUpdate() {
+  if (appVersionCheckPromise) return appVersionCheckPromise;
+  const loadedVersion = getStoredAppVersion();
+  appVersionCheckPromise = requestAppVersion()
+    .then((serverVersion) => {
+      if (!isKnownAppVersion(serverVersion)) return false;
+      if (isKnownAppVersion(loadedVersion) && loadedVersion !== serverVersion) {
+        if (shouldReloadForVersionMismatch()) location.reload();
+        return true;
+      }
+      if (!isKnownAppVersion(loadedVersion)) {
+        window.APP_VERSION = serverVersion;
+        setFooterVersion(serverVersion);
+      }
+      return false;
+    })
+    .finally(() => { appVersionCheckPromise = null; });
+  return appVersionCheckPromise;
 }
 
 function getAppVersionForHello() {
@@ -169,6 +202,32 @@ function startStaleWatchdog() {
       socket?.close(4001, "Stale connection");
     }
   }, 5000);
+}
+
+function resumeClient(phase, durationMs = 0) {
+  if (document.hidden) return;
+  const now = Date.now();
+  lastActiveCheckAt = now;
+  pageWasHidden = false;
+  if (now - lastResumeAt < RESUME_DEBOUNCE_MS) return;
+  lastResumeAt = now;
+  diagnostic.info("app_resume_detected", {
+    phase,
+    durationMs: Math.max(0, Math.round(durationMs)),
+  });
+  checkForAppUpdate().catch(() => {});
+  restartConnection().catch(() => {});
+}
+
+function startLifecycleWatchdog() {
+  if (lifecycleTimer) return;
+  lifecycleTimer = setInterval(() => {
+    if (document.hidden) return;
+    const now = Date.now();
+    const activeGapMs = Math.max(0, now - lastActiveCheckAt);
+    lastActiveCheckAt = now;
+    if (activeGapMs >= ACTIVE_GAP_THRESHOLD_MS) resumeClient("timer-gap", activeGapMs);
+  }, ACTIVE_WATCHDOG_INTERVAL_MS);
 }
 
 function randomId() {
@@ -420,6 +479,7 @@ function connect() {
     return;
   }
   startStaleWatchdog();
+  startLifecycleWatchdog();
   const generation = ++socketGeneration;
   connectAttempt++;
   setState("connecting");
@@ -690,6 +750,8 @@ export function disconnect() {
   connectTimer = null;
   if (staleTimer) clearInterval(staleTimer);
   staleTimer = null;
+  if (lifecycleTimer) clearInterval(lifecycleTimer);
+  lifecycleTimer = null;
   if (stableTimer) clearTimeout(stableTimer);
   stableTimer = null;
   const current = socket;
@@ -709,17 +771,22 @@ window.addEventListener("offline", () => {
   resolveConnectWaiters(offlineError());
   socket?.close(4002, "Browser offline");
 });
-window.addEventListener("online", () => restartConnection().catch(() => {}));
+window.addEventListener("online", () => resumeClient("online"));
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && state === "connected" && Date.now() - lastMessageAt > currentStaleAfterMs() / 2) {
-    restartConnection().catch(() => {});
+  if (document.hidden) {
+    pageWasHidden = true;
+    return;
+  }
+  if (pageWasHidden || state !== "connected" || Date.now() - lastMessageAt > currentStaleAfterMs() / 2) {
+    resumeClient("visibility");
   }
 });
+window.addEventListener("focus", () => resumeClient("focus"));
 window.addEventListener("pagehide", (event) => {
   if (!event.persisted) disconnect();
 });
 window.addEventListener("pageshow", (event) => {
-  if (event.persisted) restartConnection().catch(() => {});
+  if (event.persisted) resumeClient("pageshow");
 });
 
 connect();

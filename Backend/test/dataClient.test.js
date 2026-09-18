@@ -53,9 +53,10 @@ class FakeWebSocket {
   }
 }
 
-function loadDataClient({ cryptoImplementation, online = true, sessionStorage, storageValues = new Map() } = {}) {
+function loadDataClient({ cryptoImplementation, fetchImplementation, now, online = true, sessionStorage, storageValues = new Map() } = {}) {
   FakeWebSocket.instances = [];
   const intervals = new Set();
+  const intervalCallbacks = new Map();
   const timeouts = new Set();
   const windowListeners = new Map();
   const documentListeners = new Map();
@@ -72,6 +73,10 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
     reload() { reloads.push(Date.now()); },
   };
   const navigatorState = { onLine: online };
+  const documentState = {
+    hidden: false,
+    addEventListener(type, callback) { documentListeners.set(type, callback); },
+  };
   const trackedSetTimeout = (callback, delay, ...args) => {
     const timer = setTimeout(() => {
       timeouts.delete(timer);
@@ -87,31 +92,37 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
   const trackedSetInterval = (callback, delay, ...args) => {
     const timer = setInterval(callback, delay, ...args);
     intervals.add(timer);
+    intervalCallbacks.set(timer, () => callback(...args));
     return timer;
   };
   const trackedClearInterval = (timer) => {
     intervals.delete(timer);
+    intervalCallbacks.delete(timer);
     clearInterval(timer);
   };
+  const RuntimeDate = now
+    ? class extends Date { static now() { return now.value; } }
+    : Date;
   let uuidCounter = 0;
   const context = vm.createContext({
     URL,
     WebSocket: FakeWebSocket,
+    AbortController,
+    Date: RuntimeDate,
     clearInterval: trackedClearInterval,
     clearTimeout: trackedClearTimeout,
     console,
     crypto: cryptoImplementation || { randomUUID: () => `00000000-0000-4000-8000-${String(++uuidCounter).padStart(12, "0")}` },
-    document: {
-      hidden: false,
-      addEventListener(type, callback) { documentListeners.set(type, callback); },
-    },
+    document: documentState,
     localStorage: storage,
     location,
     navigator: navigatorState,
+    fetch: fetchImplementation,
     setInterval: trackedSetInterval,
     setTimeout: trackedSetTimeout,
     window: {
       APP_VERSION: "test",
+      fetch: fetchImplementation,
       localStorage: storage,
       location,
       sessionStorage: sessionStorage || storage,
@@ -131,15 +142,93 @@ function loadDataClient({ cryptoImplementation, online = true, sessionStorage, s
   new vm.Script(source, { filename }).runInContext(context);
   return {
     api: context.__dataClientExports,
+    document: documentState,
+    documentListeners,
     intervals,
     navigator: navigatorState,
     reloads,
+    runIntervals() {
+      for (const callback of [...intervalCallbacks.values()]) callback();
+    },
     sockets: FakeWebSocket.instances,
     storageValues,
     timeouts,
     windowListeners,
   };
 }
+
+test("sichtbar gewordene Seiten ersetzen die moeglicherweise eingefrorene Verbindung", async (t) => {
+  const runtime = loadDataClient();
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+
+  runtime.document.hidden = true;
+  runtime.documentListeners.get("visibilitychange")();
+  assert.equal(runtime.sockets.length, 1);
+
+  runtime.document.hidden = false;
+  runtime.documentListeners.get("visibilitychange")();
+  assert.equal(runtime.sockets.length, 2);
+  assert.equal(runtime.api.isConnected(), false);
+
+  const replacement = runtime.sockets[1];
+  replacement.open();
+  replacement.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  assert.equal(runtime.api.isConnected(), true);
+});
+
+test("sichtbar gewordene Seiten warten bei Backoff nicht auf einen eingefrorenen Timer", (t) => {
+  const runtime = loadDataClient();
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  firstSocket.close(1006, "network lost");
+  assert.equal(runtime.sockets.length, 1);
+
+  runtime.documentListeners.get("visibilitychange")();
+  assert.equal(runtime.sockets.length, 2);
+});
+
+test("Timerluecke erkennt Android-Standby auch nach einer frischen WebSocket-Nachricht", (t) => {
+  const now = { value: 1000 };
+  const runtime = loadDataClient({ now });
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+
+  now.value += 8 * 60 * 1000;
+  firstSocket.receive({ type: "ping", v: 2, ts: now.value });
+  runtime.runIntervals();
+  assert.equal(runtime.sockets.length, 2);
+});
+
+test("Fokus prueft die Serverversion und laedt bei einem Update genau einmal neu", async (t) => {
+  const requests = [];
+  const runtime = loadDataClient({
+    fetchImplementation: async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => ({ version: "test-next" }) };
+    },
+  });
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+
+  runtime.windowListeners.get("focus")();
+  await new Promise((resolve) => setImmediate(resolve));
+  runtime.windowListeners.get("focus")();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "/version");
+  assert.equal(requests[0].options.cache, "no-store");
+  assert.equal(runtime.reloads.length, 1);
+});
 
 test("dataClient korreliert Requests, propagiert Fehler und stellt Subscriptions wieder her", async (t) => {
   const runtime = loadDataClient();
@@ -314,6 +403,13 @@ test("terminale Close-Codes koennen durch Lifecycle-Events nicht neu gestartet w
   socket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
   socket.close(1008, "policy violation");
 
+  runtime.document.hidden = true;
+  runtime.documentListeners.get("visibilitychange")();
+  runtime.document.hidden = false;
+  runtime.documentListeners.get("visibilitychange")();
+  runtime.windowListeners.get("pageshow")({ persisted: true });
+  await Promise.resolve();
+  assert.equal(runtime.sockets.length, 1);
   await assert.rejects(runtime.api.restartConnection(), (error) => error.code === "TERMINAL_CONNECTION");
   assert.equal(runtime.sockets.length, 1);
   const recovery = runtime.api.restartConnection({ allowTerminal: true });

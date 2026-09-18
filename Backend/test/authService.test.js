@@ -4,6 +4,7 @@ const { peopleFixture, setTestEnvironment } = require("./helpers.js");
 
 setTestEnvironment();
 const dataStore = require("../dataStore.js");
+const { SESSION_MAX_PER_USER, SESSION_REFRESH_INTERVAL_MS, SESSION_TTL_MS } = require("../config.js");
 const { AuthService } = require("../authService.js");
 const { StateRepository } = require("../stateRepository.js");
 
@@ -78,6 +79,49 @@ test("Login migriert Legacy-Hash und erzeugt serverseitige Session", async () =>
   repository.close();
 });
 
+test("Erneuter Login behaelt bestehende Geraetesessions", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const auth = new AuthService({ repository, sheetService: { async setPasswordHash() {} } });
+
+  const first = await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.1" });
+  const second = await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.2" });
+
+  assert.equal(repository.getSession(first.session.token).userId, "p1");
+  assert.equal(repository.getSession(second.session.token).userId, "p1");
+  assert.notEqual(first.session.token, second.session.token);
+  repository.close();
+});
+
+test("Login begrenzt parallele Geraetesessions und behaelt die neue Sitzung", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  for (let index = 0; index < SESSION_MAX_PER_USER; index++) {
+    repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: SESSION_TTL_MS });
+  }
+  const auth = new AuthService({ repository, sheetService: { async setPasswordHash() {} } });
+
+  const result = await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.1" });
+  assert.equal(repository.getSession(result.session.token).userId, "p1");
+  assert.equal(repository.db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id = 'p1'").get().count, SESSION_MAX_PER_USER);
+  repository.close();
+});
+
+test("Sessionpruefung verlaengert eine aktive Sitzung kontrolliert", () => {
+  let now = 1000;
+  const repository = new StateRepository(":memory:", { now: () => now });
+  repository.init();
+  const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: SESSION_TTL_MS });
+  const auth = new AuthService({ repository, sheetService: {} });
+
+  now += SESSION_REFRESH_INTERVAL_MS;
+  const resolved = auth.getUserForToken(session.token, { refreshSession: true });
+  assert.equal(resolved.session.refreshed, true);
+  assert.equal(resolved.session.expiresAt, now + SESSION_TTL_MS);
+  assert.equal(auth.getUserForToken(session.token, { refreshSession: true }).session.refreshed, false);
+  repository.close();
+});
+
 test("ungueltige Kontakt-E-Mail blockiert weder unabhaengigen Login noch Personenprojektion", async () => {
   const people = structuredClone(dataStore.get("players"));
   people[2][3] = "peter@example";
@@ -140,11 +184,13 @@ test("fehlende oder veraltete Personendaten widerrufen keine gueltige Session", 
   const repository = new StateRepository(":memory:");
   repository.init();
   const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
+  const expiresAt = repository.getSession(session.token).expiresAt;
   dataStore.resetForTests();
   const auth = new AuthService({ repository, sheetService: {} });
 
-  assert.throws(() => auth.getUserForToken(session.token), { code: "PERSON_DATA_UNAVAILABLE" });
+  assert.throws(() => auth.getUserForToken(session.token, { refreshSession: true }), { code: "PERSON_DATA_UNAVAILABLE" });
   assert.equal(repository.getSession(session.token).userId, "p1");
+  assert.equal(repository.getSession(session.token).expiresAt, expiresAt);
   repository.close();
 });
 

@@ -3,12 +3,14 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { chromium } = require("playwright-core");
+const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
 
 const dataClientStub = `
+let snapshotCalls = 0;
 const snapshot = {
   success: true,
   playersValues: [
@@ -25,10 +27,24 @@ const snapshot = {
     ["retirement-empty", "260901-1800", "cup", "VF-P1", "p1", "", "p2[ret]", "", ""],
   ],
   courts: { "1": {}, "2": {} },
-  scores: { revision: 1, source: {}, courts: [] },
+  scores: {
+    revision: 1,
+    source: {},
+    courts: [{ platz: 1, satz1home: 1, satz1gast: 0, satz2home: 0, satz2gast: 0, satz3home: 0, satz3gast: 0, punktehome: 15, punktegast: 0 }],
+  },
   revisions: { players: 1, bewerbe: 1, matchtyp: 1, matches1: 1 },
 };
-export const createEndpoint = () => async () => ({ data: structuredClone(snapshot) });
+globalThis.__scoreboardTest = {
+  snapshotCalls: () => snapshotCalls,
+  setScore(value) {
+    snapshot.scores.revision += 1;
+    snapshot.scores.courts[0].punktehome = value;
+  },
+};
+export const createEndpoint = () => async () => {
+  snapshotCalls += 1;
+  return { data: structuredClone(snapshot) };
+};
 export const subscribe = () => () => {};
 export const onConnectionState = (callback) => { callback({ state: "connected", connected: true }); return () => {}; };
 export const onResync = () => () => {};
@@ -88,14 +104,15 @@ function startServer() {
 }
 
 test("Scoreboard zeigt WO und RET nur als Namensbadge und rechts nur das Satzergebnis", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  let browser;
   try {
-    const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 1400, height: 900 } });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.on("requestfailed", (request) => pageErrors.push(`${request.url()}: ${request.failure()?.errorText || "request failed"}`));
@@ -113,7 +130,47 @@ test("Scoreboard zeigt WO und RET nur als Namensbadge und rechts nur das Satzerg
     assert.equal(await entries.nth(3).locator(".badge").textContent(), "ret");
     assert.equal(await entries.locator(".ae-result").first().evaluate((result) => getComputedStyle(result).whiteSpace), "nowrap");
   } finally {
-    await browser.close();
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Scoreboard holt beim Aufwachen ohne Seitenreload einen aktuellen Snapshot", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/scoreboard-test.html`, { waitUntil: "domcontentloaded" });
+    await page.locator("#scoreboard-content.loaded").waitFor({ state: "visible" });
+    await page.locator("#p1-h-p").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#p1-h-p").textContent(), "15");
+    assert.equal(await page.evaluate(() => globalThis.__scoreboardTest.snapshotCalls()), 1);
+
+    await page.evaluate(() => {
+      globalThis.__scoreboardTest.setScore(30);
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    await page.waitForFunction(() => document.getElementById("p1-h-p")?.textContent === "30");
+    assert.equal(await page.evaluate(() => globalThis.__scoreboardTest.snapshotCalls()), 2);
+
+    await page.waitForTimeout(550);
+    await page.evaluate(() => {
+      globalThis.__scoreboardTest.setScore(40);
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForFunction(() => document.getElementById("p1-h-p")?.textContent === "40");
+    assert.equal(await page.evaluate(() => globalThis.__scoreboardTest.snapshotCalls()), 3);
+    assert.equal(await page.evaluate(() => {
+      const loader = document.getElementById("scoreboard-loader");
+      return !loader || loader.classList.contains("hidden");
+    }), true);
+  } finally {
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });

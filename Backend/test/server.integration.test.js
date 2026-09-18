@@ -4,7 +4,7 @@ const { WebSocket } = require("ws");
 const { peopleFixture, setTestEnvironment } = require("./helpers.js");
 
 setTestEnvironment();
-const { TABLE_CONFIG } = require("../config.js");
+const { SESSION_REFRESH_INTERVAL_MS, SESSION_TTL_MS, TABLE_CONFIG } = require("../config.js");
 const dataStore = require("../dataStore.js");
 const { createApplication } = require("../server.js");
 const { StateRepository } = require("../stateRepository.js");
@@ -12,6 +12,7 @@ const { AppError } = require("../errors.js");
 const { version: appVersion } = require("../package.json");
 const logger = require("../logger.js");
 const metrics = require("../metrics.js");
+const { hashToken } = require("../security.js");
 
 function createSocketClient(url, headers) {
   const socket = new WebSocket(url, { headers });
@@ -458,6 +459,16 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   const authenticatedSessionPayload = await authenticatedSession.json();
   assert.equal(authenticatedSessionPayload.user.email, "ada@example.test");
   assert.equal(authenticatedSessionPayload.user.login, "ada.login");
+  assert.equal(authenticatedSession.headers.get("set-cookie"), null);
+
+  const sessionToken = cookie.slice(cookie.indexOf("=") + 1);
+  application.repository.db.prepare("UPDATE sessions SET expires_at = ? WHERE sid_hash = ?")
+    .run(Date.now() + SESSION_TTL_MS - SESSION_REFRESH_INTERVAL_MS, hashToken(sessionToken));
+  const refreshedSession = await fetch(`${httpBase}/api/session`, { headers: { Cookie: cookie } });
+  const refreshedSessionPayload = await refreshedSession.json();
+  assert.equal(refreshedSessionPayload.authenticated, true);
+  assert.equal(refreshedSessionPayload.expiresAt > loginPayload.expiresAt, true);
+  assert.match(refreshedSession.headers.get("set-cookie"), new RegExp(`^epiber_test_session=.*Max-Age=${SESSION_TTL_MS / 1000}`));
 
   const adminPasswordResponse = await fetch(`${httpBase}/api/admin/password`, {
     method: "POST",

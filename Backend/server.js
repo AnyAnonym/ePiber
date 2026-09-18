@@ -449,7 +449,7 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/api/session") {
         if (request.method === "GET") {
-          const auth = authService.getUserForToken(sessionToken);
+          const auth = authService.getUserForToken(sessionToken, { refreshSession: true });
           return sendJson(response, 200, {
             success: true,
             authenticated: !!auth,
@@ -457,7 +457,9 @@ function createApplication(overrides = {}) {
             expiresAt: auth?.session.expiresAt || null,
             serverTime: Date.now(),
             frontendLogging: frontendLoggingService.getPolicy(auth?.principal.id || null),
-          });
+          }, auth?.session.refreshed ? {
+            "Set-Cookie": serializeCookie(SESSION_COOKIE, sessionToken, { maxAge: SESSION_TTL_MS / 1000, secure: COOKIE_SECURE }),
+          } : {});
         }
         if (request.method === "POST") {
           assertAllowedOrigin(request, ALLOWED_ORIGINS);

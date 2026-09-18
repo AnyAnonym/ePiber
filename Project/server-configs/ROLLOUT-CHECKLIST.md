@@ -103,6 +103,7 @@ Diese Checkliste ist das verbindliche Gate fuer die aktuelle Reihenfolge **PAJ -
 ## 6. Health, Status und Transport
 
 - [ ] `/version` liefert HTTP 200 und exakt Version `<FREIGEGEBENE_VERSION>` aus dem eingetragenen Release-Commit.
+- [ ] `npm run check:runtime-version -- <ORIGIN>/version` bestaetigt nach dem Dienststart maschinenpruefbar dieselbe Paket- und Laufzeitversion.
 - [ ] `/live` liefert HTTP 200 mit `status: ok`.
 - [ ] `/ready` und `/health` liefern nach Initialisierung HTTP 200 mit `status: ready`.
 - [ ] Anonymes `/status` wird mit 401 abgewiesen.
@@ -202,7 +203,10 @@ Gesamtfreigabe.
 
 ## 9. Browser, Kiosk, Monitor und Scoreboards auf PAJ
 
-- [ ] Aktuelle freigegebene Browser auf Desktop und Mobilgeraeten getestet.
+- [ ] Die Linux-Playwright-Smokesuite ist ohne Skip fuer Chrome/Windows,
+  Chrome/Android, Safari/iPhone, Safari/iPad, Safari/macOS, Firefox/Windows und
+  Edge/Windows bestanden; die dokumentierte Engine-/Geraeteprofil-Naeherung wird
+  nicht als natives Betriebssystem oder echtes Apple-Geraet ausgewiesen.
 - [ ] Mobile Navigation oeffnet ueber den Hamburger ab Bildschirmoberkante als rechtsseitiger Drawer mit etwa 82 Prozent Breite und voller Hoehe, schiebt App samt Header nach links und zeigt eine Kopfzeile `ePiber` in Headerhoehe.
 - [ ] Alle mobilen Aktionen sind linksbuendige, durch Linien getrennte Listenzeilen mit lokal eingebetteten Google Material Symbols Outlined ohne externe Font-/Iconanfrage; Apache-2.0-Lizenz und Quelle sind in `Frontend/MATERIAL_SYMBOLS_LICENSE.txt` enthalten.
 - [ ] `Spielbetrieb` verwendet `emoji_events`, Matches `sports_tennis`, Bewerbe `swords`, Scoreboard `scoreboard` sowie Anmeldung und Abmeldung `login` und `logout`; neutrale Gruppencontainer besitzen keine Kartenformatierung, Haupt- und Unterzeilen dasselbe Raster, dieselbe Schriftstaerke, Farbe und Icongroesse, Unterzeilen sind nur eingerueckt.
@@ -329,7 +333,8 @@ Gesamtfreigabe.
 - [ ] Rollen- und Datenprojektionen werden serverseitig korrekt durchgesetzt.
 - [ ] Keine falsche, doppelte oder verlorene fachliche Aenderung wurde in Sheets festgestellt.
 - [ ] Google-Sheets-Tabs `Logging` und `ScoreLog` werden nicht mehr beschrieben; getrennte SQLite-Fachhistorien sind konsistent, gesichert und ohne Geheimnisse.
-- [ ] Browser-, Kiosk-, Mobil-, Scoreboard-, Monitor-, Reconnect-, Standby-, BFCache- und WLAN-Matrix ist bestanden.
+- [ ] Playwright-Zielprofile, vollstaendige Chromium-Suite, Kiosk, Mobil,
+  Scoreboard, Monitor, Reconnect, Standby, BFCache und WLAN sind bestanden.
 - [ ] Erwartete und doppelte Spitzenlast, Veranstaltungstag-Dauerbetrieb und kontrollierter SIGTERM sind bestanden.
 - [ ] Praktischer Rollback ist innerhalb des dokumentierten Zeitfensters moeglich und getestet.
 - [ ] Grafana ist zentral fuer aktuelle Admins aus Live und PAJ erreichbar; Prometheus und Loki enthalten getrennt filterbare Daten aus Live und PAJ ohne verbotene Labels, private Meldungsfelder oder aktives PK-Ziel. Das Messaging-Dashboard erreicht ausschliesslich die beiden festen Loopback-Berichtsziele.

@@ -10,6 +10,10 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SECRETS=/etc/epiber-observability/grafana.env
 MESSAGING_SECRETS=/etc/epiber-observability/messaging-api.env
 ENABLED_DEPLOYMENTS="live paj"
+PROMETHEUS_PLUGIN_ID=prometheus
+PROMETHEUS_PLUGIN_VERSION=13.1.9
+LOKI_PLUGIN_ID=loki
+LOKI_PLUGIN_VERSION=13.2.0
 INFINITY_PLUGIN_ID=yesoreyeram-infinity-datasource
 INFINITY_PLUGIN_VERSION=4.0.0
 
@@ -25,6 +29,27 @@ wait_for_url() {
   done
   echo "Dienst nicht rechtzeitig bereit: $url" >&2
   return 1
+}
+
+ensure_grafana_plugin() {
+  plugin_id=$1
+  plugin_version=$2
+  plugin_name=$3
+  plugin_manifest="/var/lib/grafana/plugins/$plugin_id/plugin.json"
+  if [ -e "$plugin_manifest" ]; then
+    installed_plugin=$(node -e 'const value=require(process.argv[1]); process.stdout.write(`${value.id}:${value.info.version}`)' "$plugin_manifest")
+    if [ "$installed_plugin" != "$plugin_id:$plugin_version" ]; then
+      echo "$plugin_name weicht vom gepinnten Stand ab: $installed_plugin" >&2
+      exit 1
+    fi
+  else
+    runuser -u grafana -- grafana cli --homepath /usr/share/grafana --pluginsDir /var/lib/grafana/plugins plugins install "$plugin_id" "$plugin_version"
+  fi
+  installed_plugin=$(node -e 'const value=require(process.argv[1]); process.stdout.write(`${value.id}:${value.info.version}`)' "$plugin_manifest")
+  if [ "$installed_plugin" != "$plugin_id:$plugin_version" ]; then
+    echo "$plugin_name konnte nicht reproduzierbar installiert werden" >&2
+    exit 1
+  fi
 }
 
 if [ ! -s "$SECRETS" ]; then
@@ -122,21 +147,9 @@ fi
 install -d -m 0755 /etc/grafana/provisioning/datasources /etc/grafana/provisioning/dashboards /etc/grafana/provisioning/alerting /etc/grafana/dashboards/epiber
 install -d -m 0755 /etc/grafana-alloy /etc/loki /etc/prometheus/targets/epiber /etc/systemd/system/grafana.service.d /etc/tmpfiles.d
 install -d -o grafana -g grafana -m 0750 /var/lib/grafana/plugins
-plugin_manifest="/var/lib/grafana/plugins/$INFINITY_PLUGIN_ID/plugin.json"
-if [ -e "$plugin_manifest" ]; then
-  installed_plugin=$(node -e 'const value=require(process.argv[1]); process.stdout.write(`${value.id}:${value.info.version}`)' "$plugin_manifest")
-  if [ "$installed_plugin" != "$INFINITY_PLUGIN_ID:$INFINITY_PLUGIN_VERSION" ]; then
-    echo "Infinity-Plugin weicht vom gepinnten Stand ab: $installed_plugin" >&2
-    exit 1
-  fi
-else
-  runuser -u grafana -- grafana cli --pluginsDir /var/lib/grafana/plugins plugins install "$INFINITY_PLUGIN_ID" "$INFINITY_PLUGIN_VERSION"
-fi
-installed_plugin=$(node -e 'const value=require(process.argv[1]); process.stdout.write(`${value.id}:${value.info.version}`)' "$plugin_manifest")
-if [ "$installed_plugin" != "$INFINITY_PLUGIN_ID:$INFINITY_PLUGIN_VERSION" ]; then
-  echo "Infinity-Plugin konnte nicht reproduzierbar installiert werden" >&2
-  exit 1
-fi
+ensure_grafana_plugin "$PROMETHEUS_PLUGIN_ID" "$PROMETHEUS_PLUGIN_VERSION" "Prometheus-Plugin"
+ensure_grafana_plugin "$LOKI_PLUGIN_ID" "$LOKI_PLUGIN_VERSION" "Loki-Plugin"
+ensure_grafana_plugin "$INFINITY_PLUGIN_ID" "$INFINITY_PLUGIN_VERSION" "Infinity-Plugin"
 install -m 0644 "$ROOT/alloy/config.alloy" /etc/grafana-alloy/config.alloy
 install -m 0644 "$ROOT/loki/loki.yaml" /etc/loki/loki.yaml
 install -m 0644 "$ROOT/prometheus/prometheus.yml" /etc/prometheus/prometheus.yml
@@ -217,6 +230,8 @@ case "$(printf '%s' "$grafana_health" | tr -d '[:space:]')" in
 esac
 
 pacman -Q grafana grafana-alloy loki prometheus prometheus-node-exporter
+echo "$PROMETHEUS_PLUGIN_ID $PROMETHEUS_PLUGIN_VERSION"
+echo "$LOKI_PLUGIN_ID $LOKI_PLUGIN_VERSION"
 echo "$INFINITY_PLUGIN_ID $INFINITY_PLUGIN_VERSION"
 
 echo "Gemeinsame Live-/PAJ-Observability installiert. Caddy-Vorlage separat kontrolliert installieren/reloaden."

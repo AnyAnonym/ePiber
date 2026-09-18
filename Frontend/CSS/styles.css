@@ -2,7 +2,11 @@
   --bg: #fff;
   --fg: #222;
   --muted: #666;
-  --accent: #0b57d0;
+  --accent: #176b4a;
+  --accent-hover: #12573c;
+  --accent-soft: #e8f3ec;
+  --accent-soft-strong: #d8eadf;
+  --accent-border: #a9cfb8;
   --table-border: #e6e6e6;
 }
 
@@ -132,9 +136,9 @@ body.modal-open {
 .name-display {
   display: inline-block;
   font-weight: 700;
-  color: #0b57d0;
-  background: #e8efff;
-  border: 1px solid #bed3ff;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
   padding: 3px 8px;
   margin: 6px 0 12px 0;
@@ -224,7 +228,7 @@ body.modal-open {
 .profile-contact-button:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
-  background: #eef4ff;
+  background: var(--accent-soft);
 }
 
 .material-symbol {
@@ -736,15 +740,15 @@ body.modal-open {
 }
 
 .message-row.unread {
-  border-color: #8db2ed;
-  background: #eef5ff;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
 }
 
 .message-row:hover,
 .message-row:focus-visible {
   border-color: var(--accent);
   outline: 2px solid transparent;
-  box-shadow: 0 0 0 2px rgba(11, 87, 208, 0.18);
+  box-shadow: 0 0 0 2px rgba(23, 107, 74, 0.18);
 }
 
 .message-list-empty {
@@ -1156,7 +1160,7 @@ body.modal-open {
 /* -------------------------------------------------- */
 
 header {
-  background: #0b57d0;
+  background: var(--accent);
   color: #fff;
   padding: 12px 24px;
   display: flex;
@@ -1436,7 +1440,7 @@ body.mobile-nav-open {
 }
 
 .mobile-nav-row:focus-visible {
-  outline: 2px solid #176b4a;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
@@ -1587,7 +1591,7 @@ body.mobile-nav-open {
 
 .mobile-nav-favorite-link:focus-visible {
   border-radius: 3px;
-  outline: 2px solid #176b4a;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -1690,8 +1694,8 @@ body.mobile-nav-open {
 
 .favorite-match-picker-item:hover,
 .favorite-match-picker-item:focus-visible {
-  border-color: #176b4a;
-  background: #f3f8f4;
+  border-color: var(--accent);
+  background: var(--accent-soft);
   outline: 2px solid rgba(23, 107, 74, .25);
 }
 
@@ -1774,7 +1778,7 @@ body.mobile-nav-open {
     align-items: center;
     flex: 0 0 auto;
     color: #fff;
-    background: #0b57d0;
+    background: var(--accent);
   }
 
   .mobile-nav-header strong {
@@ -1815,9 +1819,6 @@ body.mobile-nav-open {
     transform: translateX(-82vw);
   }
 
-  .dashboard-page .mobile-nav-header {
-    background: #176b4a;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1928,7 +1929,7 @@ body.mobile-nav-open {
 }
 
 .bewerb-card-link:focus-visible {
-  outline: 3px solid rgba(11, 87, 208, 0.45);
+  outline: 3px solid rgba(23, 107, 74, 0.45);
   outline-offset: 2px;
 }
 
@@ -1977,9 +1978,9 @@ body.mobile-nav-open {
 
 .bewerb-card.clickable:hover,
 .bewerb-card.clickable:focus-visible {
-  background: #eaf1fb;
+  background: var(--accent-soft);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(11, 87, 208, 0.15);
+  box-shadow: 0 4px 12px rgba(23, 107, 74, 0.15);
 }
 
 .competition-history-modal {
@@ -2176,7 +2177,7 @@ body.mobile-nav-open {
 .history-reaction-add:hover,
 .history-reaction-add:focus-visible {
   color: var(--accent);
-  background: #eaf1fb;
+  background: var(--accent-soft);
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -2196,7 +2197,7 @@ body.mobile-nav-open {
 }
 
 .history-reaction-button.is-mine {
-  background: #dce9fb;
+  background: var(--accent-soft-strong);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
@@ -2422,7 +2423,7 @@ body.mobile-nav-open {
 
 .history-reaction-choice.is-mine {
   border-color: var(--accent);
-  background: #eaf1fb;
+  background: var(--accent-soft);
 }
 
 .history-reaction-person {
@@ -2874,13 +2875,13 @@ input[type="date"] {
 }
 
 .ranking-legend .legend-swatch.selected {
-  background: #eaf1fb;
-  border: 1px solid #0b57d0;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
 }
 
 .ranking-legend .legend-swatch.challenge-with-me {
   background: #fff;
-  border: 1px solid #0b57d0;
+  border: 1px solid var(--accent);
 }
 
 .ranking-legend .legend-subheading {
@@ -2977,25 +2978,25 @@ input[type="date"] {
 }
 
 .box.profile-openable:hover {
-  background: #eaf1fb;
+  background: var(--accent-soft);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .dragging {
   opacity: 0.6;
-  background: #dce4f5;
+  background: var(--accent-soft-strong);
   cursor: grabbing;
   transform: scale(1.05);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 .box.selected {
-  border-color: #0b57d0;
-  background: #eaf1fb;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .box.challenge-with-me {
-  border-color: #0b57d0 !important;
+  border-color: var(--accent) !important;
 }
 
 .box.challengeable {
@@ -3199,7 +3200,7 @@ input[type="date"] {
 .challenge-item .set-date-btn {
   margin-top: 4px;
   padding: 8px;
-  background: #0b57d0;
+  background: var(--accent);
   color: white;
   border: none;
   border-radius: 4px;
@@ -3884,7 +3885,7 @@ button.bracket-player-name:hover {
 }
 
 button.bracket-player-name:focus-visible {
-  outline: 2px solid #0b57d0;
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -3927,7 +3928,7 @@ button.bracket-player-name:focus-visible {
 
 .bracket-player.current-user,
 .bracket-player.current-user .player-result {
-  color: #0b57d0;
+  color: var(--accent);
 }
 
 .bracket-player:last-child {
@@ -5083,7 +5084,7 @@ button.bracket-player-name:focus-visible {
   width: 48px;
   height: 48px;
   border: 5px solid var(--table-border, #e6e6e6);
-  border-top: 5px solid var(--accent, #0b57d0);
+  border-top: 5px solid var(--accent, #176b4a);
   border-radius: 50%;
   animation: loading-spin 0.8s linear infinite;
 }
@@ -5111,7 +5112,7 @@ button.bracket-player-name:focus-visible {
   padding: 10px 28px;
   border: none;
   border-radius: 8px;
-  background: var(--accent, #0b57d0);
+  background: var(--accent, #176b4a);
   color: #fff;
   font-size: 1rem;
   font-weight: 600;
@@ -5119,7 +5120,7 @@ button.bracket-player-name:focus-visible {
   transition: background 0.2s;
 }
 .loading-retry-btn:hover {
-  background: #0948a3;
+  background: var(--accent-hover, #12573c);
 }
 
 .ranking-data-warning {
@@ -5217,11 +5218,7 @@ header {
   align-items: center;
   flex: 0 0 auto;
   color: #fff;
-  background: #0b57d0;
-}
-
-.dashboard-page .mobile-nav-header {
-  background: #176b4a;
+  background: var(--accent);
 }
 
 .mobile-nav-header strong {

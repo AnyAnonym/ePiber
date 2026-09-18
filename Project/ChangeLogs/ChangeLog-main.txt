@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.10.3
+Stand: 4.11.0
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2277,3 +2277,59 @@ Quelle: 4.10.2-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.10.3` gesetzt.
+
+[4.11.0] - 2026-09-18
+Commit: 4.11.0 | Sessions, Browserbetrieb und PWA erweitert
+Quelle: 4.10.3-paj-1
+
+  Added
+  - [Software] Dashboard und interaktive Fachseiten koennen als `ePiber Tennis`
+    mit Dashboard-Start, Piber-App-Icons und Standalone-Darstellung installiert
+    werden. Die PWA Light bleibt ohne Service Worker, Offline-Cache und
+    Offline-Schreibbetrieb vollstaendig online.
+  - [Observability] Datenschutzarme Sessionmetriken erfassen Erstellung,
+    Verlaengerung, Inaktivitaetsablauf und kontrollierte Widerrufsgruende.
+  - [Betrieb] Eine Maschinenpruefung vergleicht Paket- und laufende
+    `/version`-Antwort exakt und dient als zusaetzliches Rollout-Gate.
+
+  Changed
+  - [Software] Benutzersitzungen besitzen eine gleitende Inaktivitaetslaufzeit
+    von 30 Tagen und werden bei Aktivitaet gedrosselt verlaengert. Bis zu zehn
+    parallele Geraetesitzungen bleiben bestehen; sicherheitsrelevante Personen-
+    und Passwortaenderungen widerrufen sie weiterhin kontrolliert.
+  - [Software] Browserclients erkennen Visibility, Focus, BFCache,
+    Online-Rueckkehr und lange JavaScript-Pausen, pruefen dabei die Laufzeitversion
+    und verbinden mit geschuetztem Einmal-Reload neu. Das Scoreboard fordert nach
+    dem Aufwachen einen autoritativen Snapshot an.
+  - [Darstellung] Die gruene Dashboardfarbe `#176b4a` gilt als gemeinsame
+    Primaerfarbe fuer Header, Navigation, Hauptaktionen, Auswahl- und
+    Fokuszustaende sowie die Browserleiste.
+  - [Darstellung] Datenabhaengige Seiten liefern den voll deckenden Initialloader
+    vor Inhalt und Footer aus. Der Ladehelfer uebernimmt ihn auch nach dem Aufbau
+    des gemeinsamen App-Wrappers ohne doppelten oder dauerhaft verbleibenden
+    Spinner.
+  - [Tests] Die freigegebene Browsermatrix umfasst Chrome auf Windows und Android,
+    Safari auf iPhone, iPad und macOS, Firefox sowie Edge auf Windows. Eine
+    containerisierte Drei-Engine-Smokesuite ergaenzt die vollstaendige
+    Chromium-Suite und prueft Navigation, Darstellung und Wiederaufnahme.
+  - [Observability] Grafana-Datenquellen und Infinity-Plugins werden
+    reproduzierbar gepinnt, installiert und vor dem Start geprueft. Alle Panels
+    verwenden explizite Datenquellen; CPU-, RAM- und Dateisystemdarstellung nutzen
+    fachlich gueltige Skalen und eindeutige Einheiten.
+  - [Dokumentation] Architektur-, Endpoint-, Datenbank-, Seiten-, Server- und
+    Rolloutvertraege auf Sessionlaufzeit, Browsermatrix, Wiederaufnahme,
+    Ressourcenanzeige, PWA-Installation und Initialloader abgeglichen.
+
+  Fixed
+  - [Software] Firefox behaelt beim Oeffnen des Navigations-Drawers die
+    Seitenposition; Drawerpruefungen warten engineunabhaengig auf den erreichten
+    CSS-Endzustand.
+  - [Observability] Explizite Datasource-Zuordnung verhindert den stillen Rueckfall
+    von Grafana-Panels auf synthetische Testdaten; die CPU-Auslastung wird direkt
+    aus aktiven CPU-Modi berechnet.
+  - [Tests] Repository-, Auth-, HTTP-, Metrik-, Browser-, PWA-, Loader-,
+    Dashboard- und Installervertraege fuer den gesamten neuen Umfang erweitert.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.11.0` gesetzt.

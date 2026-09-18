@@ -351,8 +351,9 @@ dem Sheet-Write widerrufen. Beim eigenen erfolgreichen Wechsel wird danach genau
 eine neue Session erstellt. Schlaegt ein direkter Admin-Write oder die erstmalige
 Vergabe fehl oder bleibt sein Ausgang unklar, bleiben die Ziel-Sessions
 widerrufen; das Sheetpasswort kann dabei unveraendert sein.
-Ein erfolgreicher Login widerruft ebenfalls alle bisherigen Sessions der Person
-und erstellt genau eine neue. Die Normalisierung widerruft Sessions bei
+Erfolgreiche Logins koennen mehrere Geraetesessions derselben Person
+parallel fortsetzen; standardmaessig bleiben hoechstens zehn bestehen und beim
+Ueberschreiten werden die aeltesten entfernt. Die Normalisierung widerruft Sessions bei
 Aenderungen an Login, Aktiv oder Role, der Mitgliederabgleich bei Aktiv oder
 Role; dies gilt jeweils vorsorglich auch bei einem unklaren Writeausgang dieser
 Felder. Eine reine Kontakt-E-Mail- oder `CD-ID`-Aenderung laesst Sessions
@@ -864,8 +865,11 @@ Tabelle `sessions`:
   sid_hash PRIMARY KEY, user_id, email, login, created_at, expires_at,
   last_seen_at.
   Nur SHA-256-Hashes der zufaelligen Cookie-Tokens werden gespeichert. Index auf
-  user_id. Ablauf standardmaessig acht Stunden; abgelaufene und widerrufene
-  Sessions werden entfernt. `email` ist der Kontaktwert zum Erstellungszeitpunkt;
+  user_id. Ablauf standardmaessig nach 30 Tagen Inaktivitaet. Eine erfolgreich
+  aufgeloeste Browserpruefung verlaengert `expires_at` zusammen mit dem Cookie
+  hoechstens einmal pro Tag; abgelaufene und widerrufene Sessions werden entfernt.
+  Pro Benutzer bleiben standardmaessig hoechstens zehn Sitzungen bestehen.
+  `email` ist der Kontaktwert zum Erstellungszeitpunkt;
   `login` ist die fuer die spaetere Personenpruefung massgebliche kanonische
   Anmeldekennung. Bestehende Datenbanken werden additiv um `login TEXT NOT NULL
   DEFAULT ''` erweitert; danach uebernehmen noch leere `login`-Felder einmalig

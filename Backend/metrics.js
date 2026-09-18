@@ -24,6 +24,11 @@ const FIXED_SHEET_PURPOSES = new Set(["initial", "startup_recovery", "admin_refr
 const FIXED_SHEET_REFRESH_TRIGGERS = new Set(["startup", "startup_recovery", "admin"]);
 const FIXED_SHEET_REQUEST_RESULTS = new Set(["success", "failed", "rate_limited"]);
 const FIXED_SHEET_ATTEMPT_KINDS = new Set(["initial", "retry"]);
+const FIXED_SESSION_EVENTS = new Set(["created", "refreshed", "expired", "revoked"]);
+const FIXED_SESSION_REASONS = new Set([
+  "login", "activity", "inactivity", "logout", "identity_changed",
+  "password_change", "password_setup", "admin_password", "security_change", "session_limit",
+]);
 
 let counters = new Map();
 let histograms = new Map();
@@ -149,6 +154,13 @@ function recordLog(level, outcome = "written") {
   const safeOutcome = safeLabel(outcome, FIXED_LOG_OUTCOMES, "write_failed");
   if (safeOutcome === "written") increment("epiber_log_events_total", { level: safeLevel });
   else increment(`epiber_log_${safeOutcome}_total`, { level: safeLevel });
+}
+
+function recordSessionEvent(event, reason, amount = 1) {
+  increment("epiber_session_events_total", {
+    event: safeLabel(event, FIXED_SESSION_EVENTS),
+    reason: safeLabel(reason, FIXED_SESSION_REASONS),
+  }, amount);
 }
 
 function escapeLabel(value) {
@@ -284,6 +296,7 @@ module.exports = {
   recordFrontendEvents,
   recordHttpRequest,
   recordLog,
+  recordSessionEvent,
   recordSheetApiAttempt,
   recordSheetApiRequest,
   recordSheetTableLoad,

@@ -22,6 +22,9 @@ test("Prometheusmetriken begrenzen Labels und rendern kumulative Histogramme", (
   metrics.recordSheetApiRequest({ method: "metadata_cleanup", purpose: "metadata_cleanup", result: "success", durationMs: 70 });
   metrics.recordSheetRefresh({ trigger: "admin", result: "success", durationMs: 60 });
   metrics.recordFrontendEvents("accepted", 2);
+  metrics.recordSessionEvent("created", "login");
+  metrics.recordSessionEvent("refreshed", "activity");
+  metrics.recordSessionEvent("revoked", "password_change", 2);
 
   const output = metrics.render({
     appVersion: "test-version",
@@ -66,6 +69,9 @@ test("Prometheusmetriken begrenzen Labels und rendern kumulative Histogramme", (
   assert.match(output, /epiber_sheet_api_attempts_total\{kind="retry",method="values_batch_get",purpose="initial"\} 1/);
   assert.match(output, /epiber_sheet_api_requests_total\{method="values_batch_get",purpose="initial",result="success"\} 1/);
   assert.match(output, /epiber_sheet_refresh_operations_total\{result="success",trigger="admin"\} 1/);
+  assert.match(output, /epiber_session_events_total\{event="created",reason="login"\} 1/);
+  assert.match(output, /epiber_session_events_total\{event="refreshed",reason="activity"\} 1/);
+  assert.match(output, /epiber_session_events_total\{event="revoked",reason="password_change"\} 2/);
   assert.match(output, /epiber_sheet_table_available\{table="players"\} 1/);
   assert.match(output, /epiber_sheet_refresh_in_progress 1/);
   assert.match(output, /epiber_sheet_read_cooldown_seconds 2.5/);

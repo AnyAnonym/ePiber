@@ -272,8 +272,12 @@ Produktion Secure-Cookie. SQLite speichert nur dessen SHA-256-Hash und bindet di
 Session an Personen-ID und den beim Login gueltigen kanonischen Login. Bei jedem
 HTTP-/RPC-Zugriff werden Login, Aktivstatus und Rolle aus der aktuellen
 Personenzeile ermittelt; fehlt die Person, ist sie inaktiv oder stimmt der Login
-  nicht mehr, wird die Session verworfen. Ohne jemals erfolgreich geladenen
-  Personenstand bleiben geschuetzte Zugriffe gesperrt:
+  nicht mehr, wird die Session verworfen. Bis zu zehn Geraetesessions einer Person
+  bleiben parallel gueltig; ein weiterer Login entfernt nur die aeltesten.
+  `GET /api/session` verlaengert nach erfolgreicher Personenpruefung Serverablauf
+  und Cookie hoechstens einmal pro Tag auf 30 Tage Inaktivitaet. Andere HTTP- oder
+  WebSocket-Zugriffe verlaengern nicht einseitig nur den Serverzustand. Ohne jemals
+  erfolgreich geladenen Personenstand bleiben geschuetzte Zugriffe gesperrt:
 
   Rolle/Principal | Rechte
   ----------------|-------------------------------------------------------------
@@ -814,7 +818,10 @@ der Client stellt groessere Mengen nach Reconnect in Batches wieder her.
 `dataClient.js` ist eine explizite Zustandsmaschine: idle, connecting, connected,
 stale, backoff, offline, stopped. Socketgenerationen sperren alte Events aus;
 Reconnect verwendet exponentiellen Backoff mit Jitter, Stale-Watchdog und einen
-stabilen 30-Sekunden-Zeitraum. Pendingrequests werden bei Disconnect sofort
+stabilen 30-Sekunden-Zeitraum. Ein aktiver Fuenf-Sekunden-Waechter erkennt
+Ausfuehrungspausen ab 15 Sekunden auch dann, wenn Android beim Aufwachen kein
+verwertbares Lifecycle-Ereignis liefert oder bereits eine neue Pingnachricht
+zugestellt hat. Pendingrequests werden bei Disconnect sofort
 abgelehnt. Neue Requests im Zustand offline und bereits auf einen Verbindungsaufbau
 wartende Requests bei einem Offline-Ereignis werden sofort mit dem internen Code
 `OFFLINE` abgelehnt. Terminalcodes werden nicht automatisch umgangen.
@@ -830,7 +837,13 @@ App-Versionskonflikt und generische 4406-Protokollfehler stoppen terminal ohne
 Reconnectschleife. Sichtbare Verbindungszustaende bleiben kurz, neutral und
 nichttechnisch; technische Gruende werden nicht direkt als UI-Text ausgegeben.
 
-Online/offline, Visibility, pagehide/pageshow und BFCache werden behandelt.
+Bei Visibility-, Focus-, Online-, BFCache- und erkannten Timerpausen wird
+`GET /version` zusaetzlich unabhaengig vom Socket mit `no-store` gelesen. Weicht
+die zuvor vom Dokument geladene Version ab, verwendet dieser Pfad denselben
+tabbezogenen Reloadschutz. Gleiche oder nicht abrufbare Versionen loesen keinen
+Reload aus.
+
+Online/offline, Visibility, Focus, pagehide/pageshow und BFCache werden behandelt.
 Reconnect stellt Subscriptions wieder her und meldet Resync. Nur sichere Reads
 werden begrenzt bei Timeout/Shutdown wiederholt. Writes werden nie automatisch
 wiederholt; operationIds bleiben bei unklarem Ausgang erhalten.
@@ -1004,11 +1017,22 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
 `global.js`/`footer.js` Version und gemeinsame Initialisierung/Darstellung.
 
 Fachseiten abonnieren tabellenspezifische Invalidierungen statt kurzer Polltimer.
-Der Lade-Spinner gilt nur bis zum ersten verwertbaren Datenstand. Spaetere
-Invalidierungen und Reconnects behalten den letzten Stand sichtbar und uebernehmen
-vollstaendig vorbereitete Aktualisierungen ohne erneuten Spinner.
+Datenabhaengige Seiten liefern ihren voll deckenden Initialloader bereits im HTML
+vor Inhalt, Footer und Skripten aus; `loadingHelper.js` uebernimmt genau diesen
+Knoten ohne sichtbare Luecke oder zweiten Spinner. Der Lade-Spinner gilt nur bis
+zum ersten verwertbaren Datenstand. Spaetere Invalidierungen und Reconnects
+behalten den letzten Stand sichtbar und uebernehmen vollstaendig vorbereitete
+Aktualisierungen ohne erneuten Spinner.
 Externe Daten werden ueber sichere DOM-Knoten oder begrenztes Escaping gerendert.
 Externe Font-/Script-Abhaengigkeiten, SDK.js und rankingSidebar.js sind entfernt.
+Die interaktiven Fachseiten verknuepfen ein same-origin Web-App-Manifest fuer die
+optionale Installation als `ePiber Tennis`. Es startet unter `/index.html`, darf
+Hoch- und Querformat verwenden, fuehrt die gruene Primaerfarbe `#176b4a` bis in
+die Browserleiste und nutzt das Dashboardmotiv in normalen sowie maskierbaren
+Iconvarianten. Monitor-, Sponsoren-, technische Test- und reine
+Administrationsseiten bieten keinen eigenen Installationseinstieg. Es gibt
+bewusst keinen Service Worker, Offline-Cache oder Offline-Schreibbetrieb; Browser-
+und Backendverhalten bleiben im nicht installierten Betrieb unveraendert.
 Die fachlichen Seiten- und Administrationsdokumente sind in `SOFTWARE-DOKU.txt`
 indiziert.
 
@@ -1083,7 +1107,56 @@ eine leere Liste und koennen spaetere Rundenfristen ohne neuen UI-Vertrag nutzen
 
 
 ================================================================================
-  9. BETRIEBSGRENZE UND ROLLOUT
+  9. BROWSERUNTERSTUETZUNG UND TESTSTRATEGIE
+================================================================================
+
+Die freigegebene Zielmatrix umfasst Chrome auf Windows-Desktop und Android,
+Safari auf iPhone, iPad und macOS, Firefox auf Windows sowie Edge auf Windows.
+Automatisierte Referenz sind die exakt mit `Backend/package.json` versionierten
+Playwright-Engines und Geraeteprofile:
+
+  Zielplattform             | Linux-Playwright-Abbildung
+  --------------------------|-----------------------------------------------
+  Chrome / Windows Desktop  | Chromium, Desktop-Viewport
+  Chrome / Android          | Chromium, Pixel-7-Profil mit Touch
+  Safari / iPhone           | WebKit, iPhone-13-Profil mit Touch
+  Safari / iPad             | WebKit, iPad-Pro-11-Profil mit Touch
+  Safari / macOS            | WebKit, Desktop-Viewport
+  Firefox / Windows         | Firefox, Desktop-Viewport
+  Edge / Windows            | Chromium, eigener Zielprofil-Lauf
+
+Die Ausfuehrung erfolgt auf Linux. Engine, Viewport, Pixeldichte, mobile
+Darstellung und Touch werden dabei geprueft; Windows, macOS und iOS selbst sowie
+deren Systemschriften, virtuelle Tastaturen, Browserleisten und Betriebssystem-
+integration werden nicht emuliert. WebKit ist deshalb eine Safari-Naeherung und
+keine Zusage fuer jedes native iOS-/macOS-Detail. Feste historische
+Browsermindestversionen werden nicht unterstuetzt; massgeblich sind die mit der
+festgeschriebenen Playwright-Version gepflegten Engines.
+
+`npm run test:browser:smoke` prueft ausgewaehlte reale Kernablaeufe mit lokalen,
+deterministischen Fixtures in allen sieben Zielprofilen. Dazu gehoeren mobile und
+Desktopnavigation samt `inert`, Bewerbshistorie und Kommentar-Graphemzaehlung,
+Matchdarstellung sowie Scoreboard-Ergebnisdarstellung. `npm run
+test:browser:chromium` fuehrt die vollstaendige bestehende Browser-Suite mit dem
+systemweiten Chromium aus; `npm run test:browser` verbindet beide Stufen. Die
+Smokesuite darf bei fehlender Engine nicht als erfolgreich uebersprungen werden.
+Sie laeuft wegen des Arch-Linux-Hosts in der exakt zur Playwright-Version
+passenden offiziellen Linux-Containerumgebung. Browserbinaries und Container sind
+nur Testwerkzeuge und keine Laufzeitabhaengigkeit des Backends.
+
+Neue Browser-APIs werden gegen diese Matrix geprueft und ueber Feature Detection
+statt User-Agent-Erkennung verwendet. Kritische Bedienung erhaelt bei fehlender
+Unterstuetzung einen kontrollierten Fallback oder eine verstaendliche Ablehnung.
+Neue CSS-Funktionen duerfen Kerninhalt und Kernbedienung nur tragen, wenn alle drei
+Engines sie unterstuetzen. Maus, Tastatur und Touch bleiben entsprechend dem
+betroffenen Ablauf bedienbar. Browserrelevante Kernablaeufe erweitern die
+Smokesuite; Touch-, Responsive-, Viewport- und Navigationsaenderungen werden
+zusaetzlich in den Android-, iPhone- und iPad-Profilen geprueft. Der normale
+Backend-Build bleibt von Browserbinaries und Containerlauf unabhaengig.
+
+
+================================================================================
+  10. BETRIEBSGRENZE UND ROLLOUT
 ================================================================================
 
 Node.js 26 und npm 12.0.2 sind festgeschrieben. Vor Produktion muessen Role und
