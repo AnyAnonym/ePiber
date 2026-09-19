@@ -224,6 +224,30 @@ test("Favoritenstate erkennt eine strukturell beschaedigte Liste", () => {
   repository.close();
 });
 
+test("Persoenliche Startseite ist pro Benutzer revisioniert und idempotent", () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  assert.deepEqual(repository.getUserStartPage("p1"), {
+    target: { type: "page", page: "index" }, revision: 0, updatedAt: 0,
+  });
+  const request = {
+    operationId: "00000000-0000-4000-8000-000000000039",
+    expectedRevision: 0,
+    target: { type: "page", page: "rangliste", params: { id: "2" } },
+  };
+  const first = repository.setUserStartPage("p1", request);
+  assert.deepEqual(first, { success: true, target: request.target, revision: 1, repeated: false });
+  assert.deepEqual(repository.setUserStartPage("p1", request), { ...first, repeated: true });
+  assert.deepEqual(repository.getUserStartPage("p2"), {
+    target: { type: "page", page: "index" }, revision: 0, updatedAt: 0,
+  });
+  assert.throws(() => repository.setUserStartPage("p1", {
+    ...request,
+    operationId: "00000000-0000-4000-8000-000000000040",
+  }), { code: "REVISION_CONFLICT" });
+  repository.close();
+});
+
 test("Monitor-Tokens werden nur gehasht gespeichert und sind widerrufbar", () => {
   const repository = new StateRepository(":memory:");
   repository.init();

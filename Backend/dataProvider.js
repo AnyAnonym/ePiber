@@ -23,7 +23,7 @@ const dataPoller = require("./dataPoller.js");
 const stateStore = require("./stateStore.js");
 const courtPoller = require("./courtPoller.js");
 const { AppError, errorData } = require("./errors.js");
-const { validateEndpointRequest, validateEndpointResponse, validateFavoriteTargets } = require("./contracts.js");
+const { validateEndpointRequest, validateEndpointResponse, validateFavoriteTargets, validateStartTarget } = require("./contracts.js");
 const { TokenBucketLimiter, assertAllowedOrigin, getRequestIp, parseCookies } = require("./security.js");
 const { analyzeMatchRules, matchCompletionFingerprint, parseMatchDate, parseParticipant } = require("./matchRules.js");
 const { koRoundSuccessor, parseMatchTypeTable, parseParticipantId } = require("./matchResultRules.js");
@@ -849,7 +849,19 @@ function logHistoryInteractionCompletion({ supportId, principal, endpoint, param
   });
 }
 
-function logFavoritesCompletion(principal, params = {}, result = {}, error = null) {
+function logPreferenceCompletion(endpoint, principal, params = {}, result = {}, error = null) {
+  if (endpoint === "setMyStartPage") {
+    const rejected = error && (error.status || 500) < 500;
+    logger.log(error && !rejected ? "warn" : "info", "start_page_update_completed", {
+      actorId: principal?.type === "user" ? principal.id : "",
+      targetType: params.target?.type || "",
+      targetName: params.target?.type === "page" ? params.target.page || "" : params.target?.overlay || "",
+      revision: Number.isInteger(result.revision) ? result.revision : Number.isInteger(error?.details?.currentRevision) ? error.details.currentRevision : null,
+      outcome: error ? (rejected ? "rejected" : "failed") : result.repeated ? "repeated" : "success",
+    });
+    return;
+  }
+  if (endpoint !== "setMyFavorites") return;
   const rejected = error && (error.status || 500) < 500;
   logger.log(error && !rejected ? "warn" : "info", "favorites_update_completed", {
     actorId: principal?.type === "user" ? principal.id : "",
@@ -1301,6 +1313,18 @@ const endpoints = {
       }
     },
   },
+  myStartPage: {
+    access: "authenticated",
+    sessionAccessOnDevice: true,
+    handler: (_params, context) => {
+      const snapshot = dependencies.repository.getUserStartPage(context.principal.id);
+      try {
+        return { success: true, ...snapshot, target: validateStartTarget(snapshot.target) };
+      } catch {
+        throw new AppError("STATE_CORRUPT", "Startseiten-State ist ungueltig", 503);
+      }
+    },
+  },
   setMyFavorites: {
     access: "authenticated",
     sessionAccessOnDevice: true,
@@ -1308,6 +1332,14 @@ const endpoints = {
     audit: false,
     writeCost: 0.1,
     handler: (params, context) => dependencies.repository.setUserFavorites(context.principal.id, params),
+  },
+  setMyStartPage: {
+    access: "authenticated",
+    sessionAccessOnDevice: true,
+    write: true,
+    audit: false,
+    writeCost: 0.1,
+    handler: (params, context) => dependencies.repository.setUserStartPage(context.principal.id, params),
   },
   myMessageSummary: {
     access: "authenticated",
@@ -1781,7 +1813,7 @@ async function handleRequest(info, message, supportId) {
   try {
     authorize(endpoint, authContext);
   } catch (error) {
-    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, message.params, {}, error);
+    logPreferenceCompletion(message.endpoint, authContext.principal, message.params, {}, error);
     writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
@@ -1789,7 +1821,7 @@ async function handleRequest(info, message, supportId) {
   try {
     params = validateEndpointRequest(message.endpoint, message.params);
   } catch (error) {
-    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, message.params, {}, error);
+    logPreferenceCompletion(message.endpoint, authContext.principal, message.params, {}, error);
     writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
@@ -1799,7 +1831,7 @@ async function handleRequest(info, message, supportId) {
     const writeCost = endpoint.writeCost || 1;
     if (!writeLimiter.take(principalKey, writeCost) || !writeLimiter.take(ipKey, writeCost)) {
       const error = new AppError("WRITE_RATE_LIMIT", "Zu viele Schreiboperationen", 429);
-      if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, params, {}, error);
+      logPreferenceCompletion(message.endpoint, authContext.principal, params, {}, error);
       writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
       throw error;
     }
@@ -1819,7 +1851,7 @@ async function handleRequest(info, message, supportId) {
     if (endpoint.write && endpoint.audit !== false) {
       writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, internal, outcome: "success" });
     }
-    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, params, data);
+    logPreferenceCompletion(message.endpoint, authContext.principal, params, data);
     logHistoryInteractionCompletion({ supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, outcome: "success", startedAt: historyInteractionStartedAt });
     return data;
   } catch (error) {
@@ -1851,7 +1883,7 @@ async function handleRequest(info, message, supportId) {
         startedAt: historyInteractionStartedAt,
       });
     }
-    if (message.endpoint === "setMyFavorites") logFavoritesCompletion(authContext.principal, params, {}, responseError);
+    logPreferenceCompletion(message.endpoint, authContext.principal, params, {}, responseError);
     throw responseError;
   } finally {
     info.inflight--;

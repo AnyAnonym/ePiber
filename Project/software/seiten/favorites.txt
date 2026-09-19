@@ -1,0 +1,35 @@
+================================================================================
+Meine Favoriten - Persoenliche Start- und Schnellzugriffsseite
+================================================================================
+-- Funktion und Dateien --
+  Kontogebundene Liste aller Favoriten in derselben Reihenfolge wie im
+  Navigationsdrawer. Die Seite ist kein eigener Menueeintrag und wird als
+  persoenliches Startziel ausgewaehlt.
+  HTML: Frontend/favorites.html
+  JS:   favoritesPage.js sowie die gemeinsamen Module favorites.js, navbar.js,
+        modals.js, startPreference.js, global.js, clock.js und footer.js
+  CSS:  Frontend/CSS/styles.css
+
+-- Daten und Zugriff --
+  `myFavorites` liefert ausschliesslich die Favoriten des angemeldeten Kontos.
+  Anonym zeigt die Seite einen Anmeldehinweis. Eine leere Liste erklaert, dass
+  unterstuetzte Seiten und Aktionen ueber ihren Stern hinzugefuegt werden.
+  Rollenabhaengig nicht sichtbare Ziele werden wie im Navigationsdrawer nicht
+  gerendert.
+
+-- Darstellung und Bedienung --
+  Jede vollstaendig anklickbare Listenzeile verwendet dasselbe lokale Symbol und
+  dieselbe Beschriftung wie der entsprechende Menuefavorit. Seitenziele
+  navigieren mit ihren kontrollierten Parametern; `Spieleingabe` und `Termin
+  festlegen / aendern` oeffnen die vorhandene serverautorisierte Matchauswahl.
+  Der Stift aktiviert Drei-Striche-Handles. Pointerziehen und Pfeiltasten schreiben
+  ueber `setMyFavorites` die eine gemeinsame, revisionierte Reihenfolge; eine
+  getrennte Seitensortierung existiert nicht. Positionsaenderungen werden fuer
+  assistive Technik angesagt.
+
+-- Besonderheiten --
+  Das spaetere Erkennen oder Ausgrauen fachlich nicht mehr verfuegbarer Ziele ist
+  noch nicht Bestandteil der Seite. Solche Ziele verwenden vorerst die bestehende
+  Fehlerbehandlung der jeweiligen Zielseite. Browserdiagnosen verwenden den
+  bekannten Seitentyp `favorites` und enthalten keine Zielparameter oder
+  Personendaten.

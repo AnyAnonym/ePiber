@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#176b4a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ePiber" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/Images/pwa/apple-touch-icon.png" />
+  <title>ASKÖ Piberbach – Meine Favoriten</title>
+  <link rel="stylesheet" href="./CSS/styles.css" />
+</head>
+<body>
+  <div id="header-container"></div>
+  <div id="mobile-nav-container"></div>
+  <main class="favorites-page" aria-labelledby="favoritesPageTitle">
+    <div class="favorites-page-heading">
+      <h1 id="favoritesPageTitle">Meine Favoriten</h1>
+      <button id="favoritesPageEdit" class="favorites-page-edit" type="button" aria-label="Favoritenreihenfolge bearbeiten" aria-pressed="false" hidden></button>
+    </div>
+    <p id="favoritesPageStatus" class="favorites-page-status" role="status" aria-live="polite">Favoriten werden geladen...</p>
+    <div id="favoritesPageList" class="favorites-page-list" aria-label="Meine Favoriten"></div>
+    <p id="favoritesPageAnnouncement" class="sr-only" aria-live="polite"></p>
+  </main>
+  <div id="footer-container"></div>
+  <script type="module" src="JS/favoritesPage.js"></script>
+  <script src="JS/global.js"></script>
+  <script src="JS/clock.js"></script>
+  <script src="JS/footer.js"></script>
+</body>
+</html>

@@ -1093,8 +1093,25 @@ kontrollierte Browserereignis `favorite_labels_load_failed` ohne Bewerbsdaten.
 Overlayfavoriten laden ausschliesslich eigene offene Matches aus
 `myProfile` und verwenden danach die vorhandenen serverautorisierten Ergebnis-
 beziehungsweise Terminaktionen.
+Die eigenstaendige Seite `favorites.html` rendert dieselbe kontogebundene Liste
+mit denselben Symbolen, Beschriftungen und Overlayaktionen. Ihr Stift sortiert
+nicht separat, sondern schreibt ueber `setMyFavorites` dieselbe Reihenfolge wie
+der Menuebereich. Die Favoritengruppe im Menue bleibt ausschliesslich aufklappbar
+und ist kein Link zur Seite.
+
+Das Eigenprofil besitzt nach `System`, `Meldungen`, `Aktuell` und `Archiv` den
+Reiter `Einstellungen`. Die Auswahl `Meine Startseite` speichert ohne separaten
+Button Dashboard, Favoritenseite oder eine Kopie eines vorhandenen Favoritenziels
+revisioniert ueber `setMyStartPage`; ein Fehler stellt die vorige Auswahl wieder
+her. Der Aufruf von `/`, das installierte App-Symbol, eine erfolgreiche Anmeldung
+und der klickbare Vereinsname im Header loesen dieses Ziel auf. Der explizite
+Menuepunkt `Dashboard` und direkte Fachlinks werden nicht umgeleitet. Anonym gilt
+weiterhin das Dashboard. Spaeter fachlich ungueltig gewordene Ziele erhalten
+vorerst keine eigene Erkennung oder Ausgrauung, sondern verwenden die bestehende
+Fehlerdarstellung ihrer Zielseite.
 Auf der provisionierten Monitorseite bleibt der WebSocket-Principal fuer alle
-Monitoroperationen das Geraet. Nur `myFavorites` und `setMyFavorites` duerfen bei
+Monitoroperationen das Geraet. Nur `myFavorites`, `setMyFavorites`, `myStartPage`
+und `setMyStartPage` duerfen bei
 gleichzeitig vorhandener gueltiger Benutzersitzung diese Sitzung requestlokal
 verwenden; ohne Benutzersitzung bleibt der Stern verborgen beziehungsweise der
 Favoritenzugriff abgelehnt.

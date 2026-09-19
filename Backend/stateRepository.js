@@ -214,6 +214,33 @@ class StateRepository {
     return { ...operation.result, repeated: operation.repeated };
   }
 
+  getUserStartPage(userId) {
+    const snapshot = this.getState(`start-page:${userId}`, { type: "page", page: "index" });
+    if (!snapshot.value || typeof snapshot.value !== "object" || Array.isArray(snapshot.value)) {
+      throw new AppError("STATE_CORRUPT", "Startseiten-State ist ungueltig", 503);
+    }
+    return { target: snapshot.value, revision: snapshot.revision, updatedAt: snapshot.updatedAt };
+  }
+
+  setUserStartPage(userId, { operationId, expectedRevision, target }) {
+    const operation = this.applyStateOperation({
+      stateKey: `start-page:${userId}`,
+      fallback: { type: "page", page: "index" },
+      expectedRevision,
+      actorKey: `user:${userId}`,
+      operationId,
+      endpoint: "setMyStartPage",
+      payload: { expectedRevision, target },
+      update: () => target,
+      resultForSnapshot: (snapshot) => ({
+        success: true,
+        target: snapshot.value,
+        revision: snapshot.revision,
+      }),
+    });
+    return { ...operation.result, repeated: operation.repeated };
+  }
+
   createSession({ userId, email, login = email, ttlMs, reason = "login" }) {
     this.ensureOpen();
     const token = randomToken();

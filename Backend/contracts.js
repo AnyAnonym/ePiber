@@ -151,6 +151,18 @@ function favoriteTargets(value) {
   return targets;
 }
 
+function startTarget(value) {
+  const raw = requireObject(value, "startTarget");
+  if (raw.type === "page" && ["index", "favorites"].includes(raw.page)) {
+    return objectShape(raw, {
+      type: (entry) => text("type", { max: 8, pattern: /^page$/ })(entry),
+      page: (entry) => text("page", { max: 16, pattern: /^(index|favorites)$/ })(entry),
+    });
+  }
+  const { targetId, ...target } = favoriteTarget(raw);
+  return target;
+}
+
 function courtAssignment(params) {
   const value = objectShape(params, {
     operationId: operation,
@@ -194,10 +206,16 @@ const requestContracts = {
   memberDirectory: empty,
   myProfile: empty,
   myFavorites: empty,
+  myStartPage: empty,
   setMyFavorites: (params) => objectShape(params, {
     operationId: operation,
     expectedRevision: integer("expectedRevision", { min: 0 }),
     favorites: favoriteTargets,
+  }),
+  setMyStartPage: (params) => objectShape(params, {
+    operationId: operation,
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+    target: startTarget,
   }),
   myMessageSummary: empty,
   myMessages: (params) => objectShape(params, {
@@ -372,4 +390,10 @@ function validateEndpointResponse(endpoint, result) {
   return result;
 }
 
-module.exports = { requestContracts, validateEndpointRequest, validateEndpointResponse, validateFavoriteTargets: favoriteTargets };
+module.exports = {
+  requestContracts,
+  validateEndpointRequest,
+  validateEndpointResponse,
+  validateFavoriteTargets: favoriteTargets,
+  validateStartTarget: startTarget,
+};

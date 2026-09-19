@@ -7,6 +7,7 @@ const frontendRoot = path.resolve(__dirname, "../../Frontend");
 const manifestPath = path.join(frontendRoot, "manifest.json");
 const installEntryPages = [
   "index.html",
+  "favorites.html",
   "Bewerbe.html",
   "bewerbsRaster.html",
   "Matches1.html",
@@ -40,7 +41,7 @@ test("PWA-Manifest beschreibt die installierbare Online-Anwendung", () => {
   assert.equal(manifest.name, "ePiber Tennis");
   assert.equal(manifest.short_name, "ePiber");
   assert.equal(manifest.description, "Digitalisierungsplattform des ASKÖ Piberbach");
-  assert.equal(manifest.start_url, "/index.html");
+  assert.equal(manifest.start_url, "/");
   assert.equal(manifest.scope, "/");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.orientation, "any");
