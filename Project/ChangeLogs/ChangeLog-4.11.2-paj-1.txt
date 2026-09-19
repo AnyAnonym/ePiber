@@ -6,3 +6,10 @@ Commit: 4.11.2-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-1` gesetzt.
+
+[4.11.2-paj-1-2] - 2026-09-19
+Commit: 4.11.2-paj-1-2 | Footer-Bezeichnung auf PiTec GmbH geändert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-1-x` gesetzt.
+  - [Frontend] Footer-Bezeichnung von `ASKÖ Piberbach – Tennis` auf `PiTec GmbH` geändert und Browser-Test-Fixture angeglichen.

@@ -370,7 +370,7 @@ function startServer() {
     if (pathname === "/favorites.html") {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "favorites.html"), "utf8")
         .replace('src="JS/favoritesPage.js"', 'src="/JS/favoritesPage-under-test.js"')
-        .replace('<div id="footer-container"></div>', '<div id="footer-container"><footer class="footer"><div class="footer-clock">19.09.2026, 12:00</div><span class="footer-separator">|</span><span class="footer-brand">© ASKÖ Piberbach – Tennis</span><span class="footer-separator">|</span><span id="footer-version">vTest</span></footer></div>');
+        .replace('<div id="footer-container"></div>', '<div id="footer-container"><footer class="footer"><div class="footer-clock">19.09.2026, 12:00</div><span class="footer-separator">|</span><span class="footer-brand">PiTec GmbH</span><span class="footer-separator">|</span><span id="footer-version">vTest</span></footer></div>');
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end(source);
       return;
