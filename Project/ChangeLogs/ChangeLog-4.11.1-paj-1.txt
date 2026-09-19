@@ -6,3 +6,19 @@ Commit: 4.11.1-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.1-paj-1-1` gesetzt.
+
+[4.11.1-paj-1-2] - 2026-09-19
+Commit: 4.11.1-paj-1-2 | Persoenlichen App-Start und Favoritenlayout korrigiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.1-paj-1-1-x` gesetzt.
+  - [Frontend] `/index.html` loest fuer angemeldete Personen ebenso wie `/` die persoenliche Startseite auf, sodass auch bereits installierte Apps mit dem frueher gespeicherten Startziel automatisch migriert werden.
+  - [Frontend] Explizite Dashboard- und Anmeldelinks verwenden einen kontrollierten `dashboard=1`-Bypass, damit bewusste Dashboard-Aufrufe auch in der installierten App unveraendert bleiben.
+  - [Darstellung] Die Favoritenseite ordnet den zentrierten Titel mit Stift direkt ueber der Liste an; kurze Listen bleiben inhaltsgross, waehrend lange Listen nur den verfuegbaren Bereich zwischen Header und sichtbarem Footer nutzen und darin scrollen.
+
+  Added
+  - [Tests] Die profiluebergreifende Browser-Smokesuite prueft die Migration alter App-Starts, den expliziten Dashboard-Bypass sowie kurze und scrollbar begrenzte Favoritenlisten mit sichtbarem Footer.
+
+  Dokumentationsuebernahme
+  - `Project/software/seiten/index.txt`: `/index.html` wird wie `/` als persoenlicher Einstieg aufgeloest; explizite Dashboard-Links umgehen diese Aufloesung kontrolliert.
+  - `Project/software/seiten/favorites.txt`: Titel und Stift stehen zentriert direkt ueber der inhaltsgrossen Liste; bei vielen Eintraegen scrollt die Liste im Bereich zwischen Header und sichtbarem Footer.
