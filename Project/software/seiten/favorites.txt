@@ -25,7 +25,9 @@ Meine Favoriten - Persoenliche Start- und Schnellzugriffsseite
   Der Stift aktiviert Drei-Striche-Handles. Pointerziehen und Pfeiltasten schreiben
   ueber `setMyFavorites` die eine gemeinsame, revisionierte Reihenfolge; eine
   getrennte Seitensortierung existiert nicht. Positionsaenderungen werden fuer
-  assistive Technik angesagt.
+  assistive Technik angesagt. Titel und Stift stehen zentriert direkt ueber der
+  Liste. Kurze Listen bleiben inhaltsgross; bei vielen Eintraegen scrollt nur die
+  Liste im verfuegbaren Bereich zwischen Header und weiterhin sichtbarem Footer.
 
 -- Besonderheiten --
   Das spaetere Erkennen oder Ausgrauen fachlich nicht mehr verfuegbarer Ziele ist

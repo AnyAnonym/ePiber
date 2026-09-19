@@ -210,9 +210,15 @@ export function createEndpoint(name) {
       }
       const today = new Date();
       const birthDate = String(today.getDate()).padStart(2, "0") + "." + String(today.getMonth() + 1).padStart(2, "0") + "." + (today.getFullYear() - 30);
+      const filterRows = new URLSearchParams(window.location.search).get("directoryFilterTest") === "1" ? [
+        ["bauer-1", "Johanna", "Bauer", "0043664123456", "johanna@example.test", "19900102", "1"],
+        ["bauer-2", "Franz", "Bauer", "", "franz@example.test", "850203", "1"],
+        ["huber-1", "Jochen", "Huber", "+43 650 987654", "jochen@example.test", "", "1"],
+      ] : [];
       return { data: { success: true, values: [
         ["ID", "Vorname", "Nachname", "TelefonMobil", "E-Mail", "GeburtsDatum", "Aktiv"],
         ["birthday-1", "Geburtstags", "Mitglied", "", "", birthDate, "1"],
+        ...filterRows,
       ] } };
     }
     if (name === "rlPlatzierung") return { data: { success: true, values: [
@@ -363,7 +369,8 @@ function startServer() {
     }
     if (pathname === "/favorites.html") {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "favorites.html"), "utf8")
-        .replace('src="JS/favoritesPage.js"', 'src="/JS/favoritesPage-under-test.js"');
+        .replace('src="JS/favoritesPage.js"', 'src="/JS/favoritesPage-under-test.js"')
+        .replace('<div id="footer-container"></div>', '<div id="footer-container"><footer class="footer"><div class="footer-clock">19.09.2026, 12:00</div><span class="footer-separator">|</span><span class="footer-brand">© ASKÖ Piberbach – Tennis</span><span class="footer-separator">|</span><span id="footer-version">vTest</span></footer></div>');
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end(source);
       return;
@@ -382,7 +389,7 @@ function startServer() {
     }
     if (pathname === "/players-data-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="playerDirectorySection"><h2>Spieler</h2><div id="playerDirectoryMessage" aria-live="polite"></div><div class="players-table-scroll"><table id="tbl" class="players-table" hidden><thead><tr><th>Nachname</th><th>Vorname</th><th>Telefon</th><th>E-Mail</th><th>Geburtsdatum</th></tr></thead><tbody></tbody></table></div></section></main><script type="module" src="/JS/playerList-under-test.js"></script></body></html>');
+      response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="playerDirectorySection"><h2>Spieler</h2><div id="playerDirectoryFilter" class="player-directory-filter" hidden><label for="playerDirectoryFilterInput">Filter</label><input id="playerDirectoryFilterInput" type="search" autocomplete="off"></div><div id="playerDirectoryMessage" aria-live="polite"></div><div class="players-table-scroll"><table id="tbl" class="players-table" hidden><thead><tr><th>Nachname</th><th>Vorname</th><th>Telefon</th><th>E-Mail</th><th>Geburtsdatum</th></tr></thead><tbody></tbody></table></div></section></main><script type="module" src="/JS/playerList-under-test.js"></script></body></html>');
       return;
     }
     if (pathname === "/scoreboard-layout-test.html") {
@@ -561,7 +568,7 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
       const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
       const page = await context.newPage();
       try {
-        await page.goto(`http://127.0.0.1:${address.port}/index.html?role=${expected.role}`, { waitUntil: "domcontentloaded" });
+        await page.goto(`http://127.0.0.1:${address.port}/index.html?role=${expected.role}&dashboard=1`, { waitUntil: "domcontentloaded" });
         await page.locator("#hamburgerBtn").click();
         await page.locator("#mobileNavModal").waitFor({ state: "visible" });
         assert.equal(await page.locator('#hamburgerBtn [data-icon="menu"]').count(), 1);
@@ -601,7 +608,7 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
         assert.equal(await page.locator('#mobileNavCompetition [data-icon="sports_tennis"]').count(), 1);
         assert.equal(await page.locator('#mobileNavCompetition [data-icon="swords"]').count(), 1);
         assert.equal(await page.locator('#mobileNavCompetition [data-icon="scoreboard"]').count(), 1);
-        const rowStyles = await page.locator('.mobile-nav-main > a[href="index.html"], [aria-controls="mobileNavCompetition"], #mobileNavCompetition a').evaluateAll((rows) => rows.map((row) => {
+        const rowStyles = await page.locator('.mobile-nav-main > a[href="index.html?dashboard=1"], [aria-controls="mobileNavCompetition"], #mobileNavCompetition a').evaluateAll((rows) => rows.map((row) => {
           const style = getComputedStyle(row);
           const rect = row.getBoundingClientRect();
           const iconRect = row.querySelector(".mobile-nav-icon").getBoundingClientRect();
@@ -640,7 +647,7 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
 
         if (expected.role) {
           assert.equal(await page.locator("#profileButtonMobile").evaluate((element) => getComputedStyle(element).color), "rgb(23, 26, 31)");
-          const order = await page.locator('#profileButtonMobile, .mobile-nav-main > a[href="index.html"], #signOutButtonMobile').evaluateAll((elements) => elements.map((element) => ({ id: element.id, top: element.getBoundingClientRect().top })));
+          const order = await page.locator('#profileButtonMobile, .mobile-nav-main > a[href="index.html?dashboard=1"], #signOutButtonMobile').evaluateAll((elements) => elements.map((element) => ({ id: element.id, top: element.getBoundingClientRect().top })));
           assert.equal(order.find(({ id }) => id === "profileButtonMobile").top < order.find(({ id }) => id === "signOutButtonMobile").top, true);
           assert.equal(await page.locator('#profileButtonMobile [data-icon="person"]').count(), 1);
           const logoutPlacement = await page.evaluate(() => {
@@ -676,7 +683,7 @@ test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst ei
   try {
     browser = await launchSelectedBrowser(CHROMIUM_PATH);
     const page = await newProfilePage(browser, { viewport: { width: 390, height: 300 } });
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=admin`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=admin&dashboard=1`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => window.scrollTo(0, 300));
     const initialScroll = await page.evaluate(() => window.scrollY);
     await page.evaluate(() => document.getElementById("hamburgerBtn").click());
@@ -729,8 +736,8 @@ test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst ei
     assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
 
     await page.locator("#hamburgerBtn").click();
-    await page.evaluate(() => document.querySelector('.mobile-nav-main a[href="index.html"]').addEventListener("click", (event) => event.preventDefault(), { once: true }));
-    await page.locator('.mobile-nav-main a[href="index.html"]').click();
+    await page.evaluate(() => document.querySelector('.mobile-nav-main a[href="index.html?dashboard=1"]').addEventListener("click", (event) => event.preventDefault(), { once: true }));
+    await page.locator('.mobile-nav-main a[href="index.html?dashboard=1"]').click();
     assert.equal(await page.locator("#mobileNavModal").getAttribute("aria-hidden"), "true");
   } finally {
     await browser?.close();
@@ -810,7 +817,7 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     page.setDefaultTimeout(5000);
     await page.goto(`http://127.0.0.1:${server.address().port}/?role=player&startFavorites=1`, { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/favorites\.html$/);
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&startPageTest=1`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&startPageTest=1&dashboard=1`, { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator(".header-center .logo").getAttribute("href"), "/");
     await page.evaluate(() => window.openProfileModal());
     const profileTabs = page.locator("#profileTabs .profile-tab");
@@ -830,6 +837,25 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     const rows = page.locator(".favorites-page-item");
     await rows.first().waitFor({ state: "visible" });
     assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Mobile Rangliste", "Spieleingabe"]);
+    const shortListLayout = await page.evaluate(() => {
+      const main = document.querySelector(".favorites-page").getBoundingClientRect();
+      const heading = document.querySelector(".favorites-page-heading").getBoundingClientRect();
+      const title = document.querySelector("#favoritesPageTitle").getBoundingClientRect();
+      const edit = document.querySelector("#favoritesPageEdit").getBoundingClientRect();
+      const list = document.querySelector("#favoritesPageList").getBoundingClientRect();
+      const footer = document.querySelector("#footer-container").getBoundingClientRect();
+      return {
+        listHeight: list.height,
+        headingGap: list.top - heading.bottom,
+        groupCenterOffset: ((Math.min(title.left, edit.left) + Math.max(title.right, edit.right)) / 2) - (main.left + main.width / 2),
+        footerBottom: footer.bottom,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    assert.equal(shortListLayout.listHeight <= 120, true);
+    assert.equal(shortListLayout.headingGap <= 11, true);
+    assert.equal(Math.abs(shortListLayout.groupCenterOffset) < 2, true);
+    assert.equal(shortListLayout.footerBottom <= shortListLayout.viewportHeight + 1, true);
     await page.locator("#favoritesPageEdit").click();
     await rows.nth(1).locator(".favorites-page-drag-handle").focus();
     await page.keyboard.press("ArrowUp");
@@ -838,6 +864,39 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await page.locator("#hamburgerBtn").click();
     await page.locator(".mobile-nav-favorites-toggle").click();
     assert.deepEqual(await page.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Mobile Rangliste"]);
+
+    const longListLayout = await page.evaluate(() => {
+      const list = document.querySelector("#favoritesPageList");
+      const source = list.firstElementChild;
+      for (let index = 0; index < 20; index += 1) list.appendChild(source.cloneNode(true));
+      const bounds = list.getBoundingClientRect();
+      const footer = document.querySelector("#footer-container").getBoundingClientRect();
+      return {
+        scrollable: list.scrollHeight > list.clientHeight,
+        listBottom: bounds.bottom,
+        footerTop: footer.top,
+        footerBottom: footer.bottom,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    assert.equal(longListLayout.scrollable, true);
+    assert.equal(longListLayout.listBottom <= longListLayout.footerTop, true);
+    assert.equal(longListLayout.footerBottom <= longListLayout.viewportHeight + 1, true);
+
+    const directIndexPage = await newProfilePage(browser);
+    await directIndexPage.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&startFavorites=1&startPageTest=1`, { waitUntil: "domcontentloaded" });
+    await directIndexPage.waitForURL(/\/favorites\.html$/);
+    assert.equal(await directIndexPage.locator('.mobile-nav-main a[href="index.html?dashboard=1"]').count(), 1);
+    await directIndexPage.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&startFavorites=1&startPageTest=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+    await directIndexPage.locator("#hamburgerBtn").waitFor({ state: "visible" });
+    assert.match(directIndexPage.url(), /\/index\.html\?.*dashboard=1/);
+
+    const anonymousIndexPage = await newProfilePage(browser);
+    await anonymousIndexPage.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "domcontentloaded" });
+    await anonymousIndexPage.locator("#hamburgerBtn").waitFor({ state: "visible" });
+    assert.match(anonymousIndexPage.url(), /\/index\.html$/);
+    await anonymousIndexPage.close();
+    await directIndexPage.close();
   } finally {
     await browser?.close();
     await new Promise((resolve) => server.close(resolve));
@@ -853,7 +912,7 @@ test("Desktop verwendet denselben Drawer und verschiebt die Anwendung um maximal
   try {
     browser = await launchSelectedBrowser(CHROMIUM_PATH);
     const page = await newProfilePage(browser, { viewport: { width: 1200, height: 800 } });
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&dashboard=1`, { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator(".desktop-nav").isHidden(), true);
     assert.equal(await page.locator(".desktop-auth").isHidden(), true);
     assert.equal(await page.locator("#hamburgerBtn").isVisible(), true);
@@ -886,7 +945,7 @@ test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendig
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const expectedName = "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026";
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&longFavorite=1`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&longFavorite=1&dashboard=1`, { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator(".page-favorite-star").count(), 0);
     await page.locator("#hamburgerBtn").click();
     const favorites = page.locator(".mobile-nav-favorites");
@@ -957,7 +1016,7 @@ test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns",
     });
     assert.deepEqual(layout, { sameRightEdge: true, nextBelowStar: true, previousRight: "10px" });
     const back = page.getByRole("link", { name: "Zurück zum Dashboard" });
-    assert.equal(await back.getAttribute("href"), "./index.html");
+    assert.equal(await back.getAttribute("href"), "./index.html?dashboard=1");
     assert.equal(await back.locator("svg").getAttribute("data-icon"), "arrow_back");
     assert.equal(await back.locator("svg").getAttribute("aria-hidden"), "true");
     assert.equal(await back.locator("svg").getAttribute("focusable"), "false");
@@ -983,7 +1042,7 @@ test("Mobile Navigation zeigt einen kontrollierten Auth-Ausfall", {
   const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?authStatus=unavailable`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?authStatus=unavailable&dashboard=1`, { waitUntil: "domcontentloaded" });
     await page.locator("#hamburgerBtn").click();
     assert.equal(await page.locator(".mobile-auth-section .authUnavailable").textContent(), "Anmeldung nicht erreichbar");
     assert.equal(await page.locator(".mobile-auth-section .authUnavailable").isVisible(), true);
@@ -1002,7 +1061,7 @@ test("Dashboard zeigt aktuelle Geburtstage mit Alter und oeffnet das bestehende 
   const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&dashboard=1`, { waitUntil: "domcontentloaded" });
     const birthday = page.locator("#birthdayList .birthday");
     await birthday.waitFor({ state: "visible" });
     assert.match(await birthday.textContent(), /Geburtstags Mitglied/);
@@ -2227,6 +2286,58 @@ test("Spielertabelle scrollt horizontal, waehrend Titel und Seitenheader viewpor
       assert.equal(layout.headerWidth, layout.viewportWidth);
       await page.close();
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Spielerverzeichnis filtert Begriffe UND-verknuepft und bleibt responsiv", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/players-data-test.html?role=player&directoryFilterTest=1`, { waitUntil: "domcontentloaded" });
+    const input = page.getByLabel("Filter", { exact: true });
+    await input.waitFor({ state: "visible" });
+
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]").count(), 4);
+    await input.fill("bauer jo");
+    assert.deepEqual(await page.locator("#tbl tbody tr[data-filter-text]:visible").allTextContents(), ["BauerJohanna+43664123456johanna@example.test02.01.1990"]);
+
+    await input.fill("987654");
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]:visible").count(), 1);
+    assert.match(await page.locator("#tbl tbody tr[data-filter-text]:visible").textContent(), /HuberJochen/);
+
+    await input.fill("nicht vorhanden");
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]:visible").count(), 0);
+    assert.equal(await page.locator(".player-filter-empty").textContent(), "Keine Spieler entsprechen dem Filter.");
+
+    await input.fill("");
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]:visible").count(), 4);
+    const layout = await page.locator("#playerDirectoryFilter").evaluate((filter) => {
+      const label = filter.querySelector("label");
+      const input = filter.querySelector("input");
+      const filterBounds = filter.getBoundingClientRect();
+      const labelBounds = label.getBoundingClientRect();
+      const inputBounds = input.getBoundingClientRect();
+      const labelStyle = getComputedStyle(label);
+      return {
+        labelBeforeInput: labelBounds.right <= inputBounds.left,
+        inputInsideFilter: inputBounds.right <= filterBounds.right + 1,
+        labelColor: labelStyle.color,
+        labelWeight: Number(labelStyle.fontWeight),
+      };
+    });
+    assert.deepEqual(layout, {
+      labelBeforeInput: true,
+      inputInsideFilter: true,
+      labelColor: "rgb(34, 34, 34)",
+      labelWeight: 700,
+    });
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

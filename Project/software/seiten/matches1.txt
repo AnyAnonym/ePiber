@@ -30,7 +30,8 @@ Matches-Uebersicht mit Filtern - Zentrale Match-Seite
   Spielerpositionen. Gespielte Matches stehen neueste zuerst; offene mit Datum
   chronologisch, danach undatierte nach Bewerb. BYE wird ausgeblendet, Ergebnis
   sowie [wo]/[ret] gelten als gespielt. Das Filterpanel ist am Desktop offen und
-  mobil einklappbar.
+  mobil einklappbar. Filterbeschriftung, Trefferanzahl und Forderungshinweise
+  verwenden kontrastreiche Sekundaertexte.
 
 -- Darstellung und Sicherheit --
   Einzel und Doppel, Runde, Ergebnis, Forderungs-/Matchdatum sowie wo/ret-Badges

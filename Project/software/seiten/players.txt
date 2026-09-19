@@ -25,7 +25,11 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   ausschliesslich der umgebende Container scrollt dann horizontal. Seitenheader,
   restlicher Inhalt und die zur Bildschirmbreite zentrierte Seitenueberschrift
   bleiben im sichtbaren Viewport verankert. Die Zeile der angemeldeten Person wird
-  anhand der Session-ID vollstaendig fett dargestellt.
+  anhand der Session-ID vollstaendig fett dargestellt. Der responsive Live-Filter
+  durchsucht die dargestellten Werte fuer Name, formatiertes Telefon,
+  Kontakt-E-Mail und formatiertes Geburtsdatum. Mehrere durch Leerzeichen
+  getrennte Begriffe sind UND-verknuepft; ohne Treffer erscheint ein expliziter
+  Leerzustand, ohne die Tabellenstruktur zu verlassen.
 
 -- Navigation --
   Auf allen Viewports oeffnet die gemeinsame Navigation als rechtsseitiger,

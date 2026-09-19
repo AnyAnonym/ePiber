@@ -103,7 +103,7 @@ function renderHeader() {
   headerContainer.innerHTML = `
     <header>
       <nav id="mainNav" class="main-nav desktop-nav">
-        <a href="index.html" class="${activeClass("index.html")}">Dashboard</a>
+        <a href="index.html?dashboard=1" class="${activeClass("index.html")}">Dashboard</a>
         <a href="players.html" class="${activeClass("players.html")}" data-auth="required" hidden>Spieler</a>
         <a href="Matches1.html" class="${activeClass("Matches1.html")}">Matches</a>
         <a href="Bewerbe.html" class="${activeClass("Bewerbe.html")}">Bewerbe</a>
@@ -157,7 +157,7 @@ function renderMobileNav() {
           </nav>
           ${renderMobileFavorites(favorites)}
           <nav class="mobile-nav-main" aria-label="Seitennavigation">
-            <a href="index.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("index.html")}">
+            <a href="index.html?dashboard=1" class="mobile-nav-row mobile-nav-main-row ${activeClass("index.html")}">
               ${mobileNavIcon("dashboard")}
               <span>Dashboard</span>
             </a>

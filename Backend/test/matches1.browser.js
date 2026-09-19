@@ -51,7 +51,7 @@ function startServer() {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     if (pathname === "/matches-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      response.end(`<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"><link rel="stylesheet" href="/CSS/Matches1.css"></head><body aria-busy="true"><div class="app-shift-layer"><div class="loading-overlay" data-initial-loading-overlay role="status" aria-live="polite" aria-atomic="true"><div class="loading-overlay-content"><div class="loading-spinner" aria-hidden="true"></div><div class="loading-text">Lade Daten ...</div></div></div></div><main><section><div id="matches1-controls"><div class="m1-category-bar"><button class="m1-cat-btn active" data-cat="played">Gespielt</button><button class="m1-cat-btn" data-cat="open">Offen</button><button class="m1-cat-btn" data-cat="all">Alle</button></div><button id="filterToggle"></button><div id="filterPanel" class="hidden"><input type="checkbox" id="filterCompleteWithoutDate"><input type="checkbox" id="filterBewerb"><select id="filterBewerbSelect" disabled></select><input type="checkbox" id="filterSpieler"><select id="filterSpielerSelect" disabled></select><input type="checkbox" id="filterDatum"><div id="datumRow" class="hidden"><input id="datumVon"><input id="datumBis"></div><input type="checkbox" id="filterMissing"></div></div><div id="matches1-count"></div><div id="matches1-container"></div></section></main><footer id="test-footer">Footer darf initial nicht aufblitzen</footer><script type="module" src="/JS/Matches1-under-test.js"></script></body></html>`);
+      response.end(`<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"><link rel="stylesheet" href="/CSS/Matches1.css"></head><body aria-busy="true"><div class="app-shift-layer"><div class="loading-overlay" data-initial-loading-overlay role="status" aria-live="polite" aria-atomic="true"><div class="loading-overlay-content"><div class="loading-spinner" aria-hidden="true"></div><div class="loading-text">Lade Daten ...</div></div></div></div><main><section><div id="matches1-controls"><div class="m1-category-bar"><button class="m1-cat-btn active" data-cat="played">Gespielt</button><button class="m1-cat-btn" data-cat="open">Offen</button><button class="m1-cat-btn" data-cat="all">Alle</button></div><button class="m1-filter-toggle" id="filterToggle">Filter</button><div id="filterPanel" class="hidden"><input type="checkbox" id="filterCompleteWithoutDate"><input type="checkbox" id="filterBewerb"><select id="filterBewerbSelect" disabled></select><input type="checkbox" id="filterSpieler"><select id="filterSpielerSelect" disabled></select><input type="checkbox" id="filterDatum"><div id="datumRow" class="hidden"><input id="datumVon"><input id="datumBis"></div><input type="checkbox" id="filterMissing"></div></div><div id="matches1-count"></div><div id="matches1-container"></div></section></main><footer id="test-footer">Footer darf initial nicht aufblitzen</footer><script type="module" src="/JS/Matches1-under-test.js"></script></body></html>`);
       return;
     }
     if (pathname === "/JS/Matches1-under-test.js") {
@@ -131,6 +131,25 @@ test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergeb
     }));
     assert.equal(requestCenters.length, 3);
     assert.equal(requestCenters.every((center) => Math.abs(center - requestCenters[0]) < 1), true);
+    const secondaryStyles = await page.evaluate(() => {
+      const filter = getComputedStyle(document.getElementById("filterToggle"));
+      const count = getComputedStyle(document.getElementById("matches1-count"));
+      const request = getComputedStyle(document.querySelector(".m1-forderung"));
+      return {
+        filterColor: filter.color,
+        filterWeight: Number(filter.fontWeight),
+        countColor: count.color,
+        requestColor: request.color,
+        requestStyle: request.fontStyle,
+      };
+    });
+    assert.deepEqual(secondaryStyles, {
+      filterColor: "rgb(34, 34, 34)",
+      filterWeight: 700,
+      countColor: "rgb(74, 74, 74)",
+      requestColor: "rgb(74, 74, 74)",
+      requestStyle: "italic",
+    });
 
     await page.setViewportSize({ width: 360, height: 700 });
     const dateBox = await cards.nth(0).locator(".m1-date").boundingBox();
