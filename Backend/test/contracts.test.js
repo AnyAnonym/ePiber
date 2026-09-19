@@ -7,10 +7,33 @@ test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
     "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
     "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "matchResultSuggestion", "matches", "matches1",
     "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
-    "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myMessage", "myMessageSummary", "myMessages", "myProfile", "navigator", "normalizePerson", "operationStatus",
+    "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myMessage", "myMessageSummary", "myMessages", "myProfile", "myStartPage", "navigator", "normalizePerson", "operationStatus",
     "players", "preMatches", "publicProfile", "rankingChallengeState", "readMatchRestrictions", "reconcilePerson", "refreshSheetData", "removeEntryList", "rlPlatzierung",
-    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setMatchAppointment", "setMatchResult", "setMyFavorites", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
+    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setMatchAppointment", "setMatchResult", "setMyFavorites", "setMyStartPage", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
   ]);
+});
+
+test("Startseitenvertrag verwendet feste Einstiege und den Favoritenzielvertrag", () => {
+  const operationId = "00000000-0000-4000-8000-000000000039";
+  for (const target of [
+    { type: "page", page: "index" },
+    { type: "page", page: "favorites" },
+    { type: "page", page: "rangliste", params: { id: "cup-1" } },
+    { type: "overlay", overlay: "match-result" },
+  ]) {
+    assert.deepEqual(validateEndpointRequest("setMyStartPage", {
+      operationId, expectedRevision: 0, target,
+    }).target, target);
+  }
+  for (const target of [
+    { type: "page", page: "unknown" },
+    { type: "page", page: "favorites", params: {} },
+    { type: "overlay", overlay: "unknown" },
+  ]) {
+    assert.throws(() => validateEndpointRequest("setMyStartPage", {
+      operationId, expectedRevision: 0, target,
+    }), { code: "VALIDATION_ERROR" });
+  }
 });
 
 test("Favoritenvertrag erlaubt nur kontrollierte eindeutige Ziele", () => {

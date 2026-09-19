@@ -14,10 +14,17 @@ import {
   subscribeAuth,
 } from "./authClient.js";
 import { diagnostic } from "./diagnostics.js";
-import { createFavoriteButton } from "./favorites.js";
+import { createFavoriteButton, favoriteLabel, favoriteVisibleForUser, subscribeFavorites } from "./favorites.js";
 import { createMaterialSymbol } from "./materialSymbols.js";
 import { categorizedProfileCompetitions, clearProfileModalContent, mergedProfileCompetitions } from "./profileModalState.js";
 import { showLoadingOverlay, hideLoadingOverlay } from "./loadingHelper.js";
+import {
+  loadStartPage,
+  navigateToPersonalStart,
+  setStartPage,
+  startTargetKey,
+  subscribeStartPage,
+} from "./startPreference.js";
 
 const readPublicProfile = createEndpoint("publicProfile");
 const readMyProfile = createEndpoint("myProfile");
@@ -308,6 +315,7 @@ const profileModal = createModal("profileModal", `
     </section>
     <section id="profileMessagesPanel" class="profile-panel" role="tabpanel" hidden></section>
     <div id="profileRankingPanels"></div>
+    <section id="profileSettingsPanel" class="profile-panel" role="tabpanel" hidden></section>
     <section id="profileAdminPanel" class="profile-panel" role="tabpanel" hidden>
       <div id="profileAdminActions" class="profile-actions"></div>
     </section>
@@ -319,6 +327,84 @@ profileModal.setAttribute("aria-modal", "true");
 profileModal.setAttribute("aria-labelledby", "profileName");
 profileModal.querySelector(".modal-content")?.classList.add("profile-dialog");
 profileModal.querySelector(".close")?.setAttribute("aria-label", "Profil schließen");
+
+function prepareProfileSettings(panel, actionSignal) {
+  panel.replaceChildren();
+  const field = document.createElement("div");
+  field.className = "profile-setting-field";
+  const label = document.createElement("label");
+  label.htmlFor = "profileStartPage";
+  label.textContent = "Meine Startseite";
+  const select = document.createElement("select");
+  select.id = "profileStartPage";
+  select.disabled = true;
+  const hint = document.createElement("p");
+  hint.className = "profile-setting-hint";
+  hint.textContent = "Diese Seite wird beim persönlichen Einstieg und über das Vereinslogo geöffnet.";
+  const status = document.createElement("p");
+  status.className = "profile-setting-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  field.append(label, select, hint, status);
+  panel.appendChild(field);
+
+  let startSnapshot = null;
+  let favoriteSnapshot = null;
+  let targets = new Map();
+  const render = () => {
+    if (!startSnapshot || !favoriteSnapshot) return;
+    const selectedKey = startTargetKey(startSnapshot.target);
+    const options = [
+      [{ type: "page", page: "index" }, "Dashboard"],
+      [{ type: "page", page: "favorites" }, "Meine Favoriten"],
+      ...favoriteSnapshot.favorites
+        .filter((favorite) => favoriteVisibleForUser(favorite))
+        .map((favorite) => [favorite, favoriteLabel(favorite)]),
+    ];
+    if (selectedKey && !options.some(([target]) => startTargetKey(target) === selectedKey)) {
+      options.push([startSnapshot.target, "Aktuell gewähltes Ziel"]);
+    }
+    targets = new Map(options.map(([target]) => [startTargetKey(target), target]));
+    select.replaceChildren(...options.map(([target, text]) => {
+      const option = document.createElement("option");
+      option.value = startTargetKey(target);
+      option.textContent = text;
+      return option;
+    }));
+    select.value = selectedKey || startTargetKey({ type: "page", page: "index" });
+    select.disabled = !startSnapshot.ready || startSnapshot.loading || !favoriteSnapshot.ready;
+  };
+  const stopStart = subscribeStartPage((snapshot) => {
+    startSnapshot = snapshot;
+    render();
+  });
+  const stopFavorites = subscribeFavorites((snapshot) => {
+    favoriteSnapshot = snapshot;
+    render();
+  });
+  actionSignal.addEventListener("abort", stopStart, { once: true });
+  actionSignal.addEventListener("abort", stopFavorites, { once: true });
+  select.addEventListener("change", async () => {
+    const previousKey = startTargetKey(startSnapshot?.target);
+    const target = targets.get(select.value);
+    if (!target) return;
+    const { targetId: _targetId, ...cleanTarget } = target;
+    select.disabled = true;
+    status.textContent = "Startseite wird gespeichert...";
+    try {
+      await setStartPage({ ...cleanTarget, ...(cleanTarget.params ? { params: { ...cleanTarget.params } } : {}) });
+      status.textContent = "Startseite gespeichert.";
+    } catch (error) {
+      select.value = previousKey;
+      status.textContent = errorMessage(error, "Startseite konnte nicht gespeichert werden.");
+    } finally {
+      render();
+    }
+  }, { signal: actionSignal });
+  loadStartPage().catch((error) => {
+    status.textContent = errorMessage(error, "Startseite konnte nicht geladen werden.");
+  });
+}
 
 const messageDetailModal = createModal("messageDetailModal", `
   <h2 id="messageDetailSubject">Meldung</h2>
@@ -1856,6 +1942,7 @@ window.openProfileModal = async (options = {}) => {
   const currentCompetitionTabs = document.getElementById("profileCurrentCompetitionTabs");
   const archiveCompetitionTabs = document.getElementById("profileArchiveCompetitionTabs");
   const messagesPanel = document.getElementById("profileMessagesPanel");
+  const settingsPanel = document.getElementById("profileSettingsPanel");
   const rankingPanelsElement = document.getElementById("profileRankingPanels");
   const systemActionsElement = document.getElementById("profileSystemActions");
   const adminPanel = document.getElementById("profileAdminPanel");
@@ -1872,6 +1959,8 @@ window.openProfileModal = async (options = {}) => {
   archiveCompetitionTabs.replaceChildren();
   archiveCompetitionTabs.hidden = true;
   messagesPanel.replaceChildren();
+  settingsPanel.replaceChildren();
+  settingsPanel.hidden = true;
   document.getElementById("profileBody")?.classList.remove("messages-active");
   rankingPanelsElement.replaceChildren();
   systemActionsElement.replaceChildren();
@@ -2118,6 +2207,10 @@ window.openProfileModal = async (options = {}) => {
       actionSignal,
       () => showCompetitionTabs(archiveCompetitionTabs),
     );
+    if (ownProfile) {
+      prepareProfileSettings(settingsPanel, actionSignal);
+      appendProfileTab(tabsElement, "Einstellungen", settingsPanel, false, actionSignal, hideCompetitionTabs);
+    }
     if (adminActionsElement.childElementCount) {
       adminPanel.hidden = true;
       appendProfileTab(tabsElement, "Admin", adminPanel, false, actionSignal, hideCompetitionTabs);
@@ -2274,6 +2367,7 @@ document.getElementById("loginForm").addEventListener("submit", async (event) =>
     form.reset();
     closeModal(loginModal);
     window.showToast("Erfolgreich angemeldet.", "success");
+    navigateToPersonalStart().catch(() => {});
   } catch (error) {
     diagnostic.error("login_failed", error);
     let message = errorMessage(error, "Anmeldung fehlgeschlagen.");
@@ -2805,3 +2899,10 @@ document.addEventListener("keydown", (event) => {
   const topModal = openModals.at(-1);
   if (topModal) closeModal(topModal);
 });
+
+const requestedFavoriteOverlay = new URLSearchParams(window.location.search).get("favoriteOverlay");
+if (["match-result", "match-appointment"].includes(requestedFavoriteOverlay)) {
+  ready.then(() => {
+    if (getUser()) window.openFavoriteMatchAction(requestedFavoriteOverlay);
+  });
+}

@@ -228,7 +228,7 @@ test("Termin- und Adminfehler im Profil sind als kontrollierte Browserdiagnosen 
   assert.equal(logs[1].fields.frontendEvent, "ranking_admin_action_failed");
 });
 
-test("Favoritenfehler sind kontrollierte Browserdiagnosen ohne Zielinhalte", () => {
+test("Favoriten- und Startseitenfehler sind kontrollierte Browserdiagnosen ohne Zielinhalte", () => {
   const now = { value: 2355000 };
   const { logs, service } = fixture(now);
   service.updateSettings(settings(0));
@@ -239,7 +239,7 @@ test("Favoritenfehler sind kontrollierte Browserdiagnosen ohne Zielinhalte", () 
       appVersion: "test",
       clientSessionId: "00000000-0000-4000-8000-000000000032",
       pageType: "index",
-      events: ["favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "favorite_labels_load_failed"].map((event) => ({
+      events: ["favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "favorite_labels_load_failed", "start_page_load_failed", "start_page_save_failed"].map((event) => ({
         event,
         level: "error",
         timestamp: "2026-09-02T10:00:00.000Z",
@@ -247,9 +247,9 @@ test("Favoritenfehler sind kontrollierte Browserdiagnosen ohne Zielinhalte", () 
       })),
     },
   });
-  assert.deepEqual(result, { success: true, accepted: 4, dropped: 0 });
+  assert.deepEqual(result, { success: true, accepted: 6, dropped: 0 });
   assert.deepEqual(logs.map(({ fields }) => fields.frontendEvent), [
-    "favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "favorite_labels_load_failed",
+    "favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "favorite_labels_load_failed", "start_page_load_failed", "start_page_save_failed",
   ]);
 });
 

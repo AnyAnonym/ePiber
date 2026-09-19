@@ -601,7 +601,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.deepEqual(seniorRestrictions.data.schonzeit, []);
 
   const protectedEndpoints = [
-    "memberDirectory", "myProfile", "myFavorites", "setMyFavorites", "publicProfile", "addMatch", "setMatchAppointment", "clearMatchAppointment", "addEntryList", "removeEntryList",
+    "memberDirectory", "myProfile", "myFavorites", "myStartPage", "setMyFavorites", "setMyStartPage", "publicProfile", "addMatch", "setMatchAppointment", "clearMatchAppointment", "addEntryList", "removeEntryList",
     "withdrawFromRanking", "matchResultSuggestion", "setMatchResult", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminSetMatchEnd", "adminDeleteRankingChallenge", "adminSetRankingChallengeDate", "adminSetMatchAppointment", "operationStatus", "navigator", "courtAssign", "courtSetActive", "monitorList",
     "monitorNavigate", "monitorScroll", "monitorProvision", "monitorRotate", "monitorRevoke",
     "monitorTarget", "monitorAck",
@@ -744,6 +744,23 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.deepEqual((await playerClient.request("myFavorites")).data, {
     success: true, favorites: [], revision: 0, updatedAt: 0,
   });
+  assert.deepEqual((await playerClient.request("myStartPage")).data, {
+    success: true, target: { type: "page", page: "index" }, revision: 0, updatedAt: 0,
+  });
+  const startPageOperationId = "00000000-0000-4000-8000-000000000409";
+  const startPageWrite = await playerClient.request("setMyStartPage", {
+    operationId: startPageOperationId,
+    expectedRevision: 0,
+    target: { type: "page", page: "rangliste", params: { id: "cup-1" } },
+  });
+  assert.equal(startPageWrite.data.revision, 1);
+  assert.equal(startPageWrite.data.repeated, false);
+  assert.deepEqual((await playerClient.request("myStartPage")).data.target, startPageWrite.data.target);
+  assert.equal((await playerClient.request("setMyStartPage", {
+    operationId: startPageOperationId,
+    expectedRevision: 0,
+    target: { type: "page", page: "rangliste", params: { id: "cup-1" } },
+  })).data.repeated, true);
   const favoriteOperationId = "00000000-0000-4000-8000-000000000410";
   const favoriteWrite = await playerClient.request("setMyFavorites", {
     operationId: favoriteOperationId,
@@ -783,6 +800,10 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     && fields.actorId === "p2" && fields.count === 0 && fields.revision === 1 && fields.outcome === "rejected"), true);
   assert.deepEqual(Object.keys(logEntries.find(({ event, fields }) => event === "favorites_update_completed"
     && fields.outcome === "success").fields).sort(), ["actorId", "count", "outcome", "revision"]);
+  assert.deepEqual(logEntries.find(({ event, fields }) => event === "start_page_update_completed"
+    && fields.outcome === "success").fields, {
+    actorId: "p2", targetType: "page", targetName: "rangliste", revision: 1, outcome: "success",
+  });
   const resultSuggestion = await playerClient.request("matchResultSuggestion", { matchId: "m1", court: "1" });
   assert.equal(resultSuggestion.data.success, true);
   assert.equal(resultSuggestion.data.matchId, "m1");
@@ -1009,7 +1030,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(operatorGrafanaAuth.headers.get("x-webauth-user"), null);
 
   const authenticatedEndpoints = [
-    "memberDirectory", "myProfile", "myFavorites", "setMyFavorites", "operationStatus", "addMatch", "addEntryList",
+    "memberDirectory", "myProfile", "myFavorites", "myStartPage", "setMyFavorites", "setMyStartPage", "operationStatus", "addMatch", "addEntryList",
     "removeEntryList", "withdrawFromRanking", "competitionHistory", "competitionHistoryComments",
     "competitionHistoryInteraction", "competitionHistoryCommentForEdit", "competitionHistoryReactions", "competitionHistoryCommentReactions",
     "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
@@ -1511,6 +1532,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
 
   const auditRows = application.auditLogRepository.list();
   assert.equal(auditRows.some((row) => row.action === "setMyFavorites"), false);
+  assert.equal(auditRows.some((row) => row.action === "setMyStartPage"), false);
   const challengeAudit = auditRows.find((row) => row.action === "addMatch" && row.result === "success");
   assert.deepEqual({
     actorId: challengeAudit.actorId,

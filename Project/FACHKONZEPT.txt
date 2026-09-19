@@ -221,6 +221,14 @@ Mitglieder, der naechste Vereinstermin und sportliche Ehrungen fuer Vereins- und
 Vizemeister. Geburtstage mit erreichtem Alter und Profilzugang bleiben
 angemeldeten Benutzern vorbehalten.
 
+5.11 Persoenlicher Einstieg [Bestaetigt]
+
+Angemeldete Mitglieder koennen kontogebunden festlegen, ob ihr persoenlicher
+Einstieg das Dashboard, eine gemeinsame Favoritenseite oder eines ihrer konkreten
+Favoritenziele oeffnet. Die Favoritenseite stellt dieselbe geordnete Liste wie die
+Navigation bereit; eine Aenderung der Reihenfolge wirkt deshalb in beiden
+Ansichten. Der Dashboard-Menuepunkt bleibt davon unabhaengig direkt erreichbar.
+
 
 ================================================================================
 6. FACHLICHE ANFORDERUNGEN
@@ -332,6 +340,11 @@ angemeldeten Benutzern vorbehalten.
         neuen Anwendungsversion erforderliche Seitenreloads sollen soweit
         moeglich automatisch erfolgen. Sichtbare Meldungen dazu sollen kurz,
         neutral und ohne technische Detailangaben formuliert sein. [Bestaetigt]
+
+  LF-34 Angemeldete Benutzer sollen Dashboard, gemeinsame Favoritenseite oder ein
+        vorhandenes Favoritenziel als persoenlichen Einstieg waehlen koennen. Die
+        Auswahl wird ohne zusaetzlichen Speicherschritt kontogebunden uebernommen;
+        Menue und Favoritenseite verwenden dieselbe Reihenfolge. [Bestaetigt]
 
 6.5 Matchergebnisse
 

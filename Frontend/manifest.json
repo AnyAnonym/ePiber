@@ -4,7 +4,7 @@
   "short_name": "ePiber",
   "description": "Digitalisierungsplattform des ASKÖ Piberbach",
   "lang": "de-AT",
-  "start_url": "/index.html",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

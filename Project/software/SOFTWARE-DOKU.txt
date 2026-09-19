@@ -40,12 +40,13 @@ maschinenpruefbare Vertraege bleiben die technische Wahrheit.
 
 
 ================================================================================
-  SEITEN-DOKUMENTATION (12 FACHLICHE SEITEN + 4 ADMINISTRATION)
+  SEITEN-DOKUMENTATION (13 FACHLICHE SEITEN + 4 ADMINISTRATION)
 ================================================================================
 
   Pfad                              | Seite
   ----------------------------------|-------------------------------------------
   software/seiten/index.txt         | Dashboard / Willkommensseite
+  software/seiten/favorites.txt     | Persoenliche Favoritenseite
   software/seiten/bewerbe.txt       | Bewerbe-Uebersicht
   software/seiten/bewerbsRaster.txt | Turnierraster / KO-Baum
   software/seiten/matches1.txt      | Matches-Uebersicht

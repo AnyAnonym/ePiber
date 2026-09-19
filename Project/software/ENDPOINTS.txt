@@ -603,6 +603,22 @@ AUTHENTICATED (player, operator oder admin):
       Fachwrite und erzeugt keinen Fachaudit; `favorites_update_completed`
       protokolliert nur Akteur-ID, Anzahl, Revision und kontrollierten Ausgang.
 
+  `myStartPage {}`
+      Liefert `{ success, target, revision, updatedAt }` fuer den aktuellen
+      Benutzer. Standard ist `{ type:"page", page:"index" }`. Neben diesem
+      Dashboardziel und `{ type:"page", page:"favorites" }` verwendet `target`
+      exakt den kontrollierten Seiten-/Parameter- oder Overlayvertrag eines
+      einzelnen Favoritenziels. Freie URLs und Beschriftungen werden nicht
+      projiziert. Auf einem Monitor darf bei paralleler Benutzersitzung dieselbe
+      requestlokale Sitzungsaufloesung wie bei `myFavorites` verwendet werden.
+
+  `setMyStartPage { operationId, expectedRevision, target }`
+      Ersetzt das eigene Startziel atomar und idempotent. Ein Revisionskonflikt
+      liefert `REVISION_CONFLICT`. Der UI-Praeferenzwrite erzeugt keinen
+      Fachaudit. `start_page_update_completed` protokolliert nur Akteur-ID,
+      kontrollierten Zieltyp/-namen, Revision und Ausgang; Parameter, freie
+      Beschriftungen und Personendaten werden nicht geloggt.
+
   `myMessageSummary {}`
       Liefert fuer den aktuellen Benutzer `{ success, revision, totalCount,
       unreadCount }`. Es werden weder fremde Zaehler noch Meldungsinhalte

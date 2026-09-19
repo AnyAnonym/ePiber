@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS = Object.freeze({
 const EDITABLE_SETTINGS = Object.freeze(Object.keys(DEFAULT_SETTINGS).filter((key) => key !== "maxTargetDurationMinutes"));
 const PAGE_TYPES = new Set([
   "Bewerbe", "Matches1", "RoundRobin", "adminLogging", "bewerbsRaster",
-  "court-score-test", "entryList", "index", "monitor", "navigator", "players",
+  "court-score-test", "entryList", "favorites", "index", "monitor", "navigator", "players",
   "mitgliederAbgleichen", "personenNormalisieren", "rangliste", "scoreboard", "servicebereich",
 ]);
 
@@ -63,6 +63,8 @@ const EVENT_LEVELS = new Map([
   ["favorite_labels_load_failed", "error"],
   ["favorites_load_failed", "error"],
   ["favorites_save_failed", "error"],
+  ["start_page_load_failed", "error"],
+  ["start_page_save_failed", "error"],
   ["login_failed", "error"],
   ["logout_failed", "error"],
   ["monitor_ack_failed", "warn"],

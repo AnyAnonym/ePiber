@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.11.0
+Stand: 4.11.1
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2333,3 +2333,40 @@ Quelle: 4.10.3-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.11.0` gesetzt.
+
+[4.11.1] - 2026-09-19
+Commit: 4.11.1 | Persoenliche Startseite und Favoritenansicht ergaenzt
+Quelle: 4.11.0-paj-1
+
+  Added
+  - [Frontend] Die neue Seite `Meine Favoriten` zeigt dieselbe kontogebundene
+    Liste wie das Menue und schreibt per Pointer oder Tastatur dieselbe gemeinsame
+    Reihenfolge.
+  - [Frontend] `Frontend/favorites.html`, `Frontend/JS/favoritesPage.js`,
+    `Frontend/JS/startPreference.js` und `Frontend/JS/personalStart.js` fuer
+    Favoritenseite und persoenliche Einstiegsaufloesung hinzugefuegt.
+
+  Changed
+  - [Frontend] Das Eigenprofil bietet im neuen Reiter `Einstellungen` eine sofort
+    speichernde Auswahl fuer Dashboard, Favoritenseite oder ein vorhandenes
+    Favoritenziel als persoenlichen Einstieg.
+  - [Frontend] Vereinsname, App-Start, Root-Aufruf und erfolgreiche Anmeldung
+    verwenden fuer angemeldete Personen die persoenliche Startseite;
+    Dashboard-Direktlinks bleiben unveraendert.
+  - [Backend] `myStartPage` und `setMyStartPage` speichern den kontrollierten
+    Einstieg revisioniert und idempotent als SQLite-UI-Praeferenz mit
+    strukturiertem Abschlusslog ohne Fachaudit.
+  - [Observability] Favoriten- und Startseitenfehler besitzen kontrollierte
+    Browserdiagnosen; der neue Seitentyp `favorites` ist serverseitig bekannt und
+    Zielparameter werden nicht projiziert.
+  - [Dokumentation] Fachkonzept, Architektur, Datenbank-, Endpoint-, Dashboard-
+    und Seitendokumentation um persoenlichen Einstieg und Favoritenseite erweitert;
+    spaetere Verfuegbarkeitspruefung alter Ziele bewusst als nicht umgesetzt
+    festgehalten.
+  - [Tests] Vertrags-, Repository-, Integrations-, Logging- und
+    profiluebergreifende Browsertests fuer Startseitenpraeferenz, Auto-Speichern
+    und gemeinsame Favoritensortierung ergaenzt.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.11.1` gesetzt.

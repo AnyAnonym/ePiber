@@ -809,6 +809,11 @@ Tabelle `app_state`:
   persoenliche Favoritenliste als ausschliesslich servervalidierte Seitenziele
   mit kontrollierten Parametern oder die Overlayziele `match-result` und
   `match-appointment`; freie URLs und Beschriftungen werden nicht gespeichert.
+  `start-page:<Personen-ID>` enthaelt das persoenliche Startziel. Erlaubt sind
+  `index`, `favorites` oder exakt ein Ziel nach demselben kontrollierten
+  Seiten-/Parameter-/Overlayvertrag wie bei Favoriten. Der Standard ohne
+  gespeicherten State ist `index`; eine nachtraegliche fachliche
+  Verfuegbarkeitspruefung des Ziels findet derzeit nicht statt.
   Compare-and-set meldet bei falscher Revision
   `REVISION_CONFLICT`.
   Court-Zustaende enthalten unter anderem Match-/Bewerbszuordnung, Spieler,

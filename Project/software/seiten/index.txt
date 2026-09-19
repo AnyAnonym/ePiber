@@ -2,10 +2,13 @@
 Dashboard - Vereinsinformationen und Startseite der Anwendung
 ================================================================================
 -- Funktion und Dateien --
-  Mobile-first-Einstiegsseite mit Navbar, Vereinsmotiv, Geburtstagen, naechstem
-  Vereinstermin, sportlichen Ehrungen und Footer.
+  Mobile-first-Dashboard mit Navbar, Vereinsmotiv, Geburtstagen, naechstem
+  Vereinstermin, sportlichen Ehrungen und Footer. Fuer anonyme Benutzer ist es
+  zugleich der Einstieg; angemeldete Benutzer koennen ein persoenliches Startziel
+  festlegen.
   HTML: Frontend/index.html
-  JS:   dashboard.js, navbar.js, staticReady.js sowie die gemeinsamen Module
+  JS:   dashboard.js, personalStart.js, startPreference.js, navbar.js,
+        staticReady.js sowie die gemeinsamen Module
         modals.js, global.js, clock.js und footer.js
   CSS:  Frontend/CSS/styles.css, Frontend/CSS/dashboard.css
   Bild: Frontend/Images/dashboard/piber-gruesst.png
@@ -76,6 +79,12 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   Clipboard-APIs und ein Browser-Fallback liefern eine sichtbare Erfolg- oder
   Fehlerrueckmeldung. Anonyme Ansichten bieten keine Profilaktion; direkte oder
   veraltete Profilaufrufe bleiben ohne aktive Sitzung geschlossen.
+  Das Eigenprofil zeigt nach `System`, `Meldungen`, `Aktuell` und `Archiv` den
+  Reiter `Einstellungen`. `Meine Startseite` bietet Dashboard, `Meine Favoriten`
+  und die aktuell vorhandenen, fuer die Person sichtbaren Favoriten mit denselben
+  Beschriftungen und Zielparametern an. Eine Aenderung speichert sofort, zeigt
+  ihren Status zugaenglich an und stellt bei einem Fehler die vorige Auswahl
+  wieder her; sie navigiert nicht unmittelbar vom Profil weg.
 
 -- Layout und Bereitschaft --
   Der gruene Header bleibt die gemeinsame Desktop- und Mobilnavigation. Darunter
@@ -120,6 +129,9 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   Nicht berechtigte oder dadurch leere Gruppen bleiben vollstaendig verborgen.
   Desktop, Tablet und Mobilgeraete verwenden denselben Hamburger und Drawer; die
   fruehere separate Desktop-Navigationsleiste bleibt ausgeblendet.
+  Der klickbare Vereinsname im Header fuehrt zum persoenlichen Einstieg. Der
+  explizite Dashboard-Menuepunkt fuehrt immer zu `index.html` und loest keine
+  persoenliche Weiterleitung aus.
 
   Angemeldete Benutzer koennen die unterstuetzten Seiten ueber einen Stern direkt
   neben dem Seitentitel kontogebunden favorisieren. Der Favoritenbereich ist
@@ -136,7 +148,10 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
 
 -- Besonderheiten --
   Dashboard und interaktive Fachseiten bieten ueber das gemeinsame Manifest die
-  optionale Installation als `ePiber Tennis` mit Start auf `/index.html` an. Die
+  optionale Installation als `ePiber Tennis` mit Start auf `/` an. `/`, der
+  Header-Vereinsname und eine erfolgreiche Anmeldung loesen fuer angemeldete
+  Benutzer das kontogebundene Startziel auf; anonym bleibt das Dashboard aktiv.
+  Direkte Seitenlinks werden nicht umgeleitet. Die
   gemeinsame gruene Primaerfarbe `#176b4a` gilt fuer Header, Navigation,
   Hauptaktionen und Browserleiste. Die installierte Variante bleibt vollstaendig
   online; es gibt keinen Service Worker, Offline-Cache oder Offline-Schreibbetrieb.

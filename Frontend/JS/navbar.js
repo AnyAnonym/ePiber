@@ -40,7 +40,7 @@ const mobileNavIcons = {
   logout: "M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L585-622l55-58 200 200-200 200Z",
 };
 
-function mobileNavIcon(name, className = "mobile-nav-icon") {
+export function mobileNavIcon(name, className = "mobile-nav-icon") {
   return `<svg class="${className}" data-icon="${name}" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="${mobileNavIcons[name]}"></path></svg>`;
 }
 
@@ -50,7 +50,7 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function favoriteIconName(favorite) {
+export function favoriteIconName(favorite) {
   if (favorite.type === "overlay") return favorite.overlay === "match-result" ? "sports_tennis" : "description";
   return {
     index: "dashboard", Matches1: "sports_tennis", players: "person_search", Bewerbe: "swords", scoreboard: "scoreboard",
@@ -102,8 +102,6 @@ function renderHeader() {
 
   headerContainer.innerHTML = `
     <header>
-      <a href="index.html" class="header-logo">ASKÖ Piberbach</a>
-
       <nav id="mainNav" class="main-nav desktop-nav">
         <a href="index.html" class="${activeClass("index.html")}">Dashboard</a>
         <a href="players.html" class="${activeClass("players.html")}" data-auth="required" hidden>Spieler</a>
@@ -118,7 +116,7 @@ function renderHeader() {
       </nav>
 
       <div class="header-center">
-        <span class="logo">ASKÖ Piberbach</span>
+        <a href="/" class="logo" aria-label="Zur persönlichen Startseite">ASKÖ Piberbach</a>
         <button class="hamburger" id="hamburgerBtn" type="button" aria-label="Menü öffnen" aria-controls="mobileNavModal" aria-expanded="false">${mobileNavIcon("menu")}</button>
       </div>
 

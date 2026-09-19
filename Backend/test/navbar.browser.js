@@ -10,7 +10,9 @@ const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
 
 const authStub = `
-const role = new URLSearchParams(window.location.search).get("role");
+const roleFromQuery = new URLSearchParams(window.location.search).get("role");
+if (roleFromQuery) sessionStorage.setItem("epiber-test-role", roleFromQuery);
+const role = roleFromQuery || sessionStorage.getItem("epiber-test-role");
 const loginError = new URLSearchParams(window.location.search).get("loginError");
 const authStatus = new URLSearchParams(window.location.search).get("authStatus") || (role ? "authenticated" : "anonymous");
 const user = role ? { id: role + "-1", role, login: role + "-login", email: role + "@example.test" } : null;
@@ -39,10 +41,19 @@ export function subscribeAuth(callback) {
 
 const dataClientStub = `
 let messageRevision = 7;
-let favoritesRevision = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1" ? 1 : 0;
-let favorites = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1"
-  ? [{ targetId: "favorite-ranking", type: "page", page: "rangliste", params: { id: "2" } }]
-  : [];
+const initialFavoriteCompetition = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1";
+const initialTwoFavorites = new URLSearchParams(window.location.search).get("twoFavorites") === "1";
+let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites ? 1 : 0;
+let favorites = initialTwoFavorites
+  ? [
+      { targetId: "favorite-ranking", type: "page", page: "rangliste", params: { id: "2" } },
+      { targetId: "favorite-result", type: "overlay", overlay: "match-result" },
+    ]
+  : initialFavoriteCompetition
+    ? [{ targetId: "favorite-ranking", type: "page", page: "rangliste", params: { id: "2" } }]
+    : [];
+let startPageRevision = 0;
+let startPageTarget = { type: "page", page: new URLSearchParams(window.location.search).get("startFavorites") === "1" ? "favorites" : "index" };
 let messages = [
   { messageId: "unread-new", createdAt: "2026-08-30T10:00:00.000Z", competitionName: "Sommercup", roundName: "Viertelfinale", subject: "Neue Platzinformation", eventType: "result", actorName: "Ergebnis Erfasser", acknowledged: false },
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
@@ -181,6 +192,12 @@ export function createEndpoint(name) {
     const noNotifications = new URLSearchParams(window.location.search).get("noNotifications") === "1";
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
     if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    if (name === "myStartPage") return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision } };
+    if (name === "setMyStartPage") {
+      startPageRevision += 1;
+      startPageTarget = structuredClone(params.target);
+      return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision, repeated: false } };
+    }
     if (name === "setMyFavorites") {
       favoritesRevision += 1;
       favorites = params.favorites.map((favorite, index) => ({ targetId: "favorite-" + favoritesRevision + "-" + index, ...structuredClone(favorite) }));
@@ -318,6 +335,13 @@ function startServer() {
   const server = http.createServer((request, response) => {
     const requestUrl = new URL(request.url, "http://127.0.0.1");
     const pathname = requestUrl.pathname;
+    if (pathname === "/index.html" && requestUrl.searchParams.get("startPageTest") === "1") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "index.html"), "utf8")
+        .replace('src="JS/modals.js"', 'src="/JS/modals-under-test.js"');
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
     if (pathname === "/Matches1.html" && requestUrl.searchParams.get("favoritesTest") === "1") {
       const source = '<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><div id="header-container"></div><div id="mobile-nav-container"></div><main><section><h2>Matches - Übersicht</h2></section></main><script type="module" src="/JS/navbar-under-test.js"></script><script type="module" src="/JS/modals-under-test.js"></script></body></html>';
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -335,6 +359,13 @@ function startServer() {
     if (pathname === "/modals-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><script type="module" src="/JS/modals-under-test.js"></script></body></html>');
+      return;
+    }
+    if (pathname === "/favorites.html") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "favorites.html"), "utf8")
+        .replace('src="JS/favoritesPage.js"', 'src="/JS/favoritesPage-under-test.js"');
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
       return;
     }
     if (pathname === "/ranking-test.html") {
@@ -373,7 +404,25 @@ function startServer() {
         .replace('"./authClient.js"', '"/test/authClient.js"')
         .replace('"./diagnostics.js"', '"/test/diagnostics.js"')
         .replace('"./profileModalState.js"', '"/test/profileModalState.js"')
-        .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"');
+        .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"')
+        .replace('"./startPreference.js"', '"/JS/startPreference-under-test.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/JS/favoritesPage-under-test.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/favoritesPage.js"), "utf8")
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./modals.js"', '"/JS/modals-under-test.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/JS/startPreference-under-test.js" || pathname === "/JS/startPreference.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/startPreference.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(source);
       return;
@@ -745,6 +794,52 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
   } finally {
     await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortierung bleibt gemeinsam", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser);
+    page.setDefaultTimeout(5000);
+    await page.goto(`http://127.0.0.1:${server.address().port}/?role=player&startFavorites=1`, { waitUntil: "domcontentloaded" });
+    await page.waitForURL(/\/favorites\.html$/);
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&startPageTest=1`, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator(".header-center .logo").getAttribute("href"), "/");
+    await page.evaluate(() => window.openProfileModal());
+    const profileTabs = page.locator("#profileTabs .profile-tab");
+    await page.getByRole("tab", { name: "Einstellungen" }).waitFor({ state: "visible" });
+    assert.equal((await profileTabs.allTextContents()).at(-1), "Einstellungen");
+    await page.getByRole("tab", { name: "Einstellungen" }).click();
+    const select = page.locator("#profileStartPage");
+    await select.waitFor({ state: "visible" });
+    assert.deepEqual(await select.locator("option").allTextContents(), ["Dashboard", "Meine Favoriten", "Mobile Rangliste"]);
+    await select.selectOption("page:rangliste:id=2");
+    await page.getByText("Startseite gespeichert.").waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => window.__endpointCalls.some(({ name, params }) => (
+      name === "setMyStartPage" && params.target?.page === "rangliste" && params.target?.params?.id === "2"
+    ))), true);
+
+    await page.goto(`http://127.0.0.1:${server.address().port}/favorites.html?role=player&twoFavorites=1`, { waitUntil: "domcontentloaded" });
+    const rows = page.locator(".favorites-page-item");
+    await rows.first().waitFor({ state: "visible" });
+    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Mobile Rangliste", "Spieleingabe"]);
+    await page.locator("#favoritesPageEdit").click();
+    await rows.nth(1).locator(".favorites-page-drag-handle").focus();
+    await page.keyboard.press("ArrowUp");
+    await page.waitForFunction(() => document.querySelector(".favorites-page-link span")?.textContent === "Spieleingabe");
+    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Spieleingabe", "Mobile Rangliste"]);
+    await page.locator("#hamburgerBtn").click();
+    await page.locator(".mobile-nav-favorites-toggle").click();
+    assert.deepEqual(await page.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Mobile Rangliste"]);
+  } finally {
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });
@@ -1162,9 +1257,9 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
     });
     await playerPage.setViewportSize({ width: 390, height: 844 });
     assert.deepEqual(await playerPage.locator("#profileTabs [role=tab]").allTextContents(), [
-      "System", "Meldungen (2)", "Aktuell", "Archiv",
+      "System", "Meldungen (2)", "Aktuell", "Archiv", "Einstellungen",
     ]);
-    assert.deepEqual(await playerPage.locator("#profileTabs [role=tab]").evaluateAll((tabs) => tabs.map((tab) => tab.tabIndex)), [0, 0, 0, 0]);
+    assert.deepEqual(await playerPage.locator("#profileTabs [role=tab]").evaluateAll((tabs) => tabs.map((tab) => tab.tabIndex)), [0, 0, 0, 0, 0]);
     assert.equal(await playerPage.locator("#profileCurrentCompetitionTabs").isHidden(), true);
     assert.equal(await playerPage.locator("#profileArchiveCompetitionTabs").isHidden(), true);
     assert.match(await playerPage.locator("#profileSystemPanel").textContent(), /Benachrichtigungen:\s*Email \| Whatsapp/);
