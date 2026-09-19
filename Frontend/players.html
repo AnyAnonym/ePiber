@@ -29,6 +29,10 @@
   <main>
     <section id="playerDirectorySection" class="full-width-section">
       <h2>Spieler</h2>
+      <div id="playerDirectoryFilter" class="player-directory-filter" hidden>
+        <label for="playerDirectoryFilterInput">Filter</label>
+        <input id="playerDirectoryFilterInput" type="search" autocomplete="off" />
+      </div>
       <div id="playerDirectoryMessage" aria-live="polite"></div>
       <div class="players-table-scroll">
         <table id="tbl" class="players-table" hidden>

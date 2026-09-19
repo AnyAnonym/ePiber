@@ -57,7 +57,8 @@ main:has(#matches1-container) section {
   font-size: 0.85rem;
   cursor: pointer;
   text-align: left;
-  color: var(--muted);
+  color: var(--fg);
+  font-weight: 700;
 }
 
 .m1-filters {
@@ -129,7 +130,7 @@ main:has(#matches1-container) section {
 
 #matches1-count {
   font-size: 0.8rem;
-  color: var(--muted);
+  color: #4a4a4a;
   padding: 4px 0;
 }
 
@@ -175,7 +176,7 @@ main:has(#matches1-container) section {
   justify-self: center;
   text-align: center;
   font-size: 0.75rem;
-  color: var(--muted);
+  color: #4a4a4a;
   font-style: italic;
 }
 

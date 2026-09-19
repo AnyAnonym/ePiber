@@ -210,9 +210,15 @@ export function createEndpoint(name) {
       }
       const today = new Date();
       const birthDate = String(today.getDate()).padStart(2, "0") + "." + String(today.getMonth() + 1).padStart(2, "0") + "." + (today.getFullYear() - 30);
+      const filterRows = new URLSearchParams(window.location.search).get("directoryFilterTest") === "1" ? [
+        ["bauer-1", "Johanna", "Bauer", "0043664123456", "johanna@example.test", "19900102", "1"],
+        ["bauer-2", "Franz", "Bauer", "", "franz@example.test", "850203", "1"],
+        ["huber-1", "Jochen", "Huber", "+43 650 987654", "jochen@example.test", "", "1"],
+      ] : [];
       return { data: { success: true, values: [
         ["ID", "Vorname", "Nachname", "TelefonMobil", "E-Mail", "GeburtsDatum", "Aktiv"],
         ["birthday-1", "Geburtstags", "Mitglied", "", "", birthDate, "1"],
+        ...filterRows,
       ] } };
     }
     if (name === "rlPlatzierung") return { data: { success: true, values: [
@@ -383,7 +389,7 @@ function startServer() {
     }
     if (pathname === "/players-data-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="playerDirectorySection"><h2>Spieler</h2><div id="playerDirectoryMessage" aria-live="polite"></div><div class="players-table-scroll"><table id="tbl" class="players-table" hidden><thead><tr><th>Nachname</th><th>Vorname</th><th>Telefon</th><th>E-Mail</th><th>Geburtsdatum</th></tr></thead><tbody></tbody></table></div></section></main><script type="module" src="/JS/playerList-under-test.js"></script></body></html>');
+      response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><main><section id="playerDirectorySection"><h2>Spieler</h2><div id="playerDirectoryFilter" class="player-directory-filter" hidden><label for="playerDirectoryFilterInput">Filter</label><input id="playerDirectoryFilterInput" type="search" autocomplete="off"></div><div id="playerDirectoryMessage" aria-live="polite"></div><div class="players-table-scroll"><table id="tbl" class="players-table" hidden><thead><tr><th>Nachname</th><th>Vorname</th><th>Telefon</th><th>E-Mail</th><th>Geburtsdatum</th></tr></thead><tbody></tbody></table></div></section></main><script type="module" src="/JS/playerList-under-test.js"></script></body></html>');
       return;
     }
     if (pathname === "/scoreboard-layout-test.html") {
@@ -2280,6 +2286,58 @@ test("Spielertabelle scrollt horizontal, waehrend Titel und Seitenheader viewpor
       assert.equal(layout.headerWidth, layout.viewportWidth);
       await page.close();
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Spielerverzeichnis filtert Begriffe UND-verknuepft und bleibt responsiv", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/players-data-test.html?role=player&directoryFilterTest=1`, { waitUntil: "domcontentloaded" });
+    const input = page.getByLabel("Filter", { exact: true });
+    await input.waitFor({ state: "visible" });
+
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]").count(), 4);
+    await input.fill("bauer jo");
+    assert.deepEqual(await page.locator("#tbl tbody tr[data-filter-text]:visible").allTextContents(), ["BauerJohanna+43664123456johanna@example.test02.01.1990"]);
+
+    await input.fill("987654");
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]:visible").count(), 1);
+    assert.match(await page.locator("#tbl tbody tr[data-filter-text]:visible").textContent(), /HuberJochen/);
+
+    await input.fill("nicht vorhanden");
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]:visible").count(), 0);
+    assert.equal(await page.locator(".player-filter-empty").textContent(), "Keine Spieler entsprechen dem Filter.");
+
+    await input.fill("");
+    assert.equal(await page.locator("#tbl tbody tr[data-filter-text]:visible").count(), 4);
+    const layout = await page.locator("#playerDirectoryFilter").evaluate((filter) => {
+      const label = filter.querySelector("label");
+      const input = filter.querySelector("input");
+      const filterBounds = filter.getBoundingClientRect();
+      const labelBounds = label.getBoundingClientRect();
+      const inputBounds = input.getBoundingClientRect();
+      const labelStyle = getComputedStyle(label);
+      return {
+        labelBeforeInput: labelBounds.right <= inputBounds.left,
+        inputInsideFilter: inputBounds.right <= filterBounds.right + 1,
+        labelColor: labelStyle.color,
+        labelWeight: Number(labelStyle.fontWeight),
+      };
+    });
+    assert.deepEqual(layout, {
+      labelBeforeInput: true,
+      inputInsideFilter: true,
+      labelColor: "rgb(34, 34, 34)",
+      labelWeight: 700,
+    });
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

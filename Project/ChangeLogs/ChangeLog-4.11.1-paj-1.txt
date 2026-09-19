@@ -22,3 +22,18 @@ Commit: 4.11.1-paj-1-2 | Persoenlichen App-Start und Favoritenlayout korrigiert
   Dokumentationsuebernahme
   - `Project/software/seiten/index.txt`: `/index.html` wird wie `/` als persoenlicher Einstieg aufgeloest; explizite Dashboard-Links umgehen diese Aufloesung kontrolliert.
   - `Project/software/seiten/favorites.txt`: Titel und Stift stehen zentriert direkt ueber der inhaltsgrossen Liste; bei vielen Eintraegen scrollt die Liste im Bereich zwischen Header und sichtbarem Footer.
+
+[4.11.1-paj-1-3] - 2026-09-19
+Commit: 4.11.1-paj-1-3 | Spielerverzeichnisfilter und Textkontraste ergaenzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.1-paj-1-2-x` gesetzt.
+  - [Frontend] Das Spielerverzeichnis besitzt einen responsiven Live-Filter, der mehrere Suchbegriffe UND-verknuepft ueber Name, formatiertes Telefon, Kontakt-E-Mail und formatiertes Geburtsdatum anwendet und einen expliziten Leerzustand zeigt.
+  - [Darstellung] Filterbeschriftung, Trefferanzahl und Forderungshinweis der Matches-Seite verwenden kontrastreichere Sekundaertexte.
+
+  Added
+  - [Tests] Die profiluebergreifende Browser-Smokesuite prueft Filterinhalt, Mehrbegriffslogik, Leerzustand und responsives Layout; die Matches-Pruefung sichert die erhoehten Kontraste ab.
+
+  Dokumentationsuebernahme
+  - `Project/software/seiten/players.txt`: Live-Filter, durchsuchte Darstellungsfelder, UND-Verknuepfung und Leerzustand dokumentieren.
+  - `Project/software/seiten/matches1.txt`: Kontrastreichere Filterbeschriftung, Trefferanzahl und Forderungshinweise dokumentieren.

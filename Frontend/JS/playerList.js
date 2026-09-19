@@ -25,14 +25,49 @@ function getElements() {
     table: document.getElementById("tbl"),
     tbody: document.querySelector("#tbl tbody"),
     message: document.getElementById("playerDirectoryMessage"),
+    filter: document.getElementById("playerDirectoryFilter"),
+    filterInput: document.getElementById("playerDirectoryFilterInput"),
   };
 }
 
+function normalizeFilterText(value) {
+  return String(value || "").toLocaleLowerCase("de");
+}
+
+function applyDirectoryFilter() {
+  const { tbody, filterInput } = getElements();
+  if (!tbody || !filterInput) return;
+
+  tbody.querySelector(".player-filter-empty")?.remove();
+  const terms = normalizeFilterText(filterInput.value).trim().split(/\s+/).filter(Boolean);
+  const rows = [...tbody.querySelectorAll("tr[data-filter-text]")];
+  let visibleRows = 0;
+
+  rows.forEach((row) => {
+    const matches = terms.every((term) => row.dataset.filterText.includes(term));
+    row.hidden = !matches;
+    if (matches) visibleRows += 1;
+  });
+
+  if (rows.length > 0 && visibleRows === 0) {
+    const row = document.createElement("tr");
+    row.className = "player-filter-empty";
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.style.textAlign = "center";
+    cell.textContent = "Keine Spieler entsprechen dem Filter.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  }
+}
+
 function renderAnonymous() {
-  const { table, tbody, message } = getElements();
+  const { table, tbody, message, filter, filterInput } = getElements();
   if (!table || !tbody || !message) return;
 
   table.hidden = true;
+  if (filter) filter.hidden = true;
+  if (filterInput) filterInput.value = "";
   tbody.replaceChildren();
   message.hidden = false;
   message.replaceChildren();
@@ -51,10 +86,11 @@ function renderAnonymous() {
 }
 
 function renderError(error) {
-  const { table, tbody, message } = getElements();
+  const { table, tbody, message, filter } = getElements();
   if (!table || !tbody || !message) return;
 
   table.hidden = true;
+  if (filter) filter.hidden = true;
   tbody.replaceChildren();
   message.hidden = false;
   message.textContent = error?.message || "Spielerverzeichnis konnte nicht geladen werden.";
@@ -74,7 +110,7 @@ async function renderDirectory(user = getUser()) {
     return;
   }
 
-  const { table, tbody, message } = getElements();
+  const { table, tbody, message, filter } = getElements();
   if (!table || !tbody || !message) {
     const error = new Error("Spielerverzeichnis-Elemente fehlen.");
     error.code = "PLAYER_DIRECTORY_CONTAINER_MISSING";
@@ -132,17 +168,23 @@ async function renderDirectory(user = getUser()) {
     rows.forEach((valuesRow) => {
       const row = document.createElement("tr");
       const playerId = String(valuesRow[idIndex] || "").trim();
+      const lastName = String(valuesRow[lastNameIndex] || "").trim();
+      const firstName = String(valuesRow[firstNameIndex] || "").trim();
+      const phone = formatTelefon(valuesRow[phoneIndex]);
+      const email = String(valuesRow[emailIndex] || "").trim() || "---";
+      const birthDate = formatGeburtsdatum(valuesRow[birthDateIndex]);
+      row.dataset.filterText = normalizeFilterText([lastName, firstName, phone, email, birthDate].join(" "));
       if (playerId === String(user.id || "")) row.classList.add("current-player");
-      appendCell(row, String(valuesRow[lastNameIndex] || "").trim());
-      appendCell(row, String(valuesRow[firstNameIndex] || "").trim());
-      appendCell(row, formatTelefon(valuesRow[phoneIndex]));
-      appendCell(row, String(valuesRow[emailIndex] || "").trim() || "---");
-      appendCell(row, formatGeburtsdatum(valuesRow[birthDateIndex]));
+      appendCell(row, lastName);
+      appendCell(row, firstName);
+      appendCell(row, phone);
+      appendCell(row, email);
+      appendCell(row, birthDate);
       if (playerId) {
         const openProfile = () => window.openProfileModal?.({ playerId });
         row.tabIndex = 0;
         row.setAttribute("role", "button");
-        row.setAttribute("aria-label", `Profil von ${String(valuesRow[firstNameIndex] || "").trim()} ${String(valuesRow[lastNameIndex] || "").trim()} öffnen`);
+        row.setAttribute("aria-label", `Profil von ${firstName} ${lastName} öffnen`);
         row.addEventListener("click", openProfile);
         row.addEventListener("keydown", (event) => {
           if (event.key !== "Enter" && event.key !== " ") return;
@@ -155,8 +197,10 @@ async function renderDirectory(user = getUser()) {
   }
 
   tbody.replaceChildren(rowsFragment);
+  applyDirectoryFilter();
   message.hidden = true;
   message.replaceChildren();
+  if (filter) filter.hidden = false;
   table.hidden = false;
 }
 
@@ -184,6 +228,7 @@ subscribeAuth((user) => {
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
+  document.getElementById("playerDirectoryFilterInput")?.addEventListener("input", applyDirectoryFilter);
   showLoadingOverlay();
   try {
     const user = await ready;

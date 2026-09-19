@@ -2909,6 +2909,40 @@ input[type="date"] {
   text-align: center;
 }
 
+.player-directory-filter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 8px 0 0;
+}
+
+.player-directory-filter[hidden] {
+  display: none;
+}
+
+.player-directory-filter label {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.player-directory-filter input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  color: var(--fg);
+  background: #fff;
+  font: inherit;
+}
+
+.player-directory-filter input:focus-visible {
+  outline: 3px solid var(--focus-color, #1f6feb);
+  outline-offset: 1px;
+}
+
 .players-table-scroll {
   width: 100%;
   min-width: 0;
