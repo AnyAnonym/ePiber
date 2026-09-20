@@ -10,6 +10,7 @@ const buttonUpdaters = new Set();
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("epiber-favorites") : null;
 
 const PAGE_CONFIG = Object.freeze({
+  "index.html": { page: "index", label: "Dashboard", selector: "#welcome-title", centered: true },
   "Matches1.html": { page: "Matches1", label: "Matches", selector: "main > section > h2", centered: true },
   "players.html": { page: "players", label: "Spieler", selector: "main > section > h2", centered: true },
   "Bewerbe.html": { page: "Bewerbe", label: "Bewerbe", selector: ".bewerbe-page-heading > h2", existingRow: true },
@@ -248,6 +249,7 @@ export function favoriteLabel(target) {
 
 export function favoriteHref(target) {
   if (target?.type !== "page") return "#";
+  if (target.page === "index") return "index.html?dashboard=1";
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(target.params || {})) params.set(key, String(value));
   return `${target.page}.html${params.size ? `?${params}` : ""}`;

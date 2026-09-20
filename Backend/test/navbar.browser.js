@@ -44,8 +44,11 @@ let messageRevision = 7;
 const initialFavoriteCompetition = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1";
 const initialTwoFavorites = new URLSearchParams(window.location.search).get("twoFavorites") === "1";
 const initialHistoryFavorites = new URLSearchParams(window.location.search).get("favoriteHistory") === "1";
-let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites || initialHistoryFavorites ? 1 : 0;
-let favorites = initialHistoryFavorites
+const initialDashboardFavorite = new URLSearchParams(window.location.search).get("favoriteDashboard") === "1";
+let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites || initialHistoryFavorites || initialDashboardFavorite ? 1 : 0;
+let favorites = initialDashboardFavorite
+  ? [{ targetId: "favorite-dashboard", type: "page", page: "index" }]
+  : initialHistoryFavorites
   ? [
       { targetId: "favorite-history-all", type: "page", page: "Bewerbe", params: { history: "all" } },
       { targetId: "favorite-history-competition", type: "page", page: "Bewerbe", params: { history: "competition", id: "2" } },
@@ -1017,7 +1020,52 @@ test("Desktop verwendet denselben Drawer und verschiebt die Anwendung um maximal
   }
 });
 
-test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendigen Bewerbsnamen", {
+test("Dashboard ist trotz Favoriten-Startseite direkt favorisiert erreichbar", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteDashboard=1&startFavorites=1&startPageTest=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+
+    const star = page.locator(".page-favorite-star");
+    await star.waitFor({ state: "visible" });
+    assert.equal(await star.getAttribute("aria-pressed"), "true");
+    const titleLayout = await page.evaluate(() => {
+      const row = document.querySelector(".welcome > .favorite-title-row").getBoundingClientRect();
+      const heading = document.getElementById("welcome-title").getBoundingClientRect();
+      const favorite = document.querySelector(".page-favorite-star").getBoundingClientRect();
+      return { rowRight: row.right, viewportWidth: innerWidth, headingBottom: heading.bottom, favoriteTop: favorite.top, favoriteBottom: favorite.bottom };
+    });
+    assert.equal(titleLayout.rowRight <= titleLayout.viewportWidth, true);
+    assert.equal(titleLayout.favoriteTop < titleLayout.headingBottom && titleLayout.favoriteBottom > titleLayout.headingBottom - 20, true);
+
+    await page.evaluate(() => window.openProfileModal());
+    await page.getByRole("tab", { name: "Einstellungen" }).click();
+    assert.deepEqual(await page.locator("#profileStartPage option").allTextContents(), ["Dashboard", "Meine Favoriten"]);
+    await page.locator("#profileModal .close").click();
+
+    await page.locator("#hamburgerBtn").click();
+    const favorites = page.locator(".mobile-nav-favorites");
+    await favorites.locator(".mobile-nav-favorites-toggle").click();
+    const dashboardLink = favorites.locator(".mobile-nav-favorite-link");
+    assert.equal(await dashboardLink.locator("span").textContent(), "Dashboard");
+    assert.equal(await dashboardLink.getAttribute("href"), "index.html?dashboard=1");
+    assert.equal(await dashboardLink.locator('[data-icon="dashboard"]').count(), 1);
+
+    await dashboardLink.click();
+    await page.waitForURL(/index\.html\?dashboard=1$/);
+    assert.equal(await page.locator("#welcome-title").isVisible(), true);
+  } finally {
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Favoriten zeigen den vollstaendigen Bewerbsnamen", {
   skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
@@ -1027,7 +1075,7 @@ test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendig
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const expectedName = "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026";
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&longFavorite=1&dashboard=1`, { waitUntil: "domcontentloaded" });
-    assert.equal(await page.locator(".page-favorite-star").count(), 0);
+    assert.equal(await page.locator(".page-favorite-star").count(), 1);
     await page.locator("#hamburgerBtn").click();
     const favorites = page.locator(".mobile-nav-favorites");
     await favorites.locator(".mobile-nav-favorites-toggle").click();

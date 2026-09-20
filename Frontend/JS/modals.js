@@ -354,11 +354,15 @@ function prepareProfileSettings(panel, actionSignal) {
   const render = () => {
     if (!startSnapshot || !favoriteSnapshot) return;
     const selectedKey = startTargetKey(startSnapshot.target);
+    const fixedTargetKeys = new Set([
+      startTargetKey({ type: "page", page: "index" }),
+      startTargetKey({ type: "page", page: "favorites" }),
+    ]);
     const options = [
       [{ type: "page", page: "index" }, "Dashboard"],
       [{ type: "page", page: "favorites" }, "Meine Favoriten"],
       ...favoriteSnapshot.favorites
-        .filter((favorite) => favoriteVisibleForUser(favorite))
+        .filter((favorite) => favoriteVisibleForUser(favorite) && !fixedTargetKeys.has(startTargetKey(favorite)))
         .map((favorite) => [favorite, favoriteLabel(favorite)]),
     ];
     if (selectedKey && !options.some(([target]) => startTargetKey(target) === selectedKey)) {

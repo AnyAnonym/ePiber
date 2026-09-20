@@ -51,3 +51,15 @@ Commit: 4.11.2-paj-1-6 | Eigenmeldungen initial quittiert
   - [Observability] Die Schema-11-Migration protokolliert ausschliesslich Schemawerte und aggregierte Anzahlen korrigierter Quittierungen und unterbundener ausstehender Zustellungen.
   - [Tests] Service-, Repository-, Integrations- und Migrationstests sichern gelesene Akteursprojektionen, ungelesene Gegnerprojektionen, externe Zustellung und die Korrektur bestehender Forderungen ab; das Historientestwerkzeug verlangt Schema 11.
   - [Dokumentation] Eigenaktivitaetsvertrag, Meldungsprojektion und Messaging-Schema 11 sind in Architektur-, Endpoint- und Datenbankdokumentation festgehalten.
+
+[4.11.2-paj-1-7] - 2026-09-20
+Commit: 4.11.2-paj-1-7 | Forderungsbetreff und Dashboard-Favorit ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-6-x` gesetzt.
+  - [Messaging] Der Betreff neuer Forderer-Eigenmeldungen nennt den geforderten Spieler direkt, damit er bereits in der persoenlichen Meldungsliste sichtbar ist.
+  - [Frontend] Das Dashboard kann ueber einen Stern neben dem Haupttitel favorisiert werden; sein Favoritenlink umgeht mit `dashboard=1` eine konfigurierte Favoriten-Startseite, und die Startseitenauswahl zeigt Dashboard weiterhin nur einmal.
+  - [Backend] Der geschlossene Favoritenvertrag erlaubt das parameterlose Dashboardziel `index`.
+  - [Tests] Service- und Integrationstest sichern den gegnerbezogenen Forderungsbetreff ab.
+  - [Tests] Vertrags- und profiluebergreifende Browsertests sichern Dashboardstern, Linkziel, Icon, Startseitenumgehung, responsive Titelzeile und die deduplizierte Startseitenauswahl ab.
+  - [Dokumentation] Endpoint- und Seitendokumentation beschreiben den sichtbaren Forderungsbetreff sowie das Dashboard-Favoritenziel.

@@ -16,7 +16,7 @@ for (const [profileName, profile] of Object.entries(profiles)) {
   const navigationTest = mobileProfiles.has(profileName)
     ? "Mobiler Drawer"
     : "Desktop verwendet denselben Drawer";
-  const testPattern = `^(${navigationTest}|30-Tage-Session|Persoenliche Startseite|Spielerverzeichnis filtert|Matches zeigen WO|Bewerbshistorie|Scoreboard zeigt WO|Scoreboard holt beim Aufwachen|Scoreboard kehrt)`;
+  const testPattern = `^(${navigationTest}|30-Tage-Session|Dashboard ist trotz|Persoenliche Startseite|Spielerverzeichnis filtert|Matches zeigen WO|Bewerbshistorie|Scoreboard zeigt WO|Scoreboard holt beim Aufwachen|Scoreboard kehrt)`;
   console.log(`\nBrowser-Smoke: ${profile.label}`);
   const result = spawnSync(process.execPath, [
     "--test",

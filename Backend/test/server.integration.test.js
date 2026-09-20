@@ -1440,7 +1440,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal((await playerClient.request("competitionHistoryInteraction", { eventId: historyEventId })).data.interaction.commentCount, 0);
   const challengerMessages = await playerClient.request("myMessages", { limit: 10 });
   assert.equal(challengerMessages.data.unreadCount, 0);
-  assert.equal(challengerMessages.data.messages[0].subject, "Forderung ausgesprochen in Cup");
+  assert.equal(challengerMessages.data.messages[0].subject, "Forderung an Ada Admin ausgesprochen");
   assert.equal(Number.isFinite(challengerMessages.data.messages[0].acknowledgedAt), true);
   assert.equal(challengerMessages.data.messages[0].competitionName, "Cup");
   assert.equal(challengerMessages.data.messages[0].roundName, "");

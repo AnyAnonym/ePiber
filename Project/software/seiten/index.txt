@@ -84,7 +84,9 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   und die aktuell vorhandenen, fuer die Person sichtbaren Favoriten mit denselben
   Beschriftungen und Zielparametern an. Eine Aenderung speichert sofort, zeigt
   ihren Status zugaenglich an und stellt bei einem Fehler die vorige Auswahl
-  wieder her; sie navigiert nicht unmittelbar vom Profil weg.
+  wieder her; sie navigiert nicht unmittelbar vom Profil weg. Ein als Favorit
+  gespeichertes Dashboard wird in dieser Auswahl nicht zusaetzlich zum festen
+  Dashboardeintrag dupliziert.
 
 -- Layout und Bereitschaft --
   Der gruene Header bleibt die gemeinsame Desktop- und Mobilnavigation. Darunter
@@ -140,7 +142,10 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   die revisionsgeschuetzt gespeicherte Reihenfolge. Die Overlayfavoriten
   `Spieleingabe` und `Termin festlegen / aendern` zeigen zuerst ausschliesslich
   eigene offene Matches mit dem jeweiligen serverseitigen Aktionsrecht. Das
-  Dashboard bleibt als fester Menueeintrag ohne Favoritenstern. Der gemeinsame
+  Dashboard bleibt als fester Menueeintrag und kann zusaetzlich ueber den Stern
+  neben `Der Piber gruesst` favorisiert werden. Sein Favoritenlink verwendet
+  `index.html?dashboard=1`, damit eine persoenliche Favoriten-Startseite bewusst
+  umgangen wird. Der gemeinsame
   Stern besitzt genau eine schwarze Kontur und ist innen inaktiv weiss sowie aktiv
   vollstaendig gelb. Bewerbsbezogene Favoriten zeigen den Bewerbsnamen statt der
   technischen ID, begrenzen lange Namen auf zwei Zeilen mit Ellipse und stellen

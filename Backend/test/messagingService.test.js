@@ -116,7 +116,7 @@ test("Forderung erzeugt fuer Gegner und Forderer getrennte Meldungen samt extern
   assert.equal(first.event.competitionId, "competition-1");
   assert.equal(first.event.summary, "Ada Admin (4) hat Peter Player (2) gefordert.");
   assert.equal(renamed.event.summary, first.event.summary);
-  assert.equal(first.challenger.subject, "Forderung ausgesprochen in Herren");
+  assert.equal(first.challenger.subject, "Forderung an Peter Player ausgesprochen");
   assert.equal(first.challenger.body, "Du (4) hast Peter Player (2) in Herren gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.");
   assert.equal(first.challenger.acknowledgedAt, 1000);
   assert.equal(first.recipient.acknowledgedAt, null);

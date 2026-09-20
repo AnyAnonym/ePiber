@@ -187,7 +187,7 @@ class MessagingService {
   }
 
   ensureChallengeConfirmation({ matchId, challengerId, opponentId, opponentName, competitionId = null, competitionName, createdAt = this.now() }) {
-    return this.ensureMessage({ identity: `challenge-confirmation:${matchId}`, recipientId: challengerId, competitionId, createdAt, subject: `Forderung ausgesprochen in ${competitionName}`, body: `Du hast ${opponentName || opponentId} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.`, type: "challenge_confirmation", matchId, actorId: challengerId, acknowledgedAt: createdAt, externalDelivery: false });
+    return this.ensureMessage({ identity: `challenge-confirmation:${matchId}`, recipientId: challengerId, competitionId, createdAt, subject: `Forderung an ${opponentName || opponentId} ausgesprochen`, body: `Du hast ${opponentName || opponentId} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.`, type: "challenge_confirmation", matchId, actorId: challengerId, acknowledgedAt: createdAt, externalDelivery: false });
   }
 
   async ensureChallengeEvent({ matchId, recipientId, competitionId = null, competitionName, challengerId, challengerName, challengerRank = null, opponentId = recipientId, opponentName, opponentRank = null, createdAt = this.now() }) {
@@ -195,7 +195,7 @@ class MessagingService {
     const opponentDisplay = rankedName(opponentName || opponentId, opponentRank);
     const participants = [
       this.activityParticipant({ actorId: challengerId, createdAt, identity: `challenge:${matchId}`, userId: recipientId, role: "opponent", displayName: opponentName || opponentId, type: "challenge", subject: `Neue Forderung in ${competitionName}`, body: `${challengerDisplay} hat dich${Number.isInteger(opponentRank) && opponentRank >= 0 ? ` (${opponentRank})` : ""} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.` }),
-      this.activityParticipant({ actorId: challengerId, createdAt, identity: `challenge-confirmation:${matchId}`, userId: challengerId, role: "challenger", displayName: challengerName || challengerId, type: "challenge_confirmation", subject: `Forderung ausgesprochen in ${competitionName}`, body: `Du${Number.isInteger(challengerRank) && challengerRank >= 0 ? ` (${challengerRank})` : ""} hast ${opponentDisplay} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.` }),
+      this.activityParticipant({ actorId: challengerId, createdAt, identity: `challenge-confirmation:${matchId}`, userId: challengerId, role: "challenger", displayName: challengerName || challengerId, type: "challenge_confirmation", subject: `Forderung an ${opponentName || opponentId} ausgesprochen`, body: `Du${Number.isInteger(challengerRank) && challengerRank >= 0 ? ` (${challengerRank})` : ""} hast ${opponentDisplay} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.` }),
     ];
     const event = await this.ensureEvent({
       id: stableId("evt", `challenge:${matchId}`),
