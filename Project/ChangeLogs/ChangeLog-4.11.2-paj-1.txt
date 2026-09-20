@@ -32,3 +32,11 @@ Commit: 4.11.2-paj-1-4 | Scoreboard-Ruecknavigation korrigiert
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-3-x` gesetzt.
   - [Frontend] Der Scoreboard-Zurueckbutton kehrt bei interner Navigation zur aufrufenden Seite zurueck; direkte Aufrufe, App-Starts und fehlendes JavaScript verwenden weiterhin das Dashboard als sicheren Fallback.
   - [Tests] Die Sieben-Profil-Browsersmokesuite deckt interne Rueckkehr und Dashboard-Fallback des Scoreboards ab.
+
+[4.11.2-paj-1-5] - 2026-09-20
+Commit: 4.11.2-paj-1-5 | Session-Requestschleife behoben
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-4-x` gesetzt.
+  - [Frontend] Die Ablaufplanung lang laufender Benutzersessions begrenzt Browser-Timer auf den sicheren 32-Bit-Bereich und verhindert dadurch hochfrequente `/api/session`-Schleifen bei der 30-Tage-Sessiondauer.
+  - [Tests] AuthClient- und profiluebergreifende Browser-Regressionstests pruefen, dass eine 30-Tage-Session genau einen begrenzten Ablauftimer plant und keine sofortigen Wiederholungsanfragen ausloest.

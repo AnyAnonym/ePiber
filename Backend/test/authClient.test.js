@@ -13,7 +13,7 @@ async function waitFor(predicate, timeoutMs, message) {
   throw new Error(message);
 }
 
-function loadAuthClient(fetchImplementation, { locks, restartConnection = async () => {} } = {}) {
+function loadAuthClient(fetchImplementation, { locks, restartConnection = async () => {}, setTimeoutImplementation } = {}) {
   const windowListeners = new Map();
   const unrefTimeout = (callback, delay, ...args) => {
     const timer = setTimeout(callback, delay, ...args);
@@ -31,7 +31,7 @@ function loadAuthClient(fetchImplementation, { locks, restartConnection = async 
     navigator: locks ? { locks } : {},
     __restartConnection: restartConnection,
     setInterval: () => 1,
-    setTimeout: unrefTimeout,
+    setTimeout: setTimeoutImplementation || unrefTimeout,
     window: {
       addEventListener(type, callback) { windowListeners.set(type, callback); },
     },
@@ -50,6 +50,36 @@ function loadAuthClient(fetchImplementation, { locks, restartConnection = async 
   new vm.Script(source, { filename }).runInContext(context);
   return context.__authClient;
 }
+
+test("30-Tage-Sessions bleiben innerhalb des sicheren Browser-Timerbereichs", async () => {
+  const scheduledDelays = [];
+  let requests = 0;
+  const now = Date.now();
+  const api = loadAuthClient(async () => {
+    requests += 1;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        authenticated: true,
+        user: { id: "p1", role: "player" },
+        expiresAt: now + 30 * 24 * 60 * 60 * 1000,
+        serverTime: now,
+      }),
+    };
+  }, {
+    setTimeoutImplementation(_callback, delay) {
+      scheduledDelays.push(delay);
+      return { fakeTimer: scheduledDelays.length };
+    },
+  });
+
+  await api.ready;
+
+  assert.equal(requests, 1);
+  assert.deepEqual(scheduledDelays, [80000, 2147483647]);
+});
 
 test("initialer Sessionfehler bleibt vom abgemeldeten Zustand unterscheidbar", async () => {
   const api = loadAuthClient(async () => { throw new Error("network unavailable"); });

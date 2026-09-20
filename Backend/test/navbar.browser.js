@@ -420,6 +420,34 @@ function startServer() {
       response.end('<!doctype html><html lang="de"><body><a href="/scoreboard-navigation-test.html">Scoreboard öffnen</a></body></html>');
       return;
     }
+    if (pathname === "/auth-timer-test.html") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html lang="de"><body><script>
+        window.__sessionRequests = 0;
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (input, options) => {
+          const target = typeof input === "string" ? input : input.url;
+          if (new URL(target, location.href).pathname === "/api/session") window.__sessionRequests += 1;
+          return nativeFetch(input, options);
+        };
+      </script><script type="module">
+        import { ready } from "/JS/authClient-timer-test.js";
+        await ready;
+        window.__authReady = true;
+      </script></body></html>`);
+      return;
+    }
+    if (pathname === "/api/session") {
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      response.end(JSON.stringify({
+        success: true,
+        authenticated: true,
+        user: { id: "player-1", role: "player", login: "player-login" },
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        serverTime: Date.now(),
+      }));
+      return;
+    }
     if (pathname === "/messages-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><div id="header-container"></div><div id="mobile-nav-container"></div><script type="module" src="/JS/navbar-under-test.js"></script><script type="module" src="/JS/modals-under-test.js"></script></body></html>');
@@ -508,6 +536,19 @@ function startServer() {
       response.end(authStub);
       return;
     }
+    if (pathname === "/JS/authClient-timer-test.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/authClient.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/authDataClient.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/test/authDataClient.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end("export const restartConnection = async () => {};\n");
+      return;
+    }
     if (pathname === "/test/dataClient.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(dataClientStub);
@@ -515,7 +556,7 @@ function startServer() {
     }
     if (pathname === "/test/diagnostics.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-      response.end("export const diagnostic = { info() {}, warn() {}, error() {} };\n");
+      response.end("export const diagnostic = { info() {}, warn() {}, error() {} }; export const applyDiagnosticPolicy = () => {};\n");
       return;
     }
     if (pathname === "/test/monitorReady.js") {
@@ -690,6 +731,26 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
     }
   } finally {
     await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("30-Tage-Session erzeugt keinen hochfrequenten Browser-Request", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/auth-timer-test.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => window.__authReady === true);
+    await page.waitForTimeout(500);
+
+    assert.equal(await page.evaluate(() => window.__sessionRequests), 1);
+  } finally {
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });
