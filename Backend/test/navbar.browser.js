@@ -406,6 +406,20 @@ function startServer() {
       response.end(source);
       return;
     }
+    if (pathname === "/scoreboard-navigation-test.html") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "scoreboard.html"), "utf8")
+        .replace(/<script[\s\S]*?<\/script>/g, "")
+        .replace("</head>", "<style>#scoreboard-loader { display: none !important; }</style></head>")
+        .replace("</body>", '<script type="module" src="/JS/scoreboardBack.js"></script></body>');
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/scoreboard-source-test.html") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end('<!doctype html><html lang="de"><body><a href="/scoreboard-navigation-test.html">Scoreboard öffnen</a></body></html>');
+      return;
+    }
     if (pathname === "/messages-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body><div id="header-container"></div><div id="mobile-nav-container"></div><script type="module" src="/JS/navbar-under-test.js"></script><script type="module" src="/JS/modals-under-test.js"></script></body></html>');
@@ -1036,7 +1050,7 @@ test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns",
       };
     });
     assert.deepEqual(layout, { sameRightEdge: true, nextBelowStar: true, previousRight: "10px" });
-    const back = page.getByRole("link", { name: "Zurück zum Dashboard" });
+    const back = page.getByRole("link", { name: "Zurück" });
     assert.equal(await back.getAttribute("href"), "./index.html?dashboard=1");
     assert.equal(await back.locator("svg").getAttribute("data-icon"), "arrow_back");
     assert.equal(await back.locator("svg").getAttribute("aria-hidden"), "true");
@@ -1049,6 +1063,42 @@ test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns",
         usesCurrentColor: getComputedStyle(icon).fill === getComputedStyle(element).color,
       };
     }), { button: [36, 36], icon: [22, 22], usesCurrentColor: true });
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Scoreboard kehrt zur internen Herkunft zurueck und nutzt direkt das Dashboard", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const page = await newProfilePage(browser, hasSelectedProfile() ? {} : { viewport: { width: 390, height: 844 } });
+    await page.goto(`${origin}/scoreboard-source-test.html`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("link", { name: "Scoreboard öffnen" }).click();
+    await page.waitForURL(`${origin}/scoreboard-navigation-test.html`);
+    const back = page.locator(".scoreboard-back");
+    if (await back.isVisible()) await back.click({ noWaitAfter: true });
+    else {
+      await back.evaluate((element) => { element.style.display = "grid"; });
+      await back.click({ noWaitAfter: true });
+    }
+    await page.waitForURL(`${origin}/scoreboard-source-test.html`);
+
+    const directPage = await newProfilePage(browser, hasSelectedProfile() ? {} : { viewport: { width: 390, height: 844 } });
+    await directPage.goto(`${origin}/scoreboard-navigation-test.html`, { waitUntil: "domcontentloaded" });
+    const directBack = directPage.locator(".scoreboard-back");
+    if (await directBack.isVisible()) await directBack.click({ noWaitAfter: true });
+    else {
+      await directBack.evaluate((element) => { element.style.display = "grid"; });
+      await directBack.click({ noWaitAfter: true });
+    }
+    await directPage.waitForURL(`${origin}/index.html?dashboard=1`);
+    await directPage.close();
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

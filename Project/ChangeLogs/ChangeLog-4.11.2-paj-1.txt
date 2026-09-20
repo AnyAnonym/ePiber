@@ -24,3 +24,11 @@ Commit: 4.11.2-paj-1-3 | Bewerbshistorien als Favoriten ergänzt
   - [Frontend] Das Uhr-/Pfeilsymbol der Historienbuttons wird aus demselben zentralen SVG-Pfad auch in Navigation und Favoritenseite dargestellt.
   - [Backend] Der Favoriten- und Startseitenvertrag erlaubt ausschliesslich die geschlossenen Bewerbeziele `history:all` sowie `history:competition` mit validierter Bewerbs-ID.
   - [Tests] Vertrags-, Integrations- und Browsertests decken Validierung, Persistenz, datensparsame Abschlusslogs, Beschriftung, Ziel-URLs, Favoritensterne und den direkten Dialogaufruf ab.
+
+[4.11.2-paj-1-4] - 2026-09-20
+Commit: 4.11.2-paj-1-4 | Scoreboard-Ruecknavigation korrigiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-3-x` gesetzt.
+  - [Frontend] Der Scoreboard-Zurueckbutton kehrt bei interner Navigation zur aufrufenden Seite zurueck; direkte Aufrufe, App-Starts und fehlendes JavaScript verwenden weiterhin das Dashboard als sicheren Fallback.
+  - [Tests] Die Sieben-Profil-Browsersmokesuite deckt interne Rueckkehr und Dashboard-Fallback des Scoreboards ab.
