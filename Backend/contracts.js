@@ -116,6 +116,14 @@ function favoriteTarget(raw) {
         id: id("id"),
         paarungslayout: optional(integer("paarungslayout", { min: 0, max: 5 })),
       });
+    } else if (pageTarget.page === "Bewerbe" && rawParams.history !== undefined) {
+      params = objectShape(rawParams, {
+        history: (entry) => text("history", { max: 11, pattern: /^(all|competition)$/ })(entry),
+        id: optional(id("id")),
+      });
+      if ((params.history === "competition") !== (params.id !== undefined)) {
+        throw new AppError("VALIDATION_ERROR", "Bewerbshistorie benoetigt genau bei Einzelhistorien eine ID");
+      }
     } else if (FAVORITE_ID_PAGES.has(pageTarget.page)) {
       params = objectShape(rawParams, { id: id("id") });
     } else if (pageTarget.page === "navigator") {

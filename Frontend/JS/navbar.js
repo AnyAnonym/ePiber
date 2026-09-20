@@ -1,5 +1,6 @@
 import { hasRole, ready, subscribeAuth } from "./authClient.js";
 import { createEndpoint, subscribe } from "./dataClient.js";
+import { HISTORY_ICON_PATH } from "./materialSymbols.js";
 import {
   favoriteHref,
   favoriteLabel,
@@ -20,6 +21,7 @@ const mobileNavIcons = {
   close: "m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z",
   person: "M367-527q-47-47-47-113t47-113q47-47 113-47t113 47q47 47 47 113t-47 113q-47 47-113 47t-113-47ZM160-160v-112q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v112H160Zm80-80h480v-32q0-11-5.5-20T700-306q-54-27-109-40.5T480-360q-56 0-111 13.5T260-306q-9 5-14.5 14t-5.5 20v32Zm296.5-343.5Q560-607 560-640t-23.5-56.5Q513-720 480-720t-56.5 23.5Q400-673 400-640t23.5 56.5Q447-560 480-560t56.5-23.5ZM480-640Zm0 400Z",
   star: "m354-287 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Zm247-350Z",
+  history: HISTORY_ICON_PATH,
   dashboard: "M520-600v-240h320v240H520ZM120-440v-400h320v400H120Zm400 320v-400h320v400H520Zm-400 0v-240h320v240H120Zm80-400h160v-240H200v240Zm400 320h160v-240H600v240Zm0-480h160v-80H600v80ZM200-200h160v-80H200v80Zm160-320Zm240-160Zm0 240ZM360-280Z",
   emoji_events: "M280-120v-80h160v-124q-49-11-87.5-41.5T296-442q-75-9-125.5-65.5T120-640v-40q0-33 23.5-56.5T200-760h80v-80h400v80h80q33 0 56.5 23.5T840-680v40q0 76-50.5 132.5T664-442q-18 46-56.5 76.5T520-324v124h160v80H280Zm0-408v-152h-80v40q0 38 22 68.5t58 43.5Zm285 93q35-35 35-85v-240H360v240q0 50 35 85t85 35q50 0 85-35Zm115-93q36-13 58-43.5t22-68.5v-40h-80v152Zm-200-52Z",
   expand_more: "M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z",
@@ -52,6 +54,7 @@ function escapeHtml(value) {
 
 export function favoriteIconName(favorite) {
   if (favorite.type === "overlay") return favorite.overlay === "match-result" ? "sports_tennis" : "description";
+  if (favorite.page === "Bewerbe" && favorite.params?.history) return "history";
   return {
     index: "dashboard", Matches1: "sports_tennis", players: "person_search", Bewerbe: "swords", scoreboard: "scoreboard",
     adminLogging: "description", personenNormalisieren: "database", mitgliederAbgleichen: "sync", servicebereich: "dns",

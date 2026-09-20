@@ -4,6 +4,7 @@ import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay
 import { signalMonitorReady, signalMonitorFailed } from "./monitorReady.js";
 import { diagnostic } from "./diagnostics.js";
 import { createMaterialSymbol } from "./materialSymbols.js";
+import { createFavoriteButton, refreshFavoriteButtons } from "./favorites.js";
 
 const readBewerbe = createEndpoint("bewerbe");
 const readBewerbsart = createEndpoint("bewerbsart");
@@ -30,6 +31,8 @@ let bewerbeLoadedOnce = false;
 let historyButtonsVisible = false;
 let historyAuthIdentity = null;
 let historyRequestGeneration = 0;
+let competitionsById = new Map();
+let requestedHistoryOpened = false;
 const historyState = {
   open: false,
   global: false,
@@ -85,6 +88,7 @@ function clearHistoryState() {
   historyState.loading = false;
   historyState.reactionCatalog = [];
   historyState.revision = 0;
+  refreshFavoriteButtons();
   for (const id of ["history-comments-modal", "history-comment-editor-modal", "history-reactions-modal"]) {
     const interactionModal = historyElement(id);
     if (interactionModal) {
@@ -111,6 +115,40 @@ function clearHistoryState() {
     historyElement("competition-history-more").textContent = "Weitere Einträge laden";
     historyElement("competition-history-more").hidden = true;
   }
+}
+
+function historyFavoriteTarget() {
+  if (!historyState.open) return null;
+  return historyState.global
+    ? { type: "page", page: "Bewerbe", params: { history: "all" } }
+    : { type: "page", page: "Bewerbe", params: { history: "competition", id: historyState.bewerbId } };
+}
+
+function requestedHistory() {
+  const params = new URLSearchParams(window.location.search);
+  const history = params.get("history");
+  if (history === "all") return { global: true };
+  const id = String(params.get("id") || "").trim();
+  if (history === "competition" && /^[A-Za-z0-9_.:-]{1,64}$/.test(id)) return { global: false, id };
+  return null;
+}
+
+function openRequestedHistory() {
+  if (requestedHistoryOpened || !historyButtonsVisible || !bewerbeLoadedOnce) return;
+  const requested = requestedHistory();
+  if (!requested) return;
+  const globalButton = historyElement("all-competition-history-button");
+  if (requested.global) {
+    requestedHistoryOpened = true;
+    openCompetitionHistory(null, globalButton);
+    return;
+  }
+  const competition = competitionsById.get(requested.id);
+  const button = [...document.querySelectorAll(".competition-history-button[data-competition-id]")]
+    .find((entry) => entry.dataset.competitionId === requested.id);
+  if (!competition || !button) return;
+  requestedHistoryOpened = true;
+  openCompetitionHistory(competition, button);
 }
 
 function closeCompetitionHistory({ restoreFocus = true } = {}) {
@@ -921,6 +959,7 @@ function openCompetitionHistory(competition, button) {
   historyState.returnFocus = button;
   historyElement("competition-history-title").textContent = "Historie";
   historyElement("competition-history-competition-name").textContent = historyState.competitionName;
+  refreshFavoriteButtons();
   const modal = historyElement("competition-history-modal");
   modal.hidden = false;
   window.lockModalScroll?.();
@@ -932,6 +971,8 @@ function initializeCompetitionHistory() {
   const modal = historyElement("competition-history-modal");
   const globalButton = historyElement("all-competition-history-button");
   globalButton?.appendChild(createMaterialSymbol("history"));
+  const favoriteHost = historyElement("competition-history-favorite");
+  favoriteHost?.appendChild(createFavoriteButton(historyFavoriteTarget, { className: "competition-history-favorite-star" }));
   globalButton?.addEventListener("click", () => openCompetitionHistory(null, globalButton));
   historyElement("competition-history-close")?.addEventListener("click", () => closeCompetitionHistory());
   historyElement("competition-history-more")?.addEventListener("click", () => loadCompetitionHistory({
@@ -987,6 +1028,7 @@ function initializeCompetitionHistory() {
     if (historyAuthIdentity !== null && historyAuthIdentity !== identity) closeCompetitionHistory({ restoreFocus: false });
     historyAuthIdentity = identity;
     setHistoryButtonsVisible(Boolean(identity));
+    openRequestedHistory();
   });
   ready.catch(() => setHistoryButtonsVisible(false));
   subscribe("competition-history", (data) => {
@@ -1098,6 +1140,7 @@ function createCard(b) {
   historyButton.className = "competition-history-button";
   historyButton.setAttribute("aria-label", `Historie von ${String(b.bezeichnung || "Bewerb")} öffnen`);
   historyButton.title = "Bewerbshistorie öffnen";
+  historyButton.dataset.competitionId = String(b.id);
   historyButton.appendChild(createMaterialSymbol("history"));
   historyButton.hidden = !historyButtonsVisible;
   historyButton.addEventListener("click", (event) => {
@@ -1293,6 +1336,7 @@ async function loadBewerbe() {
     });
 
     const filtered = bewerbe.filter((b) => String(b.id).trim() !== "1");
+    competitionsById = new Map(filtered.map((competition) => [String(competition.id), competition]));
     scheduleCompetitionBoundary(filtered);
 
     const today = new Date();
@@ -1360,6 +1404,7 @@ async function loadBewerbe() {
     }
     container.replaceChildren(content);
     bewerbeLoadedOnce = true;
+    openRequestedHistory();
     if (!preserveContent) hideLoadingOverlay();
   } catch (err) {
     diagnostic.error("competitions_load_failed", err);

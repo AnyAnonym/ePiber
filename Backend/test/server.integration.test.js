@@ -767,6 +767,8 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     expectedRevision: 0,
     favorites: [
       { type: "page", page: "RoundRobin", params: { id: "cup-1", paarungslayout: 2 } },
+      { type: "page", page: "Bewerbe", params: { history: "all" } },
+      { type: "page", page: "Bewerbe", params: { history: "competition", id: "cup-1" } },
       { type: "overlay", overlay: "match-appointment" },
     ],
   });
@@ -778,6 +780,8 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     expectedRevision: 0,
     favorites: [
       { type: "page", page: "RoundRobin", params: { id: "cup-1", paarungslayout: 2 } },
+      { type: "page", page: "Bewerbe", params: { history: "all" } },
+      { type: "page", page: "Bewerbe", params: { history: "competition", id: "cup-1" } },
       { type: "overlay", overlay: "match-appointment" },
     ],
   });
@@ -793,9 +797,9 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     success: true, favorites: [], revision: 0, updatedAt: 0,
   });
   assert.equal(logEntries.some(({ event, fields }) => event === "favorites_update_completed"
-    && fields.actorId === "p2" && fields.count === 2 && fields.revision === 1 && fields.outcome === "success"), true);
+    && fields.actorId === "p2" && fields.count === 4 && fields.revision === 1 && fields.outcome === "success"), true);
   assert.equal(logEntries.some(({ event, fields }) => event === "favorites_update_completed"
-    && fields.actorId === "p2" && fields.count === 2 && fields.revision === 1 && fields.outcome === "repeated"), true);
+    && fields.actorId === "p2" && fields.count === 4 && fields.revision === 1 && fields.outcome === "repeated"), true);
   assert.equal(logEntries.some(({ event, fields }) => event === "favorites_update_completed"
     && fields.actorId === "p2" && fields.count === 0 && fields.revision === 1 && fields.outcome === "rejected"), true);
   assert.deepEqual(Object.keys(logEntries.find(({ event, fields }) => event === "favorites_update_completed"

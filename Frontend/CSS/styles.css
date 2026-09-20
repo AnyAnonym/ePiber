@@ -2214,6 +2214,18 @@ body.mobile-nav-open {
   text-align: center;
 }
 
+.competition-history-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+}
+
+#competition-history-favorite {
+  display: inline-flex;
+  margin-top: -3px;
+}
+
 .competition-history-heading-copy,
 .competition-history-heading h2,
 .competition-history-heading p {

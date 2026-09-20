@@ -43,8 +43,14 @@ const dataClientStub = `
 let messageRevision = 7;
 const initialFavoriteCompetition = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1";
 const initialTwoFavorites = new URLSearchParams(window.location.search).get("twoFavorites") === "1";
-let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites ? 1 : 0;
-let favorites = initialTwoFavorites
+const initialHistoryFavorites = new URLSearchParams(window.location.search).get("favoriteHistory") === "1";
+let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites || initialHistoryFavorites ? 1 : 0;
+let favorites = initialHistoryFavorites
+  ? [
+      { targetId: "favorite-history-all", type: "page", page: "Bewerbe", params: { history: "all" } },
+      { targetId: "favorite-history-competition", type: "page", page: "Bewerbe", params: { history: "competition", id: "2" } },
+    ]
+  : initialTwoFavorites
   ? [
       { targetId: "favorite-ranking", type: "page", page: "rangliste", params: { id: "2" } },
       { targetId: "favorite-result", type: "overlay", overlay: "match-result" },
@@ -957,6 +963,21 @@ test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendig
     assert.equal(await link.locator("span").textContent(), expectedName);
     assert.equal(await link.locator("span").evaluate((element) => getComputedStyle(element).webkitLineClamp), "2");
     assert.equal((await link.textContent()).includes("(2)"), false);
+
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteHistory=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+    await page.locator("#hamburgerBtn").click();
+    const historyFavorites = page.locator(".mobile-nav-favorites");
+    await historyFavorites.locator(".mobile-nav-favorites-toggle").click();
+    const historyLinks = historyFavorites.locator(".mobile-nav-favorite-link");
+    await historyLinks.first().waitFor({ state: "visible" });
+    assert.deepEqual(await historyLinks.locator("span").allTextContents(), ["Historie aller Bewerbe", "Historie – Mobile Rangliste"]);
+    assert.deepEqual(await historyLinks.evaluateAll((links) => links.map((entry) => entry.getAttribute("href"))), [
+      "Bewerbe.html?history=all",
+      "Bewerbe.html?history=competition&id=2",
+    ]);
+    assert.deepEqual(await historyLinks.locator(".mobile-nav-favorite-icon").evaluateAll((icons) => icons.map((icon) => icon.dataset.icon)), ["history", "history"]);
+    const historyIconPaths = await historyLinks.locator(".mobile-nav-favorite-icon path").evaluateAll((paths) => paths.map((path) => path.getAttribute("d")));
+    assert.equal(historyIconPaths.every((path) => typeof path === "string" && path.startsWith("M480-120") && path.includes("L440-464")), true);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

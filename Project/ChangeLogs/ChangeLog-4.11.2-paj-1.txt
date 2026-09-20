@@ -13,3 +13,14 @@ Commit: 4.11.2-paj-1-2 | Footer-Bezeichnung auf PiTec GmbH geändert
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-1-x` gesetzt.
   - [Frontend] Footer-Bezeichnung von `ASKÖ Piberbach – Tennis` auf `PiTec GmbH` geändert und Browser-Test-Fixture angeglichen.
+
+[4.11.2-paj-1-3] - 2026-09-20
+Commit: 4.11.2-paj-1-3 | Bewerbshistorien als Favoriten ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-2-x` gesetzt.
+  - [Frontend] Gesamt- und Einzelbewerbshistorien koennen im Dialog kontogebunden favorisiert und aus Navigation, Favoritenseite oder Startseitenpraeferenz direkt wieder geoeffnet werden.
+  - [Frontend] Historienfavoriten verwenden kontrollierte Bezeichnungen mit Bewerbsnamen und ein eigenes Historiensymbol.
+  - [Frontend] Das Uhr-/Pfeilsymbol der Historienbuttons wird aus demselben zentralen SVG-Pfad auch in Navigation und Favoritenseite dargestellt.
+  - [Backend] Der Favoriten- und Startseitenvertrag erlaubt ausschliesslich die geschlossenen Bewerbeziele `history:all` sowie `history:competition` mit validierter Bewerbs-ID.
+  - [Tests] Vertrags-, Integrations- und Browsertests decken Validierung, Persistenz, datensparsame Abschlusslogs, Beschriftung, Ziel-URLs, Favoritensterne und den direkten Dialogaufruf ab.
