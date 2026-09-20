@@ -624,7 +624,18 @@ Fachhistorien und Betriebslogs:
     Transaktion; stabile IDs machen Wiederholungen idempotent. Erfolgreiche neue
     Projektionen publizieren danach private Zusammenfassungen. Externe Adapter
     aktualisieren ausschliesslich kontrollierte Zustellstatus.
-    Messaging-Schema 6 migriert bereits persistierte Ergebnisereignisse mit den
+    Teilnehmerprojektionen fachlicher Eigenaktivitaeten bleiben fuer den Akteur
+    in der Inbox sichtbar, werden aber mit dem Ereigniszeitpunkt initial
+    quittiert und nicht extern an ihn selbst zugestellt. Andere Beteiligte
+    erhalten ihre Projektionen ungelesen und gemaess ihrer konfigurierten Kanaele.
+    Das gilt insbesondere fuer Forderungen, Termine, Terminabsagen, Ergebnisse,
+    Ranglistenrueckzuege und administrative Forderungskorrekturen, sofern der
+    Akteur selbst eine Teilnehmerprojektion besitzt. Operative Folgeaufgaben wie
+    ein fehlendes KO-Folgematch bleiben davon getrennte kenntnisnahmepflichtige
+    Meldungen.
+    Messaging-Schema 11 quittiert bestehende ungelesene Forderer-Eigenmeldungen
+    und unterbindet deren noch ausstehende externe Selbstzustellung. Schema 6
+    migriert bereits persistierte Ergebnisereignisse mit den
     kontrollierten alten Detailpraefixen `Abschlussart: walkover|retirement`.
     Schema 7 stellt kontrolliert erkannte Walkover-Inboxtexte auf
     `Du gewinnst durch W.O. von ...` beziehungsweise `Du verlierst durch W.O.`

@@ -19,6 +19,7 @@ test("Startseitenvertrag verwendet feste Einstiege und den Favoritenzielvertrag"
     { type: "page", page: "index" },
     { type: "page", page: "favorites" },
     { type: "page", page: "rangliste", params: { id: "cup-1" } },
+    { type: "page", page: "Bewerbe", params: { history: "competition", id: "cup-1" } },
     { type: "overlay", overlay: "match-result" },
   ]) {
     assert.deepEqual(validateEndpointRequest("setMyStartPage", {
@@ -42,12 +43,15 @@ test("Favoritenvertrag erlaubt nur kontrollierte eindeutige Ziele", () => {
     operationId,
     expectedRevision: 0,
     favorites: [
+      { type: "page", page: "index" },
       { type: "page", page: "RoundRobin", params: { id: "cup-1", paarungslayout: 3 } },
+      { type: "page", page: "Bewerbe", params: { history: "all" } },
+      { type: "page", page: "Bewerbe", params: { history: "competition", id: "cup-1" } },
       { type: "page", page: "navigator", params: { profil: "screen-1" } },
       { type: "overlay", overlay: "match-result" },
     ],
   });
-  assert.equal(result.favorites.length, 3);
+  assert.equal(result.favorites.length, 6);
   assert.equal(result.favorites.every(({ targetId }) => /^favorite-[A-Za-z0-9_-]{43}$/.test(targetId)), true);
   assert.deepEqual(validateEndpointRequest("setMyFavorites", {
     operationId, expectedRevision: 0, favorites: [{ type: "page", page: "Matches1", params: {} }],
@@ -58,7 +62,10 @@ test("Favoritenvertrag erlaubt nur kontrollierte eindeutige Ziele", () => {
   for (const favorites of [
     [{ type: "page", page: "unknown" }],
     [{ type: "page", page: "Matches1", params: { id: "1" } }],
-    [{ type: "page", page: "index" }],
+    [{ type: "page", page: "Bewerbe", params: { history: "competition" } }],
+    [{ type: "page", page: "Bewerbe", params: { history: "all", id: "cup-1" } }],
+    [{ type: "page", page: "Bewerbe", params: { history: "free-form" } }],
+    [{ type: "page", page: "index", params: { dashboard: 1 } }],
     [{ type: "page", page: "RoundRobin", params: { paarungslayout: 6 } }],
     [{ type: "page", page: "rangliste" }],
     [{ type: "page", page: "navigator", params: { profil: "https://example.test" } }],

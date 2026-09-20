@@ -508,7 +508,7 @@ und `synchronous=FULL`; es gibt keine automatische fachliche Bereinigung.
 
 `MESSAGING_FILE`, standardmaessig `messaging.sqlite` im Verzeichnis von
 `STATE_FILE`, produktiv `/var/lib/epiber-<system>/messaging.sqlite`, verwendet
-Schema 9:
+Schema 11:
 
 Tabelle `competition_events`:
   event_id PRIMARY KEY, competition_id, created_at, event_type, source,
@@ -536,6 +536,11 @@ Tabelle `event_deliveries`:
 Tabelle `event_ack_operations`:
   user_id + operation_id PRIMARY KEY, event_id, message_id, acknowledged_at.
   Sie bindet eine Quittierung idempotent an genau eine eigene Meldung.
+
+Tabelle `message_bulk_ack_operations`:
+  user_id + operation_id PRIMARY KEY, acknowledged_at, changed_count. Sie bindet
+  eine Sammelquittierung idempotent an den Benutzer und den einmal ermittelten
+  Umfang.
 
 Tabelle `messaging_revisions`:
   user_id PRIMARY KEY, revision. Neue persoenliche Projektionen und erstmalige
@@ -592,6 +597,12 @@ die Verliererperspektive `Du verlierst durch W.O.`, Historienzusammenfassung und
   Ereignisse und persoenliche Meldungsprojektionen bleiben unveraendert. Schema 9
   ergaenzt bei bereits auf Schema 8 gestarteten Datenbanken die fehlende Tabelle
   `comment_reactions` samt Index additiv; vorhandene Kommentare bleiben unveraendert.
+  Schema 10 ergaenzt `message_bulk_ack_operations`. Schema 11 setzt bei bisher
+  ungelesenen `challenge_confirmation`-Projektionen des Forderungsakteurs
+  `acknowledged_at` auf den Ereigniszeitpunkt, erhoeht dessen Messaging-Revision
+  einmalig und beendet nur noch ausstehende externe Selbstzustellungen als
+  `not_configured`. Gegnerprojektionen, bereits quittierte Eigenmeldungen und
+  abgeschlossene Zustellstaende bleiben unveraendert.
 Eine einmalige
 Legacy-Zuordnung ergaenzt bei matchgebundenen Ereignissen fehlende Bewerb-IDs aus
 `Matches1`; beliebige manuelle Sheet-Aenderungen erzeugen dagegen keine

@@ -22,6 +22,9 @@ Meine Favoriten - Persoenliche Start- und Schnellzugriffsseite
   dieselbe Beschriftung wie der entsprechende Menuefavorit. Seitenziele
   navigieren mit ihren kontrollierten Parametern; `Spieleingabe` und `Termin
   festlegen / aendern` oeffnen die vorhandene serverautorisierte Matchauswahl.
+  Das Ziel `Dashboard` verwendet `index.html?dashboard=1` und bleibt dadurch auch
+  dann direkt erreichbar, wenn `Meine Favoriten` als persoenliche Startseite
+  eingestellt ist.
   Der Stift aktiviert Drei-Striche-Handles. Pointerziehen und Pfeiltasten schreiben
   ueber `setMyFavorites` die eine gemeinsame, revisionierte Reihenfolge; eine
   getrennte Seitensortierung existiert nicht. Positionsaenderungen werden fuer

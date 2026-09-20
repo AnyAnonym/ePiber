@@ -43,8 +43,17 @@ const dataClientStub = `
 let messageRevision = 7;
 const initialFavoriteCompetition = new URLSearchParams(window.location.search).get("favoriteCompetition") === "1";
 const initialTwoFavorites = new URLSearchParams(window.location.search).get("twoFavorites") === "1";
-let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites ? 1 : 0;
-let favorites = initialTwoFavorites
+const initialHistoryFavorites = new URLSearchParams(window.location.search).get("favoriteHistory") === "1";
+const initialDashboardFavorite = new URLSearchParams(window.location.search).get("favoriteDashboard") === "1";
+let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites || initialHistoryFavorites || initialDashboardFavorite ? 1 : 0;
+let favorites = initialDashboardFavorite
+  ? [{ targetId: "favorite-dashboard", type: "page", page: "index" }]
+  : initialHistoryFavorites
+  ? [
+      { targetId: "favorite-history-all", type: "page", page: "Bewerbe", params: { history: "all" } },
+      { targetId: "favorite-history-competition", type: "page", page: "Bewerbe", params: { history: "competition", id: "2" } },
+    ]
+  : initialTwoFavorites
   ? [
       { targetId: "favorite-ranking", type: "page", page: "rangliste", params: { id: "2" } },
       { targetId: "favorite-result", type: "overlay", overlay: "match-result" },
@@ -370,7 +379,7 @@ function startServer() {
     if (pathname === "/favorites.html") {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "favorites.html"), "utf8")
         .replace('src="JS/favoritesPage.js"', 'src="/JS/favoritesPage-under-test.js"')
-        .replace('<div id="footer-container"></div>', '<div id="footer-container"><footer class="footer"><div class="footer-clock">19.09.2026, 12:00</div><span class="footer-separator">|</span><span class="footer-brand">© ASKÖ Piberbach – Tennis</span><span class="footer-separator">|</span><span id="footer-version">vTest</span></footer></div>');
+        .replace('<div id="footer-container"></div>', '<div id="footer-container"><footer class="footer"><div class="footer-clock">19.09.2026, 12:00</div><span class="footer-separator">|</span><span class="footer-brand">PiTec GmbH</span><span class="footer-separator">|</span><span id="footer-version">vTest</span></footer></div>');
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end(source);
       return;
@@ -398,6 +407,48 @@ function startServer() {
         .replace(/<script[\s\S]*?<\/script>/g, "");
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end(source);
+      return;
+    }
+    if (pathname === "/scoreboard-navigation-test.html") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "scoreboard.html"), "utf8")
+        .replace(/<script[\s\S]*?<\/script>/g, "")
+        .replace("</head>", "<style>#scoreboard-loader { display: none !important; }</style></head>")
+        .replace("</body>", '<script type="module" src="/JS/scoreboardBack.js"></script></body>');
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/scoreboard-source-test.html") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end('<!doctype html><html lang="de"><body><a href="/scoreboard-navigation-test.html">Scoreboard öffnen</a></body></html>');
+      return;
+    }
+    if (pathname === "/auth-timer-test.html") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html lang="de"><body><script>
+        window.__sessionRequests = 0;
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (input, options) => {
+          const target = typeof input === "string" ? input : input.url;
+          if (new URL(target, location.href).pathname === "/api/session") window.__sessionRequests += 1;
+          return nativeFetch(input, options);
+        };
+      </script><script type="module">
+        import { ready } from "/JS/authClient-timer-test.js";
+        await ready;
+        window.__authReady = true;
+      </script></body></html>`);
+      return;
+    }
+    if (pathname === "/api/session") {
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      response.end(JSON.stringify({
+        success: true,
+        authenticated: true,
+        user: { id: "player-1", role: "player", login: "player-login" },
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        serverTime: Date.now(),
+      }));
       return;
     }
     if (pathname === "/messages-test.html") {
@@ -488,6 +539,19 @@ function startServer() {
       response.end(authStub);
       return;
     }
+    if (pathname === "/JS/authClient-timer-test.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/authClient.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/authDataClient.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/test/authDataClient.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end("export const restartConnection = async () => {};\n");
+      return;
+    }
     if (pathname === "/test/dataClient.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(dataClientStub);
@@ -495,7 +559,7 @@ function startServer() {
     }
     if (pathname === "/test/diagnostics.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-      response.end("export const diagnostic = { info() {}, warn() {}, error() {} };\n");
+      response.end("export const diagnostic = { info() {}, warn() {}, error() {} }; export const applyDiagnosticPolicy = () => {};\n");
       return;
     }
     if (pathname === "/test/monitorReady.js") {
@@ -670,6 +734,26 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
     }
   } finally {
     await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("30-Tage-Session erzeugt keinen hochfrequenten Browser-Request", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/auth-timer-test.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => window.__authReady === true);
+    await page.waitForTimeout(500);
+
+    assert.equal(await page.evaluate(() => window.__sessionRequests), 1);
+  } finally {
+    await browser?.close();
     await new Promise((resolve) => server.close(resolve));
   }
 });
@@ -936,7 +1020,52 @@ test("Desktop verwendet denselben Drawer und verschiebt die Anwendung um maximal
   }
 });
 
-test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendigen Bewerbsnamen", {
+test("Dashboard ist trotz Favoriten-Startseite direkt favorisiert erreichbar", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteDashboard=1&startFavorites=1&startPageTest=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+
+    const star = page.locator(".page-favorite-star");
+    await star.waitFor({ state: "visible" });
+    assert.equal(await star.getAttribute("aria-pressed"), "true");
+    const titleLayout = await page.evaluate(() => {
+      const row = document.querySelector(".welcome > .favorite-title-row").getBoundingClientRect();
+      const heading = document.getElementById("welcome-title").getBoundingClientRect();
+      const favorite = document.querySelector(".page-favorite-star").getBoundingClientRect();
+      return { rowRight: row.right, viewportWidth: innerWidth, headingBottom: heading.bottom, favoriteTop: favorite.top, favoriteBottom: favorite.bottom };
+    });
+    assert.equal(titleLayout.rowRight <= titleLayout.viewportWidth, true);
+    assert.equal(titleLayout.favoriteTop < titleLayout.headingBottom && titleLayout.favoriteBottom > titleLayout.headingBottom - 20, true);
+
+    await page.evaluate(() => window.openProfileModal());
+    await page.getByRole("tab", { name: "Einstellungen" }).click();
+    assert.deepEqual(await page.locator("#profileStartPage option").allTextContents(), ["Dashboard", "Meine Favoriten"]);
+    await page.locator("#profileModal .close").click();
+
+    await page.locator("#hamburgerBtn").click();
+    const favorites = page.locator(".mobile-nav-favorites");
+    await favorites.locator(".mobile-nav-favorites-toggle").click();
+    const dashboardLink = favorites.locator(".mobile-nav-favorite-link");
+    assert.equal(await dashboardLink.locator("span").textContent(), "Dashboard");
+    assert.equal(await dashboardLink.getAttribute("href"), "index.html?dashboard=1");
+    assert.equal(await dashboardLink.locator('[data-icon="dashboard"]').count(), 1);
+
+    await dashboardLink.click();
+    await page.waitForURL(/index\.html\?dashboard=1$/);
+    assert.equal(await page.locator("#welcome-title").isVisible(), true);
+  } finally {
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Favoriten zeigen den vollstaendigen Bewerbsnamen", {
   skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
@@ -946,7 +1075,7 @@ test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendig
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const expectedName = "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026";
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&longFavorite=1&dashboard=1`, { waitUntil: "domcontentloaded" });
-    assert.equal(await page.locator(".page-favorite-star").count(), 0);
+    assert.equal(await page.locator(".page-favorite-star").count(), 1);
     await page.locator("#hamburgerBtn").click();
     const favorites = page.locator(".mobile-nav-favorites");
     await favorites.locator(".mobile-nav-favorites-toggle").click();
@@ -957,6 +1086,21 @@ test("Dashboard bleibt ohne Favoritenstern und Favoriten zeigen den vollstaendig
     assert.equal(await link.locator("span").textContent(), expectedName);
     assert.equal(await link.locator("span").evaluate((element) => getComputedStyle(element).webkitLineClamp), "2");
     assert.equal((await link.textContent()).includes("(2)"), false);
+
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteHistory=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+    await page.locator("#hamburgerBtn").click();
+    const historyFavorites = page.locator(".mobile-nav-favorites");
+    await historyFavorites.locator(".mobile-nav-favorites-toggle").click();
+    const historyLinks = historyFavorites.locator(".mobile-nav-favorite-link");
+    await historyLinks.first().waitFor({ state: "visible" });
+    assert.deepEqual(await historyLinks.locator("span").allTextContents(), ["Historie aller Bewerbe", "Historie – Mobile Rangliste"]);
+    assert.deepEqual(await historyLinks.evaluateAll((links) => links.map((entry) => entry.getAttribute("href"))), [
+      "Bewerbe.html?history=all",
+      "Bewerbe.html?history=competition&id=2",
+    ]);
+    assert.deepEqual(await historyLinks.locator(".mobile-nav-favorite-icon").evaluateAll((icons) => icons.map((icon) => icon.dataset.icon)), ["history", "history"]);
+    const historyIconPaths = await historyLinks.locator(".mobile-nav-favorite-icon path").evaluateAll((paths) => paths.map((path) => path.getAttribute("d")));
+    assert.equal(historyIconPaths.every((path) => typeof path === "string" && path.startsWith("M480-120") && path.includes("L440-464")), true);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -1015,7 +1159,7 @@ test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns",
       };
     });
     assert.deepEqual(layout, { sameRightEdge: true, nextBelowStar: true, previousRight: "10px" });
-    const back = page.getByRole("link", { name: "Zurück zum Dashboard" });
+    const back = page.getByRole("link", { name: "Zurück" });
     assert.equal(await back.getAttribute("href"), "./index.html?dashboard=1");
     assert.equal(await back.locator("svg").getAttribute("data-icon"), "arrow_back");
     assert.equal(await back.locator("svg").getAttribute("aria-hidden"), "true");
@@ -1028,6 +1172,42 @@ test("Mobile Scoreboard-Aktionen stehen rechtsbuendig und unterhalb des Sterns",
         usesCurrentColor: getComputedStyle(icon).fill === getComputedStyle(element).color,
       };
     }), { button: [36, 36], icon: [22, 22], usesCurrentColor: true });
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Scoreboard kehrt zur internen Herkunft zurueck und nutzt direkt das Dashboard", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const page = await newProfilePage(browser, hasSelectedProfile() ? {} : { viewport: { width: 390, height: 844 } });
+    await page.goto(`${origin}/scoreboard-source-test.html`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("link", { name: "Scoreboard öffnen" }).click();
+    await page.waitForURL(`${origin}/scoreboard-navigation-test.html`);
+    const back = page.locator(".scoreboard-back");
+    if (await back.isVisible()) await back.click({ noWaitAfter: true });
+    else {
+      await back.evaluate((element) => { element.style.display = "grid"; });
+      await back.click({ noWaitAfter: true });
+    }
+    await page.waitForURL(`${origin}/scoreboard-source-test.html`);
+
+    const directPage = await newProfilePage(browser, hasSelectedProfile() ? {} : { viewport: { width: 390, height: 844 } });
+    await directPage.goto(`${origin}/scoreboard-navigation-test.html`, { waitUntil: "domcontentloaded" });
+    const directBack = directPage.locator(".scoreboard-back");
+    if (await directBack.isVisible()) await directBack.click({ noWaitAfter: true });
+    else {
+      await directBack.evaluate((element) => { element.style.display = "grid"; });
+      await directBack.click({ noWaitAfter: true });
+    }
+    await directPage.waitForURL(`${origin}/index.html?dashboard=1`);
+    await directPage.close();
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

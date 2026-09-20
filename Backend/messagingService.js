@@ -140,6 +140,15 @@ class MessagingService {
     };
   }
 
+  activityParticipant({ actorId, createdAt, ...participant }) {
+    const ownActivity = String(participant.userId) === String(actorId);
+    return this.participant({
+      ...participant,
+      acknowledgedAt: ownActivity ? createdAt : null,
+      externalDelivery: !ownActivity,
+    });
+  }
+
   async ensureEvent(event, participants) {
     const outcome = this.repository.ensureEvent(event, participants);
     this.log("info", "competition_event_persistence_completed", {
@@ -167,8 +176,8 @@ class MessagingService {
     return this.repository.getEvent(event.id);
   }
 
-  async ensureMessage({ identity, recipientId, createdAt, subject, body, type, matchId, actorId, competitionId = null }) {
-    const participant = this.participant({ identity, userId: recipientId, role: "recipient", type, subject, body });
+  async ensureMessage({ identity, recipientId, createdAt, subject, body, type, matchId, actorId, competitionId = null, acknowledgedAt = null, externalDelivery = true }) {
+    const participant = this.participant({ identity, userId: recipientId, role: "recipient", type, subject, body, acknowledgedAt, externalDelivery });
     const event = await this.ensureEvent({ id: participant.messageId, competitionId, createdAt, type, source: "match", sourceId: matchId, actorId, actorName: "", summary: subject, detail: "" }, [participant]);
     return event.participants[0];
   }
@@ -178,15 +187,15 @@ class MessagingService {
   }
 
   ensureChallengeConfirmation({ matchId, challengerId, opponentId, opponentName, competitionId = null, competitionName, createdAt = this.now() }) {
-    return this.ensureMessage({ identity: `challenge-confirmation:${matchId}`, recipientId: challengerId, competitionId, createdAt, subject: `Forderung ausgesprochen in ${competitionName}`, body: `Du hast ${opponentName || opponentId} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.`, type: "challenge_confirmation", matchId, actorId: challengerId });
+    return this.ensureMessage({ identity: `challenge-confirmation:${matchId}`, recipientId: challengerId, competitionId, createdAt, subject: `Forderung an ${opponentName || opponentId} ausgesprochen`, body: `Du hast ${opponentName || opponentId} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.`, type: "challenge_confirmation", matchId, actorId: challengerId, acknowledgedAt: createdAt, externalDelivery: false });
   }
 
   async ensureChallengeEvent({ matchId, recipientId, competitionId = null, competitionName, challengerId, challengerName, challengerRank = null, opponentId = recipientId, opponentName, opponentRank = null, createdAt = this.now() }) {
     const challengerDisplay = rankedName(challengerName || challengerId, challengerRank);
     const opponentDisplay = rankedName(opponentName || opponentId, opponentRank);
     const participants = [
-      this.participant({ identity: `challenge:${matchId}`, userId: recipientId, role: "opponent", displayName: opponentName || opponentId, type: "challenge", subject: `Neue Forderung in ${competitionName}`, body: `${challengerDisplay} hat dich${Number.isInteger(opponentRank) && opponentRank >= 0 ? ` (${opponentRank})` : ""} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.` }),
-      this.participant({ identity: `challenge-confirmation:${matchId}`, userId: challengerId, role: "challenger", displayName: challengerName || challengerId, type: "challenge_confirmation", subject: `Forderung ausgesprochen in ${competitionName}`, body: `Du${Number.isInteger(challengerRank) && challengerRank >= 0 ? ` (${challengerRank})` : ""} hast ${opponentDisplay} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.` }),
+      this.activityParticipant({ actorId: challengerId, createdAt, identity: `challenge:${matchId}`, userId: recipientId, role: "opponent", displayName: opponentName || opponentId, type: "challenge", subject: `Neue Forderung in ${competitionName}`, body: `${challengerDisplay} hat dich${Number.isInteger(opponentRank) && opponentRank >= 0 ? ` (${opponentRank})` : ""} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.` }),
+      this.activityParticipant({ actorId: challengerId, createdAt, identity: `challenge-confirmation:${matchId}`, userId: challengerId, role: "challenger", displayName: challengerName || challengerId, type: "challenge_confirmation", subject: `Forderung an ${opponentName || opponentId} ausgesprochen`, body: `Du${Number.isInteger(challengerRank) && challengerRank >= 0 ? ` (${challengerRank})` : ""} hast ${opponentDisplay} in ${competitionName} gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.` }),
     ];
     const event = await this.ensureEvent({
       id: stableId("evt", `challenge:${matchId}`),
@@ -224,7 +233,9 @@ class MessagingService {
       const changeText = changed
         ? `Der Termin für dein Match gegen ${opponentName} wurde von ${previousDateText} auf ${dateText} geändert.`
         : `Dein Match gegen ${opponentName} ist für den ${dateText} geplant.`;
-      return this.participant({
+      return this.activityParticipant({
+        actorId,
+        createdAt,
         identity: `${identity}:${userId}`,
         userId,
         role: "participant",
@@ -233,8 +244,6 @@ class MessagingService {
         subject: `${changed ? "Spieltermin geändert" : "Spieltermin festgelegt"} mit ${opponentName}`,
         body: `${changeText}${reason ? ` Administrator ${actorName || actorId} hat als Grund angegeben: ${reason}` : ""}`,
         allowMissingPerson: true,
-        acknowledgedAt: userId === String(actorId) ? createdAt : null,
-        externalDelivery: userId !== String(actorId),
       });
     });
     const firstTeamName = namedTeams[0].join(" / ");
@@ -268,12 +277,11 @@ class MessagingService {
     const participants = uniqueIds.map((userId) => {
       const ownTeam = teams.findIndex((team) => (team || []).map(String).includes(userId));
       const opponentName = ownTeam >= 0 ? namedTeams[1 - ownTeam].join(" / ") : "Unbekannt";
-      return this.participant({
+      return this.activityParticipant({
+        actorId, createdAt,
         identity: `${identity}:${userId}`, userId, role: "participant", displayName: participantNames[userId] || userId,
         type: "appointment_cancelled", subject: `Spieltermin abgesagt mit ${opponentName}`,
         body: `Der Spieltermin für dein Match gegen ${opponentName} am ${previousDateText} wurde abgesagt.`, allowMissingPerson: true,
-        acknowledgedAt: userId === String(actorId) ? createdAt : null,
-        externalDelivery: userId !== String(actorId),
       });
     });
     const event = await this.ensureEvent({
@@ -325,7 +333,9 @@ class MessagingService {
       const recipientWon = hasOutcome && teams[winnerSide - 1].map(String).includes(userId);
       const opponentIndex = recipientWon ? 2 - winnerSide : winnerSide - 1;
       const outcomeText = hasOutcome ? `Du ${recipientWon ? "gewinnst" : "verlierst"} das Match gegen ${namedTeams[opponentIndex].join(" / ")}` : "";
-      return this.participant({
+      return this.activityParticipant({
+        actorId,
+        createdAt,
         identity: `${identity}:${userId}`,
         userId,
         role: "participant",
@@ -338,8 +348,6 @@ class MessagingService {
           ? `${completionType === "walkover" ? recipientWon ? `Du gewinnst durch W.O. von ${namedTeams[2 - winnerSide].join(" / ")}.` : "Du verlierst durch W.O." : `${outcomeText}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}`}${reason ? ` Grund: ${reason}` : ""}`
           : `${actorName || actorId} hat das Matchergebnis ${changeType === "result" ? "eingetragen" : changeType === "result_cleared" ? "zurückgenommen" : "korrigiert"}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}${reason ? ` Grund: ${reason}` : ""}`,
         allowMissingPerson: true,
-        acknowledgedAt: userId === String(actorId) ? createdAt : null,
-        externalDelivery: userId !== String(actorId),
       });
     });
     const event = await this.ensureEvent({
@@ -431,8 +439,8 @@ class MessagingService {
       ? `Forderung ${role === "challenger" ? "gegen" : "von"} ${otherName} gelöscht`
       : `${label.subject} mit ${otherName}`;
     const participants = [
-      this.participant({ identity: `${identity}:${challengerId}`, userId: challengerId, role: "challenger", displayName: challengerName, type: label.type, subject: subject(opponentName, "challenger"), body: body(opponentName, "challenger"), allowMissingPerson: true }),
-      this.participant({ identity: `${identity}:${opponentId}`, userId: opponentId, role: "opponent", displayName: opponentName, type: label.type, subject: subject(challengerName, "opponent"), body: body(challengerName, "opponent"), allowMissingPerson: true }),
+      this.activityParticipant({ actorId, createdAt, identity: `${identity}:${challengerId}`, userId: challengerId, role: "challenger", displayName: challengerName, type: label.type, subject: subject(opponentName, "challenger"), body: body(opponentName, "challenger"), allowMissingPerson: true }),
+      this.activityParticipant({ actorId, createdAt, identity: `${identity}:${opponentId}`, userId: opponentId, role: "opponent", displayName: opponentName, type: label.type, subject: subject(challengerName, "opponent"), body: body(challengerName, "opponent"), allowMissingPerson: true }),
     ];
     const event = await this.ensureEvent({
       id: stableId("evt", identity),
@@ -452,7 +460,7 @@ class MessagingService {
   async ensureRankingWithdrawalEvent({ competitionId, competitionName, participantId, participantName = participantId, actorId = participantId, actorName = participantName, operationId, reason = "", createdAt = this.now() }) {
     const identity = `ranking-withdrawal:${competitionId}:${participantId}:${operationId || createdAt}`;
     const detail = reason ? `Grund: ${reason}` : "";
-    const participant = this.participant({ identity, userId: participantId, role: "withdrawn", displayName: participantName, type: "ranking_withdrawal", subject: `Aus Rangliste ${competitionName} rausgehängt`, body: `Du hast dich aus der Rangliste ${competitionName} rausgehängt.${detail ? ` ${detail}` : ""}` });
+    const participant = this.activityParticipant({ actorId, createdAt, identity, userId: participantId, role: "withdrawn", displayName: participantName, type: "ranking_withdrawal", subject: `Aus Rangliste ${competitionName} rausgehängt`, body: `Du hast dich aus der Rangliste ${competitionName} rausgehängt.${detail ? ` ${detail}` : ""}` });
     const event = await this.ensureEvent({
       id: stableId("evt", identity),
       competitionId,

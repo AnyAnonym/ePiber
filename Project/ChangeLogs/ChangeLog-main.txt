@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.11.2
+Stand: 4.11.3
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2399,3 +2399,48 @@ Quelle: 4.11.1-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.11.2` gesetzt.
+
+[4.11.3] - 2026-09-20
+Commit: 4.11.3 | Navigation, Favoriten und Meldungen verbessert
+Quelle: 4.11.2-paj-1
+
+  Changed
+  - [Frontend] Footer-Bezeichnung von `ASKÖ Piberbach – Tennis` auf `PiTec GmbH`
+    geaendert.
+  - [Frontend] Gesamt- und Einzelbewerbshistorien koennen kontogebunden
+    favorisiert und aus Navigation, Favoritenseite oder Startseitenpraeferenz
+    direkt geoeffnet werden; kontrollierte Beschriftungen nennen den Bewerb und
+    verwenden ein gemeinsames Historiensymbol.
+  - [Frontend] Der Scoreboard-Zurueckbutton kehrt bei interner Navigation zur
+    aufrufenden Seite zurueck; direkte Aufrufe, App-Starts und fehlendes
+    JavaScript verwenden das Dashboard als sicheren Fallback.
+  - [Frontend] Die Ablaufplanung lang laufender Benutzersessions begrenzt
+    Browser-Timer auf den sicheren 32-Bit-Bereich und verhindert dadurch
+    hochfrequente `/api/session`-Schleifen bei der 30-Tage-Sessiondauer.
+  - [Frontend] Das Dashboard kann ueber einen Stern neben dem Haupttitel
+    favorisiert werden. Sein expliziter `dashboard=1`-Link umgeht eine
+    konfigurierte Favoriten-Startseite; die Startseitenauswahl zeigt Dashboard
+    weiterhin nur einmal.
+  - [Backend] Der Favoriten- und Startseitenvertrag erlaubt die geschlossenen
+    Bewerbshistorienziele sowie das parameterlose Dashboardziel `index`.
+  - [Messaging] Fachliche Eigenaktivitaeten bleiben sichtbar, werden fuer den
+    Akteur aber initial quittiert und nicht extern an ihn selbst zugestellt.
+    Neue Forderer-Eigenmeldungen nennen den geforderten Spieler bereits im
+    Betreff; Gegnerprojektionen bleiben ungelesen.
+  - [Datenbank] Messaging-Schema 11 quittiert bestehende ungelesene
+    Forderer-Eigenmeldungen, erhoeht deren private Revision und beendet nur noch
+    ausstehende externe Selbstzustellungen kontrolliert.
+  - [Observability] Die Schema-11-Migration protokolliert ausschliesslich
+    Schemawerte und aggregierte Anzahlen korrigierter Quittierungen und
+    unterbundener ausstehender Zustellungen.
+  - [Tests] Vertrags-, Service-, Repository-, Integrations-, Migrations- und
+    profiluebergreifende Browsertests sichern Favoriten, Scoreboard-Rueckkehr,
+    Sessiontimer, Meldungsprojektionen, Zustellung, responsive Darstellung und
+    die Schema-11-Migration ab.
+  - [Dokumentation] Architektur-, Datenbank-, Endpoint-, Dashboard- und
+    Favoritendokumentation auf die neuen Vertraege und Bedienablaeufe
+    aktualisiert.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.11.3` gesetzt.

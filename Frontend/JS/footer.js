@@ -11,7 +11,7 @@
 
   const brand = document.createElement("span");
   brand.className = "footer-brand";
-  brand.textContent = "© ASKÖ Piberbach – Tennis";
+  brand.textContent = "PiTec GmbH";
 
   const leftSeparator = document.createElement("span");
   leftSeparator.className = "footer-separator";

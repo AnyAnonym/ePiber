@@ -11,6 +11,7 @@ let authStatus = "loading";
 let authError = null;
 const listeners = new Set();
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("epiber-auth") : null;
+const MAX_TIMEOUT_MS = 2147483647;
 
 function runAuthMutation(callback) {
   const execute = () => navigator.locks?.request
@@ -51,7 +52,7 @@ function scheduleExpiry(retryMs = 0) {
     return;
   }
   if (!expiresAt) return;
-  const delay = Math.max(50, expiresAt - (Date.now() + serverClockOffset) + 50);
+  const delay = Math.min(MAX_TIMEOUT_MS, Math.max(50, expiresAt - (Date.now() + serverClockOffset) + 50));
   expiryTimer = setTimeout(() => {
     expiryTimer = null;
     refreshSession({ reconnect: true }).catch(() => {});

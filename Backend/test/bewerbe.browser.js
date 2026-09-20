@@ -26,6 +26,7 @@ export const ready = new Promise((resolve) => {
   if (params.get("manualAuth") === "1") window.__resolveAuth = () => resolveAuth(resolve);
   else setTimeout(() => resolveAuth(resolve), Number(params.get("authDelay") || 0));
 });
+export const getUser = () => user;
 export const hasRole = (...roles) => Boolean(user) && roles.some((role) => (user.roles || [user.role]).includes(role));
 export function subscribeAuth(callback) {
   listeners.add(callback);
@@ -48,6 +49,9 @@ window.__interaction = { commentCount: 1, reactionTotal: 3, reactions: [{ key: "
 window.__commentWriteCalls = [];
 window.__revision = 1;
 window.__subscriptions = new Map();
+window.__favoriteWrites = [];
+let favorites = [];
+let favoritesRevision = 0;
 window.__catalog = [
   { key: "thumbs_up", emoji: "👍", label: "Gefällt mir", order: 10, active: true },
   { key: "surprised", emoji: "😮", label: "Überrascht", order: 20, active: true },
@@ -62,6 +66,13 @@ export const getOperationId = () => "00000000-0000-4000-8000-000000000001";
 export const releaseOperationId = () => {};
 export function createEndpoint(name) {
   return async (params = {}) => {
+    if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    if (name === "setMyFavorites") {
+      window.__favoriteWrites.push(structuredClone(params.favorites));
+      favoritesRevision += 1;
+      favorites = params.favorites.map((favorite, index) => ({ targetId: "favorite-" + favoritesRevision + "-" + index, ...structuredClone(favorite) }));
+      return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    }
     if (name === "competitionHistoryComments") {
       const admin = new URLSearchParams(location.search).get("role") === "admin";
       if (new URLSearchParams(location.search).get("staleComments") === "1" && params.eventId === "history-1") await new Promise((resolve) => setTimeout(resolve, 300));
@@ -198,6 +209,15 @@ function startServer() {
       response.end(source);
       return;
     }
+    if (pathname === "/JS/favorites.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/favorites.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
     if (pathname === "/test/authClient.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(authStub);
@@ -272,15 +292,18 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.equal(await globalHistoryButton.locator("svg").getAttribute("focusable"), "false");
     const pageHeadingGap = await page.locator(".bewerbe-page-heading").evaluate((row) => {
       const heading = row.querySelector("h2").getBoundingClientRect();
-      const buttonElement = row.querySelector("button");
+      const buttonElement = row.querySelector(".competition-history-button");
       const button = buttonElement.getBoundingClientRect();
+      const pageFavorite = row.querySelector(".page-favorite-star").getBoundingClientRect();
       return {
-        horizontal: button.left - heading.right,
+        favoriteHorizontal: pageFavorite.left - heading.right,
+        historyHorizontal: button.left - pageFavorite.right,
         vertical: Math.abs((button.top + button.height / 2) - (heading.top + heading.height / 2)),
         outsideCards: !document.getElementById("bewerbe-container").contains(buttonElement),
       };
     });
-    assert.equal(pageHeadingGap.horizontal >= 0 && pageHeadingGap.horizontal <= 8, true);
+    assert.equal(pageHeadingGap.favoriteHorizontal >= 0 && pageHeadingGap.favoriteHorizontal <= 8, true);
+    assert.equal(pageHeadingGap.historyHorizontal >= 0 && pageHeadingGap.historyHorizontal <= 8, true);
     assert.equal(pageHeadingGap.vertical <= 1, true);
     assert.equal(pageHeadingGap.outsideCards, true);
 
@@ -288,6 +311,14 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     await globalHistoryButton.click();
     const modal = page.getByRole("dialog");
     await modal.waitFor({ state: "visible" });
+    assert.equal(await page.locator("#competition-history-close").evaluate((button) => document.activeElement === button), true);
+    const historyFavorite = modal.locator("#competition-history-favorite .favorite-star");
+    await historyFavorite.waitFor({ state: "visible" });
+    await historyFavorite.click();
+    assert.deepEqual(await page.evaluate(() => window.__favoriteWrites.at(-1)), [
+      { type: "page", page: "Bewerbe", params: { history: "all" } },
+    ]);
+    assert.equal(await historyFavorite.getAttribute("aria-pressed"), "true");
     assert.equal(await modal.locator("#competition-history-title").innerText(), "Historie");
     assert.equal(await modal.locator("#competition-history-competition-name").innerText(), "Alle Bewerbe");
     assert.deepEqual(await page.evaluate(() => window.__historyCalls), [{}]);
@@ -434,6 +465,11 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.equal(headingGap.vertical <= 1, true);
     await historyButton.click();
     await modal.waitFor({ state: "visible" });
+    await historyFavorite.click();
+    assert.deepEqual(await page.evaluate(() => window.__favoriteWrites.at(-1)), [
+      { type: "page", page: "Bewerbe", params: { history: "all" } },
+      { type: "page", page: "Bewerbe", params: { history: "competition", id: "2" } },
+    ]);
     assert.equal(await modal.locator("#competition-history-title").innerText(), "Historie");
     assert.equal(await modal.locator("#competition-history-competition-name").innerText(), "Rangliste <img src=x onerror=alert(1)>");
     assert.equal(await modal.locator(".competition-history-heading").evaluate((heading) => getComputedStyle(heading).textAlign), "center");
@@ -470,8 +506,6 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     ]);
     assert.equal((await modal.textContent()).includes("Grund: Doppelte Forderung"), true);
     assert.equal((await modal.textContent()).includes("Ebenfalls nicht anzeigen"), false);
-    assert.equal(await page.locator("#competition-history-close").evaluate((button) => document.activeElement === button), true);
-
     await moreButton.click();
     assert.deepEqual(await page.evaluate(() => window.__historyCalls), [
       {},
@@ -498,7 +532,7 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     await page.keyboard.press("Escape");
     assert.equal(await modal.isHidden(), true);
     assert.equal(await page.locator(".bewerb-card .competition-history-button").first().isVisible(), true);
-    await page.waitForFunction(() => window.__bewerbeCalls.length === 2);
+    await page.waitForFunction(() => window.__bewerbeCalls.length >= 2);
     assert.equal(await page.locator(".bewerb-card").count(), cardCount);
 
     await globalHistoryButton.click();
@@ -509,6 +543,14 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     assert.equal(await globalHistoryButton.isHidden(), true);
     assert.equal(await page.locator("#competition-history-list").textContent(), "");
     await page.close();
+
+    const directPage = await newProfilePage(browser);
+    await directPage.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?history=competition&id=3`, { waitUntil: "domcontentloaded" });
+    const directModal = directPage.locator("#competition-history-modal");
+    await directModal.waitFor({ state: "visible" });
+    assert.equal(await directModal.locator("#competition-history-competition-name").innerText(), "Sommercup");
+    assert.deepEqual(await directPage.evaluate(() => window.__historyCalls), [{ bewerbId: "3" }]);
+    await directPage.close();
 
     const errorPage = await newProfilePage(browser);
     await errorPage.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?historyError=1`, { waitUntil: "domcontentloaded" });

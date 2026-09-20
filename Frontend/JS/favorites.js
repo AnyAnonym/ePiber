@@ -6,9 +6,11 @@ const readFavorites = createEndpoint("myFavorites");
 const writeFavorites = createEndpoint("setMyFavorites");
 const readCompetitions = createEndpoint("bewerbe");
 const listeners = new Set();
+const buttonUpdaters = new Set();
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("epiber-favorites") : null;
 
 const PAGE_CONFIG = Object.freeze({
+  "index.html": { page: "index", label: "Dashboard", selector: "#welcome-title", centered: true },
   "Matches1.html": { page: "Matches1", label: "Matches", selector: "main > section > h2", centered: true },
   "players.html": { page: "players", label: "Spieler", selector: "main > section > h2", centered: true },
   "Bewerbe.html": { page: "Bewerbe", label: "Bewerbe", selector: ".bewerbe-page-heading > h2", existingRow: true },
@@ -235,6 +237,11 @@ export function favoriteVisibleForUser(target, user = getUser()) {
 
 export function favoriteLabel(target) {
   if (target?.type === "overlay") return target.overlay === "match-result" ? "Spieleingabe" : "Termin festlegen / ändern";
+  if (target?.page === "Bewerbe" && target?.params?.history === "all") return "Historie aller Bewerbe";
+  if (target?.page === "Bewerbe" && target?.params?.history === "competition") {
+    const competitionName = competitionNames.get(String(target.params.id || ""));
+    return competitionName ? `Historie – ${competitionName}` : "Bewerbshistorie";
+  }
   const base = PAGE_LABELS[target?.page] || "Seite";
   const id = target?.params?.id;
   return id ? competitionNames.get(String(id)) || base : base;
@@ -242,31 +249,41 @@ export function favoriteLabel(target) {
 
 export function favoriteHref(target) {
   if (target?.type !== "page") return "#";
+  if (target.page === "index") return "index.html?dashboard=1";
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(target.params || {})) params.set(key, String(value));
   return `${target.page}.html${params.size ? `?${params}` : ""}`;
 }
 
-export function createFavoriteButton(target, { className = "" } = {}) {
+export function refreshFavoriteButtons() {
+  for (const update of buttonUpdaters) update();
+}
+
+export function createFavoriteButton(targetOrProvider, { className = "" } = {}) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `favorite-star${className ? ` ${className}` : ""}`;
   button.innerHTML = '<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m233-120 65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"></path></svg>';
+  const target = () => typeof targetOrProvider === "function" ? targetOrProvider() : targetOrProvider;
   const update = () => {
-    const active = isFavorite(target);
+    const currentTarget = target();
+    const active = currentTarget ? isFavorite(currentTarget) : false;
     const authenticated = Boolean(getUser());
-    button.hidden = !authenticated;
-    button.disabled = authenticated && !state.ready;
+    button.hidden = !authenticated || !currentTarget;
+    button.disabled = authenticated && Boolean(currentTarget) && !state.ready;
     button.classList.toggle("is-favorite", active);
     button.setAttribute("aria-pressed", String(active));
     button.setAttribute("aria-label", active ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen");
     button.title = active ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen";
   };
+  buttonUpdaters.add(update);
   subscribeFavorites(update);
   button.addEventListener("click", async () => {
+    const currentTarget = target();
+    if (!currentTarget) return;
     button.disabled = true;
     try {
-      await toggleFavorite(target);
+      await toggleFavorite(currentTarget);
     } catch (error) {
       window.showToast?.(favoriteErrorMessage(error, "Favorit konnte nicht gespeichert werden."), "error");
     } finally {

@@ -182,7 +182,9 @@ function createApplication(overrides = {}) {
     instanceId: INSTANCE_ID,
     journal: AUDIT_LOG_JOURNAL,
   });
-  const messagingRepository = overrides.messagingRepository || new MessagingRepository(MESSAGING_FILE);
+  const messagingRepository = overrides.messagingRepository || new MessagingRepository(MESSAGING_FILE, {
+    log: (level, event, fields) => logger.log(level, event, fields),
+  });
   scoreLogRepository.init?.();
   auditLogRepository.init?.();
   messagingRepository.init?.();
