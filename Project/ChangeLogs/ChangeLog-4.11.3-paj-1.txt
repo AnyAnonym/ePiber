@@ -6,3 +6,11 @@ Commit: 4.11.3-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.3-paj-1-1` gesetzt.
+
+[4.11.3-paj-1-2] - 2026-09-20
+Commit: 4.11.3-paj-1-2 | Samsung-Internet-Browserprofil ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.3-paj-1-1-x` gesetzt.
+  - [Tests] Die profiluebergreifende Browser-Smokesuite fuehrt ihre mobilen Kernablaeufe zusaetzlich mit einem Samsung-Internet-/Android-Profil auf Basis von Chromium, Galaxy S24 und Samsung-UA aus.
+  - [Dokumentation] Browser-Supportmatrix und Server-Testanleitung beschreiben Samsung Internet als achtes Zielprofil sowie die Grenze der automatisierten Chromium-Naeherung.

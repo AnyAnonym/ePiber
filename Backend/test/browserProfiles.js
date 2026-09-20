@@ -1,5 +1,7 @@
 const { chromium, devices, firefox, webkit } = require("playwright");
 
+const galaxyS24 = devices["Galaxy S24"];
+
 const profiles = Object.freeze({
   "chrome-windows": {
     label: "Chrome (Windows Desktop)",
@@ -10,6 +12,14 @@ const profiles = Object.freeze({
     label: "Chrome (Android)",
     browserType: chromium,
     contextOptions: devices["Pixel 7"],
+  },
+  "samsung-internet-android": {
+    label: "Samsung Internet (Android)",
+    browserType: chromium,
+    contextOptions: {
+      ...galaxyS24,
+      userAgent: galaxyS24.userAgent.replace("Chrome/", "SamsungBrowser/29.0 Chrome/"),
+    },
   },
   "safari-iphone": {
     label: "Safari (iPhone)",

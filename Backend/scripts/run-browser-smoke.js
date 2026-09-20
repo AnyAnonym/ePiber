@@ -9,7 +9,7 @@ const selectedTests = [
   "test/bewerbe.browser.js",
   "test/scoreboardRecentMatches.browser.js",
 ];
-const mobileProfiles = new Set(["chrome-android", "safari-iphone", "safari-ipad"]);
+const mobileProfiles = new Set(["chrome-android", "samsung-internet-android", "safari-iphone", "safari-ipad"]);
 const failures = [];
 
 for (const [profileName, profile] of Object.entries(profiles)) {

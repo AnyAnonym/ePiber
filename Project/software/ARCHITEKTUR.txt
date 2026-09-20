@@ -1139,7 +1139,8 @@ eine leere Liste und koennen spaetere Rundenfristen ohne neuen UI-Vertrag nutzen
 ================================================================================
 
 Die freigegebene Zielmatrix umfasst Chrome auf Windows-Desktop und Android,
-Safari auf iPhone, iPad und macOS, Firefox auf Windows sowie Edge auf Windows.
+Samsung Internet auf Android, Safari auf iPhone, iPad und macOS, Firefox auf
+Windows sowie Edge auf Windows.
 Automatisierte Referenz sind die exakt mit `Backend/package.json` versionierten
 Playwright-Engines und Geraeteprofile:
 
@@ -1147,6 +1148,7 @@ Playwright-Engines und Geraeteprofile:
   --------------------------|-----------------------------------------------
   Chrome / Windows Desktop  | Chromium, Desktop-Viewport
   Chrome / Android          | Chromium, Pixel-7-Profil mit Touch
+  Samsung Internet / Android| Chromium, Galaxy-S24-Profil mit Touch und Samsung-UA
   Safari / iPhone           | WebKit, iPhone-13-Profil mit Touch
   Safari / iPad             | WebKit, iPad-Pro-11-Profil mit Touch
   Safari / macOS            | WebKit, Desktop-Viewport
@@ -1157,12 +1159,15 @@ Die Ausfuehrung erfolgt auf Linux. Engine, Viewport, Pixeldichte, mobile
 Darstellung und Touch werden dabei geprueft; Windows, macOS und iOS selbst sowie
 deren Systemschriften, virtuelle Tastaturen, Browserleisten und Betriebssystem-
 integration werden nicht emuliert. WebKit ist deshalb eine Safari-Naeherung und
-keine Zusage fuer jedes native iOS-/macOS-Detail. Feste historische
+keine Zusage fuer jedes native iOS-/macOS-Detail. Samsung Internet wird mit der
+versionierten Chromium-Engine, einem Galaxy-S24-Geraeteprofil und Samsung-UA
+angenaehert; herstellerspezifische Browserleisten und Engineanpassungen werden
+nicht nativ emuliert. Feste historische
 Browsermindestversionen werden nicht unterstuetzt; massgeblich sind die mit der
 festgeschriebenen Playwright-Version gepflegten Engines.
 
 `npm run test:browser:smoke` prueft ausgewaehlte reale Kernablaeufe mit lokalen,
-deterministischen Fixtures in allen sieben Zielprofilen. Dazu gehoeren mobile und
+deterministischen Fixtures in allen acht Zielprofilen. Dazu gehoeren mobile und
 Desktopnavigation samt `inert`, Bewerbshistorie und Kommentar-Graphemzaehlung,
 Matchdarstellung sowie Scoreboard-Ergebnisdarstellung. `npm run
 test:browser:chromium` fuehrt die vollstaendige bestehende Browser-Suite mit dem

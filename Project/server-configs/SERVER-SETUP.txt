@@ -178,10 +178,10 @@ versionierten Playwright-Bibliothek mit `npm ci --include=dev`.
 
 `npm run test:browser:smoke` startet ueber Rootless Docker das exakt passende
 offizielle Image `mcr.microsoft.com/playwright:v1.62.1-noble` und prueft die
-freigegebenen Chrome-/Android-, Safari-/iPhone-/iPad-/macOS-, Firefox-/Windows-
-und Edge-/Windows-Zielprofile. Das Image stellt die drei abgestimmten Engines
-Chromium, Firefox und WebKit bereit. Arch Linux wird von den heruntergeladenen
-Playwright-Browserbuilds nicht offiziell unterstuetzt; ein direkter Hostlauf ist
+freigegebenen Chrome-/Android-, Samsung-Internet-/Android-, Safari-/iPhone-/iPad-/
+macOS-, Firefox-/Windows- und Edge-/Windows-Zielprofile. Das Image stellt die drei
+abgestimmten Engines Chromium, Firefox und WebKit bereit. Arch Linux wird von den
+heruntergeladenen Playwright-Browserbuilds nicht offiziell unterstuetzt; ein direkter Hostlauf ist
 daher kein Freigabenachweis. Die Rootless-Docker-Einrichtung benoetigt fuer `paj`
 einen Bereich von mindestens 65536 Sub-UIDs und Sub-GIDs, aktiviertes User-
 Lingering, den AUR-Baustein `docker-rootless-extras` und einen Rootless-Kontext
