@@ -40,3 +40,14 @@ Commit: 4.11.2-paj-1-5 | Session-Requestschleife behoben
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-4-x` gesetzt.
   - [Frontend] Die Ablaufplanung lang laufender Benutzersessions begrenzt Browser-Timer auf den sicheren 32-Bit-Bereich und verhindert dadurch hochfrequente `/api/session`-Schleifen bei der 30-Tage-Sessiondauer.
   - [Tests] AuthClient- und profiluebergreifende Browser-Regressionstests pruefen, dass eine 30-Tage-Session genau einen begrenzten Ablauftimer plant und keine sofortigen Wiederholungsanfragen ausloest.
+
+[4.11.2-paj-1-6] - 2026-09-20
+Commit: 4.11.2-paj-1-6 | Eigenmeldungen initial quittiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.2-paj-1-5-x` gesetzt.
+  - [Messaging] Fachliche Eigenaktivitaeten bleiben sichtbar, werden fuer den Akteur aber initial quittiert und nicht extern an ihn selbst zugestellt; Forderungen und Ranglistenrueckzuege folgen damit demselben Vertrag wie Termin- und Ergebnisaktionen.
+  - [Datenbank] Messaging-Schema 11 quittiert bestehende ungelesene Forderer-Eigenmeldungen, erhoeht deren private Revision und beendet nur noch ausstehende externe Selbstzustellungen kontrolliert.
+  - [Observability] Die Schema-11-Migration protokolliert ausschliesslich Schemawerte und aggregierte Anzahlen korrigierter Quittierungen und unterbundener ausstehender Zustellungen.
+  - [Tests] Service-, Repository-, Integrations- und Migrationstests sichern gelesene Akteursprojektionen, ungelesene Gegnerprojektionen, externe Zustellung und die Korrektur bestehender Forderungen ab; das Historientestwerkzeug verlangt Schema 11.
+  - [Dokumentation] Eigenaktivitaetsvertrag, Meldungsprojektion und Messaging-Schema 11 sind in Architektur-, Endpoint- und Datenbankdokumentation festgehalten.

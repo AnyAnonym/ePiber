@@ -4,12 +4,13 @@ const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 const { AppError } = require("./errors.js");
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 class MessagingRepository {
-  constructor(filename, { now = Date.now } = {}) {
+  constructor(filename, { now = Date.now, log = () => {} } = {}) {
     this.filename = filename;
     this.now = now;
+    this.log = log;
     this.db = null;
     this.failureCount = 0;
     this.lastError = null;
@@ -72,9 +73,12 @@ class MessagingRepository {
       this.migrateV9();
     } else if (version === 9) {
       this.migrateV9();
-    } else if (version !== SCHEMA_VERSION) {
+    } else if (![10, SCHEMA_VERSION].includes(version)) {
       throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     }
+    const migratedVersion = Number(this.db.prepare("PRAGMA user_version").get().user_version);
+    if (migratedVersion === 10) this.migrateV10();
+    else if (migratedVersion !== SCHEMA_VERSION) throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     if (this.filename !== ":memory:") fs.chmodSync(this.filename, 0o600);
   }
 
@@ -193,7 +197,7 @@ class MessagingRepository {
         revision INTEGER NOT NULL
       );
       INSERT OR IGNORE INTO competition_history_revision(singleton, revision) VALUES (1, 0);
-      PRAGMA user_version = 10;
+      PRAGMA user_version = 11;
     `);
   }
 
@@ -410,6 +414,73 @@ class MessagingRepository {
       try { this.db.exec("ROLLBACK"); } catch {}
       throw error;
     }
+  }
+
+  migrateV10() {
+    this.db.exec("BEGIN IMMEDIATE");
+    let acknowledgedActorReceipts = 0;
+    let suppressedPendingDeliveries = 0;
+    try {
+      const affectedUsers = this.db.prepare(`
+        SELECT DISTINCT r.user_id
+        FROM event_receipts r
+        JOIN event_participants p ON p.event_id = r.event_id AND p.user_id = r.user_id
+        JOIN competition_events e ON e.event_id = r.event_id
+        WHERE e.event_type = 'challenge'
+          AND e.actor_id = r.user_id
+          AND p.participant_role = 'challenger'
+          AND p.projection_type = 'challenge_confirmation'
+          AND r.acknowledged_at IS NULL
+      `).all().map(({ user_id: userId }) => userId);
+      acknowledgedActorReceipts = Number(this.db.prepare(`
+        UPDATE event_receipts
+        SET acknowledged_at = (
+          SELECT e.created_at FROM competition_events e WHERE e.event_id = event_receipts.event_id
+        )
+        WHERE acknowledged_at IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM event_participants p
+            JOIN competition_events e ON e.event_id = p.event_id
+            WHERE p.event_id = event_receipts.event_id
+              AND p.user_id = event_receipts.user_id
+              AND e.event_type = 'challenge'
+              AND e.actor_id = event_receipts.user_id
+              AND p.participant_role = 'challenger'
+              AND p.projection_type = 'challenge_confirmation'
+          )
+      `).run().changes);
+      suppressedPendingDeliveries = Number(this.db.prepare(`
+        UPDATE event_deliveries
+        SET status = 'not_configured', updated_at = ?
+        WHERE status = 'pending' AND channel <> 'Inbox'
+          AND EXISTS (
+            SELECT 1
+            FROM event_participants p
+            JOIN competition_events e ON e.event_id = p.event_id
+            WHERE p.event_id = event_deliveries.event_id
+              AND p.user_id = event_deliveries.user_id
+              AND e.event_type = 'challenge'
+              AND e.actor_id = event_deliveries.user_id
+              AND p.participant_role = 'challenger'
+              AND p.projection_type = 'challenge_confirmation'
+          )
+      `).run(this.now()).changes);
+      const revise = this.db.prepare("INSERT INTO messaging_revisions(user_id, revision) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET revision = revision + 1");
+      for (const userId of affectedUsers) revise.run(userId);
+      this.db.exec("PRAGMA user_version = 11; COMMIT");
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+    try {
+      this.log("info", "messaging_schema_migration_completed", {
+        fromVersion: 10,
+        toVersion: 11,
+        acknowledgedActorReceipts,
+        suppressedPendingDeliveries,
+      });
+    } catch {}
   }
 
   migrateV1() {

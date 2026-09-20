@@ -632,7 +632,10 @@ AUTHENTICATED (player, operator oder admin):
       Bestaetigungszeit. Der kontrollierte `competitionName` lautet bei keiner
       Bewerbszuordnung `Allgemeine Meldung`. Ungelesene Meldungen stehen vor
       gelesenen; innerhalb beider Gruppen gilt Erstellungszeit und ID absteigend.
-      Ein Cursor ist an den aktuellen Empfaenger gebunden.
+      Ein Cursor ist an den aktuellen Empfaenger gebunden. Fachliche
+      Eigenaktivitaeten bleiben als bereits bestaetigte Meldung sichtbar und
+      werden nicht extern an den Akteur selbst zugestellt; andere Beteiligte
+      erhalten ihre Projektion ungelesen.
 
   `myMessage { messageId }`
       Liefert ausschliesslich die eigene Meldung als Detailprojektion; diese
@@ -741,7 +744,9 @@ AUTHENTICATED (player, operator oder admin):
       Geforderten ablehnbar. Bei neuen Forderungen steht der Forderer in
       `Spieler1ID`, der Geforderte in `Spieler3ID`. Audit `addMatch` erfasst ab
       `started` Akteur, Zielperson und Bewerb; Erfolg ergaenzt die Match-ID. Ein
-      innerhalb von zwoelf Monaten rausgehaengter Spieler darf ab seinem
+      Forderer erhaelt seine sichtbare Bestaetigungsprojektion bereits quittiert
+      und ohne externe Selbstzustellung; die Gegnerprojektion bleibt ungelesen.
+      Ein innerhalb von zwoelf Monaten rausgehaengter Spieler darf ab seinem
       gespeicherten letzten Rang jeden dort oder dahinter gereihten aktiven
       Spieler fordern. Offene Forderung, eigene Sperrzeit und gegnerische
       Schonzeit werden weiterhin serverseitig geprueft. Ein teilnahmeberechtigter

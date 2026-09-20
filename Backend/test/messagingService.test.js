@@ -118,20 +118,20 @@ test("Forderung erzeugt fuer Gegner und Forderer getrennte Meldungen samt extern
   assert.equal(renamed.event.summary, first.event.summary);
   assert.equal(first.challenger.subject, "Forderung ausgesprochen in Herren");
   assert.equal(first.challenger.body, "Du (4) hast Peter Player (2) in Herren gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.");
+  assert.equal(first.challenger.acknowledgedAt, 1000);
+  assert.equal(first.recipient.acknowledgedAt, null);
   assert.equal(first.recipient.body, "Ada Admin (4) hat dich (2) gefordert. Bitte vereinbart einen Spieltermin in den kommenden sieben Tagen.");
   assert.equal(renamed.challenger.body, first.challenger.body);
   assert.equal(renamed.recipient.body, first.recipient.body);
-  assert.deepEqual(repository.summary("p1"), { revision: 1, totalCount: 1, unreadCount: 1 });
+  assert.deepEqual(repository.summary("p1"), { revision: 1, totalCount: 1, unreadCount: 0 });
   assert.deepEqual(repository.summary("p2"), { revision: 1, totalCount: 1, unreadCount: 1 });
   assert.deepEqual(sends.map(({ channel, recipientId }) => ({ channel, recipientId })), [
-    { channel: "Email", recipientId: "p1" },
-    { channel: "Whatsapp", recipientId: "p1" },
     { channel: "Email", recipientId: "p2" },
     { channel: "Whatsapp", recipientId: "p2" },
   ]);
   assert.deepEqual(events, [
     { topic: "messages:p2", data: { revision: 1, unreadCount: 1 } },
-    { topic: "messages:p1", data: { revision: 1, unreadCount: 1 } },
+    { topic: "messages:p1", data: { revision: 1, unreadCount: 0 } },
   ]);
   repository.close();
 });
@@ -598,7 +598,7 @@ test("persistente pending-Zustellung wird bei der idempotenten Wiederholung fort
   repository.close();
 });
 
-test("Ranglisten-Rueckzug erzeugt ein zentrales Einteilnehmerereignis und Wettbewerbshistorie", async () => {
+test("Ranglisten-Rueckzug bleibt als bereits gelesene Eigenaktivitaet sichtbar", async () => {
   dataStore.resetForTests();
   dataStore.set("players", [["ID", "Notification"], ["p7", ""]], { source: "test" });
   const repository = new MessagingRepository(":memory:");
@@ -613,10 +613,12 @@ test("Ranglisten-Rueckzug erzeugt ein zentrales Einteilnehmerereignis und Wettbe
   assert.equal(first.event.detail, "");
   assert.match(first.message.body, /Grund: Verletzt/);
   assert.equal(first.message.participantRole, "withdrawn");
-  assert.equal(repository.summary("p7").totalCount, 1);
+  assert.equal(first.message.acknowledgedAt, 7000);
+  assert.deepEqual(repository.summary("p7"), { revision: 1, totalCount: 1, unreadCount: 0 });
   assert.deepEqual(repository.competitionHistory("ranking-2").map(({ type }) => type), ["ranking_withdrawal"]);
   const ack = service.acknowledge({ id: "p7" }, { operationId: "00000000-0000-4000-8000-000000000778", messageId: first.message.id });
-  assert.equal(ack.repeated, false);
+  assert.equal(ack.repeated, true);
+  assert.equal(ack.changed, false);
   assert.equal(service.acknowledge({ id: "p7" }, { operationId: "00000000-0000-4000-8000-000000000778", messageId: first.message.id }).repeated, true);
   assert.equal(repository.summary("p7").unreadCount, 0);
   repository.close();
