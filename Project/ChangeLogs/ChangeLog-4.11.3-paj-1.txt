@@ -14,3 +14,11 @@ Commit: 4.11.3-paj-1-2 | Samsung-Internet-Browserprofil ergänzt
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.3-paj-1-1-x` gesetzt.
   - [Tests] Die profiluebergreifende Browser-Smokesuite fuehrt ihre mobilen Kernablaeufe zusaetzlich mit einem Samsung-Internet-/Android-Profil auf Basis von Chromium, Galaxy S24 und Samsung-UA aus.
   - [Dokumentation] Browser-Supportmatrix und Server-Testanleitung beschreiben Samsung Internet als achtes Zielprofil sowie die Grenze der automatisierten Chromium-Naeherung.
+
+[4.11.3-paj-1-3] - 2026-09-21
+Commit: 4.11.3-paj-1-3 | Favoriten-Hover dezent gestaltet
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.3-paj-1-2-x` gesetzt.
+  - [Frontend] Favoritensterne verwenden beim Maus-Hover statt der gruenen Fokusumrandung einen dezenten goldenen Hintergrund und eine leichte Vergroesserung; die gruene Umrandung bleibt fuer den Tastaturfokus erhalten.
+  - [Tests] Der Browsertest prueft die neue Hover-Darstellung der Favoritensterne.

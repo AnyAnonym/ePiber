@@ -847,6 +847,10 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     assert.equal(await pageStar.locator("svg path").count(), 1);
     assert.equal(await pageStar.getAttribute("aria-pressed"), "false");
     assert.equal(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).fill), "rgb(255, 255, 255)");
+    await pageStar.hover();
+    await page.waitForTimeout(200);
+    assert.equal(await pageStar.evaluate((element) => getComputedStyle(element).backgroundColor), "rgba(245, 197, 24, 0.18)");
+    assert.notEqual(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).transform), "none");
     await pageStar.click();
     await page.waitForTimeout(200);
     assert.equal(await pageStar.getAttribute("aria-pressed"), "true", JSON.stringify({ calls: await page.evaluate(() => window.__endpointCalls), pageErrors }));

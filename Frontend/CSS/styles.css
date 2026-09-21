@@ -1815,9 +1815,11 @@ body.mobile-nav-open {
   place-items: center;
   padding: 4px;
   border: 0;
+  border-radius: 50%;
   color: #111;
   background: transparent;
   cursor: pointer;
+  transition: background-color .15s ease;
 }
 
 .favorite-star svg {
@@ -1827,16 +1829,26 @@ body.mobile-nav-open {
   stroke: #111;
   stroke-width: 22px;
   paint-order: stroke fill;
+  transition: transform .15s ease;
 }
 
 .favorite-star.is-favorite svg {
   fill: #f5c518;
 }
 
-.favorite-star:hover,
 .favorite-star:focus-visible {
   outline: 3px solid rgba(23, 107, 74, .35);
   outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .favorite-star:hover {
+    background: rgba(245, 197, 24, .18);
+  }
+
+  .favorite-star:hover svg {
+    transform: scale(1.08);
+  }
 }
 
 .favorite-star:disabled {
@@ -2016,7 +2028,9 @@ body.mobile-nav-open {
 
 @media (prefers-reduced-motion: reduce) {
   .app-shift-layer,
-  .mobile-nav-content {
+  .mobile-nav-content,
+  .favorite-star,
+  .favorite-star svg {
     transition-duration: 0.01ms;
   }
 
