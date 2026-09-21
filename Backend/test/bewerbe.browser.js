@@ -67,6 +67,7 @@ export const releaseOperationId = () => {};
 export function createEndpoint(name) {
   return async (params = {}) => {
     if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    if (name === "hallTimeGrids") return { data: { success: true, grids: [], revision: 0 } };
     if (name === "setMyFavorites") {
       window.__favoriteWrites.push(structuredClone(params.favorites));
       favoritesRevision += 1;

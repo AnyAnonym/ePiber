@@ -8,6 +8,7 @@ const selectedTests = [
   "test/matches1.browser.js",
   "test/bewerbe.browser.js",
   "test/scoreboardRecentMatches.browser.js",
+  "test/hallzeiten.browser.js",
 ];
 const mobileProfiles = new Set(["chrome-android", "samsung-internet-android", "safari-iphone", "safari-ipad"]);
 const failures = [];
@@ -16,7 +17,7 @@ for (const [profileName, profile] of Object.entries(profiles)) {
   const navigationTest = mobileProfiles.has(profileName)
     ? "Mobiler Drawer"
     : "Desktop verwendet denselben Drawer";
-  const testPattern = `^(${navigationTest}|30-Tage-Session|Dashboard ist trotz|Persoenliche Startseite|Spielerverzeichnis filtert|Matches zeigen WO|Bewerbshistorie|Scoreboard zeigt WO|Scoreboard holt beim Aufwachen|Scoreboard kehrt)`;
+  const testPattern = `^(${navigationTest}|30-Tage-Session|Dashboard ist trotz|Persoenliche Startseite|Spielerverzeichnis filtert|Matches zeigen WO|Bewerbshistorie|Scoreboard zeigt WO|Scoreboard holt beim Aufwachen|Scoreboard kehrt|Hallenzeiten-Raster|Hallenzeiten-Verwaltung|Hallenzeiten liegen)`;
   console.log(`\nBrowser-Smoke: ${profile.label}`);
   const result = spawnSync(process.execPath, [
     "--test",

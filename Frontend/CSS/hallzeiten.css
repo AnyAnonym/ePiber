@@ -1,0 +1,32 @@
+.hall-time-main { width: min(100% - 2rem, 1500px); margin: 0 auto; padding: 2rem 0 4rem; }
+.hall-time-heading { text-align: center; margin-bottom: 1.25rem; }
+.hall-time-heading h1 { margin: 0; }
+.hall-time-description { max-width: 900px; margin: .8rem auto; white-space: pre-wrap; line-height: 1.55; }
+.hall-time-rules { display: flex; justify-content: center; flex-wrap: wrap; gap: .5rem; }
+.hall-time-rules span { padding: .4rem .7rem; border-radius: 999px; background: #e8f2eb; color: #174d2c; font-size: .9rem; }
+.hall-time-card, .hall-time-table-card { background: #fff; border: 1px solid #d9e2db; border-radius: 14px; box-shadow: 0 5px 20px rgba(21, 54, 33, .08); padding: 1rem; }
+.hall-time-table-scroll { overflow: auto; max-height: 70vh; }
+#hall-time-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 0; }
+#hall-time-table th, #hall-time-table td { padding: .25rem .15rem; text-align: center; border-right: 1px solid #e3e8e4; border-bottom: 1px solid #e3e8e4; background: #fff; }
+#hall-time-table th:not(.hall-time-player):not(.hall-time-sum), #hall-time-table td:not(.hall-time-player):not(.hall-time-sum) { width: 56px; min-width: 56px; max-width: 56px; }
+#hall-time-table thead th { position: sticky; top: 0; z-index: 3; background: #f2f7f3; }
+#hall-time-table .hall-time-player { position: sticky; left: 0; z-index: 2; min-width: 165px; text-align: left; background: #f8faf8; }
+#hall-time-table thead .hall-time-player { z-index: 5; }
+#hall-time-table .hall-time-sum { position: sticky; right: 0; z-index: 2; width: 58px; min-width: 58px; font-weight: 700; background: #f8faf8; }
+#hall-time-table thead .hall-time-sum { z-index: 5; }
+#hall-time-table thead span, #hall-time-table thead small { display: block; font-weight: 400; }
+#hall-time-table tr.is-current-player th, #hall-time-table tr.is-current-player td { background: #f0f8f2; }
+.hall-time-state { width: 40px; min-height: 36px; padding: .2rem; border: 0; border-radius: 9px; font-weight: 800; cursor: pointer; }
+.hall-time-state:disabled { cursor: default; opacity: .8; }
+.hall-time-state.is-confirmed, .hall-time-legend .is-confirmed { background: #ccebd3; color: #11612d; }
+.hall-time-state.is-waitlist, .hall-time-legend .is-waitlist { background: #fff0b8; color: #765800; }
+.hall-time-state.is-empty, .hall-time-legend .is-empty { background: #f6d6d6; color: #8b2222; }
+.hall-time-legend { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+.hall-time-legend span { padding: .35rem .6rem; border-radius: 8px; }
+.hall-time-feedback { min-height: 1.5rem; text-align: center; }
+.hall-time-feedback[data-state="error"] { color: #a11; }
+.hall-time-feedback[data-state="success"] { color: #17622e; }
+.hall-time-history { margin-top: 1rem; }
+.hall-time-history ol { max-height: 360px; overflow: auto; padding-left: 1.5rem; }
+.hall-time-history li { padding: .35rem 0; }
+@media (max-width: 700px) { .hall-time-main { width: min(100% - 1rem, 1500px); padding-top: 1rem; } .hall-time-table-card { padding: .5rem; } #hall-time-table .hall-time-player { min-width: 130px; } }

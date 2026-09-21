@@ -4,12 +4,12 @@ const { requestContracts, validateEndpointRequest, validateEndpointResponse } = 
 
 test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
   assert.deepEqual(Object.keys(requestContracts).sort(), [
-    "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
-    "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "matchResultSuggestion", "matches", "matches1",
+    "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminDistributeHallTimeGrid", "adminHallTimeGrids", "adminMemberReconciliation", "adminPeopleNormalization", "adminSaveHallTimeGrid", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
+    "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "hallTimeGrid", "hallTimeGrids", "hallTimeHistory", "matchResultSuggestion", "matches", "matches1",
     "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
     "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myMessage", "myMessageSummary", "myMessages", "myProfile", "myStartPage", "navigator", "normalizePerson", "operationStatus",
     "players", "preMatches", "publicProfile", "rankingChallengeState", "readMatchRestrictions", "reconcilePerson", "refreshSheetData", "removeEntryList", "rlPlatzierung",
-    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setMatchAppointment", "setMatchResult", "setMyFavorites", "setMyStartPage", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
+    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setHallTimeBooking", "setMatchAppointment", "setMatchResult", "setMyFavorites", "setMyStartPage", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
   ]);
 });
 

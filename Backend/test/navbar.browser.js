@@ -201,6 +201,7 @@ export function createEndpoint(name) {
     const noNotifications = new URLSearchParams(window.location.search).get("noNotifications") === "1";
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
     if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    if (name === "hallTimeGrids") return { data: { success: true, grids: role && new URLSearchParams(window.location.search).get("hallTimes") === "1" ? [{ id: "hall-1", name: "Donnerstag Doppel", mode: "equal" }] : [], revision: 0 } };
     if (name === "myStartPage") return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision } };
     if (name === "setMyStartPage") {
       startPageRevision += 1;
@@ -732,6 +733,36 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
         await context.close();
       }
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Hallenzeiten liegen auf Spielbetriebsebene und Raster sind genau eine weitere Stufe eingerueckt", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&hallTimes=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+    await page.locator("#mobileHallTimes").waitFor({ state: "attached" });
+    await page.locator("#hamburgerBtn").click();
+    await page.locator('[aria-controls="mobileNavCompetition"]').click();
+    const hallToggle = page.locator('[aria-controls="mobileHallTimeLinks"]');
+    await hallToggle.waitFor({ state: "visible" });
+    const competitionLeft = await page.locator('[aria-controls="mobileNavCompetition"] .mobile-nav-icon').evaluate((element) => element.getBoundingClientRect().left);
+    const scoreboardLeft = await page.locator('#mobileNavCompetition a[href="scoreboard.html"] .mobile-nav-icon').evaluate((element) => element.getBoundingClientRect().left);
+    const hallLeft = await hallToggle.locator(".mobile-nav-icon").first().evaluate((element) => element.getBoundingClientRect().left);
+    assert.equal(hallLeft, scoreboardLeft);
+    await hallToggle.click();
+    const gridLink = page.locator('#mobileHallTimeLinks a[href="hallzeiten.html?id=hall-1"]');
+    await gridLink.waitFor({ state: "visible" });
+    const gridLeft = await gridLink.locator(".mobile-nav-icon").evaluate((element) => element.getBoundingClientRect().left);
+    assert.equal(hallLeft - competitionLeft, gridLeft - hallLeft);
+    await page.close();
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

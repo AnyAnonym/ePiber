@@ -60,6 +60,7 @@ const HISTORY_INTERACTION_WRITES = new Set([
   "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment",
   "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
 ]);
+const HALL_TIME_WRITES = new Set(["adminSaveHallTimeGrid", "setHallTimeBooking", "adminDistributeHallTimeGrid"]);
 const PUBLIC_COLUMNS = {
   bewerbe: ["id", "bezeichnung", "bewerbsartid", "geschlecht", "entrystart", "entrydeadline", "bewerbsbeginn", "bewerbsende", "sortorder"],
   bewerbsart: ["id", "bezeichnung", "entrylistavailable", "roundrobin", "rasterfunktion", "spezifikum"],
@@ -245,6 +246,24 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
           changedTableCount: Array.isArray(result.changedTables) ? result.changedTables.length : 0,
           refreshedAt: result.refreshedAt || null,
         } : null),
+      };
+    case "adminSaveHallTimeGrid":
+      return {
+        targetType: "hall-time-grid", targetId: result.grid?.id || params.gridId || "new",
+        before: params.gridId ? { gridId: params.gridId, expectedRevision: params.expectedRevision } : null,
+        after: result.success ? { gridId: result.grid?.id || "", revision: result.revision, active: params.active, mode: params.mode } : null,
+      };
+    case "setHallTimeBooking":
+      return {
+        targetType: "hall-time-slot", targetId: params.slotId,
+        before: { gridId: params.gridId, personId: params.personId || "self" },
+        after: result.success ? { selected: params.selected, gridId: params.gridId, personId: params.personId || "self", revision: result.revision } : null,
+      };
+    case "adminDistributeHallTimeGrid":
+      return {
+        targetType: "hall-time-grid", targetId: params.gridId,
+        before: { expectedRevision: params.expectedRevision },
+        after: result.success ? { revision: result.revision, replacedFutureEntries: true } : null,
       };
     default:
       return { targetType: "", targetId: "", before: null, after: null };
@@ -813,7 +832,7 @@ function writeAudit({ eventId, principal, endpoint, params, result = {}, interna
 }
 
 function writeRejectedEndpointAudit({ eventId, principal, endpoint, error, startedAt }) {
-  if (!HISTORY_INTERACTION_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages") return;
+  if (!HISTORY_INTERACTION_WRITES.has(endpoint) && !HALL_TIME_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages") return;
   try {
     writeAudit({ eventId, principal, endpoint, params: {}, outcome: "started" });
     writeAudit({ eventId, principal, endpoint, params: {}, outcome: "failed", error });
@@ -822,12 +841,17 @@ function writeRejectedEndpointAudit({ eventId, principal, endpoint, error, start
   }
   if (HISTORY_INTERACTION_WRITES.has(endpoint)) {
     logHistoryInteractionCompletion({ supportId: eventId, principal, endpoint, params: {}, error, outcome: "rejected", startedAt });
-  } else {
+  } else if (endpoint === "acknowledgeAllMessages") {
     logger.log("info", "message_bulk_acknowledgment_completed", {
       recipientId: principal.id,
       durationMs: Math.max(0, Date.now() - startedAt),
       result: "rejected",
       errorCode: error.code || "MESSAGE_BULK_ACKNOWLEDGMENT_REJECTED",
+    });
+  } else {
+    logger.log("info", "hall_time_write_completed", {
+      supportId: eventId, action: endpoint, actorId: principal?.id || "",
+      durationMs: Math.max(0, Date.now() - startedAt), result: "rejected", errorCode: error.code || "HALL_TIME_WRITE_REJECTED",
     });
   }
 }
@@ -846,6 +870,15 @@ function logHistoryInteractionCompletion({ supportId, principal, endpoint, param
     durationMs: Math.max(0, Date.now() - startedAt),
     result: outcome,
     errorCode: error?.code || null,
+  });
+}
+
+function logHallTimeCompletion({ supportId, principal, endpoint, params = {}, result = {}, error = null, outcome, startedAt = Date.now() }) {
+  if (!HALL_TIME_WRITES.has(endpoint)) return;
+  logger.log(error && (error.status || 500) >= 500 ? "warn" : "info", "hall_time_write_completed", {
+    supportId, action: endpoint, actorId: principal?.id || "", gridId: params.gridId || result.grid?.id || "",
+    slotId: params.slotId || "", revision: Number.isInteger(result.revision) ? result.revision : null,
+    durationMs: Math.max(0, Date.now() - startedAt), result: outcome, errorCode: error?.code || null,
   });
 }
 
@@ -1300,13 +1333,52 @@ const endpoints = {
       },
     }),
   },
+  hallTimeGrids: {
+    access: "authenticated",
+    handler: (_params, context) => dependencies.hallTimeService.visibleGrids(context.principal),
+  },
+  hallTimeGrid: {
+    access: "authenticated",
+    handler: (params, context) => dependencies.hallTimeService.grid(context.principal, params.gridId),
+  },
+  hallTimeHistory: {
+    access: "authenticated",
+    handler: (params, context) => dependencies.hallTimeService.history(context.principal, params.gridId),
+  },
+  adminHallTimeGrids: {
+    access: ["admin"],
+    handler: (_params, context) => dependencies.hallTimeService.adminGrids(context.principal),
+  },
+  adminSaveHallTimeGrid: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => {
+      requireCurrentTables("players");
+      const names = playerNameMap();
+      for (const personId of params.participantIds) {
+        if (!names.has(personId)) throw new AppError("PLAYER_NOT_FOUND", "Mindestens ein Spieler wurde nicht gefunden", 404);
+      }
+      return dependencies.hallTimeService.saveGrid(context.principal, params, names);
+    },
+  },
+  setHallTimeBooking: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => dependencies.hallTimeService.setBooking(context.principal, params),
+  },
+  adminDistributeHallTimeGrid: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => dependencies.hallTimeService.distribute(context.principal, params),
+  },
   myFavorites: {
     access: "authenticated",
     sessionAccessOnDevice: true,
     handler: (_params, context) => {
       const snapshot = dependencies.repository.getUserFavorites(context.principal.id);
       try {
-        const favorites = validateFavoriteTargets(snapshot.favorites.map(({ targetId, ...target }) => target));
+        const favorites = validateFavoriteTargets(snapshot.favorites.map(({ targetId, ...target }) => target))
+          .filter((favorite) => favorite.page !== "hallzeiten" || dependencies.hallTimeService.canView(context.principal, favorite.params?.id));
         return { success: true, ...snapshot, favorites };
       } catch {
         throw new AppError("STATE_CORRUPT", "Favoriten-State ist ungueltig", 503);
@@ -1319,7 +1391,13 @@ const endpoints = {
     handler: (_params, context) => {
       const snapshot = dependencies.repository.getUserStartPage(context.principal.id);
       try {
-        return { success: true, ...snapshot, target: validateStartTarget(snapshot.target) };
+        const target = validateStartTarget(snapshot.target);
+        return {
+          success: true, ...snapshot,
+          target: target.page === "hallzeiten" && !dependencies.hallTimeService.canView(context.principal, target.params?.id)
+            ? { type: "page", page: "index" }
+            : target,
+        };
       } catch {
         throw new AppError("STATE_CORRUPT", "Startseiten-State ist ungueltig", 503);
       }
@@ -1331,7 +1409,14 @@ const endpoints = {
     write: true,
     audit: false,
     writeCost: 0.1,
-    handler: (params, context) => dependencies.repository.setUserFavorites(context.principal.id, params),
+    handler: (params, context) => {
+      for (const favorite of params.favorites) {
+        if (favorite.page === "hallzeiten" && !dependencies.hallTimeService.canView(context.principal, favorite.params?.id)) {
+          throw new AppError("FORBIDDEN", "Dieser Hallenzeiten-Raster darf nicht als Favorit gespeichert werden", 403);
+        }
+      }
+      return dependencies.repository.setUserFavorites(context.principal.id, params);
+    },
   },
   setMyStartPage: {
     access: "authenticated",
@@ -1339,7 +1424,12 @@ const endpoints = {
     write: true,
     audit: false,
     writeCost: 0.1,
-    handler: (params, context) => dependencies.repository.setUserStartPage(context.principal.id, params),
+    handler: (params, context) => {
+      if (params.target.page === "hallzeiten" && !dependencies.hallTimeService.canView(context.principal, params.target.params?.id)) {
+        throw new AppError("FORBIDDEN", "Dieser Hallenzeiten-Raster darf nicht als Startseite gespeichert werden", 403);
+      }
+      return dependencies.repository.setUserStartPage(context.principal.id, params);
+    },
   },
   myMessageSummary: {
     access: "authenticated",
@@ -1699,6 +1789,7 @@ function canSubscribe(info, topic) {
     return info.principal.type === "user" && topic === `messages:${info.principal.id}`;
   }
   if (topic === "competition-history") return info.principal.type === "user";
+  if (topic === "hall-times") return info.principal.type === "user";
   if (topic.startsWith("monitor-status:")) {
     return info.principal.type === "user" && hasAnyRole(info.principal, ["operator", "admin"]);
   }
@@ -1853,6 +1944,7 @@ async function handleRequest(info, message, supportId) {
     }
     logPreferenceCompletion(message.endpoint, authContext.principal, params, data);
     logHistoryInteractionCompletion({ supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, outcome: "success", startedAt: historyInteractionStartedAt });
+    logHallTimeCompletion({ supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, outcome: "success", startedAt: historyInteractionStartedAt });
     return data;
   } catch (error) {
     let responseError = error;
@@ -1882,6 +1974,7 @@ async function handleRequest(info, message, supportId) {
         outcome: actionCompleted || responseError.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : ((responseError.status || 500) < 500 ? "rejected" : "failed"),
         startedAt: historyInteractionStartedAt,
       });
+      logHallTimeCompletion({ supportId, principal: authContext.principal, endpoint: message.endpoint, params, error: responseError, outcome: actionCompleted || responseError.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : ((responseError.status || 500) < 500 ? "rejected" : "failed"), startedAt: historyInteractionStartedAt });
     }
     logPreferenceCompletion(message.endpoint, authContext.principal, params, {}, responseError);
     throw responseError;

@@ -22,3 +22,18 @@ Commit: 4.11.3-paj-1-3 | Favoriten-Hover dezent gestaltet
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.3-paj-1-2-x` gesetzt.
   - [Frontend] Favoritensterne verwenden beim Maus-Hover statt der gruenen Fokusumrandung einen dezenten goldenen Hintergrund und eine leichte Vergroesserung; die gruene Umrandung bleibt fuer den Tastaturfokus erhalten.
   - [Tests] Der Browsertest prueft die neue Hover-Darstellung der Favoritensterne.
+
+[4.11.3-paj-1-4] - 2026-09-21
+Commit: 4.11.3-paj-1-4 | Hallenzeiten eingeführt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.11.3-paj-1-3-x` gesetzt.
+  - [Frontend] Neue geschuetzte Seite `hallzeiten.html` zeigt zugeordnete Hallenzeiten-Raster mit Favorit, Beschreibung, kompakter Belegung `Fix/Maximum (Warteliste)`, eigener Anmeldung/Abmeldung, automatischem Nachruecken und Rasterhistorie.
+  - [Frontend] Neue Administration `hallzeitenVerwalten.html` verwaltet Raster, Teilnehmer, Einzeltermine, Kapazitaet, optionale Warteliste sowie die Modi `Gleichberechtigte Aufteilung` und `FairUse-Anmeldung`; eine bestaetigte Neuverteilung ersetzt ausschliesslich zukuenftige Eintraege.
+  - [Frontend] Die rollen- und zuordnungsabhaengige Navigation fuehrt sichtbare Raster unter `Spielbetrieb / Hallenzeiten` und die Verwaltung unter `Administration / Hallenzeiten verwalten`; Raster koennen als berechtigungsgepruefte Favoriten und Startziele verwendet werden.
+  - [Backend] Der revisionierte und idempotente Hallenzeiten-State speichert Konfiguration, Einteilungen und kontrollierte Historie atomar, setzt abgelaufene Wartelistenplaetze auf Rot zurueck und benachrichtigt automatisch nachgerueckte Spieler.
+  - [Backend] FairUse zaehlt gruene und gelbe Eintraege aller zugeordneten Spieler, verwendet parametrierte Kalenderfristen in `Europe/Vienna` und gibt Restplaetze in der letzten Phase ohne FairUse-Grenze frei.
+  - [Observability] Hallenzeiten-Fachwrites besitzen kontrollierte Auditprojektionen, strukturierte Abschlusslogs und benannte Browserdiagnosen ohne freie Beschreibungs- oder Personendaten.
+  - [Tests] Service-, Vertrags- und Browsertests decken Berechtigung, FairUse, Warteliste, Nachruecken, Ablauf, Neuverteilung, sichere Textdarstellung, Responsive-Ansicht und das Bestaetigungs-Overlay ab.
+  - [Frontend] `Hallenzeiten` steht im mobilen Spielbetriebsmenue auf derselben Ebene wie Bewerbe und Scoreboard; nur die konkreten Raster sind eine weitere, gleich grosse Stufe eingerueckt. Terminspalten verwenden die kleinstmoegliche feste Breite.
+  - [Tests] Die Historie ist gegen doppelte Eintraege bei einfacher An- und Abmeldung abgesichert; ein zweiter Eintrag entsteht nur fuer ein tatsaechliches automatisches Nachruecken.

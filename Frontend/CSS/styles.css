@@ -5511,3 +5511,43 @@ header {
 body.mobile-nav-open .app-shift-layer {
   transform: translateX(calc(-1 * var(--navigation-drawer-width)));
 }
+.desktop-hall-times {
+  position: relative;
+  display: inline-flex;
+}
+
+.desktop-hall-times > button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.desktop-hall-time-links {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  padding: .4rem;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+  border-radius: 10px;
+  z-index: 30;
+}
+
+.desktop-hall-times:hover .desktop-hall-time-links,
+.desktop-hall-times:focus-within .desktop-hall-time-links {
+  display: grid;
+}
+
+.desktop-hall-time-links a {
+  color: #173f25 !important;
+  padding: .55rem .7rem;
+  white-space: nowrap;
+}
+
+#mobileHallTimeLinks .mobile-nav-main-row {
+  padding-left: 76px;
+}
