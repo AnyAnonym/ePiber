@@ -278,6 +278,7 @@ function createAppShiftLayer() {
     if (
       element === layer
       || element.id === "mobile-nav-container"
+      || element.id === "personalStartLoading"
       || element.tagName === "SCRIPT"
       || element.matches(".modal, .diagnostic-mode-notice, .toast-container")
     ) return;

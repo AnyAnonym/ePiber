@@ -14,3 +14,11 @@ Commit: 4.12.0-paj-1-2 | Login-Erfolgstoasts entfernt
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.0-paj-1-1-x` gesetzt.
   - [Frontend] Erfolgreiche An- und Abmeldungen wechseln Sitzung und Ansicht ohne das bisherige gruene Toast-Overlay; Fehlerhinweise und alle anderen Meldungen bleiben unveraendert.
   - [Tests] Der Navbar-Browsertest sichert ab, dass erfolgreiche An- und Abmeldungen keinen Toast erzeugen.
+
+[4.12.0-paj-1-3] - 2026-09-21
+Commit: 4.12.0-paj-1-3 | Startseitenauflösung mit Spinner verdeckt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.0-paj-1-2-x` gesetzt.
+  - [Frontend] Der persoenliche Einstieg verdeckt das Dashboard bis zur serverseitigen Zielaufloesung mit einem neutralen Ladespinner; Favoriten-Weiterleitungen zeigen dadurch kein Dashboard im Hintergrund, waehrend anonyme und explizite Dashboardaufrufe weiterhin direkt das Dashboard erhalten.
+  - [Tests] Der profiluebergreifende Startseitentest prueft Spinner, verborgenes Dashboard, Favoritenweiterleitung sowie spinnerfreie anonyme und explizite Dashboardaufrufe.

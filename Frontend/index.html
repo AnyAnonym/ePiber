@@ -15,7 +15,15 @@
   <link rel="stylesheet" href="./CSS/dashboard.css" />
 </head>
 
-<body class="dashboard-page">
+<body class="dashboard-page personal-start-pending">
+  <script src="JS/personalStartGate.js"></script>
+
+  <div id="personalStartLoading" class="loading-overlay personal-start-loading" role="status" aria-live="polite">
+    <div class="loading-overlay-content">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <div class="loading-text">Persönliche Startseite wird geladen …</div>
+    </div>
+  </div>
 
   <div id="header-container"></div>
   <div id="mobile-nav-container"></div>

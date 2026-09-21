@@ -207,7 +207,10 @@ export function createEndpoint(name) {
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
     if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
     if (name === "hallTimeGrids") return { data: { success: true, grids: role && new URLSearchParams(window.location.search).get("hallTimes") === "1" ? [{ id: "hall-1", name: "Donnerstag Doppel", mode: "equal" }] : [], revision: 0 } };
-    if (name === "myStartPage") return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision } };
+    if (name === "myStartPage") {
+      if (new URLSearchParams(window.location.search).get("slowStartPage") === "1") await new Promise((resolve) => setTimeout(resolve, 500));
+      return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision } };
+    }
     if (name === "myHallTimeGroups") return { data: { success: true, groups: structuredClone(hallTimeGroups), revision: hallTimeGroupRevision } };
     if (name === "setMyHallTimeGroupMembership") {
       hallTimeGroupRevision += 1;
@@ -975,7 +978,9 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     browser = await launchSelectedBrowser(CHROMIUM_PATH);
     const page = await newProfilePage(browser);
     page.setDefaultTimeout(5000);
-    await page.goto(`http://127.0.0.1:${server.address().port}/?role=player&startFavorites=1`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/?role=player&startFavorites=1&slowStartPage=1`, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator("#personalStartLoading").isVisible(), true);
+    assert.equal(await page.locator(".club-dashboard").evaluate((element) => getComputedStyle(element).visibility), "hidden");
     await page.waitForURL(/\/favorites\.html$/);
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&startPageTest=1&publicGroups=1&dashboard=1`, { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator(".header-center .logo").getAttribute("href"), "/");
@@ -1059,11 +1064,13 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await directIndexPage.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&startFavorites=1&startPageTest=1&dashboard=1`, { waitUntil: "domcontentloaded" });
     await directIndexPage.locator("#hamburgerBtn").waitFor({ state: "visible" });
     assert.match(directIndexPage.url(), /\/index\.html\?.*dashboard=1/);
+    assert.equal(await directIndexPage.locator("#personalStartLoading").count(), 0);
 
     const anonymousIndexPage = await newProfilePage(browser);
     await anonymousIndexPage.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "domcontentloaded" });
     await anonymousIndexPage.locator("#hamburgerBtn").waitFor({ state: "visible" });
     assert.match(anonymousIndexPage.url(), /\/index\.html$/);
+    assert.equal(await anonymousIndexPage.locator("#personalStartLoading").count(), 0);
     await anonymousIndexPage.close();
     await directIndexPage.close();
   } finally {
