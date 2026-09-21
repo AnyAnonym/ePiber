@@ -229,6 +229,25 @@ Favoritenziele oeffnet. Die Favoritenseite stellt dieselbe geordnete Liste wie d
 Navigation bereit; eine Aenderung der Reihenfolge wirkt deshalb in beiden
 Ansichten. Der Dashboard-Menuepunkt bleibt davon unabhaengig direkt erreichbar.
 
+5.12 Hallenzeiten reservieren [Bestaetigt]
+
+Administratoren verwalten Hallenzeiten-Gruppen mit Teilnehmern, Terminen,
+Fixplatzkapazitaet, optionaler Warteliste und parametrierbaren Vergaberegeln. Eine
+Gruppe kann fuer den selbststaendigen Beitritt in den Profileinstellungen
+freigegeben werden; alle Gruppenmitglieder duerfen pragmatisch fuer jede andere
+zugeordnete Person an- und abmelden. Die Historie nennt dabei handelnde und
+betroffene Person. Fremdaenderungen erzeugen zusaetzlich eine persoenliche,
+quittierungspflichtige Meldung.
+
+Gruene Eintraege sind Fixplaetze, gelbe Eintraege gereihte Wartelistenplaetze und
+rote Felder keine Teilnahme. Wird ein Fixplatz frei, rueckt die erste wartende
+Person automatisch nach. Fair Use zaehlt gruene und gelbe Eintraege gemeinsam;
+der Durchschnitt beruecksichtigt nur zugeordnete Personen mit mindestens einem
+Eintrag. Grundkontingent, prozentuale Erweiterung, Kalenderfristen,
+Fixplatzkapazitaet und persoenliches Wartelistenlimit sind administrativ
+konfigurierbar. Eine automatische gleichberechtigte Verteilung bleibt als
+getrennter Modus ohne personenbezogene Verteilungsmeldungen verfuegbar.
+
 
 ================================================================================
 6. FACHLICHE ANFORDERUNGEN
@@ -401,6 +420,30 @@ Ansichten. Der Dashboard-Menuepunkt bleibt davon unabhaengig direkt erreichbar.
         kontogebundene Favoriten speichern und deren Reihenfolge selbst festlegen
         koennen. Nicht vorhandene oder nicht berechtigte Ziele duerfen nicht als
         bedienbare Favoriten erscheinen. [Bestaetigt]
+
+6.8 Hallenzeiten
+
+  LF-70 Administratoren sollen Hallenzeiten-Gruppen, Teilnehmer, Termine,
+        Fixplatzkapazitaet, Warteliste und Vergaberegeln verwalten und Gruppen
+        optional fuer den selbststaendigen Beitritt freigeben koennen.
+        [Bestaetigt]
+
+  LF-71 Jedes Gruppenmitglied soll zukuenftige Eintraege aller zugeordneten
+        Personen aendern koennen. Fremde An- und Abmeldungen muessen in der
+        gemeinsamen Historie mit Akteur und Zielperson sowie in einer
+        quittierungspflichtigen persoenlichen Meldung fuer die Zielperson
+        nachvollziehbar sein. [Bestaetigt]
+
+  LF-72 Volle Termine sollen eine nach Eintrittszeit gereihte Warteliste besitzen.
+        Beim Freiwerden eines Fixplatzes rueckt die erste Person automatisch nach.
+        Das persoenliche Wartelistenlimit ist administrativ konfigurierbar.
+        [Bestaetigt]
+
+  LF-73 Fair Use soll gruene und gelbe Eintraege gemeinsam begrenzen. Neben einem
+        Grundkontingent werden der Durchschnitt nur der bereits reservierenden
+        Gruppenmitglieder, eine prozentuale Erweiterung und parametrierte
+        Kalenderfristen verwendet; die Regel gilt auch vor Vergabe eines
+        Wartelistenplatzes. [Bestaetigt]
 
 
 ================================================================================

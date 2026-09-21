@@ -91,9 +91,9 @@ const playerIds = (name) => (value) => {
 };
 const FAVORITE_PAGES = new Set([
   "index", "Matches1", "players", "Bewerbe", "scoreboard", "RoundRobin", "entryList", "rangliste",
-  "bewerbsRaster", "adminLogging", "personenNormalisieren", "mitgliederAbgleichen", "servicebereich", "navigator", "monitor",
+  "bewerbsRaster", "hallzeiten", "adminLogging", "personenNormalisieren", "mitgliederAbgleichen", "servicebereich", "hallzeitenVerwalten", "navigator", "monitor",
 ]);
-const FAVORITE_ID_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster"]);
+const FAVORITE_ID_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster", "hallzeiten"]);
 const FAVORITE_OVERLAYS = new Set(["match-result", "match-appointment"]);
 
 function favoriteTargetId(target) {
@@ -159,6 +159,65 @@ function favoriteTargets(value) {
   return targets;
 }
 
+function idArray(name, { min = 0, max = 500 } = {}) {
+  return (value) => {
+    if (!Array.isArray(value) || value.length < min || value.length > max) {
+      throw new AppError("VALIDATION_ERROR", `${name} muss ${min} bis ${max} Eintraege enthalten`);
+    }
+    const values = value.map((entry) => idValue(entry, name));
+    if (new Set(values).size !== values.length) throw new AppError("VALIDATION_ERROR", `${name} darf keine Duplikate enthalten`);
+    return values;
+  };
+}
+
+function hallTimeSlots(value) {
+  if (!Array.isArray(value) || value.length > 250) throw new AppError("VALIDATION_ERROR", "slots darf maximal 250 Termine enthalten");
+  const slots = value.map((entry) => objectShape(entry, {
+    id: optional(id("slot.id")),
+    date: text("slot.date", { min: 10, max: 10, pattern: /^\d{4}-\d{2}-\d{2}$/ }),
+    start: text("slot.start", { min: 5, max: 5, pattern: /^(?:[01]\d|2[0-3]):[0-5]\d$/ }),
+    end: text("slot.end", { min: 5, max: 5, pattern: /^(?:[01]\d|2[0-3]):[0-5]\d$/ }),
+  }));
+  if (slots.some(({ date }) => {
+    const parsed = new Date(`${date}T12:00:00Z`);
+    return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date;
+  })) throw new AppError("VALIDATION_ERROR", "Termin-Datum ist ungueltig");
+  if (slots.some(({ start, end }) => end <= start)) throw new AppError("VALIDATION_ERROR", "Terminende muss nach dem Beginn liegen");
+  if (new Set(slots.map(({ id: slotId }) => slotId).filter(Boolean)).size !== slots.filter(({ id: slotId }) => slotId).length) throw new AppError("VALIDATION_ERROR", "Termin-IDs muessen eindeutig sein");
+  if (new Set(slots.map(({ date, start, end }) => `${date}:${start}:${end}`)).size !== slots.length) throw new AppError("VALIDATION_ERROR", "Termine duerfen nicht doppelt vorkommen");
+  return slots;
+}
+
+function fairUseConfig(value) {
+  const config = objectShape(value, {
+    base: integer("fairUse.base", { min: 0, max: 1000 }),
+    extendedDays: integer("fairUse.extendedDays", { min: 1, max: 365 }),
+    percent: integer("fairUse.percent", { min: 0, max: 1000 }),
+    openDays: integer("fairUse.openDays", { min: 0, max: 364 }),
+  });
+  if (config.extendedDays <= config.openDays) throw new AppError("VALIDATION_ERROR", "Erweiterte Freigabe muss vor der freien Restplatzvergabe beginnen");
+  return config;
+}
+
+function hallTimeGridWrite(params) {
+  return objectShape(params, {
+    operationId: operation,
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+    gridId: optional(id("gridId")),
+    name: text("name", { min: 1, max: 100 }),
+    description: text("description", { max: 4000 }),
+    mode: text("mode", { max: 16, pattern: /^(equal|fair_use)$/ }),
+    capacity: integer("capacity", { min: 1, max: 100 }),
+    waitlistEnabled: (value) => booleanValue(value, "waitlistEnabled"),
+    maxWaitlistEntries: integer("maxWaitlistEntries", { min: 0, max: 1000 }),
+    publicJoinable: (value) => booleanValue(value, "publicJoinable"),
+    fairUse: fairUseConfig,
+    active: (value) => booleanValue(value, "active"),
+    participantIds: idArray("participantIds", { max: 500 }),
+    slots: hallTimeSlots,
+  });
+}
+
 function startTarget(value) {
   const raw = requireObject(value, "startTarget");
   if (raw.type === "page" && ["index", "favorites"].includes(raw.page)) {
@@ -213,6 +272,35 @@ const requestContracts = {
   scoreboardSnapshot: empty,
   memberDirectory: empty,
   myProfile: empty,
+  myHallTimeGroups: empty,
+  hallTimeGrids: empty,
+  hallTimeGrid: (params) => objectShape(params, { gridId: id("gridId") }),
+  hallTimeHistory: (params) => objectShape(params, { gridId: id("gridId") }),
+  adminHallTimeGrids: empty,
+  adminSaveHallTimeGrid: hallTimeGridWrite,
+  setHallTimeBooking: (params) => objectShape(params, {
+    operationId: operation,
+    gridId: id("gridId"),
+    slotId: id("slotId"),
+    personId: optional(id("personId")),
+    selected: (value) => booleanValue(value, "selected"),
+  }),
+  setMyHallTimeGroupMembership: (params) => objectShape(params, {
+    operationId: operation,
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+    gridId: id("gridId"),
+    selected: (value) => booleanValue(value, "selected"),
+  }),
+  adminDistributeHallTimeGrid: (params) => objectShape(params, {
+    operationId: operation,
+    gridId: id("gridId"),
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+  }),
+  adminClearAllHallTimeStatuses: (params) => objectShape(params, {
+    operationId: operation,
+    gridId: id("gridId"),
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+  }),
   myFavorites: empty,
   myStartPage: empty,
   setMyFavorites: (params) => objectShape(params, {

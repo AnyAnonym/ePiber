@@ -5,6 +5,7 @@ import { diagnostic } from "./diagnostics.js";
 const readFavorites = createEndpoint("myFavorites");
 const writeFavorites = createEndpoint("setMyFavorites");
 const readCompetitions = createEndpoint("bewerbe");
+const readHallTimeGrids = createEndpoint("hallTimeGrids");
 const listeners = new Set();
 const buttonUpdaters = new Set();
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("epiber-favorites") : null;
@@ -19,23 +20,26 @@ const PAGE_CONFIG = Object.freeze({
   "entryList.html": { page: "entryList", label: "Eintragungsliste", selector: "#entryListHeading", centered: true },
   "rangliste.html": { page: "rangliste", label: "Rangliste", selector: "#rankingSection > h2", centered: true },
   "bewerbsRaster.html": { page: "bewerbsRaster", label: "Turnierraster", selector: "#bracketHeading", centered: true },
+  "hallzeiten.html": { page: "hallzeiten", label: "Hallenzeiten", selector: "#hall-time-title", existingRow: true },
   "adminLogging.html": { page: "adminLogging", label: "Frontend-Logging", selector: "#logging-app .logging-heading h1" },
   "personenNormalisieren.html": { page: "personenNormalisieren", label: "Datenpflege", selector: "#normalization-app .normalization-heading h1" },
   "mitgliederAbgleichen.html": { page: "mitgliederAbgleichen", label: "Mitgliederabgleich", selector: "#reconciliation-app .normalization-heading h1" },
   "servicebereich.html": { page: "servicebereich", label: "Servicebereich", selector: "#service-app .service-heading h1" },
+  "hallzeitenVerwalten.html": { page: "hallzeitenVerwalten", label: "Hallenzeiten verwalten", selector: "#hall-time-admin-app .hall-time-admin-heading h1" },
   "navigator.html": { page: "navigator", label: "Monitorsteuerung", selector: "#navigator-app .navigator-title-block h1" },
   "monitor.html": { page: "monitor", label: "Monitor", selector: "#monitor-stage", floating: true },
 });
 
 const PAGE_LABELS = Object.freeze(Object.fromEntries(Object.values(PAGE_CONFIG).map(({ page, label }) => [page, label])));
-const ADMIN_PAGES = new Set(["adminLogging", "personenNormalisieren", "mitgliederAbgleichen", "servicebereich"]);
+const ADMIN_PAGES = new Set(["adminLogging", "personenNormalisieren", "mitgliederAbgleichen", "servicebereich", "hallzeitenVerwalten"]);
 const OPERATOR_PAGES = new Set(["navigator"]);
-const PARAMETERIZED_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster"]);
+const PARAMETERIZED_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster", "hallzeiten"]);
 let state = { identity: null, favorites: [], revision: 0, loading: false, ready: false };
 let loadGeneration = 0;
 let competitionGeneration = 0;
 let mutationQueue = Promise.resolve();
 let competitionNames = new Map();
+let hallTimeNames = new Map();
 
 function notify() {
   const snapshot = favoriteSnapshot();
@@ -89,6 +93,7 @@ async function loadForUser(user, { force = false } = {}) {
     loadGeneration += 1;
     competitionGeneration += 1;
     competitionNames = new Map();
+    hallTimeNames = new Map();
     state = { identity: null, favorites: [], revision: 0, loading: false, ready: true };
     notify();
     return;
@@ -119,29 +124,37 @@ async function loadForUser(user, { force = false } = {}) {
 }
 
 async function loadCompetitionNames(identity = state.identity, favorites = state.favorites) {
-  const competitionIds = new Set(favorites.map((favorite) => String(favorite?.params?.id || "")).filter(Boolean));
+  const competitionIds = new Set(favorites.filter(({ page }) => page !== "hallzeiten").map((favorite) => String(favorite?.params?.id || "")).filter(Boolean));
+  const hallTimeIds = new Set(favorites.filter(({ page }) => page === "hallzeiten").map((favorite) => String(favorite?.params?.id || "")).filter(Boolean));
   const generation = ++competitionGeneration;
-  if (!identity || !competitionIds.size) {
-    if (competitionNames.size) {
+  if (!identity || (!competitionIds.size && !hallTimeIds.size)) {
+    if (competitionNames.size || hallTimeNames.size) {
       competitionNames = new Map();
+      hallTimeNames = new Map();
       notify();
     }
     return;
   }
   try {
-    const response = await readCompetitions();
+    const [competitionResponse, hallTimeResponse] = await Promise.all([
+      competitionIds.size ? readCompetitions() : Promise.resolve({ data: { values: [] } }),
+      hallTimeIds.size ? readHallTimeGrids() : Promise.resolve({ data: { grids: [] } }),
+    ]);
     if (generation !== competitionGeneration || state.identity !== identity) return;
-    const values = response.data?.values;
-    if (!Array.isArray(values) || !Array.isArray(values[0])) throw new Error("Bewerbe sind nicht verfügbar.");
-    const header = values[0].map((value) => String(value || "").trim().toLowerCase());
-    const idIndex = header.indexOf("id");
-    const nameIndex = header.indexOf("bezeichnung");
-    if (idIndex < 0 || nameIndex < 0) throw new Error("Bewerbsnamen sind unvollständig.");
-    competitionNames = new Map(values.slice(1).flatMap((row) => {
-      const id = String(row[idIndex] || "").trim();
-      const name = String(row[nameIndex] || "").trim();
-      return competitionIds.has(id) && name ? [[id, name]] : [];
-    }));
+    const values = competitionResponse.data?.values;
+    if (competitionIds.size) {
+      if (!Array.isArray(values) || !Array.isArray(values[0])) throw new Error("Bewerbe sind nicht verfügbar.");
+      const header = values[0].map((value) => String(value || "").trim().toLowerCase());
+      const idIndex = header.indexOf("id");
+      const nameIndex = header.indexOf("bezeichnung");
+      if (idIndex < 0 || nameIndex < 0) throw new Error("Bewerbsnamen sind unvollständig.");
+      competitionNames = new Map(values.slice(1).flatMap((row) => {
+        const id = String(row[idIndex] || "").trim();
+        const name = String(row[nameIndex] || "").trim();
+        return competitionIds.has(id) && name ? [[id, name]] : [];
+      }));
+    } else competitionNames = new Map();
+    hallTimeNames = new Map((hallTimeResponse.data?.grids || []).filter(({ id }) => hallTimeIds.has(String(id))).map(({ id, name }) => [String(id), String(name)]));
     notify();
   } catch (error) {
     if (generation !== competitionGeneration || state.identity !== identity) return;
@@ -242,6 +255,7 @@ export function favoriteLabel(target) {
     const competitionName = competitionNames.get(String(target.params.id || ""));
     return competitionName ? `Historie – ${competitionName}` : "Bewerbshistorie";
   }
+  if (target?.page === "hallzeiten") return hallTimeNames.get(String(target?.params?.id || "")) || "Hallenzeiten";
   const base = PAGE_LABELS[target?.page] || "Seite";
   const id = target?.params?.id;
   return id ? competitionNames.get(String(id)) || base : base;
@@ -330,5 +344,6 @@ channel?.addEventListener("message", (event) => {
 });
 
 subscribe("bewerbe", () => loadCompetitionNames());
+subscribe("hall-times", () => loadCompetitionNames());
 
 mountPageFavorite();

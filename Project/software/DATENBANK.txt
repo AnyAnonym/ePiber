@@ -825,6 +825,14 @@ Tabelle `app_state`:
   Seiten-/Parameter-/Overlayvertrag wie bei Favoriten. Der Standard ohne
   gespeicherten State ist `index`; eine nachtraegliche fachliche
   Verfuegbarkeitspruefung des Ziels findet derzeit nicht statt.
+  `hall-times:v1` enthaelt alle Hallenzeiten-Raster gemeinsam revisioniert. Ein
+  Raster speichert ID, Name, Beschreibung, Modus `equal|fair_use`, Aktivstatus,
+  oeffentliche Beitrittsfreigabe, Fixplatzkapazitaet, Wartelistenaktivierung und
+  persoenliches Wartelistenlimit, Fair-Use-Parameter, strukturierte Teilnehmer,
+  chronologische Termine, Fix-/Wartelisteneintraege mit Queuezeit sowie eine auf
+  5000 Eintraege begrenzte Fachhistorie. Wartelistenpositionen werden aus Queuezeit
+  und Personen-ID abgeleitet und nicht redundant gespeichert. Alle Mutationen
+  verwenden dieselbe State-Revision und idempotente `operations`-Datensaetze.
   Compare-and-set meldet bei falscher Revision
   `REVISION_CONFLICT`.
   Court-Zustaende enthalten unter anderem Match-/Bewerbszuordnung, Spieler,

@@ -1,0 +1,22 @@
+================================================================================
+Hallenzeiten drucken - Admin-Druckvorlagen
+================================================================================
+-- Funktion und Dateien --
+  HTML: Frontend/hallzeitenDrucken.html
+  JS:   Frontend/JS/hallzeitenDrucken.js
+  CSS:  Frontend/CSS/hallzeitenDrucken.css
+  URL:  hallzeitenDrucken.html?id=<Raster-ID>&ansicht=mine|all
+  Die Seite ist ausschliesslich fuer Administratoren erreichbar.
+
+-- Projektionen --
+  `mine` zeigt die eigene Teilnehmerzeile; ist der Administrator kein Teilnehmer,
+  wird eine leere Namensvorlage erzeugt. `all` zeigt alle Teilnehmer nach Nachname
+  und Vorname sortiert. Die Ausgabe enthaelt ausschliesslich zwei Rasterbloecke
+  ohne Titel, Hinweise, Legende, Summenspalte oder Belegungsfuss.
+
+-- Drucklayout --
+  Termine werden moeglichst gleichmaessig auf Vorder- und Rueckseite verteilt. Bei
+  ungerader Anzahl erhaelt Block 2 eine leere Ausgleichsspalte. Datum und Zeit sind
+  kompakt; Namens-, Termin- und Gesamtbreite werden einmal global aus den
+  tatsaechlichen Inhalten berechnet, sodass beide Bloecke mit und ohne
+  Ausgleichsspalte exakt gleich breit bleiben.

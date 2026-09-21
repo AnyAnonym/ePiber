@@ -171,6 +171,9 @@ Vorlage existieren nicht mehr.
 | `personenNormalisieren.html` | Admin-Personendaten normalisieren | keine |
 | `mitgliederAbgleichen.html` | Admin-ClubDesk-Mitgliederabgleich | keine |
 | `servicebereich.html` | Admin-Status und Gesamtimport der Sheet-Daten | keine |
+| `hallzeiten.html` | Hallenzeiten-Reservierungsraster | `?id=<rasterId>` erforderlich |
+| `hallzeitenVerwalten.html` | Admin-Verwaltung der Hallenzeiten | keine |
+| `hallzeitenDrucken.html` | Admin-Druckvorlagen | `?id=<rasterId>&ansicht=mine|all` |
 
 `matches.html` und `preMatches.html` existieren laut aktueller Dokumentation
 nicht mehr. `matches` und `preMatches` bestehen nur als WebSocket-Aliase fort.

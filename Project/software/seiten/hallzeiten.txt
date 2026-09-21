@@ -1,0 +1,39 @@
+================================================================================
+Hallenzeiten - Reservierungsraster
+================================================================================
+-- Funktion und Dateien --
+  HTML: Frontend/hallzeiten.html
+  JS:   Frontend/JS/hallzeiten.js
+  CSS:  Frontend/CSS/hallzeiten.css
+  URL:  hallzeiten.html?id=<Raster-ID>
+  Die geschuetzte responsive Seite zeigt Fixplaetze, Warteliste, Summen und
+  Fachhistorie eines aktiven Hallenzeiten-Rasters.
+
+-- Zugriff und Datenfluss --
+  Administratoren duerfen alle aktiven Raster sehen; andere angemeldete Benutzer
+  nur Raster, deren Teilnehmerliste ihre Personen-ID enthaelt. `hallTimeGrid` und
+  `hallTimeHistory` laden Zustand und Historie, `setHallTimeBooking` schreibt
+  revisioniert/idempotent. Das private Topic `hall-times` invalidiert den Stand.
+
+-- Raster und Bedienung --
+  Rot bedeutet nicht eingetragen, Gruen Fixplatz, Gelb Warteliste samt Position.
+  Jede zugeordnete Person darf zukuenftige Eintraege aller Teilnehmer aendern.
+  Fremde An- und Abmeldungen erzeugen fuer die betroffene Person eine ungelesene,
+  quittierungspflichtige Inboxmeldung. Wird ein Fixplatz frei, rueckt Position 1
+  atomar nach und wird ebenfalls benachrichtigt. Vergangene Termine sind nur fuer
+  Administratoren korrigierbar.
+
+  `Alle` zeigt alle Zeilen und Termine, markiert die eigene Zeile blau und
+  zentriert sie. `Aktuell` zeigt nur gruen/gelb eingetragene Personen des naechsten
+  moeglichen Termins. Ein Terminspaltenkopf verwendet denselben Filter fuer seine
+  Spalte. Ein Klick auf einen Namen zeigt nur Terminspalten mit Eintrag dieser
+  Person; die ausgewaehlte Zeile und Spalte sind blau. Rechts stehen Fixplaetze
+  und Wartelistenanzahl je Person, unten Belegung/Kapazitaet und Wartende je Termin.
+
+-- Regeln, Historie und Fehler --
+  Fair Use zaehlt Fix- und Wartelistenplaetze gemeinsam und wird vor einer
+  Wartelistenvergabe geprueft. Das eigene Wartelistenkontingent ist parametriert.
+  Ablehnungen erscheinen ohne Supportnummer in einem mittigen Dialog; die interne
+  Browserdiagnose behaelt den kontrollierten Fehlercode. Die Historie nennt Zeit,
+  Aktion, Akteur, Zielperson und Termin. Automatische Verteilungen erscheinen nur
+  als Gesamtvorgang und erzeugen keine personenbezogenen Einzelmeldungen.

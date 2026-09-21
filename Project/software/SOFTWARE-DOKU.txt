@@ -40,7 +40,7 @@ maschinenpruefbare Vertraege bleiben die technische Wahrheit.
 
 
 ================================================================================
-  SEITEN-DOKUMENTATION (13 FACHLICHE SEITEN + 4 ADMINISTRATION)
+  SEITEN-DOKUMENTATION (14 FACHLICHE SEITEN + 6 ADMINISTRATION)
 ================================================================================
 
   Pfad                              | Seite
@@ -58,7 +58,12 @@ maschinenpruefbare Vertraege bleiben die technische Wahrheit.
   software/seiten/entryList.txt     | Bewerbsanmeldung
   software/seiten/rangliste.txt     | Ranglisten-Pyramide
   software/seiten/roundRobin.txt    | RoundRobin-Gruppenphase
+  software/seiten/hallzeiten.txt    | Hallenzeiten-Reservierungsraster
   software/seiten/adminLogging.txt  | Frontend-Logging-Administration
+  software/seiten/hallzeitenVerwalten.txt
+                                     | Hallenzeiten-Administration
+  software/seiten/hallzeitenDrucken.txt
+                                     | Hallenzeiten-Druckvorlagen
   software/seiten/servicebereich.txt| Sheet-Daten-Servicebereich
   software/seiten/personenNormalisieren.txt
                                      | Personendaten-Normalisierung

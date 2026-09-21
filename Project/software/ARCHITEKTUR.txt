@@ -105,11 +105,21 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
 
 `stateRepository.js`
   Kapselt SQLite mit WAL/FULL, Dateirechten, Transaktionen, revisioniertem
-  app_state, kontogebundenen Favoriten, Sessions, Monitorgeraeten,
+  app_state, kontogebundenen Favoriten, Hallenzeiten, Sessions, Monitorgeraeten,
   Operationsergebnissen und Loginlimits.
   Beim Start wird die obsolete Tabelle `password_reset_proofs` einschliesslich
   etwaiger Altdaten gedroppt. Tokens werden nur gehasht persistiert. Cleanup
   entfernt abgelaufene beziehungsweise alte Eintraege.
+
+`hallTimeService.js`
+  Verwaltet den revisionierten State `hall-times:v1` mit Rasterkonfiguration,
+  Teilnehmern, Terminen, Fix- und Wartelistenplaetzen sowie begrenzter
+  Fachhistorie. Der Service autorisiert Rasterzugriff und oeffentlichen
+  Selbstbeitritt, erzwingt Fair Use und persoenliche Wartelistenlimits, rueckt
+  Wartende atomar nach und berechnet die gleichberechtigte Verteilung. Manuelle
+  Fremdaenderungen und automatisches Nachruecken erzeugen kontrollierte
+  persoenliche Meldungen; automatische Verteilung erzeugt keine
+  personenbezogenen Meldungen oder Einzelhistorie.
 
 `messagingRepository.js`, `messagingService.js`
   Persistieren das versionierte zentrale Bewerbsereignismodell, normalisierte
@@ -1012,7 +1022,14 @@ die Datenbanken bleiben bis zum Ende aller angenommenen Arbeit geoeffnet.
                       Match-Ergebnisdialog mit blauen Teilnehmer- und roten
                       Adminaktionen. Profilinhalt und
                       Aktionshandler werden beim Schliessen und Identitaetswechsel
-                      vollstaendig entfernt.
+                       vollstaendig entfernt.
+`hallzeiten.js`       Responsives Reservierungsraster, Ansichts-/Zeilenfilter,
+                       Buchungsaktionen und gemeinsame Fachhistorie.
+`hallzeitenVerwalten.js`
+                      Adminpflege von Raster, Teilnehmern, Terminserien,
+                      Vergaberegeln, Verteilung und Druckeinstiegen.
+`hallzeitenDrucken.js` Admin-only Zweiblock-Druckprojektion fuer persoenliche
+                       und vollstaendige Vorder-/Rueckseitenvorlagen.
 `loadingHelper.js`    Einheitlicher voll deckender Initialloader mit dem Text
                       `Lade Daten ...` fuer Seiten und Dialoge sowie fokussierbare,
                       schliessbare Fehleranzeigen mit erhaltener Support-ID.
@@ -1120,6 +1137,12 @@ Menuepunkt `Dashboard` und direkte Fachlinks werden nicht umgeleitet. Anonym gil
 weiterhin das Dashboard. Spaeter fachlich ungueltig gewordene Ziele erhalten
 vorerst keine eigene Erkennung oder Ausgrauung, sondern verwenden die bestehende
 Fehlerdarstellung ihrer Zielseite.
+Im selben Reiter listet `myHallTimeGroups` alle aktiven oeffentlich beitretbaren
+Hallenzeiten-Gruppen. Eine Checkbox schreibt die eigene Mitgliedschaft
+revisioniert ueber `setMyHallTimeGroupMembership`. Der Beitritt fuegt die aktuelle
+Person in dieselbe Teilnehmerliste ein, die Administratoren pflegen. Ein Austritt
+verlangt zuvor die Entfernung aller eigenen noch aktuellen Eintraege. Das Topic
+`hall-times` aktualisiert Navigation, Raster und geoeffnete Administration.
 Auf der provisionierten Monitorseite bleibt der WebSocket-Principal fuer alle
 Monitoroperationen das Geraet. Nur `myFavorites`, `setMyFavorites`, `myStartPage`
 und `setMyStartPage` duerfen bei
@@ -1139,7 +1162,8 @@ eine leere Liste und koennen spaetere Rundenfristen ohne neuen UI-Vertrag nutzen
 ================================================================================
 
 Die freigegebene Zielmatrix umfasst Chrome auf Windows-Desktop und Android,
-Safari auf iPhone, iPad und macOS, Firefox auf Windows sowie Edge auf Windows.
+Samsung Internet auf Android, Safari auf iPhone, iPad und macOS, Firefox auf
+Windows sowie Edge auf Windows.
 Automatisierte Referenz sind die exakt mit `Backend/package.json` versionierten
 Playwright-Engines und Geraeteprofile:
 
@@ -1147,6 +1171,7 @@ Playwright-Engines und Geraeteprofile:
   --------------------------|-----------------------------------------------
   Chrome / Windows Desktop  | Chromium, Desktop-Viewport
   Chrome / Android          | Chromium, Pixel-7-Profil mit Touch
+  Samsung Internet / Android| Chromium, Galaxy-S24-Profil mit Touch und Samsung-UA
   Safari / iPhone           | WebKit, iPhone-13-Profil mit Touch
   Safari / iPad             | WebKit, iPad-Pro-11-Profil mit Touch
   Safari / macOS            | WebKit, Desktop-Viewport
@@ -1157,12 +1182,15 @@ Die Ausfuehrung erfolgt auf Linux. Engine, Viewport, Pixeldichte, mobile
 Darstellung und Touch werden dabei geprueft; Windows, macOS und iOS selbst sowie
 deren Systemschriften, virtuelle Tastaturen, Browserleisten und Betriebssystem-
 integration werden nicht emuliert. WebKit ist deshalb eine Safari-Naeherung und
-keine Zusage fuer jedes native iOS-/macOS-Detail. Feste historische
+keine Zusage fuer jedes native iOS-/macOS-Detail. Samsung Internet wird mit der
+versionierten Chromium-Engine, einem Galaxy-S24-Geraeteprofil und Samsung-UA
+angenaehert; herstellerspezifische Browserleisten und Engineanpassungen werden
+nicht nativ emuliert. Feste historische
 Browsermindestversionen werden nicht unterstuetzt; massgeblich sind die mit der
 festgeschriebenen Playwright-Version gepflegten Engines.
 
 `npm run test:browser:smoke` prueft ausgewaehlte reale Kernablaeufe mit lokalen,
-deterministischen Fixtures in allen sieben Zielprofilen. Dazu gehoeren mobile und
+deterministischen Fixtures in allen acht Zielprofilen. Dazu gehoeren mobile und
 Desktopnavigation samt `inert`, Bewerbshistorie und Kommentar-Graphemzaehlung,
 Matchdarstellung sowie Scoreboard-Ergebnisdarstellung. `npm run
 test:browser:chromium` fuehrt die vollstaendige bestehende Browser-Suite mit dem

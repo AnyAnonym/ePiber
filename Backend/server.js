@@ -54,6 +54,7 @@ const { ScoreLogRepository } = require("./scoreLogRepository.js");
 const { AuditLogRepository } = require("./auditLogRepository.js");
 const { MessagingRepository } = require("./messagingRepository.js");
 const { MessagingService } = require("./messagingService.js");
+const { HallTimeService } = require("./hallTimeService.js");
 const { EmailMessagingAdapter } = require("./emailMessagingAdapter.js");
 const { WhatsappMessagingAdapter } = require("./whatsappMessagingAdapter.js");
 const logger = require("./logger.js");
@@ -195,6 +196,12 @@ function createApplication(overrides = {}) {
     emailAdapter: new EmailMessagingAdapter(),
     whatsappAdapter: new WhatsappMessagingAdapter(),
     publish: (topic, data) => dataProvider.publish(topic, data),
+  });
+  const hallTimeService = overrides.hallTimeService || new HallTimeService({
+    repository,
+    messagingService,
+    publish: (topic, data) => dataProvider.publish(topic, data),
+    log: logger.log,
   });
   const messagingReporting = overrides.messagingReporting || {
     enabled: MESSAGING_REPORT_ENABLED,
@@ -733,6 +740,7 @@ function createApplication(overrides = {}) {
     canonicalizeMonitorPath,
     monitorBroker,
     messagingService,
+    hallTimeService,
     repository,
     scoreLogRepository,
     sheetService,
@@ -755,7 +763,12 @@ function createApplication(overrides = {}) {
       for (const court of ["1", "2"]) courtPoller.logCourtSnapshot(court, "startup");
       initialized = true;
       logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }).ready, durationMs: Date.now() - startedAt });
-      cleanupTimer = setInterval(() => repository.cleanup(), 300000);
+      cleanupTimer = setInterval(() => {
+        repository.cleanup();
+        try { hallTimeService.cleanupExpired(); } catch (error) {
+          logger.log("warn", "hall_time_expiration_failed", { errorCode: error.code || "HALL_TIME_EXPIRATION_FAILED" });
+        }
+      }, 300000);
       cleanupTimer.unref?.();
       return result;
     })();

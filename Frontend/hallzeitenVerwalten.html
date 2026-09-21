@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASKÖ Piberbach – Hallenzeiten verwalten</title>
+  <link rel="stylesheet" href="./CSS/styles.css" />
+  <link rel="stylesheet" href="./CSS/hallzeiten.css" />
+  <link rel="stylesheet" href="./CSS/hallzeitenVerwalten.css" />
+</head>
+<body>
+  <div id="header-container"></div><div id="mobile-nav-container"></div>
+  <main class="hall-time-admin-main">
+    <section id="hall-time-admin-access" class="hall-time-card" aria-live="polite"><h1>Hallenzeiten verwalten</h1><p id="hall-time-admin-access-message">Sitzung wird geprüft …</p></section>
+    <div id="hall-time-admin-app" hidden>
+      <header class="hall-time-admin-heading"><p>Administration / Spielbetrieb</p><h1>Hallenzeiten verwalten</h1><p>Raster, Termine, Teilnehmer und Vergaberegeln festlegen.</p></header>
+      <p id="hall-time-admin-feedback" class="hall-time-feedback" role="status" aria-live="polite"></p>
+      <div class="hall-time-admin-layout">
+        <aside class="hall-time-card hall-time-admin-list"><button id="hall-time-new" type="button">+ Neuer Raster</button><nav id="hall-time-grid-list" aria-label="Hallenzeiten-Raster"></nav></aside>
+        <form id="hall-time-form" class="hall-time-card hall-time-admin-form">
+          <div class="hall-time-form-heading"><h2 id="hall-time-form-title">Neuer Raster</h2><a id="hall-time-open" href="#" hidden>Raster öffnen</a></div>
+          <div id="hall-time-print-actions" class="hall-time-print-actions" hidden><strong>Druckvorlagen</strong><a id="hall-time-print-mine" href="#" target="_blank" rel="noopener">Mein Raster</a><a id="hall-time-print-all" href="#" target="_blank" rel="noopener">Gesamter Raster</a></div>
+          <label>Name<input id="hall-time-name" maxlength="100" required /></label>
+          <label>Beschreibung und Regeln<textarea id="hall-time-description-input" maxlength="4000" rows="5"></textarea></label>
+          <div class="hall-time-form-grid">
+            <label>Modus<select id="hall-time-mode"><option value="equal">Gleichberechtigte Aufteilung</option><option value="fair_use">FairUse-Anmeldung</option></select></label>
+            <label>Fixplätze pro Termin<input id="hall-time-capacity" type="number" min="1" max="100" value="4" required /></label>
+            <label class="hall-time-check"><input id="hall-time-waitlist" type="checkbox" checked /> Warteliste aktiv</label>
+            <label>Wartelisteneinträge pro Person<input id="hall-time-waitlist-limit" type="number" min="0" max="1000" value="2" required /></label>
+            <label class="hall-time-check"><input id="hall-time-public-join" type="checkbox" /> Öffentlich beitretbar</label>
+            <label class="hall-time-check"><input id="hall-time-active" type="checkbox" checked /> Raster aktiv</label>
+          </div>
+          <fieldset id="hall-time-fair-use"><legend>FairUse</legend><div class="hall-time-form-grid">
+            <label>Grundkontingent<input id="hall-time-fair-base" type="number" min="0" max="1000" value="2" /></label>
+            <label>Erweiterte Freigabe (Kalendertage)<input id="hall-time-fair-extended" type="number" min="1" max="365" value="7" /></label>
+            <label>Zulässige Abweichung (%)<input id="hall-time-fair-percent" type="number" min="0" max="1000" value="50" /></label>
+            <label>Freie Vergabe (Kalendertage)<input id="hall-time-fair-open" type="number" min="0" max="364" value="2" /></label>
+          </div></fieldset>
+          <fieldset><legend>Spieler</legend><input id="hall-time-player-filter" type="search" placeholder="Spieler suchen …" /><div id="hall-time-players" class="hall-time-player-picker"></div></fieldset>
+          <fieldset><legend>Termine</legend><div class="hall-time-slot-add"><label>Datum<input id="hall-time-slot-date" type="date" /></label><label>Beginn<input id="hall-time-slot-start" type="time" value="19:00" /></label><label>Ende<input id="hall-time-slot-end" type="time" value="21:00" /></label><label>Folgetermine<input id="hall-time-slot-repeat" type="number" min="0" max="249" value="0" inputmode="numeric" /></label><button id="hall-time-slot-add" type="button">Terminserie übernehmen</button></div><p class="hall-time-slot-help">Die Anzahl erzeugt zusätzlich zum Ausgangstermin wöchentliche Folgetermine mit derselben Uhrzeit.</p><div id="hall-time-slots"></div></fieldset>
+          <div class="hall-time-admin-actions"><button type="submit" class="primary">Speichern</button><button id="hall-time-distribute" type="button">Gleichberechtigt verteilen</button><button id="hall-time-clear-all-statuses" type="button" class="danger">Alle Stati auf Termin löschen</button></div>
+        </form>
+      </div>
+    </div>
+  </main>
+  <dialog id="hall-time-distribute-dialog"><form method="dialog"><button class="hall-time-dialog-close" value="cancel" aria-label="Dialog schließen">×</button><h2>Bestehende Einteilung ersetzen?</h2><p>Alle grünen und gelben Einträge zukünftiger Termine werden entfernt und durch eine neue gleichberechtigte Verteilung ersetzt. Vergangene Termine bleiben unverändert.</p><div><button value="cancel">Abbrechen</button><button id="hall-time-distribute-confirm" value="default" class="primary">Neu verteilen</button></div></form></dialog>
+  <dialog id="hall-time-clear-statuses-dialog"><form method="dialog"><button class="hall-time-dialog-close" value="cancel" aria-label="Dialog schließen">×</button><h2>Alle Stati auf den Terminen löschen?</h2><p>Alle grünen und gelben Reservierungsstati werden gelöscht. Sämtliche vergangenen und zukünftigen Termine bleiben bestehen.</p><div><button value="cancel">Abbrechen</button><button id="hall-time-clear-statuses-confirm" value="default" class="danger">Alle Stati auf Termin löschen</button></div></form></dialog>
+  <div id="footer-container"></div>
+  <script type="module" src="JS/navbar.js"></script><script type="module" src="JS/modals.js"></script><script type="module" src="JS/favorites.js"></script><script type="module" src="JS/hallzeitenVerwalten.js"></script><script src="JS/global.js"></script><script src="JS/footer.js"></script>
+</body>
+</html>

@@ -228,6 +228,46 @@ test("Termin- und Adminfehler im Profil sind als kontrollierte Browserdiagnosen 
   assert.equal(logs[1].fields.frontendEvent, "ranking_admin_action_failed");
 });
 
+test("Hallenzeiten-Druckansicht besitzt einen bekannten Seitentyp und kontrollierte Fehlerdiagnose", () => {
+  const { logs, service } = fixture({ value: 2352500 });
+  service.updateSettings(settings(0));
+  const result = service.recordBatch({
+    sourceIp: "203.0.113.10",
+    identity: { id: "p1", name: "Ada Admin", role: "admin" },
+    body: {
+      appVersion: "test",
+      clientSessionId: "00000000-0000-4000-8000-000000000033",
+      pageType: "hallzeitenDrucken",
+      events: [{ event: "hall_time_admin_load_failed", level: "error", code: "DATA_NOT_READY" }],
+    },
+  });
+  assert.deepEqual(result, { success: true, accepted: 1, dropped: 0 });
+  assert.equal(logs[0].fields.pageType, "hallzeitenDrucken");
+  assert.equal(logs[0].fields.frontendEvent, "hall_time_admin_load_failed");
+});
+
+test("Profilgruppen besitzen kontrollierte Lade- und Schreibdiagnosen", () => {
+  const { logs, service } = fixture({ value: 2353000 });
+  service.updateSettings(settings(0));
+  const result = service.recordBatch({
+    sourceIp: "203.0.113.10",
+    identity: { id: "p2", name: "Peter Player", role: "player" },
+    body: {
+      appVersion: "test",
+      clientSessionId: "00000000-0000-4000-8000-000000000034",
+      pageType: "index",
+      events: [
+        { event: "profile_hall_time_groups_load_failed", level: "error", code: "REQUEST_TIMEOUT" },
+        { event: "profile_hall_time_group_write_failed", level: "error", code: "REVISION_CONFLICT" },
+      ],
+    },
+  });
+  assert.deepEqual(result, { success: true, accepted: 2, dropped: 0 });
+  assert.deepEqual(logs.map(({ fields }) => fields.frontendEvent), [
+    "profile_hall_time_groups_load_failed", "profile_hall_time_group_write_failed",
+  ]);
+});
+
 test("Favoriten- und Startseitenfehler sind kontrollierte Browserdiagnosen ohne Zielinhalte", () => {
   const now = { value: 2355000 };
   const { logs, service } = fixture(now);
@@ -432,6 +472,28 @@ test("Dashboard-Geburtstagsfehler ist eine kontrollierte Browserdiagnose", () =>
   assert.deepEqual(result, { success: true, accepted: 1, dropped: 0 });
   assert.equal(logs[0].fields.pageType, "index");
   assert.equal(logs[0].fields.frontendEvent, "dashboard_birthdays_load_failed");
+});
+
+test("Profiloeffnungsdauer ist eine kontrollierte Diagnose ohne Profildaten", () => {
+  const now = { value: 3600000 };
+  const { logs, service } = fixture(now);
+  service.updateSettings(settings(0, { level: "info", sampleRatePercent: 100 }));
+  const result = service.recordBatch({
+    identity: { id: "p2", name: "Peter Player", role: "player" },
+    sourceIp: "192.0.2.2",
+    body: {
+      appVersion: "4.3.0-test",
+      clientSessionId: "00000000-0000-4000-8000-000000000014",
+      pageType: "index",
+      events: [{ event: "profile_open_completed", level: "info", category: "private", durationMs: 1234, outcome: "success" }],
+    },
+  });
+  assert.deepEqual(result, { success: true, accepted: 1, dropped: 0 });
+  assert.equal(logs[0].fields.frontendEvent, "profile_open_completed");
+  assert.equal(logs[0].fields.durationMs, 1234);
+  assert.equal(logs[0].fields.category, "private");
+  assert.equal(logs[0].fields.outcome, "success");
+  assert.equal(Object.hasOwn(logs[0].fields, "profile"), false);
 });
 
 test("Info- und Debug-Sampling wird serverseitig erzwungen und Zielpersonen erhalten 100 Prozent", () => {

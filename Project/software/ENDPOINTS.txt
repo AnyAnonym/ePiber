@@ -583,6 +583,49 @@ AUTHENTICATED (player, operator oder admin):
       Resetwerte erscheinen nie. Raushaengezeit und -grund folgen dem
       angemeldeten Profilvertrag.
 
+  `myHallTimeGroups {}`
+      Liefert `{ success, revision, groups:[{ id, name, joined }] }` fuer alle
+      aktiven Hallenzeiten-Raster mit administrativ aktivierter oeffentlicher
+      Beitrittsfreigabe. Teilnehmerlisten oder fremde Mitgliedschaften werden
+      nicht projiziert.
+
+  `setMyHallTimeGroupMembership { operationId, expectedRevision, gridId, selected }`
+      Tritt einer oeffentlich beitretbaren aktiven Gruppe revisioniert und
+      idempotent bei oder verlaesst sie. Ein Austritt mit eigenen noch aktuellen
+      Fix- oder Wartelisteneintraegen liefert `HALL_TIME_GROUP_ACTIVE_ENTRIES`;
+      eine nicht oeffentliche Gruppe `HALL_TIME_GROUP_NOT_PUBLIC`. Erfolg liefert
+      `{ success, gridId, selected, revision, repeated? }`, publiziert
+      `hall-times` und wird ohne freie Gruppen- oder Personendaten auditiert und
+      strukturiert abgeschlossen.
+
+  `hallTimeGrids {}`
+      Liefert die aktiven, fuer den Principal sichtbaren Raster als
+      `{ id, name, mode }`; Administratoren sehen alle aktiven Raster, andere
+      Benutzer nur ihre Teilnehmergruppen.
+
+  `hallTimeGrid { gridId }`
+      Liefert das sichtbare Raster mit Konfiguration, sortierten Teilnehmern,
+      Terminen, Statusprojektionen, abgeleiteten Wartelistenpositionen, Revision,
+      `currentPersonId` und `canAdminister`. Nicht zugeordnete Benutzer erhalten
+      `FORBIDDEN`.
+
+  `hallTimeHistory { gridId }`
+      Liefert die juengsten Fachereignisse in umgekehrter Reihenfolge mit Akteur,
+      betroffener Person, Statuswechsel und gegebenenfalls Terminprojektion.
+
+  `setHallTimeBooking { operationId, gridId, slotId, personId?, selected }`
+      Setzt oder entfernt einen eigenen beziehungsweise fremden zukuenftigen
+      Eintrag. Gruppenmitglieder duerfen alle Rasterteilnehmer bearbeiten;
+      vergangene Termine nur Administratoren. Freie Kapazitaet erzeugt einen
+      Fixplatz, sonst bei aktiver Warteliste einen gereihten Wartelistenplatz.
+      Fair Use gilt fuer normale Benutzer vor beiden Statusarten und zaehlt Gruen
+      und Gelb; der Durchschnitt verwendet nur aktuell zugeordnete Personen mit
+      mindestens einem Eintrag. Das parametrierte persoenliche Wartelistenlimit
+      liefert bei Ueberschreitung `HALL_TIME_WAITLIST_LIMIT`. Das Entfernen eines
+      Fixplatzes rueckt atomar die erste wartende Person nach. Manuelle fremde An-
+      und Abmeldungen erzeugen eine ungelesene quittierungspflichtige Inboxmeldung
+      ohne externe Zustellung; eigene Aenderungen bleiben meldungsfrei.
+
   `myFavorites {}`
       Liefert `{ success, favorites, revision, updatedAt }` fuer den aktuellen
       Benutzer. Jedes Ziel besitzt eine serverseitig abgeleitete `targetId` und
@@ -1023,6 +1066,29 @@ OPERATOR ODER ADMIN:
       direction `up|down`; adressierter, geordneter, ablaufender Command.
 
 ADMIN:
+  `adminHallTimeGrids {}`
+      Liefert alle aktiven und archivierten Hallenzeiten-Raster mit vollstaendiger
+      Administrationsprojektion und gemeinsamer Revision.
+
+  `adminSaveHallTimeGrid { operationId, expectedRevision, gridId?, name,
+  description, mode, capacity, waitlistEnabled, maxWaitlistEntries,
+  publicJoinable, fairUse, active, participantIds, slots }`
+      Legt einen Raster an oder ersetzt seine Konfiguration revisioniert. `fairUse`
+      ist `{ base, extendedDays, percent, openDays }`; `slots` enthalten ID
+      optional sowie Datum, Beginn und Ende. Vergangene Termine bleiben gesperrt,
+      Kapazitaet und Wartelisten-Deaktivierung duerfen vorhandene Eintraege nicht
+      verletzen. Teilnehmer werden aus aktuellen Personen aufgeloest.
+
+  `adminDistributeHallTimeGrid { operationId, gridId, expectedRevision }`
+      Ersetzt im Modus `equal` alle zukuenftigen Eintraege durch eine moeglichst
+      ausgeglichene Verteilung, die wiederholte Gruppen und direkte Folgeeinsaetze
+      reduziert. Historisiert wird der Gesamtvorgang, nicht jede Zuweisung; es
+      entstehen keine persoenlichen Meldungen.
+
+  `adminClearAllHallTimeStatuses { operationId, gridId, expectedRevision }`
+      Entfernt nach Bestaetigung alle Fix- und Wartelistenstati, behaelt aber alle
+      Termine. Erfolg liefert zusaetzlich `deletedEntryCount`.
+
   `sheetDataStatus {}`
       Liefert den kontrollierten Zustand des Sheet-Snapshots mit
       `lastSuccessfulRefreshAt`, `dataAgeMs`, `inProgress`,
@@ -1197,7 +1263,9 @@ Operator/Admin Topics:
   `monitors`                     Monitorliste/Presence
   `monitor-status:<monitorId>`   adressierter Presence-/Commandstatus
 
-Authenticated private Topic:
+Authenticated Topics:
+  `hall-times`                    Rasterinvalidierung `{ gridId, revision }` nach
+                                  Konfiguration, Beitritt, Buchung oder Verteilung.
   `messages:<Personen-ID>`       Nur fuer die eigene aktuelle Principal-ID;
                                  Snapshot `{ revision, unreadCount }` nach neuer
                                  Meldung oder erstmaliger Kenntnisnahme.

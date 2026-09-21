@@ -63,6 +63,10 @@ let favorites = initialDashboardFavorite
     : [];
 let startPageRevision = 0;
 let startPageTarget = { type: "page", page: new URLSearchParams(window.location.search).get("startFavorites") === "1" ? "favorites" : "index" };
+let hallTimeGroupRevision = 4;
+let hallTimeGroups = new URLSearchParams(window.location.search).get("publicGroups") === "1"
+  ? [{ id: "hall-public", name: "der Piber reserviert", joined: false }, { id: "hall-joined", name: "Freitag Doppel", joined: true }]
+  : [];
 let messages = [
   { messageId: "unread-new", createdAt: "2026-08-30T10:00:00.000Z", competitionName: "Sommercup", roundName: "Viertelfinale", subject: "Neue Platzinformation", eventType: "result", actorName: "Ergebnis Erfasser", acknowledged: false },
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
@@ -201,7 +205,15 @@ export function createEndpoint(name) {
     const noNotifications = new URLSearchParams(window.location.search).get("noNotifications") === "1";
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
     if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
+    if (name === "hallTimeGrids") return { data: { success: true, grids: role && new URLSearchParams(window.location.search).get("hallTimes") === "1" ? [{ id: "hall-1", name: "Donnerstag Doppel", mode: "equal" }] : [], revision: 0 } };
     if (name === "myStartPage") return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision } };
+    if (name === "myHallTimeGroups") return { data: { success: true, groups: structuredClone(hallTimeGroups), revision: hallTimeGroupRevision } };
+    if (name === "setMyHallTimeGroupMembership") {
+      hallTimeGroupRevision += 1;
+      const group = hallTimeGroups.find(({ id }) => id === params.gridId);
+      if (group) group.joined = params.selected;
+      return { data: { success: true, gridId: params.gridId, selected: params.selected, revision: hallTimeGroupRevision, repeated: false } };
+    }
     if (name === "setMyStartPage") {
       startPageRevision += 1;
       startPageTarget = structuredClone(params.target);
@@ -259,13 +271,16 @@ export function createEndpoint(name) {
       },
       { personId: "p2", name: "Other Player", withdrawnAt: "260828-1100", previousRank: 7, reason: "Pause", returnChallenge: null },
     ] } };
-    if (name === "myProfile") return { data: { success: true, profile: {
+    if (name === "myProfile") {
+      if (new URLSearchParams(window.location.search).get("slowProfile") === "1") await new Promise((resolve) => setTimeout(resolve, 1500));
+      return { data: { success: true, profile: {
        id: role + "-1", firstName: "Own", lastName: "Player", login: role + "-login",
         email: "contact+team?x@example.test", phone: "0043 664 1234567", birthDate: "", notifications: noNotifications ? [] : ["Email", "Whatsapp"], competitions: emptyProfile ? [] : competitions.filter(({ competitionId }) => competitionId.startsWith("r")), rankings: emptyProfile ? [] : withdrawn ? [{
          competitionId: "2", competitionName: "Mobile Rangliste", rank: 0, status: "withdrawn",
          withdrawal: { withdrawnAt: "260829-1200", previousRank: 4, reason: "Pause" },
        }] : rankings,
-     } } };
+      } } };
+    }
     if (name === "publicProfile") {
       const profileRankings = structuredClone(rankings);
       if (new URLSearchParams(window.location.search).get("dst") === "1") profileRankings[1].openChallenge.challengedAt = "270328-0237";
@@ -462,7 +477,7 @@ function startServer() {
         .replace('"./authClient.js"', '"/test/authClient.js"')
         .replace('"./diagnostics.js"', '"/test/diagnostics.js"')
         .replace('"./profileModalState.js"', '"/test/profileModalState.js"')
-        .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"')
+        .replace('"./loadingHelper.js"', '"/JS/loadingHelper.js"')
         .replace('"./startPreference.js"', '"/JS/startPreference-under-test.js"');
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(source);
@@ -738,6 +753,62 @@ test("Mobile Navigation zeigt rollenabhaengige Links nur berechtigten Benutzern"
   }
 });
 
+test("Hallenzeiten liegen auf Spielbetriebsebene und Raster sind genau eine weitere Stufe eingerueckt", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&hallTimes=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+    await page.locator("#mobileHallTimes").waitFor({ state: "attached" });
+    await page.locator("#hamburgerBtn").click();
+    await page.locator('[aria-controls="mobileNavCompetition"]').click();
+    const hallToggle = page.locator('[aria-controls="mobileHallTimeLinks"]');
+    await hallToggle.waitFor({ state: "visible" });
+    assert.equal(await hallToggle.locator('[data-icon="calendar_month"]').count(), 1);
+    const competitionLeft = await page.locator('[aria-controls="mobileNavCompetition"] .mobile-nav-icon').evaluate((element) => element.getBoundingClientRect().left);
+    const scoreboardLeft = await page.locator('#mobileNavCompetition a[href="scoreboard.html"] .mobile-nav-icon').evaluate((element) => element.getBoundingClientRect().left);
+    const hallLeft = await hallToggle.locator(".mobile-nav-icon").first().evaluate((element) => element.getBoundingClientRect().left);
+    assert.equal(hallLeft, scoreboardLeft);
+    await hallToggle.click();
+    const gridLink = page.locator('#mobileHallTimeLinks a[href="hallzeiten.html?id=hall-1"]');
+    await gridLink.waitFor({ state: "visible" });
+    const gridLeft = await gridLink.locator(".mobile-nav-icon").evaluate((element) => element.getBoundingClientRect().left);
+    assert.equal(hallLeft - competitionLeft, gridLeft - hallLeft);
+    await page.close();
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Profilmodal zeigt das Ladeoverlay vor einer verzoegerten Profilantwort", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/messages-test.html?role=player&slowProfile=1`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => typeof window.openProfileModal === "function", null, { timeout: 5000 });
+    const startedAt = Date.now();
+    await page.evaluate(() => { void window.openProfileModal(); });
+    await page.locator("#profileModal").waitFor({ state: "visible", timeout: 750 });
+    assert.equal(Date.now() - startedAt < 1000, true);
+    assert.equal(await page.locator("#profileModal .loading-overlay").isVisible(), true);
+    assert.equal(await page.locator("#profileName").textContent(), "Lade Profil...");
+    await page.getByRole("heading", { name: "Own Player" }).waitFor({ timeout: 5000 });
+    assert.equal(await page.locator("#profileModal .loading-overlay").count(), 0);
+    await page.close();
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("30-Tage-Session erzeugt keinen hochfrequenten Browser-Request", {
   skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
@@ -847,6 +918,10 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     assert.equal(await pageStar.locator("svg path").count(), 1);
     assert.equal(await pageStar.getAttribute("aria-pressed"), "false");
     assert.equal(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).fill), "rgb(255, 255, 255)");
+    await pageStar.hover();
+    await page.waitForTimeout(200);
+    assert.equal(await pageStar.evaluate((element) => getComputedStyle(element).backgroundColor), "rgba(245, 197, 24, 0.18)");
+    assert.notEqual(await pageStar.locator("svg").evaluate((element) => getComputedStyle(element).transform), "none");
     await pageStar.click();
     await page.waitForTimeout(200);
     assert.equal(await pageStar.getAttribute("aria-pressed"), "true", JSON.stringify({ calls: await page.evaluate(() => window.__endpointCalls), pageErrors }));
@@ -901,7 +976,7 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     page.setDefaultTimeout(5000);
     await page.goto(`http://127.0.0.1:${server.address().port}/?role=player&startFavorites=1`, { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/favorites\.html$/);
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&startPageTest=1&dashboard=1`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&startPageTest=1&publicGroups=1&dashboard=1`, { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator(".header-center .logo").getAttribute("href"), "/");
     await page.evaluate(() => window.openProfileModal());
     const profileTabs = page.locator("#profileTabs .profile-tab");
@@ -915,6 +990,15 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await page.getByText("Startseite gespeichert.").waitFor({ state: "visible" });
     assert.equal(await page.evaluate(() => window.__endpointCalls.some(({ name, params }) => (
       name === "setMyStartPage" && params.target?.page === "rangliste" && params.target?.params?.id === "2"
+    ))), true);
+    const publicGroup = page.getByLabel("der Piber reserviert");
+    await publicGroup.waitFor({ state: "visible" });
+    assert.equal(await publicGroup.isChecked(), false);
+    assert.equal(await page.getByLabel("Freitag Doppel").isChecked(), true);
+    await publicGroup.check();
+    await page.getByText("Gruppe beigetreten.").waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => window.__endpointCalls.some(({ name, params }) => (
+      name === "setMyHallTimeGroupMembership" && params.gridId === "hall-public" && params.selected === true && params.expectedRevision === 4
     ))), true);
 
     await page.goto(`http://127.0.0.1:${server.address().port}/favorites.html?role=player&twoFavorites=1`, { waitUntil: "domcontentloaded" });

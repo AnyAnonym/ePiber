@@ -1,0 +1,25 @@
+================================================================================
+Hallenzeiten verwalten - Administration
+================================================================================
+-- Funktion und Dateien --
+  HTML: Frontend/hallzeitenVerwalten.html
+  JS:   Frontend/JS/hallzeitenVerwalten.js
+  CSS:  Frontend/CSS/hallzeitenVerwalten.css und hallzeiten.css
+  Die Adminseite verwaltet Raster, Teilnehmer, Terminserien und Vergaberegeln.
+
+-- Zugriff und Konfiguration --
+  Client und RPCs verlangen Rolle `admin`. Konfigurierbar sind Name, Beschreibung,
+  Modus `equal|fair_use`, Fixplatzkapazitaet, optionale Warteliste, persoenliches
+  Wartelistenlimit, oeffentlicher Selbstbeitritt, Aktivstatus und Fair-Use-Werte
+  fuer Grundkontingent, erweiterte Freigabe, Prozentaufschlag und freie Vergabe.
+  Teilnehmer werden aus aktiven Personen gewaehlt. Selbst beigetretene Mitglieder
+  erscheinen live in derselben Liste; Revisionskonflikte verhindern Ueberschreiben.
+
+-- Termine und Aktionen --
+  Ein Ausgangstermin kann mit bis zu 249 woechentlichen Folgeterminen uebernommen
+  werden; Duplikate werden uebersprungen. Gleichberechtigte Neuverteilung ersetzt
+  nach Sicherheitsdialog nur zukuenftige Stati. `Alle Stati auf Termin loeschen`
+  entfernt nach Bestaetigung alle gruenen und gelben Stati, aber keine Termine.
+  Beide Operationen sind revisioniert, idempotent, auditiert und strukturiert
+  geloggt. Fuer bestehende Raster fuehren Links zu persoenlicher und vollstaendiger
+  Druckvorlage.

@@ -337,6 +337,37 @@ body.modal-open {
   max-width: 520px;
 }
 
+.profile-group-setting {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #d9dee3;
+}
+
+.profile-group-setting h3 {
+  margin: 0;
+}
+
+.profile-group-list {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-group-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #d9dee3;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.profile-group-list input {
+  width: 20px;
+  height: 20px;
+}
+
 .profile-setting-field label {
   font-weight: 750;
 }
@@ -1815,9 +1846,11 @@ body.mobile-nav-open {
   place-items: center;
   padding: 4px;
   border: 0;
+  border-radius: 50%;
   color: #111;
   background: transparent;
   cursor: pointer;
+  transition: background-color .15s ease;
 }
 
 .favorite-star svg {
@@ -1827,16 +1860,26 @@ body.mobile-nav-open {
   stroke: #111;
   stroke-width: 22px;
   paint-order: stroke fill;
+  transition: transform .15s ease;
 }
 
 .favorite-star.is-favorite svg {
   fill: #f5c518;
 }
 
-.favorite-star:hover,
 .favorite-star:focus-visible {
   outline: 3px solid rgba(23, 107, 74, .35);
   outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .favorite-star:hover {
+    background: rgba(245, 197, 24, .18);
+  }
+
+  .favorite-star:hover svg {
+    transform: scale(1.08);
+  }
 }
 
 .favorite-star:disabled {
@@ -2016,7 +2059,9 @@ body.mobile-nav-open {
 
 @media (prefers-reduced-motion: reduce) {
   .app-shift-layer,
-  .mobile-nav-content {
+  .mobile-nav-content,
+  .favorite-star,
+  .favorite-star svg {
     transition-duration: 0.01ms;
   }
 
@@ -5496,4 +5541,44 @@ header {
 
 body.mobile-nav-open .app-shift-layer {
   transform: translateX(calc(-1 * var(--navigation-drawer-width)));
+}
+.desktop-hall-times {
+  position: relative;
+  display: inline-flex;
+}
+
+.desktop-hall-times > button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.desktop-hall-time-links {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  padding: .4rem;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+  border-radius: 10px;
+  z-index: 30;
+}
+
+.desktop-hall-times:hover .desktop-hall-time-links,
+.desktop-hall-times:focus-within .desktop-hall-time-links {
+  display: grid;
+}
+
+.desktop-hall-time-links a {
+  color: #173f25 !important;
+  padding: .55rem .7rem;
+  white-space: nowrap;
+}
+
+#mobileHallTimeLinks .mobile-nav-main-row {
+  padding-left: 76px;
 }

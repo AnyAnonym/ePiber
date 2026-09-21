@@ -10,6 +10,7 @@ import {
 } from "./favorites.js";
 
 const readMyMessageSummary = createEndpoint("myMessageSummary");
+const readHallTimeGrids = createEndpoint("hallTimeGrids");
 let stopMessageSubscription = null;
 let messageIdentity = null;
 let summaryGeneration = 0;
@@ -28,6 +29,7 @@ const mobileNavIcons = {
   sports_tennis: "m137-160-57-56 164-164q31-31 42.5-77.5T298-600q0-58 26-114t74-104q91-91 201-103t181 61q72 72 60 182T738-478q-48 48-104 74t-114 26q-97 0-142 11t-77 43L137-160Zm275-334q47 46 127 34t143-75q64-64 76.5-143.5T724-803q-48-48-125.5-36T456-763q-63 63-76.5 142.5T412-494ZM607-87q-47-47-47-113t47-113q47-47 113-47t113 47q47 47 47 113T833-87q-47 47-113 47T607-87Zm169.5-56.5Q800-167 800-200t-23.5-56.5Q753-280 720-280t-56.5 23.5Q640-233 640-200t23.5 56.5Q687-120 720-120t56.5-23.5ZM720-200Z",
   swords: "M762-96 645-212l-88 88-28-28q-23-23-23-57t23-57l169-169q23-23 57-23t57 23l28 28-88 88 116 117q12 12 12 28t-12 28l-50 50q-12 12-28 12t-28-12Zm118-628L426-270l5 4q23 23 23 57t-23 57l-28 28-88-88L198-96q-12 12-28 12t-28-12l-50-50q-12-12-12-28t12-28l116-117-88-88 28-28q23-23 57-23t57 23l4 5 454-454h160v160ZM334-583l24-23 23-24-23 24-24 23Zm-56 57L80-724v-160h160l198 198-57 56-174-174h-47v47l174 174-56 57Zm92 199 430-430v-47h-47L323-374l47 47Zm0 0-24-23-23-24 23 24 24 23Z",
   scoreboard: "M620-360q-17 0-28.5-11.5T580-400v-160q0-17 11.5-28.5T620-600h100q17 0 28.5 11.5T760-560v160q0 17-11.5 28.5T720-360H620Zm20-60h60v-120h-60v120Zm-440 60v-100q0-17 11.5-28.5T240-500h80v-40H200v-60h140q17 0 28.5 11.5T380-560v60q0 17-11.5 28.5T340-460h-80v40h120v60H200Zm250-160v-60h60v60h-60Zm0 140v-60h60v60h-60ZM160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h120v-80h80v80h240v-80h80v80h120q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h290v-60h60v60h290v-480H510v60h-60v-60H160v480Zm0 0v-480 480Z",
+  calendar_month: "M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Zm280 240q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-160 0q-17 0-28.5-11.5T280-440q0-17 11.5-28.5T320-480q17 0 28.5 11.5T360-440q0 17-11.5 28.5T320-400Zm320 0q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-160 0q-17 0-28.5-11.5T280-280q0-17 11.5-28.5T320-320q17 0 28.5 11.5T360-280q0 17-11.5 28.5T320-240Zm320 0q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z",
   groups: "M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z",
   person_search: "M440-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47Zm0-80q33 0 56.5-23.5T520-640q0-33-23.5-56.5T440-720q-33 0-56.5 23.5T360-640q0 33 23.5 56.5T440-560ZM884-20 756-148q-21 12-45 20t-51 8q-75 0-127.5-52.5T480-300q0-75 52.5-127.5T660-480q75 0 127.5 52.5T840-300q0 27-8 51t-20 45L940-76l-56 56ZM731-229q29-29 29-71t-29-71q-29-29-71-29t-71 29q-29 29-29 71t29 71q29 29 71 29t71-29Zm-611 69v-111q0-34 17-63t47-44q51-26 115-44t142-18q-12 18-20.5 38.5T407-359q-60 5-107 20.5T221-306q-10 5-15.5 14.5T200-271v31h207q5 22 13.5 42t20.5 38H120Zm320-480Zm-33 400Z",
   admin_panel_settings: "M722.5-297.5Q740-315 740-340t-17.5-42.5Q705-400 680-400t-42.5 17.5Q620-365 620-340t17.5 42.5Q655-280 680-280t42.5-17.5ZM680-160q31 0 57-14.5t42-38.5q-22-13-47-20t-52-7q-27 0-52 7t-47 20q16 24 42 38.5t57 14.5ZM480-80q-139-35-229.5-159.5T160-516v-244l320-120 320 120v227q-19-8-39-14.5t-41-9.5v-147l-240-90-240 90v188q0 47 12.5 94t35 89.5Q310-290 342-254t71 60q11 32 29 61t41 52q-1 0-1.5.5t-1.5.5Zm200 0q-83 0-141.5-58.5T480-280q0-83 58.5-141.5T680-480q83 0 141.5 58.5T880-280q0 83-58.5 141.5T680-80ZM480-494Z",
@@ -58,7 +60,7 @@ export function favoriteIconName(favorite) {
   return {
     index: "dashboard", Matches1: "sports_tennis", players: "person_search", Bewerbe: "swords", scoreboard: "scoreboard",
     adminLogging: "description", personenNormalisieren: "database", mitgliederAbgleichen: "sync", servicebereich: "dns",
-    navigator: "monitoring", monitor: "monitoring",
+    hallzeiten: "calendar_month", hallzeitenVerwalten: "calendar_month", navigator: "monitoring", monitor: "monitoring",
   }[favorite.page] || "emoji_events";
 }
 
@@ -111,10 +113,12 @@ function renderHeader() {
         <a href="Matches1.html" class="${activeClass("Matches1.html")}">Matches</a>
         <a href="Bewerbe.html" class="${activeClass("Bewerbe.html")}">Bewerbe</a>
         <a href="scoreboard.html" class="${activeClass("scoreboard.html")}">Scoreboard</a>
+        <div id="desktopHallTimes" class="desktop-hall-times" hidden><button type="button">Hallenzeiten</button><div id="desktopHallTimeLinks" class="desktop-hall-time-links"></div></div>
         <a href="personenNormalisieren.html" class="${activeClass("personenNormalisieren.html")}" data-role="admin" hidden>Datenpflege</a>
         <a href="mitgliederAbgleichen.html" class="${activeClass("mitgliederAbgleichen.html")}" data-role="admin" hidden>Mitgliederabgleich</a>
         <a href="adminLogging.html" class="${activeClass("adminLogging.html")}" data-role="admin" hidden>Logging</a>
         <a href="servicebereich.html" class="${activeClass("servicebereich.html")}" data-role="admin" hidden>Servicebereich</a>
+        <a href="hallzeitenVerwalten.html" class="${activeClass("hallzeitenVerwalten.html")}" data-role="admin" hidden>Hallenzeiten verwalten</a>
         <a href="https://epiber.at/grafana/" data-role="admin" hidden>Grafana</a>
       </nav>
 
@@ -175,6 +179,10 @@ function renderMobileNav() {
                 <a href="Matches1.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("Matches1.html")}">${mobileNavIcon("sports_tennis")}<span>Matches</span></a>
                 <a href="Bewerbe.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("Bewerbe.html")}">${mobileNavIcon("swords")}<span>Bewerbe</span></a>
                 <a href="scoreboard.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("scoreboard.html")}">${mobileNavIcon("scoreboard")}<span>Scoreboard</span></a>
+                <div id="mobileHallTimes" class="mobile-nav-group mobile-nav-nested-group" hidden>
+                  <button class="mobile-nav-row mobile-nav-main-row mobile-nav-group-toggle" type="button" aria-expanded="false" aria-controls="mobileHallTimeLinks">${mobileNavIcon("calendar_month")}<span>Hallenzeiten</span>${mobileNavIcon("expand_more", "mobile-nav-chevron")}</button>
+                  <div id="mobileHallTimeLinks" class="mobile-nav-submenu" role="group" aria-label="Hallenzeiten" hidden></div>
+                </div>
               </div>
             </div>
 
@@ -200,6 +208,7 @@ function renderMobileNav() {
                 <a href="mitgliederAbgleichen.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("mitgliederAbgleichen.html")}">${mobileNavIcon("sync")}<span>Mitgliederabgleich</span></a>
                 <a href="adminLogging.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("adminLogging.html")}">${mobileNavIcon("description")}<span>Logging</span></a>
                 <a href="servicebereich.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("servicebereich.html")}">${mobileNavIcon("dns")}<span>Servicebereich</span></a>
+                <a href="hallzeitenVerwalten.html" class="mobile-nav-row mobile-nav-main-row ${activeClass("hallzeitenVerwalten.html")}">${mobileNavIcon("calendar_month")}<span>Hallenzeiten verwalten</span></a>
                 <a href="https://epiber.at/grafana/" class="mobile-nav-row mobile-nav-main-row">${mobileNavIcon("monitoring")}<span>Grafana</span></a>
               </div>
             </div>
@@ -309,6 +318,35 @@ function renderAuthState(user, authState = {}) {
     element.style.display = visible ? "inline" : "none";
     element.textContent = authState.status === "unavailable" ? "Anmeldung nicht erreichbar" : "Anmeldung wird geprüft";
   });
+}
+
+let hallTimeMenuGeneration = 0;
+let hallTimeMenuUser = null;
+async function updateHallTimeNavigation(user) {
+  const generation = ++hallTimeMenuGeneration;
+  const desktop = document.getElementById("desktopHallTimes");
+  const mobile = document.getElementById("mobileHallTimes");
+  if (!user) {
+    if (desktop) desktop.hidden = true;
+    if (mobile) mobile.hidden = true;
+    return;
+  }
+  try {
+    const response = await readHallTimeGrids();
+    if (generation !== hallTimeMenuGeneration) return;
+    const grids = Array.isArray(response.data?.grids) ? response.data.grids : [];
+    const mobileLinks = grids.map(({ id, name }) => `<a href="hallzeiten.html?id=${encodeURIComponent(id)}" class="mobile-nav-row mobile-nav-main-row">${mobileNavIcon("calendar_month")}<span>${escapeHtml(name)}</span></a>`).join("");
+    const desktopLinks = grids.map(({ id, name }) => `<a href="hallzeiten.html?id=${encodeURIComponent(id)}">${escapeHtml(name)}</a>`).join("");
+    const mobileTarget = document.getElementById("mobileHallTimeLinks");
+    const desktopTarget = document.getElementById("desktopHallTimeLinks");
+    if (mobileTarget) mobileTarget.innerHTML = mobileLinks;
+    if (desktopTarget) desktopTarget.innerHTML = desktopLinks;
+    if (desktop) desktop.hidden = grids.length === 0;
+    if (mobile) mobile.hidden = grids.length === 0;
+  } catch {
+    if (desktop) desktop.hidden = true;
+    if (mobile) mobile.hidden = true;
+  }
 }
 
 function setMessageCount(rawCount, revision = null) {
@@ -540,9 +578,12 @@ async function initNavigation() {
   subscribeAuth((user, authState) => {
     renderAuthState(user, authState);
     updateMessageSubscription(authState.status === "authenticated" ? user : null);
+    hallTimeMenuUser = authState.status === "authenticated" ? user : null;
+    updateHallTimeNavigation(hallTimeMenuUser);
   });
   subscribeFavorites(({ favorites }) => updateMobileFavorites(favorites));
   window.addEventListener("epiber-message-summary-refresh", () => refreshMessageSummary());
+  subscribe("hall-times", () => updateHallTimeNavigation(hallTimeMenuUser));
 
   await ready;
 }

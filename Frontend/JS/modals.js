@@ -28,6 +28,8 @@ import {
 
 const readPublicProfile = createEndpoint("publicProfile");
 const readMyProfile = createEndpoint("myProfile");
+const readMyHallTimeGroups = createEndpoint("myHallTimeGroups");
+const setMyHallTimeGroupMembership = createEndpoint("setMyHallTimeGroupMembership");
 const readMyMessageSummary = createEndpoint("myMessageSummary");
 const readMyMessages = createEndpoint("myMessages");
 const readMyMessage = createEndpoint("myMessage");
@@ -348,6 +350,22 @@ function prepareProfileSettings(panel, actionSignal) {
   field.append(label, select, hint, status);
   panel.appendChild(field);
 
+  const groupField = document.createElement("div");
+  groupField.className = "profile-setting-field profile-group-setting";
+  const groupHeading = document.createElement("h3");
+  groupHeading.textContent = "Öffentliche Gruppen";
+  const groupHint = document.createElement("p");
+  groupHint.className = "profile-setting-hint";
+  groupHint.textContent = "Hier kannst du öffentlich freigegebenen Hallenzeiten-Gruppen beitreten.";
+  const groupList = document.createElement("div");
+  groupList.className = "profile-group-list";
+  const groupStatus = document.createElement("p");
+  groupStatus.className = "profile-setting-status";
+  groupStatus.setAttribute("role", "status");
+  groupStatus.setAttribute("aria-live", "polite");
+  groupField.append(groupHeading, groupHint, groupList, groupStatus);
+  panel.appendChild(groupField);
+
   let startSnapshot = null;
   let favoriteSnapshot = null;
   let targets = new Map();
@@ -407,6 +425,65 @@ function prepareProfileSettings(panel, actionSignal) {
   }, { signal: actionSignal });
   loadStartPage().catch((error) => {
     status.textContent = errorMessage(error, "Startseite konnte nicht geladen werden.");
+  });
+
+  let groupRevision = 0;
+  let publicGroups = [];
+  let groupBusy = false;
+  const renderGroups = () => {
+    groupList.replaceChildren();
+    if (!publicGroups.length) {
+      const empty = document.createElement("p");
+      empty.className = "profile-setting-hint";
+      empty.textContent = "Derzeit sind keine öffentlichen Gruppen verfügbar.";
+      groupList.appendChild(empty);
+      return;
+    }
+    for (const group of publicGroups) {
+      const groupLabel = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = group.joined;
+      checkbox.disabled = groupBusy;
+      checkbox.addEventListener("change", async () => {
+        const selected = checkbox.checked;
+        const key = `hall-time-group-membership:${group.id}:${selected}:${groupRevision}`;
+        groupBusy = true;
+        renderGroups();
+        groupStatus.textContent = selected ? "Gruppe wird beigetreten..." : "Gruppe wird verlassen...";
+        try {
+          const response = await setMyHallTimeGroupMembership({
+            operationId: getOperationId(key), expectedRevision: groupRevision, gridId: group.id, selected,
+          });
+          releaseOperationId(key);
+          groupRevision = response.data.revision;
+          group.joined = response.data.selected;
+          groupStatus.textContent = selected ? "Gruppe beigetreten." : "Gruppe verlassen.";
+        } catch (error) {
+          releaseOperationId(key, error);
+          groupStatus.textContent = errorMessage(error, "Gruppenzugehörigkeit konnte nicht gespeichert werden.");
+          diagnostic.error("profile_hall_time_group_write_failed", error);
+          try {
+            const response = await readMyHallTimeGroups();
+            groupRevision = response.data.revision;
+            publicGroups = response.data.groups || [];
+          } catch {}
+        } finally {
+          groupBusy = false;
+          renderGroups();
+        }
+      }, { signal: actionSignal });
+      groupLabel.append(checkbox, document.createTextNode(group.name));
+      groupList.appendChild(groupLabel);
+    }
+  };
+  readMyHallTimeGroups().then((response) => {
+    groupRevision = response.data.revision || 0;
+    publicGroups = response.data.groups || [];
+    renderGroups();
+  }).catch((error) => {
+    groupStatus.textContent = errorMessage(error, "Öffentliche Gruppen konnten nicht geladen werden.");
+    diagnostic.error("profile_hall_time_groups_load_failed", error);
   });
 }
 
@@ -1932,13 +2009,17 @@ window.openLoginModal = () => {
 
 window.openProfileModal = async (options = {}) => {
   const requestGeneration = ++profileRequestGeneration;
-  await ready;
-  if (requestGeneration !== profileRequestGeneration) return;
-
   const requestedId = String(options.playerId || "").trim();
-  const sessionUser = getUser();
+  let sessionUser = getUser();
+  if (!sessionUser) {
+    await ready;
+    if (requestGeneration !== profileRequestGeneration) return;
+    sessionUser = getUser();
+  }
   if (!sessionUser) return;
   const ownProfile = !requestedId || (sessionUser && requestedId === String(sessionUser.id));
+  const profileOpenStartedAt = performance.now();
+  let profileOpenOutcome = "success";
 
   const nameElement = document.getElementById("profileName");
   const textElement = document.getElementById("profileText");
@@ -1974,12 +2055,17 @@ window.openProfileModal = async (options = {}) => {
   openModal(profileModal);
   const loadingScope = profileModal.querySelector(".modal-content");
   showLoadingOverlay(undefined, loadingScope);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  if (requestGeneration !== profileRequestGeneration || profileModal.classList.contains("hidden")) return;
 
   try {
     const result = ownProfile
       ? await readMyProfile()
       : await readPublicProfile({ id: requestedId });
-    if (requestGeneration !== profileRequestGeneration) return;
+    if (requestGeneration !== profileRequestGeneration) {
+      profileOpenOutcome = "cancelled";
+      return;
+    }
     const data = result.data;
 
     if (!data?.success || !data.profile) {
@@ -2166,7 +2252,10 @@ window.openProfileModal = async (options = {}) => {
       let revision = null;
       try {
         const summaryResult = await readMyMessageSummary();
-        if (requestGeneration !== profileRequestGeneration) return;
+        if (requestGeneration !== profileRequestGeneration) {
+          profileOpenOutcome = "cancelled";
+          return;
+        }
         if (summaryResult.data?.success) {
           unreadCount = Math.max(0, Number(summaryResult.data.unreadCount) || 0);
           revision = summaryResult.data.revision;
@@ -2233,11 +2322,19 @@ window.openProfileModal = async (options = {}) => {
     }
   } catch (error) {
     if (requestGeneration !== profileRequestGeneration) return;
+    profileOpenOutcome = "failed";
     diagnostic.error("profile_load_failed", error);
     nameElement.textContent = "Fehler beim Laden";
     textElement.textContent = errorMessage(error, "Profil konnte nicht geladen werden.");
   } finally {
-    if (requestGeneration === profileRequestGeneration) hideLoadingOverlay(loadingScope);
+    if (requestGeneration === profileRequestGeneration) {
+      hideLoadingOverlay(loadingScope);
+      diagnostic.info("profile_open_completed", {
+        category: ownProfile ? "private" : "public",
+        durationMs: Math.max(0, Math.round(performance.now() - profileOpenStartedAt)),
+        outcome: profileOpenOutcome,
+      });
+    }
   }
 };
 
