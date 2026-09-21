@@ -6,3 +6,11 @@ Commit: 4.12.0-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.0-paj-1-1` gesetzt.
+
+[4.12.0-paj-1-2] - 2026-09-21
+Commit: 4.12.0-paj-1-2 | Login-Erfolgstoasts entfernt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.0-paj-1-1-x` gesetzt.
+  - [Frontend] Erfolgreiche An- und Abmeldungen wechseln Sitzung und Ansicht ohne das bisherige gruene Toast-Overlay; Fehlerhinweise und alle anderen Meldungen bleiben unveraendert.
+  - [Tests] Der Navbar-Browsertest sichert ab, dass erfolgreiche An- und Abmeldungen keinen Toast erzeugen.

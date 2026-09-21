@@ -2467,7 +2467,6 @@ document.getElementById("loginForm").addEventListener("submit", async (event) =>
     await login(loginName, password);
     form.reset();
     closeModal(loginModal);
-    window.showToast("Erfolgreich angemeldet.", "success");
     navigateToPersonalStart().catch(() => {});
   } catch (error) {
     diagnostic.error("login_failed", error);
@@ -2936,7 +2935,6 @@ document.addEventListener("click", async (event) => {
     await endSession();
     closeModal(passwordModal);
     closeModal(adminPasswordModal);
-    window.showToast("Erfolgreich abgemeldet.", "success");
   } catch (error) {
     diagnostic.error("logout_failed", error);
     window.showToast(errorMessage(error, "Abmeldung fehlgeschlagen."), "error");

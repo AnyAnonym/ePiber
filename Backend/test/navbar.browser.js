@@ -24,7 +24,8 @@ export const login = async () => {
   if (loginError === "LOGIN_RATE_LIMIT") error.details = { retryAfterMs: 610000 };
   throw error;
 };
-export const logout = async () => {};
+window.__logoutCalls = 0;
+export const logout = async () => { window.__logoutCalls += 1; };
 export const changePassword = async () => ({ success: true });
 export const getUser = () => user;
 export const isAuthenticated = () => Boolean(user);
@@ -1479,6 +1480,35 @@ test("Loginfehler bleiben im mobilen Dialog sichtbar und nennen die Sperrdauer",
         await context.close();
       }
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Erfolgreiche An- und Abmeldung erzeugen keinen Toast", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const address = server.address();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const modalSource = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/modals.js"), "utf8");
+    assert.doesNotMatch(modalSource, /showToast\("Erfolgreich angemeldet\.", "success"\)/);
+    assert.doesNotMatch(modalSource, /showToast\("Erfolgreich abgemeldet\.", "success"\)/);
+
+    const logoutPage = await newProfilePage(browser);
+    await logoutPage.goto(`http://127.0.0.1:${address.port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await logoutPage.evaluate(() => {
+      const button = document.createElement("button");
+      button.id = "signOutButton";
+      button.textContent = "Abmelden";
+      document.body.appendChild(button);
+      button.click();
+    });
+    await logoutPage.waitForFunction(() => window.__logoutCalls === 1);
+    assert.equal(await logoutPage.locator("#toastContainer .toast").count(), 0);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
