@@ -25,7 +25,7 @@ const PAGE_TYPES = new Set([
   "Bewerbe", "Matches1", "RoundRobin", "adminLogging", "bewerbsRaster",
   "court-score-test", "entryList", "favorites", "index", "monitor", "navigator", "players",
   "mitgliederAbgleichen", "personenNormalisieren", "rangliste", "scoreboard", "servicebereich",
-  "hallzeiten", "hallzeitenVerwalten",
+  "hallzeiten", "hallzeitenDrucken", "hallzeitenVerwalten",
 ]);
 
 const EVENT_LEVELS = new Map([
@@ -89,7 +89,10 @@ const EVENT_LEVELS = new Map([
   ["member_reconciliation_parse_failed", "error"],
   ["member_reconciliation_write_failed", "error"],
   ["profile_challenge_failed", "error"],
+  ["profile_hall_time_groups_load_failed", "error"],
+  ["profile_hall_time_group_write_failed", "error"],
   ["profile_load_failed", "error"],
+  ["profile_open_completed", "info"],
   ["match_result_action_failed", "error"],
   ["match_result_suggestion_failed", "warn"],
   ["match_date_action_failed", "error"],

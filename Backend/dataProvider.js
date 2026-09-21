@@ -60,7 +60,7 @@ const HISTORY_INTERACTION_WRITES = new Set([
   "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment",
   "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
 ]);
-const HALL_TIME_WRITES = new Set(["adminSaveHallTimeGrid", "setHallTimeBooking", "adminDistributeHallTimeGrid"]);
+const HALL_TIME_WRITES = new Set(["adminSaveHallTimeGrid", "setHallTimeBooking", "setMyHallTimeGroupMembership", "adminDistributeHallTimeGrid", "adminClearAllHallTimeStatuses"]);
 const PUBLIC_COLUMNS = {
   bewerbe: ["id", "bezeichnung", "bewerbsartid", "geschlecht", "entrystart", "entrydeadline", "bewerbsbeginn", "bewerbsende", "sortorder"],
   bewerbsart: ["id", "bezeichnung", "entrylistavailable", "roundrobin", "rasterfunktion", "spezifikum"],
@@ -259,11 +259,25 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
         before: { gridId: params.gridId, personId: params.personId || "self" },
         after: result.success ? { selected: params.selected, gridId: params.gridId, personId: params.personId || "self", revision: result.revision } : null,
       };
+    case "setMyHallTimeGroupMembership":
+      return {
+        targetType: "hall-time-group", targetId: params.gridId,
+        before: { gridId: params.gridId, selected: !params.selected },
+        after: result.success ? { gridId: params.gridId, selected: result.selected, revision: result.revision } : null,
+      };
     case "adminDistributeHallTimeGrid":
       return {
         targetType: "hall-time-grid", targetId: params.gridId,
         before: { expectedRevision: params.expectedRevision },
         after: result.success ? { revision: result.revision, replacedFutureEntries: true } : null,
+      };
+    case "adminClearAllHallTimeStatuses":
+      return {
+        targetType: "hall-time-grid", targetId: params.gridId,
+        before: { expectedRevision: params.expectedRevision },
+        after: result.success ? {
+          revision: result.revision, deletedEntryCount: result.deletedEntryCount || 0,
+        } : null,
       };
     default:
       return { targetType: "", targetId: "", before: null, after: null };
@@ -990,6 +1004,26 @@ function playerNameMap() {
   return new Map(dependencies.authService.parsePeople().map((person) => [person.id, [person.firstName, person.lastName].filter(Boolean).join(" ")]));
 }
 
+function hallTimePlayerMap() {
+  return new Map(dependencies.authService.parsePeople().map((person) => {
+    const firstName = String(person.firstName || "").trim();
+    const lastName = String(person.lastName || "").trim();
+    return [person.id, { firstName, lastName, name: [lastName, firstName].filter(Boolean).join(" ") || person.id }];
+  }));
+}
+
+function projectHallTimePlayerNames(result) {
+  const people = hallTimePlayerMap();
+  const project = (grid) => {
+    if (!grid?.participants) return grid;
+    grid.participants = grid.participants.map((participant) => ({ ...participant, ...(people.get(participant.id) || {}) }));
+    return grid;
+  };
+  if (result?.grid) project(result.grid);
+  if (Array.isArray(result?.grids)) result.grids.forEach(project);
+  return result;
+}
+
 function parsePlayerId(raw) {
   const value = String(raw || "").trim();
   const markerLength = value.endsWith("[wo]") ? 4 : value.endsWith("[ret]") ? 5 : 0;
@@ -1333,13 +1367,17 @@ const endpoints = {
       },
     }),
   },
+  myHallTimeGroups: {
+    access: "authenticated",
+    handler: (_params, context) => dependencies.hallTimeService.publicGroups(context.principal),
+  },
   hallTimeGrids: {
     access: "authenticated",
     handler: (_params, context) => dependencies.hallTimeService.visibleGrids(context.principal),
   },
   hallTimeGrid: {
     access: "authenticated",
-    handler: (params, context) => dependencies.hallTimeService.grid(context.principal, params.gridId),
+    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.grid(context.principal, params.gridId)),
   },
   hallTimeHistory: {
     access: "authenticated",
@@ -1347,29 +1385,44 @@ const endpoints = {
   },
   adminHallTimeGrids: {
     access: ["admin"],
-    handler: (_params, context) => dependencies.hallTimeService.adminGrids(context.principal),
+    handler: (_params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.adminGrids(context.principal)),
   },
   adminSaveHallTimeGrid: {
     access: ["admin"],
     write: true,
     handler: (params, context) => {
       requireCurrentTables("players");
-      const names = playerNameMap();
+      const names = hallTimePlayerMap();
       for (const personId of params.participantIds) {
         if (!names.has(personId)) throw new AppError("PLAYER_NOT_FOUND", "Mindestens ein Spieler wurde nicht gefunden", 404);
       }
-      return dependencies.hallTimeService.saveGrid(context.principal, params, names);
+      return projectHallTimePlayerNames(dependencies.hallTimeService.saveGrid(context.principal, params, names));
     },
   },
   setHallTimeBooking: {
     access: "authenticated",
     write: true,
-    handler: (params, context) => dependencies.hallTimeService.setBooking(context.principal, params),
+    handler: async (params, context) => projectHallTimePlayerNames(await dependencies.hallTimeService.setBooking(context.principal, params)),
+  },
+  setMyHallTimeGroupMembership: {
+    access: "authenticated",
+    write: true,
+    handler: (params, context) => {
+      requireCurrentTables("players");
+      const person = hallTimePlayerMap().get(context.principal.id);
+      if (!person) throw new AppError("PLAYER_NOT_FOUND", "Person wurde nicht gefunden", 404);
+      return dependencies.hallTimeService.setPublicMembership(context.principal, params, person);
+    },
   },
   adminDistributeHallTimeGrid: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.hallTimeService.distribute(context.principal, params),
+    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.distribute(context.principal, params)),
+  },
+  adminClearAllHallTimeStatuses: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.clearAllStatuses(context.principal, params)),
   },
   myFavorites: {
     access: "authenticated",

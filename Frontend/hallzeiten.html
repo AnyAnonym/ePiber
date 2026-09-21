@@ -18,10 +18,22 @@
     </section>
     <div id="hall-time-app" hidden>
       <header class="hall-time-heading">
+        <button id="hall-time-info-open" class="hall-time-info-button" type="button" aria-label="Informationen zum Raster" aria-haspopup="dialog">i</button>
         <div class="favorite-title-row favorite-title-row-centered"><h1 id="hall-time-title">Hallenzeiten</h1></div>
-        <p id="hall-time-description" class="hall-time-description"></p>
-        <div id="hall-time-rules" class="hall-time-rules"></div>
       </header>
+      <nav class="hall-time-view-controls" aria-label="Rasteransicht"><button id="hall-time-view-all" type="button" aria-pressed="true">Alle</button><button id="hall-time-view-current" type="button" aria-pressed="false">Aktuell</button></nav>
+      <dialog id="hall-time-info-dialog" class="hall-time-info-dialog" aria-label="Rasterbeschreibung">
+        <form method="dialog">
+          <button class="hall-time-info-close" type="submit" aria-label="Informationen schließen">×</button>
+          <p id="hall-time-description" class="hall-time-description"></p>
+        </form>
+      </dialog>
+      <dialog id="hall-time-message-dialog" class="hall-time-info-dialog hall-time-message-dialog" aria-label="Meldung">
+        <form method="dialog">
+          <button class="hall-time-info-close" type="submit" aria-label="Meldung schließen">×</button>
+          <p id="hall-time-message-text" class="hall-time-message-text" role="alert"></p>
+        </form>
+      </dialog>
       <p id="hall-time-feedback" class="hall-time-feedback" role="status" aria-live="polite"></p>
       <section class="hall-time-table-card" aria-label="Hallenzeiten-Raster">
         <div class="hall-time-table-scroll">
@@ -31,7 +43,7 @@
             <tfoot><tr id="hall-time-foot"></tr></tfoot>
           </table>
         </div>
-        <div class="hall-time-legend" aria-label="Legende"><span class="is-confirmed">✓ Fixplatz</span><span class="is-waitlist">⌛ Warteliste</span><span class="is-empty">× Nicht eingetragen</span></div>
+        <div class="hall-time-legend" aria-label="Legende"><span class="is-confirmed">✓ Dabei</span><span class="is-waitlist">⌛ Warteliste</span><span class="is-empty">× nicht Dabei</span></div>
       </section>
       <section class="hall-time-card hall-time-history" aria-labelledby="hall-time-history-title">
         <h2 id="hall-time-history-title">Historie</h2>
@@ -45,6 +57,7 @@
   <script type="module" src="JS/favorites.js"></script>
   <script type="module" src="JS/hallzeiten.js"></script>
   <script src="JS/global.js"></script>
+  <script src="JS/clock.js"></script>
   <script src="JS/footer.js"></script>
 </body>
 </html>

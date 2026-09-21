@@ -601,7 +601,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.deepEqual(seniorRestrictions.data.schonzeit, []);
 
   const protectedEndpoints = [
-    "memberDirectory", "myProfile", "myFavorites", "myStartPage", "setMyFavorites", "setMyStartPage", "publicProfile", "addMatch", "setMatchAppointment", "clearMatchAppointment", "addEntryList", "removeEntryList",
+    "memberDirectory", "myProfile", "myHallTimeGroups", "myFavorites", "myStartPage", "setMyFavorites", "setMyHallTimeGroupMembership", "setMyStartPage", "publicProfile", "addMatch", "setMatchAppointment", "clearMatchAppointment", "addEntryList", "removeEntryList",
     "withdrawFromRanking", "matchResultSuggestion", "setMatchResult", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminSetMatchEnd", "adminDeleteRankingChallenge", "adminSetRankingChallengeDate", "adminSetMatchAppointment", "operationStatus", "navigator", "courtAssign", "courtSetActive", "monitorList",
     "monitorNavigate", "monitorScroll", "monitorProvision", "monitorRotate", "monitorRevoke",
     "monitorTarget", "monitorAck",
@@ -1034,7 +1034,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(operatorGrafanaAuth.headers.get("x-webauth-user"), null);
 
   const authenticatedEndpoints = [
-    "memberDirectory", "myProfile", "myFavorites", "myStartPage", "setMyFavorites", "setMyStartPage", "operationStatus", "addMatch", "addEntryList",
+    "memberDirectory", "myProfile", "myHallTimeGroups", "myFavorites", "myStartPage", "setMyFavorites", "setMyHallTimeGroupMembership", "setMyStartPage", "operationStatus", "addMatch", "addEntryList",
     "removeEntryList", "withdrawFromRanking", "competitionHistory", "competitionHistoryComments",
     "competitionHistoryInteraction", "competitionHistoryCommentForEdit", "competitionHistoryReactions", "competitionHistoryCommentReactions",
     "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",

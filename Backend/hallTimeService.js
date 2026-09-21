@@ -4,6 +4,7 @@ const { AppError } = require("./errors.js");
 const STATE_KEY = "hall-times:v1";
 const EMPTY_STATE = Object.freeze({ grids: [] });
 const HISTORY_LIMIT = 5000;
+const DEFAULT_MAX_WAITLIST_ENTRIES = 2;
 const VIENNA_DATE = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
 });
@@ -60,6 +61,50 @@ function appendHistory(grid, entries) {
   grid.history = [...(grid.history || []), ...entries].slice(-HISTORY_LIMIT);
 }
 
+function compareParticipants(left, right) {
+  return (left.lastName || left.name).localeCompare(right.lastName || right.name, "de")
+    || (left.firstName || "").localeCompare(right.firstName || "", "de")
+    || left.id.localeCompare(right.id);
+}
+
+function maxWaitlistEntries(grid) {
+  return Number.isInteger(grid.maxWaitlistEntries) ? grid.maxWaitlistEntries : DEFAULT_MAX_WAITLIST_ENTRIES;
+}
+
+function pairKey(left, right) {
+  return left < right ? `${left}:${right}` : `${right}:${left}`;
+}
+
+function selectDistributedParticipants({ participants, capacity, counts, pairCounts, lastSlotIndexes, slotIndex }) {
+  const selected = [];
+  const participantIndex = new Map(participants.map(({ id }, index) => [id, index]));
+  while (selected.length < Math.min(capacity, participants.length)) {
+    const candidates = participants.filter(({ id }) => !selected.some((person) => person.id === id));
+    candidates.sort((left, right) => {
+      const pairValues = (candidate) => selected.map((person) => pairCounts.get(pairKey(candidate.id, person.id)) || 0);
+      const leftPairs = pairValues(left);
+      const rightPairs = pairValues(right);
+      const leftMaximum = leftPairs.length ? Math.max(...leftPairs) : 0;
+      const rightMaximum = rightPairs.length ? Math.max(...rightPairs) : 0;
+      const leftSum = leftPairs.reduce((sum, value) => sum + value, 0);
+      const rightSum = rightPairs.reduce((sum, value) => sum + value, 0);
+      const leftLast = lastSlotIndexes.get(left.id) ?? Number.NEGATIVE_INFINITY;
+      const rightLast = lastSlotIndexes.get(right.id) ?? Number.NEGATIVE_INFINITY;
+      const rotationStart = (slotIndex * Math.max(1, capacity)) % participants.length;
+      const rotation = (person) => (participantIndex.get(person.id) - rotationStart + participants.length) % participants.length;
+      return counts.get(left.id) - counts.get(right.id)
+        || leftMaximum - rightMaximum
+        || leftSum - rightSum
+        || Number(leftLast === slotIndex - 1) - Number(rightLast === slotIndex - 1)
+        || leftLast - rightLast
+        || rotation(left) - rotation(right)
+        || left.id.localeCompare(right.id);
+    });
+    selected.push(candidates[0]);
+  }
+  return selected;
+}
+
 function slotExpired(slot, now) {
   return viennaDateTimeMs(slot.date, slot.end) <= now;
 }
@@ -91,7 +136,8 @@ function projectedGrid(grid, revision, principal) {
   }
   return {
     id: grid.id, name: grid.name, description: grid.description, mode: grid.mode,
-    capacity: grid.capacity, waitlistEnabled: grid.waitlistEnabled, fairUse: clone(grid.fairUse),
+    capacity: grid.capacity, waitlistEnabled: grid.waitlistEnabled, maxWaitlistEntries: maxWaitlistEntries(grid),
+    publicJoinable: grid.publicJoinable === true, fairUse: clone(grid.fairUse),
     active: grid.active, participants: clone(grid.participants), slots: clone(grid.slots),
     entries: grid.entries.map((entry) => ({
       slotId: entry.slotId, personId: entry.personId, status: entry.status,
@@ -148,6 +194,71 @@ class HallTimeService {
         .map(({ id, name, mode }) => ({ id, name, mode }))
         .sort((left, right) => left.name.localeCompare(right.name, "de")),
     };
+  }
+
+  publicGroups(principal) {
+    const snapshot = this.snapshot();
+    return {
+      success: true,
+      revision: snapshot.revision,
+      groups: snapshot.value.grids
+        .filter((grid) => grid.active && grid.publicJoinable === true)
+        .map((grid) => ({
+          id: grid.id,
+          name: grid.name,
+          joined: grid.participants.some(({ id }) => id === principal.id),
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name, "de")),
+    };
+  }
+
+  setPublicMembership(principal, request, person) {
+    const now = this.now();
+    const operation = this.repository.applyStateOperation({
+      stateKey: STATE_KEY, fallback: EMPTY_STATE, expectedRevision: request.expectedRevision,
+      actorKey: `user:${principal.id}`, operationId: request.operationId,
+      endpoint: "setMyHallTimeGroupMembership", payload: request,
+      update: (state) => {
+        normalizeExpired(state, now);
+        const grid = state.grids.find(({ id }) => id === request.gridId);
+        if (!grid?.active || grid.publicJoinable !== true) {
+          throw new AppError("HALL_TIME_GROUP_NOT_PUBLIC", "Diese Hallenzeiten-Gruppe ist nicht öffentlich beitretbar", 409);
+        }
+        const participantIndex = grid.participants.findIndex(({ id }) => id === principal.id);
+        if (request.selected && participantIndex < 0) {
+          grid.participants.push({
+            id: principal.id,
+            firstName: person.firstName || "",
+            lastName: person.lastName || "",
+            name: person.name || principal.name || principal.id,
+          });
+          grid.participants.sort(compareParticipants);
+          appendHistory(grid, [historyEntry({ now, action: "group_joined", actor: principal, person })]);
+          grid.updatedAt = now;
+        } else if (!request.selected && participantIndex >= 0) {
+          const hasCurrentEntries = grid.entries.some((entry) => entry.personId === principal.id
+            && grid.slots.some((slot) => slot.id === entry.slotId && !slotExpired(slot, now)));
+          if (hasCurrentEntries) {
+            throw new AppError("HALL_TIME_GROUP_ACTIVE_ENTRIES", "Vor dem Austritt müssen alle eigenen aktuellen Einträge entfernt werden", 409);
+          }
+          grid.participants.splice(participantIndex, 1);
+          appendHistory(grid, [historyEntry({ now, action: "group_left", actor: principal, person })]);
+          grid.updatedAt = now;
+        }
+        return state;
+      },
+      resultForSnapshot: (snapshot) => {
+        const grid = snapshot.value.grids.find(({ id }) => id === request.gridId);
+        return {
+          success: true,
+          gridId: request.gridId,
+          selected: grid?.participants.some(({ id }) => id === principal.id) || false,
+          revision: snapshot.revision,
+        };
+      },
+    });
+    if (!operation.repeated) this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    return { ...operation.result, repeated: operation.repeated };
   }
 
   canView(principal, gridId) {
@@ -221,8 +332,14 @@ class HallTimeService {
         const grid = {
           id: existing?.id || crypto.randomUUID(), name: request.name, description: request.description,
           mode: request.mode, capacity: request.capacity, waitlistEnabled: request.waitlistEnabled,
+          maxWaitlistEntries: request.maxWaitlistEntries, publicJoinable: request.publicJoinable,
           fairUse: clone(request.fairUse), active: request.active,
-          participants: request.participantIds.map((id) => ({ id, name: participantNames.get(id) || id })),
+          participants: request.participantIds.map((id) => {
+            const person = participantNames.get(id);
+            return typeof person === "object" && person
+              ? { id, firstName: person.firstName || "", lastName: person.lastName || "", name: person.name || id }
+              : { id, name: person || id };
+          }).sort(compareParticipants),
           slots, entries, history: clone(existing?.history || []), createdAt: existing?.createdAt || now, updatedAt: now,
         };
         appendHistory(grid, [historyEntry({ now, action: existing ? "grid_updated" : "grid_created", actor: principal, detail: grid.name })]);
@@ -242,6 +359,7 @@ class HallTimeService {
     const now = this.now();
     const endpoint = "setHallTimeBooking";
     let promoted = null;
+    let foreignChange = null;
     const operation = this.repository.applyStateOperation({
       stateKey: STATE_KEY, fallback: EMPTY_STATE,
       actorKey: `user:${principal.id}`, operationId: request.operationId, endpoint,
@@ -251,10 +369,11 @@ class HallTimeService {
         const grid = state.grids.find(({ id }) => id === request.gridId);
         if (!grid?.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
         const admin = isAdmin(principal);
-        const personId = admin && request.personId ? request.personId : principal.id;
-        if (!admin && request.personId && request.personId !== principal.id) throw new AppError("FORBIDDEN", "Nur die eigene Einteilung darf geaendert werden", 403);
+        const actorParticipates = grid.participants.some(({ id }) => id === principal.id);
+        if (!admin && !actorParticipates) throw new AppError("FORBIDDEN", "Berechtigung fuer diesen Hallenzeiten-Raster fehlt", 403);
+        const personId = request.personId || principal.id;
         const person = grid.participants.find(({ id }) => id === personId);
-        if (!person || (!admin && !grid.participants.some(({ id }) => id === principal.id))) throw new AppError("FORBIDDEN", "Spieler ist diesem Raster nicht zugeordnet", 403);
+        if (!person) throw new AppError("FORBIDDEN", "Spieler ist diesem Raster nicht zugeordnet", 403);
         const slot = grid.slots.find(({ id }) => id === request.slotId);
         if (!slot) throw new AppError("HALL_TIME_SLOT_NOT_FOUND", "Termin wurde nicht gefunden", 404);
         if (!admin && slotExpired(slot, now)) throw new AppError("HALL_TIME_PAST_LOCKED", "Vergangene Termine koennen nur durch Administratoren korrigiert werden", 409);
@@ -265,6 +384,7 @@ class HallTimeService {
           if (!current) return state;
           grid.entries.splice(currentIndex, 1);
           events.push(historyEntry({ now, action: "booking_removed", actor: principal, person, slotId: slot.id, from: current.status, to: "red" }));
+          if (personId !== principal.id) foreignChange = { person, grid, slot, action: "removed", previousStatus: current.status };
           if (current.status === "confirmed") {
             const next = grid.entries.filter((entry) => entry.slotId === slot.id && entry.status === "waitlist")
               .sort((left, right) => left.queuedAt - right.queuedAt || left.personId.localeCompare(right.personId))[0];
@@ -278,7 +398,15 @@ class HallTimeService {
         } else if (!current) {
           if (!admin && grid.mode === "fair_use") {
             const personal = grid.entries.filter((entry) => entry.personId === personId && ["confirmed", "waitlist"].includes(entry.status)).length;
-            const average = grid.participants.length ? grid.entries.filter((entry) => ["confirmed", "waitlist"].includes(entry.status)).length / grid.participants.length : 0;
+            const participantIds = new Set(grid.participants.map(({ id }) => id));
+            const reservationCounts = new Map(grid.participants.map(({ id }) => [id, 0]));
+            for (const entry of grid.entries) {
+              if (participantIds.has(entry.personId) && ["confirmed", "waitlist"].includes(entry.status)) {
+                reservationCounts.set(entry.personId, reservationCounts.get(entry.personId) + 1);
+              }
+            }
+            const reservingCounts = [...reservationCounts.values()].filter((count) => count > 0);
+            const average = reservingCounts.length ? reservingCounts.reduce((sum, count) => sum + count, 0) / reservingCounts.length : 0;
             const daysUntil = dateOrdinal(slot.date) - dateOrdinal(localDate(now));
             let limit = Infinity;
             if (daysUntil > grid.fairUse.extendedDays) limit = grid.fairUse.base;
@@ -288,8 +416,14 @@ class HallTimeService {
           const confirmed = grid.entries.filter((entry) => entry.slotId === slot.id && entry.status === "confirmed").length;
           const status = confirmed < grid.capacity ? "confirmed" : "waitlist";
           if (status === "waitlist" && !grid.waitlistEnabled) throw new AppError("HALL_TIME_SLOT_FULL", "Dieser Termin ist bereits voll belegt", 409);
+          if (status === "waitlist") {
+            const waiting = grid.entries.filter((entry) => entry.personId === personId && entry.status === "waitlist").length;
+            const limit = maxWaitlistEntries(grid);
+            if (waiting >= limit) throw new AppError("HALL_TIME_WAITLIST_LIMIT", `Es sind höchstens ${limit} Wartelisteneinträge erlaubt`, 409, { limit });
+          }
           grid.entries.push({ slotId: slot.id, personId, status, queuedAt: now });
           events.push(historyEntry({ now, action: status === "confirmed" ? "booking_added" : "waitlist_added", actor: principal, person, slotId: slot.id, from: "red", to: status }));
+          if (personId !== principal.id) foreignChange = { person, grid, slot, action: "added", status };
         }
         appendHistory(grid, events);
         grid.updatedAt = now;
@@ -319,6 +453,36 @@ class HallTimeService {
           });
         }
       }
+      if (foreignChange?.person?.id && this.messagingService) {
+        const dateLabel = foreignChange.slot.date.split("-").reverse().join(".");
+        const actorName = principal.name || principal.id;
+        const body = foreignChange.action === "removed"
+          ? foreignChange.previousStatus === "waitlist"
+            ? `${actorName} hat dich für den Termin am ${dateLabel} von ${foreignChange.slot.start} bis ${foreignChange.slot.end} von der Warteliste entfernt.`
+            : `${actorName} hat dich für den Termin am ${dateLabel} von ${foreignChange.slot.start} bis ${foreignChange.slot.end} abgemeldet.`
+          : foreignChange.status === "waitlist"
+            ? `${actorName} hat dich für den Termin am ${dateLabel} von ${foreignChange.slot.start} bis ${foreignChange.slot.end} auf die Warteliste gesetzt.`
+            : `${actorName} hat dich für den Termin am ${dateLabel} von ${foreignChange.slot.start} bis ${foreignChange.slot.end} eingetragen.`;
+        try {
+          await this.messagingService.ensureMessage({
+            identity: `hall-time-foreign-booking:${request.operationId}:${foreignChange.person.id}`,
+            recipientId: foreignChange.person.id, createdAt: now,
+            subject: `Änderung in ${foreignChange.grid.name}`,
+            body,
+            type: "hall_time_booking_changed", matchId: foreignChange.slot.id, actorId: principal.id,
+            externalDelivery: false,
+          });
+          this.log("info", "hall_time_foreign_booking_message_completed", {
+            gridId: foreignChange.grid.id, slotId: foreignChange.slot.id,
+            recipientId: foreignChange.person.id, result: "success",
+          });
+        } catch (error) {
+          this.log("warn", "hall_time_foreign_booking_message_failed", {
+            gridId: foreignChange.grid.id, slotId: foreignChange.slot.id,
+            recipientId: foreignChange.person.id, errorCode: error.code || "MESSAGING_WRITE_FAILED",
+          });
+        }
+      }
     }
     return { ...operation.result, repeated: operation.repeated };
   }
@@ -339,30 +503,72 @@ class HallTimeService {
         const futureIds = new Set(futureSlots.map(({ id }) => id));
         grid.entries = grid.entries.filter((entry) => !futureIds.has(entry.slotId));
         const counts = new Map(grid.participants.map(({ id }) => [id, grid.entries.filter((entry) => entry.personId === id && entry.status === "confirmed").length]));
-        let previous = new Set();
-        const generatedEvents = [];
-        futureSlots.forEach((slot, slotIndex) => {
-          const selected = [...grid.participants].sort((left, right) => (
-            counts.get(left.id) - counts.get(right.id)
-            || Number(previous.has(left.id)) - Number(previous.has(right.id))
-            || ((grid.participants.findIndex(({ id }) => id === left.id) - slotIndex) % grid.participants.length)
-              - ((grid.participants.findIndex(({ id }) => id === right.id) - slotIndex) % grid.participants.length)
-            || left.id.localeCompare(right.id)
-          )).slice(0, Math.min(grid.capacity, grid.participants.length));
-          previous = new Set(selected.map(({ id }) => id));
+        const pairCounts = new Map();
+        const lastSlotIndexes = new Map();
+        const allSlots = [...grid.slots].sort((left, right) => `${left.date}T${left.start}`.localeCompare(`${right.date}T${right.start}`));
+        const allSlotIndexes = new Map(allSlots.map(({ id }, index) => [id, index]));
+        for (const slot of allSlots) {
+          const people = grid.entries.filter((entry) => entry.slotId === slot.id && entry.status === "confirmed").map(({ personId }) => personId);
+          for (const personId of people) lastSlotIndexes.set(personId, allSlotIndexes.get(slot.id));
+          for (let left = 0; left < people.length; left++) {
+            for (let right = left + 1; right < people.length; right++) {
+              const key = pairKey(people[left], people[right]);
+              pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+            }
+          }
+        }
+        futureSlots.forEach((slot) => {
+          const slotIndex = allSlotIndexes.get(slot.id);
+          const selected = selectDistributedParticipants({
+            participants: grid.participants, capacity: grid.capacity, counts, pairCounts, lastSlotIndexes, slotIndex,
+          });
           for (const person of selected) {
             grid.entries.push({ slotId: slot.id, personId: person.id, status: "confirmed", queuedAt: now });
             counts.set(person.id, counts.get(person.id) + 1);
-            generatedEvents.push(historyEntry({ now, action: "assigned_by_distribution", actor: principal, person, slotId: slot.id, from: "red", to: "confirmed" }));
+            lastSlotIndexes.set(person.id, slotIndex);
+          }
+          for (let left = 0; left < selected.length; left++) {
+            for (let right = left + 1; right < selected.length; right++) {
+              const key = pairKey(selected[left].id, selected[right].id);
+              pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+            }
           }
         });
-        appendHistory(grid, [historyEntry({ now, action: "distribution_replaced", actor: principal, detail: `${futureSlots.length}` }), ...generatedEvents]);
+        appendHistory(grid, [historyEntry({ now, action: "distribution_replaced", actor: principal, detail: `${futureSlots.length}` })]);
         grid.updatedAt = now;
         return state;
       },
       resultForSnapshot: (snapshot) => {
         const grid = snapshot.value.grids.find(({ id }) => id === request.gridId);
         return { success: true, grid: projectedGrid(grid, snapshot.revision, principal), revision: snapshot.revision };
+      },
+    });
+    if (!operation.repeated) this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    return { ...operation.result, repeated: operation.repeated };
+  }
+
+  clearAllStatuses(principal, request) {
+    if (!isAdmin(principal)) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
+    const now = this.now();
+    let deletedEntryCount = 0;
+    const operation = this.repository.applyStateOperation({
+      stateKey: STATE_KEY, fallback: EMPTY_STATE, expectedRevision: request.expectedRevision,
+      actorKey: `user:${principal.id}`, operationId: request.operationId, endpoint: "adminClearAllHallTimeStatuses", payload: request,
+      update: (state) => {
+        const grid = state.grids.find(({ id }) => id === request.gridId);
+        if (!grid?.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
+        deletedEntryCount = grid.entries.length;
+        grid.entries = [];
+        appendHistory(grid, [historyEntry({ now, action: "all_statuses_cleared", actor: principal, detail: `${deletedEntryCount}` })]);
+        grid.updatedAt = now;
+        return state;
+      },
+      resultForSnapshot: (snapshot) => {
+        const grid = snapshot.value.grids.find(({ id }) => id === request.gridId);
+        return {
+          success: true, grid: projectedGrid(grid, snapshot.revision, principal), revision: snapshot.revision,
+          deletedEntryCount,
+        };
       },
     });
     if (!operation.repeated) this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });

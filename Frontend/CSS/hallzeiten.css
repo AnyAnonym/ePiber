@@ -1,32 +1,58 @@
-.hall-time-main { width: min(100% - 2rem, 1500px); margin: 0 auto; padding: 2rem 0 4rem; }
-.hall-time-heading { text-align: center; margin-bottom: 1.25rem; }
-.hall-time-heading h1 { margin: 0; }
-.hall-time-description { max-width: 900px; margin: .8rem auto; white-space: pre-wrap; line-height: 1.55; }
-.hall-time-rules { display: flex; justify-content: center; flex-wrap: wrap; gap: .5rem; }
-.hall-time-rules span { padding: .4rem .7rem; border-radius: 999px; background: #e8f2eb; color: #174d2c; font-size: .9rem; }
+.hall-time-main { position: relative; width: calc(100% - 2rem); max-width: 1500px; margin: 0 auto; padding: 2rem 0 4rem; }
+#hall-time-app { width: 100%; min-width: 0; max-width: 100%; }
+.hall-time-heading { box-sizing: border-box; position: relative; width: 100%; max-width: 100%; min-height: 36px; margin-bottom: .25rem; padding: .25rem 42px; overflow: hidden; border-radius: 14px; color: #fff; background: #176b4a; text-align: center; }
+.hall-time-heading .favorite-title-row { display: flex; width: 100%; min-height: 28px; align-items: center; justify-content: center; }
+.hall-time-heading h1 { width: auto; margin: 0; overflow-wrap: anywhere; text-align: center; line-height: 1.05; }
+.hall-time-heading .favorite-star { position: absolute; z-index: 1; right: .45rem; top: 50%; margin: 0; transform: translateY(-50%); }
+.hall-time-view-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .25rem; width: 100%; margin: 0 0 .25rem; }
+.hall-time-view-controls button { min-height: 36px; padding: .25rem .6rem; border: 3px solid transparent; border-radius: 14px; color: #d0d8d3; background: #176b4a; font: inherit; font-weight: 700; cursor: pointer; }
+.hall-time-view-controls button:hover, .hall-time-view-controls button:focus-visible { color: #fff; }
+.hall-time-view-controls button[aria-pressed="true"] { border-color: #1675d1; color: #fff; }
+.hall-time-info-button { position: absolute; z-index: 1; left: .45rem; top: 50%; width: 27px; height: 27px; padding: 0; border: 2px solid currentColor; border-radius: 50%; color: #fff; background: transparent; font: 700 1rem/23px serif; cursor: pointer; transform: translateY(-50%); }
+.hall-time-info-button:hover, .hall-time-info-button:focus-visible { color: #176b4a; background: #fff; }
+.hall-time-info-dialog { box-sizing: border-box; position: fixed; inset: 0; width: 560px; max-width: calc(100% - 1rem); height: fit-content; max-height: calc(100dvh - 1rem); margin: auto; padding: 1rem; overflow: auto; border: 0; border-radius: 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, .3); transform: translate(var(--hall-time-dialog-offset-x, 0), var(--hall-time-dialog-offset-y, 0)); }
+.hall-time-info-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.hall-time-info-dialog form { position: relative; padding-top: 1.2rem; }
+.hall-time-info-dialog .hall-time-description, .hall-time-info-dialog .hall-time-message-text { margin: 0; white-space: pre-wrap; line-height: 1.35; overflow-wrap: anywhere; text-align: center; }
+.hall-time-info-dialog .hall-time-info-close { position: absolute; top: -.8rem; right: -.7rem; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: #26352a; background: transparent; font: 400 1.8rem/30px sans-serif; cursor: pointer; }
+.hall-time-info-dialog .hall-time-info-close:hover, .hall-time-info-dialog .hall-time-info-close:focus-visible { background: #edf2ee; }
 .hall-time-card, .hall-time-table-card { background: #fff; border: 1px solid #d9e2db; border-radius: 14px; box-shadow: 0 5px 20px rgba(21, 54, 33, .08); padding: 1rem; }
-.hall-time-table-scroll { overflow: auto; max-height: 70vh; }
+.hall-time-table-card { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
+.hall-time-table-scroll { width: 100%; max-width: 100%; max-height: min(62vh, 620px); max-height: min(62dvh, 620px); overflow: auto; overflow-anchor: none; overscroll-behavior-x: contain; overscroll-behavior-y: auto; }
 #hall-time-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 0; }
 #hall-time-table th, #hall-time-table td { padding: .25rem .15rem; text-align: center; border-right: 1px solid #e3e8e4; border-bottom: 1px solid #e3e8e4; background: #fff; }
 #hall-time-table th:not(.hall-time-player):not(.hall-time-sum), #hall-time-table td:not(.hall-time-player):not(.hall-time-sum) { width: 56px; min-width: 56px; max-width: 56px; }
 #hall-time-table thead th { position: sticky; top: 0; z-index: 3; background: #f2f7f3; }
-#hall-time-table .hall-time-player { position: sticky; left: 0; z-index: 2; min-width: 165px; text-align: left; background: #f8faf8; }
+#hall-time-table .hall-time-slot-select { display: block; width: 100%; min-height: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+#hall-time-table .hall-time-player { position: sticky; left: 0; z-index: 2; width: 80px; min-width: 80px; max-width: 80px; overflow: hidden; text-align: left; line-height: 1.1; background: #f8faf8; }
+#hall-time-table .hall-time-player-select { display: block; width: 100%; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+#hall-time-table .hall-time-person-name { display: block; min-width: 0; font-size: .8rem; }
+#hall-time-table .hall-time-person-name > span { display: block; width: max-content; max-width: none; white-space: nowrap; transform: scaleX(var(--hall-time-name-scale, 1)); transform-origin: left center; }
 #hall-time-table thead .hall-time-player { z-index: 5; }
-#hall-time-table .hall-time-sum { position: sticky; right: 0; z-index: 2; width: 58px; min-width: 58px; font-weight: 700; background: #f8faf8; }
-#hall-time-table thead .hall-time-sum { z-index: 5; }
-#hall-time-table thead span, #hall-time-table thead small { display: block; font-weight: 400; }
-#hall-time-table tr.is-current-player th, #hall-time-table tr.is-current-player td { background: #f0f8f2; }
+#hall-time-table .hall-time-sum { width: 58px; min-width: 58px; font-weight: 700; background: #f8faf8; }
+#hall-time-table thead span, #hall-time-table thead small { display: block; font-weight: 400; line-height: 1.15; }
+#hall-time-table thead .hall-time-separator { line-height: .75; }
+#hall-time-table tfoot th, #hall-time-table tfoot td { position: sticky; bottom: 0; z-index: 4; background: #f2f7f3; box-shadow: 0 -1px 0 #cbd5cd; }
+#hall-time-table tfoot .hall-time-player { z-index: 6; background: #eef4ef; }
+#hall-time-table .is-past-slot { color: #6f7771; background: #f1f3f1; }
+#hall-time-table .is-past-slot .hall-time-state { opacity: .72; filter: saturate(.55); }
+#hall-time-table tr.is-current-player th.hall-time-player { color: #214f7d; font-weight: 700; }
+#hall-time-table tr.is-current-player-row th, #hall-time-table tr.is-current-player-row td { background: #e7f1fb; }
+#hall-time-table tr.is-selected-player th, #hall-time-table tr.is-selected-player td { background: #e7f1fb; }
+#hall-time-table .is-selected-slot { background: #e7f1fb !important; }
+#hall-time-table [hidden] { display: none; }
 .hall-time-state { width: 40px; min-height: 36px; padding: .2rem; border: 0; border-radius: 9px; font-weight: 800; cursor: pointer; }
 .hall-time-state:disabled { cursor: default; opacity: .8; }
 .hall-time-state.is-confirmed, .hall-time-legend .is-confirmed { background: #ccebd3; color: #11612d; }
 .hall-time-state.is-waitlist, .hall-time-legend .is-waitlist { background: #fff0b8; color: #765800; }
 .hall-time-state.is-empty, .hall-time-legend .is-empty { background: #f6d6d6; color: #8b2222; }
-.hall-time-legend { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
-.hall-time-legend span { padding: .35rem .6rem; border-radius: 8px; }
-.hall-time-feedback { min-height: 1.5rem; text-align: center; }
+.hall-time-legend { display: flex; flex-wrap: nowrap; justify-content: center; gap: .35rem; margin-top: .6rem; }
+.hall-time-legend span { padding: .3rem .45rem; border-radius: 8px; white-space: nowrap; font-size: .85rem; }
+.hall-time-feedback { position: absolute; z-index: 8; left: 50%; max-width: calc(100% - 2rem); margin: .25rem 0; padding: .25rem .55rem; border-radius: 7px; background: rgba(255, 255, 255, .96); box-shadow: 0 2px 8px rgba(0, 0, 0, .12); text-align: center; transform: translateX(-50%); }
+.hall-time-feedback:empty { display: none; }
 .hall-time-feedback[data-state="error"] { color: #a11; }
 .hall-time-feedback[data-state="success"] { color: #17622e; }
 .hall-time-history { margin-top: 1rem; }
 .hall-time-history ol { max-height: 360px; overflow: auto; padding-left: 1.5rem; }
 .hall-time-history li { padding: .35rem 0; }
-@media (max-width: 700px) { .hall-time-main { width: min(100% - 1rem, 1500px); padding-top: 1rem; } .hall-time-table-card { padding: .5rem; } #hall-time-table .hall-time-player { min-width: 130px; } }
+@media (max-width: 700px) { .hall-time-main { width: calc(100% - 1rem); padding-top: 1rem; } .hall-time-heading { padding-inline: 38px; } .hall-time-table-card { padding: .5rem; } .hall-time-table-scroll { max-height: 55vh; max-height: 55dvh; } }

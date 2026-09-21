@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hallenzeiten – Druckansicht</title>
+  <link rel="stylesheet" href="./CSS/hallzeitenDrucken.css" />
+</head>
+<body>
+  <main>
+    <section id="hall-time-print-access" class="print-message" aria-live="polite">
+      <h1>Hallenzeiten – Druckansicht</h1>
+      <p id="hall-time-print-message">Druckansicht wird geladen …</p>
+    </section>
+    <div id="hall-time-print-app" hidden>
+      <div id="hall-time-print-pages"></div>
+    </div>
+  </main>
+  <script type="module" src="JS/hallzeitenDrucken.js"></script>
+</body>
+</html>

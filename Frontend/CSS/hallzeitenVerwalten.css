@@ -8,19 +8,28 @@
 #hall-time-grid-list button { text-align: left; padding: .65rem; border: 1px solid #d7e1d9; border-radius: 8px; background: #fff; }
 #hall-time-grid-list button.active { background: #dceddf; border-color: #5b9a6b; }
 .hall-time-form-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.hall-time-print-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .7rem; margin: 0 0 1rem; padding: .55rem .7rem; border-radius: 8px; background: #eef5f0; }
+.hall-time-print-actions a { color: #135b3f; font-weight: 700; }
 .hall-time-admin-form > label, .hall-time-admin-form fieldset { display: grid; gap: .4rem; margin: 0 0 1rem; }
-.hall-time-admin-form input, .hall-time-admin-form textarea, .hall-time-admin-form select { padding: .55rem; border: 1px solid #bcc9bf; border-radius: 7px; font: inherit; }
+.hall-time-admin-form input, .hall-time-admin-form textarea, .hall-time-admin-form select { min-width: 0; max-width: 100%; padding: .55rem; border: 1px solid #bcc9bf; border-radius: 7px; font: inherit; }
 .hall-time-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .8rem; }
 .hall-time-form-grid label { display: grid; gap: .35rem; }
 .hall-time-form-grid .hall-time-check { display: flex; align-items: center; }
 .hall-time-player-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .35rem; max-height: 300px; overflow: auto; padding: .5rem; border: 1px solid #d7e1d9; }
 .hall-time-player-picker label { display: flex; gap: .45rem; align-items: center; padding: .25rem; }
-.hall-time-slot-add { display: grid; grid-template-columns: 1fr 110px 110px auto; gap: .5rem; }
+.hall-time-slot-add { display: grid; grid-template-columns: minmax(150px, 1fr) 110px 110px 120px auto; gap: .5rem; align-items: end; }
+.hall-time-slot-add label { display: grid; gap: .3rem; }
+.hall-time-slot-help { margin: -.25rem 0 .5rem; color: var(--muted); font-size: .9rem; }
 .hall-time-slot-row { display: grid; grid-template-columns: 1fr 110px 110px auto; gap: .5rem; align-items: center; padding: .45rem 0; border-bottom: 1px solid #e4e9e5; }
 .hall-time-admin-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
-.hall-time-admin-form button, .hall-time-admin-list button, #hall-time-distribute-dialog button { padding: .6rem .8rem; border: 1px solid #7c9c84; border-radius: 8px; cursor: pointer; }
+.hall-time-admin-form button, .hall-time-admin-list button, #hall-time-distribute-dialog button, #hall-time-clear-statuses-dialog button { padding: .6rem .8rem; border: 1px solid #7c9c84; border-radius: 8px; cursor: pointer; }
 .hall-time-admin-form button.primary, #hall-time-distribute-dialog button.primary { background: #176b35; color: #fff; }
-#hall-time-distribute-dialog { max-width: 560px; border: 0; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
-#hall-time-distribute-dialog::backdrop { background: rgba(0,0,0,.45); }
-#hall-time-distribute-dialog form > div { display: flex; justify-content: flex-end; gap: .6rem; }
-@media (max-width: 800px) { .hall-time-admin-layout { grid-template-columns: 1fr; } .hall-time-admin-list { position: static; } .hall-time-slot-add, .hall-time-slot-row { grid-template-columns: 1fr 1fr; } }
+.hall-time-admin-form button.danger, #hall-time-clear-statuses-dialog button.danger { border-color: #9d2f2f; background: #a52b2b; color: #fff; }
+#hall-time-distribute-dialog, #hall-time-clear-statuses-dialog { box-sizing: border-box; position: fixed; inset: 0; width: 560px; max-width: calc(100% - 1rem); height: fit-content; max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); margin: auto; overflow: auto; border: 0; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.3); transform: translate(var(--hall-time-dialog-offset-x, 0), var(--hall-time-dialog-offset-y, 0)); }
+#hall-time-distribute-dialog::backdrop, #hall-time-clear-statuses-dialog::backdrop { background: rgba(0,0,0,.45); }
+#hall-time-distribute-dialog form, #hall-time-clear-statuses-dialog form { position: relative; padding-top: .6rem; text-align: center; }
+#hall-time-distribute-dialog h2, #hall-time-clear-statuses-dialog h2 { margin-top: 0; }
+#hall-time-distribute-dialog .hall-time-dialog-close, #hall-time-clear-statuses-dialog .hall-time-dialog-close { position: absolute; top: -.85rem; right: -.7rem; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: #26352a; background: transparent; font: 400 1.8rem/30px sans-serif; }
+#hall-time-distribute-dialog .hall-time-dialog-close:hover, #hall-time-distribute-dialog .hall-time-dialog-close:focus-visible, #hall-time-clear-statuses-dialog .hall-time-dialog-close:hover, #hall-time-clear-statuses-dialog .hall-time-dialog-close:focus-visible { background: #edf2ee; }
+#hall-time-distribute-dialog form > div, #hall-time-clear-statuses-dialog form > div { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .6rem; padding-top: .5rem; background: #fff; }
+@media (max-width: 800px) { .hall-time-admin-layout { grid-template-columns: minmax(0, 1fr); } .hall-time-admin-list { position: static; } .hall-time-admin-form { min-width: 0; } .hall-time-slot-add, .hall-time-slot-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hall-time-slot-add > *, .hall-time-slot-row > * { min-width: 0; max-width: 100%; } .hall-time-slot-add > button { grid-column: 1 / -1; width: 100%; overflow-wrap: anywhere; } }

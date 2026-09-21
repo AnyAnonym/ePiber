@@ -4,13 +4,37 @@ const { requestContracts, validateEndpointRequest, validateEndpointResponse } = 
 
 test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
   assert.deepEqual(Object.keys(requestContracts).sort(), [
-    "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminDistributeHallTimeGrid", "adminHallTimeGrids", "adminMemberReconciliation", "adminPeopleNormalization", "adminSaveHallTimeGrid", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
+    "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearAllHallTimeStatuses", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminDistributeHallTimeGrid", "adminHallTimeGrids", "adminMemberReconciliation", "adminPeopleNormalization", "adminSaveHallTimeGrid", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
     "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "hallTimeGrid", "hallTimeGrids", "hallTimeHistory", "matchResultSuggestion", "matches", "matches1",
     "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
-    "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myMessage", "myMessageSummary", "myMessages", "myProfile", "myStartPage", "navigator", "normalizePerson", "operationStatus",
+    "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myHallTimeGroups", "myMessage", "myMessageSummary", "myMessages", "myProfile", "myStartPage", "navigator", "normalizePerson", "operationStatus",
     "players", "preMatches", "publicProfile", "rankingChallengeState", "readMatchRestrictions", "reconcilePerson", "refreshSheetData", "removeEntryList", "rlPlatzierung",
-    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setHallTimeBooking", "setMatchAppointment", "setMatchResult", "setMyFavorites", "setMyStartPage", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
+    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setHallTimeBooking", "setMatchAppointment", "setMatchResult", "setMyFavorites", "setMyHallTimeGroupMembership", "setMyStartPage", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
   ]);
+});
+
+test("Oeffentliche Hallengruppe besitzt einen geschlossenen Mitgliedschaftsvertrag", () => {
+  const operationId = "00000000-0000-4000-8000-000000000041";
+  assert.deepEqual(validateEndpointRequest("setMyHallTimeGroupMembership", {
+    operationId, expectedRevision: 3, gridId: "hall-1", selected: true,
+  }), { operationId, expectedRevision: 3, gridId: "hall-1", selected: true });
+  assert.throws(() => validateEndpointRequest("setMyHallTimeGroupMembership", {
+    operationId, expectedRevision: 3, gridId: "hall-1", selected: true, personId: "p2",
+  }), { code: "VALIDATION_ERROR" });
+});
+
+test("Hallenrastervertrag begrenzt oeffentlichen Beitritt und Wartelistenkontingent", () => {
+  const payload = {
+    operationId: "00000000-0000-4000-8000-000000000042", expectedRevision: 0,
+    name: "der Piber reserviert", description: "Reservierungsregeln", mode: "fair_use", capacity: 4,
+    waitlistEnabled: true, maxWaitlistEntries: 2, publicJoinable: true,
+    fairUse: { base: 2, extendedDays: 7, percent: 50, openDays: 2 },
+    active: true, participantIds: ["p1"], slots: [{ date: "2026-10-01", start: "19:00", end: "21:00" }],
+  };
+  const result = validateEndpointRequest("adminSaveHallTimeGrid", payload);
+  assert.equal(result.publicJoinable, true);
+  assert.equal(result.maxWaitlistEntries, 2);
+  assert.throws(() => validateEndpointRequest("adminSaveHallTimeGrid", { ...payload, maxWaitlistEntries: -1 }), { code: "VALIDATION_ERROR" });
 });
 
 test("Startseitenvertrag verwendet feste Einstiege und den Favoritenzielvertrag", () => {

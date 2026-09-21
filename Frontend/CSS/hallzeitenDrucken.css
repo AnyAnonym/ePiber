@@ -1,0 +1,26 @@
+:root { font-family: Arial, Helvetica, sans-serif; color: #17221a; background: #fff; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { width: min(100% - 2rem, 1500px); margin: 1rem auto; }
+.print-message { padding: 1rem; border: 1px solid #ccd8cf; border-radius: 10px; }
+.hall-time-print-page { overflow: visible; text-align: center; break-after: page; page-break-after: always; }
+.hall-time-print-page:last-child { break-after: auto; page-break-after: auto; }
+.hall-time-print-table { display: inline-table; width: var(--print-table-width); max-width: none; margin: 0 auto; border-collapse: collapse; table-layout: fixed; font-size: 7pt; }
+.hall-time-print-table th, .hall-time-print-table td { padding: .1rem .06rem; border: 1px solid #56665a; text-align: center; }
+.hall-time-print-table thead th { white-space: pre-line; }
+.hall-time-print-table .print-name-column { width: var(--print-name-width); }
+.hall-time-print-table .print-slot-column { width: var(--print-slot-width); }
+.hall-time-print-table .print-name { text-align: left; white-space: nowrap; }
+.hall-time-print-table .print-slot { white-space: pre-line; }
+.hall-time-print-table tbody td { white-space: nowrap; }
+.hall-time-print-table thead th { background: #e8f0ea; }
+.hall-time-print-table .is-confirmed { background: #ccebd3; color: #0d5325; font-weight: 700; }
+.hall-time-print-table .is-waitlist { background: #fff0b8; color: #664c00; font-weight: 700; }
+.hall-time-print-table .is-empty { color: #742020; }
+@page { size: landscape; margin: 10mm; }
+@media print {
+  main { width: 100%; margin: 0; }
+  .hall-time-print-table { font-size: 7pt; }
+  .hall-time-print-table .print-name-column { width: var(--print-name-width); }
+  .hall-time-print-table .print-slot-column { width: var(--print-slot-width); }
+}
