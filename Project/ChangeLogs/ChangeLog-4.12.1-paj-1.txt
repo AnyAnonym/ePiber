@@ -19,3 +19,12 @@ Commit: 4.12.1-paj-1-2 | Hallenzeiten-Historie und Monitoring erweitert
   - [Observability] Erfolgreiche Hallenzeiten-Fachereignisse erhalten die datensparsame Loki-Projektion `hall_time_history_recorded`; Zielpersonen erscheinen dort nur als ID. Prometheus liefert aktuelle Raster-, Kapazitaets-, Belegungs-, Wartelisten- und Historiengauges.
   - [Grafana] Das neue Dashboard `ePiber Hallenreservierung` kombiniert aktuelle Prometheus-Zustaende mit 14 Tagen Loki-Aktivitaet, Neuverteilungssummen und problematischen Schreibausgaengen.
   - [Tests] Zusaetzliche Service-, Metrik-, Dashboard- und Browsertests pruefen Batchdeltas, das 10000er-Limit, datensparsame Projektionen und die sichtbare Neuverteilungszusammenfassung.
+
+[4.12.1-paj-1-3] - 2026-09-22
+Commit: 4.12.1-paj-1-3 | Chat-Assistent mit Vector-RAG geplant
+
+  Added
+  - [Planung] Nicht-kanonische Arbeitsgrundlage fuer den fachlichen Chat-Assistenten mit Hybrid-/Vector-RAG, Azure-Spracheingabe, PostgreSQL-Protokollierung, kontrollierten Live-Daten-Tools und getrennter OpenCode-Administrationsschiene unter `Project/2do/` ergaenzt.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.1-paj-1-2-x` gesetzt.
