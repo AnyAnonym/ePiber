@@ -46,10 +46,10 @@ test("Hallenzeiten-Meldungen projizieren den kontrollierten Rasterkontext", asyn
   });
 
   const listEntry = service.messages({ id: "p2" }, { limit: 10 }).messages[0];
-  assert.equal(listEntry.competitionName, "Hallenzeit „der Piber reserviert“ informiert");
+  assert.equal(listEntry.competitionName, "Hallenzeit „der Piber reserviert“");
   assert.equal(listEntry.subject, "Du wurdest angemeldet");
   const detail = service.message({ id: "p2" }, created.id).message;
-  assert.equal(detail.competitionName, "Hallenzeit „der Piber reserviert“ informiert");
+  assert.equal(detail.competitionName, "Hallenzeit „der Piber reserviert“");
   assert.equal(Object.hasOwn(detail, "contextName"), false);
   repository.close();
 });

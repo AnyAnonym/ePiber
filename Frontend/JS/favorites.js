@@ -40,6 +40,13 @@ let competitionGeneration = 0;
 let mutationQueue = Promise.resolve();
 let competitionNames = new Map();
 let hallTimeNames = new Map();
+let unreadMessageCount = 0;
+
+const OVERLAY_LABELS = Object.freeze({
+  "match-result": "Spieleingabe",
+  "match-appointment": "Termin festlegen / ändern",
+  profile: "Profil",
+});
 
 function notify() {
   const snapshot = favoriteSnapshot();
@@ -249,7 +256,10 @@ export function favoriteVisibleForUser(target, user = getUser()) {
 }
 
 export function favoriteLabel(target) {
-  if (target?.type === "overlay") return target.overlay === "match-result" ? "Spieleingabe" : "Termin festlegen / ändern";
+  if (target?.type === "overlay") {
+    if (target.overlay === "profile-messages") return `Meldungen (${unreadMessageCount})`;
+    return OVERLAY_LABELS[target.overlay] || "Aktion";
+  }
   if (target?.page === "Bewerbe" && target?.params?.history === "all") return "Historie aller Bewerbe";
   if (target?.page === "Bewerbe" && target?.params?.history === "competition") {
     const competitionName = competitionNames.get(String(target.params.id || ""));
@@ -259,6 +269,10 @@ export function favoriteLabel(target) {
   const base = PAGE_LABELS[target?.page] || "Seite";
   const id = target?.params?.id;
   return id ? competitionNames.get(String(id)) || base : base;
+}
+
+export function favoriteHasUnreadMessages(target) {
+  return target?.type === "overlay" && target.overlay === "profile-messages" && unreadMessageCount > 0;
 }
 
 export function favoriteHref(target) {
@@ -345,5 +359,12 @@ channel?.addEventListener("message", (event) => {
 
 subscribe("bewerbe", () => loadCompetitionNames());
 subscribe("hall-times", () => loadCompetitionNames());
+
+window.addEventListener("epiber-message-summary", (event) => {
+  const nextCount = Math.max(0, Number(event.detail?.unreadCount) || 0);
+  if (nextCount === unreadMessageCount) return;
+  unreadMessageCount = nextCount;
+  notify();
+});
 
 mountPageFavorite();

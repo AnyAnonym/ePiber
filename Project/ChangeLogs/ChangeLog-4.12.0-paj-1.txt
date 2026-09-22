@@ -31,3 +31,14 @@ Commit: 4.12.0-paj-1-4 | Hallenzeiten-Meldungen präzisiert
   - [Backend] Persoenliche Hallenzeiten-Meldungen speichern den kontrollierten Rasterkontext und verwenden aktionsbezogene Betreffe fuer Anmeldung, Abmeldung, Wartelistenaufnahme, Wartelistenentfernung und Nachruecken; Schema 12 uebernimmt Kontext und Aktion auch fuer bekannte bestehende Hallenzeiten-Meldungen.
   - [Frontend] Meldungsliste und Detailoverlay bezeichnen Hallenzeiten dynamisch als `Hallenzeit „<Rastername>“ informiert` statt als allgemeine Meldung.
   - [Tests] Fach-, Migrations-, Projektions- und Browsertests sichern Rasterkontext und alle aktionsbezogenen Hallenzeiten-Betreffe ab.
+
+[4.12.0-paj-1-5] - 2026-09-22
+Commit: 4.12.0-paj-1-5 | Profil- und Meldungsfavoriten ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.0-paj-1-4-x` gesetzt.
+  - [Frontend] Hallenzeiten-Meldungen verwenden die kuerzere Kategorie `Hallenzeit „<Rastername>“` ohne den Zusatz `informiert`.
+  - [Frontend] Eigenes Profil und der Meldungsreiter koennen ueber eigene Sterne als kontrollierte Overlayziele favorisiert und direkt geoeffnet werden; der Meldungsstern steht oberhalb der nach unten rueckenden Liste.
+  - [Frontend] Der Meldungsfavorit zeigt die aktuelle ungelesene Anzahl als `Meldungen (N)` und hebt bei offenen Meldungen die gesamte Favoritenzeile gegenueber den normalgewichtigen Eintraegen deutlich fett hervor.
+  - [Frontend] Profil- und Meldungsfavoriten oeffnen ihr Overlay samt Ladezustand ohne asynchronen Zwischenframe ueber der zuvor sichtbaren Favoritenansicht.
+  - [Tests] Vertrags-, Projektions- und Browsertests decken die neuen Profilfavoriten, die dynamische Meldungsanzahl und die gekuerzte Hallenzeiten-Kategorie ab.

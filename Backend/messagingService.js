@@ -903,7 +903,7 @@ class MessagingService {
   messageCategoryName(message) {
     if (HALL_TIME_MESSAGE_TYPES.has(message.type)) {
       const name = String(message.contextName || "").trim();
-      return name ? `Hallenzeit „${name}“ informiert` : "Hallenzeit informiert";
+      return name ? `Hallenzeit „${name}“` : "Hallenzeit";
     }
     return this.competitionName(message.competitionId);
   }
