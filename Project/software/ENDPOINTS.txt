@@ -630,7 +630,7 @@ AUTHENTICATED (player, operator oder admin):
       Liefert `{ success, favorites, revision, updatedAt }` fuer den aktuellen
       Benutzer. Jedes Ziel besitzt eine serverseitig abgeleitete `targetId` und
       ist entweder `{ type:"page", page, params? }` oder
-      `{ type:"overlay", overlay:"match-result|match-appointment" }`.
+      `{ type:"overlay", overlay:"match-result|match-appointment|profile|profile-messages" }`.
       Auf `monitor.html` darf dieser Endpoint trotz Geraeteprincipal gezielt die
       parallel vorhandene gueltige Benutzersitzung verwenden; alle Monitor-RPCs
       bleiben unveraendert an das Geraet gebunden.
@@ -675,7 +675,8 @@ AUTHENTICATED (player, operator oder admin):
       Erstellungszeit, `competitionName`, den optional aus `BewerbRunde`
       kontrolliert bezeichneten `roundName`, `actorName`, Betreff und
       Bestaetigungszeit. Der kontrollierte `competitionName` lautet bei keiner
-      Bewerbszuordnung `Allgemeine Meldung`. Ungelesene Meldungen stehen vor
+      Bewerbszuordnung `Allgemeine Meldung`; Hallenzeiten-Projektionen verwenden
+      stattdessen `Hallenzeit „<Rastername>“`. Ungelesene Meldungen stehen vor
       gelesenen; innerhalb beider Gruppen gilt Erstellungszeit und ID absteigend.
       Ein Cursor ist an den aktuellen Empfaenger gebunden. Fachliche
       Eigenaktivitaeten bleiben als bereits bestaetigte Meldung sichtbar und

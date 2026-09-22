@@ -22,6 +22,11 @@ body {
   background: var(--paper);
 }
 
+.personal-start-loading { display: none; }
+.dashboard-page.personal-start-pending { overflow: hidden; }
+.dashboard-page.personal-start-pending > :is(#header-container, #mobile-nav-container, .club-dashboard, #footer-container, .app-shift-layer) { visibility: hidden; }
+.dashboard-page.personal-start-pending > .personal-start-loading { display: grid; }
+
 .club-dashboard a { color: inherit; }
 
 .dashboard-page #header-container header {

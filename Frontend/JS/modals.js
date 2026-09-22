@@ -14,7 +14,7 @@ import {
   subscribeAuth,
 } from "./authClient.js";
 import { diagnostic } from "./diagnostics.js";
-import { createFavoriteButton, favoriteLabel, favoriteVisibleForUser, subscribeFavorites } from "./favorites.js";
+import { createFavoriteButton, favoriteLabel, favoriteVisibleForUser, refreshFavoriteButtons, subscribeFavorites } from "./favorites.js";
 import { createMaterialSymbol } from "./materialSymbols.js";
 import { categorizedProfileCompetitions, clearProfileModalContent, mergedProfileCompetitions } from "./profileModalState.js";
 import { showLoadingOverlay, hideLoadingOverlay } from "./loadingHelper.js";
@@ -306,7 +306,10 @@ const adminPasswordModal = createModal("adminPasswordModal", `
 `, { explicitDismiss: true });
 
 const profileModal = createModal("profileModal", `
-  <h2 id="profileName">Profil</h2>
+  <div class="profile-title-row">
+    <h2 id="profileName">Profil</h2>
+    <span id="profileFavoriteAnchor"></span>
+  </div>
   <div id="profileTabs" class="profile-tabs" role="tablist" aria-label="Profilbereiche"></div>
   <div id="profileCurrentCompetitionTabs" class="profile-tabs profile-competition-tabs" role="tablist" aria-label="Aktuelle Bewerbe" hidden></div>
   <div id="profileArchiveCompetitionTabs" class="profile-tabs profile-competition-tabs" role="tablist" aria-label="Archivierte Bewerbe" hidden></div>
@@ -327,6 +330,15 @@ profileModal.classList.add("profile-modal");
 profileModal.setAttribute("role", "dialog");
 profileModal.setAttribute("aria-modal", "true");
 profileModal.setAttribute("aria-labelledby", "profileName");
+const profileFavoriteStar = createFavoriteButton(
+  () => profileModal.dataset.profileScope === "private" ? { type: "overlay", overlay: "profile" } : null,
+  { className: "profile-favorite-star" },
+);
+document.getElementById("profileFavoriteAnchor").appendChild(profileFavoriteStar);
+const messagesFavoriteStar = createFavoriteButton(
+  { type: "overlay", overlay: "profile-messages" },
+  { className: "profile-messages-favorite-star" },
+);
 profileModal.querySelector(".modal-content")?.classList.add("profile-dialog");
 profileModal.querySelector(".close")?.setAttribute("aria-label", "Profil schließen");
 
@@ -1713,6 +1725,9 @@ function updateAcknowledgeAllButton() {
 
 function prepareMessagesPanel(panel, signal) {
   panel.replaceChildren();
+  const favoriteRow = document.createElement("div");
+  favoriteRow.className = "profile-messages-favorite-row";
+  favoriteRow.appendChild(messagesFavoriteStar);
   const scroll = document.createElement("div");
   scroll.id = "profileMessagesScroll";
   scroll.className = "profile-messages-scroll";
@@ -1730,7 +1745,7 @@ function prepareMessagesPanel(panel, signal) {
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   actions.append(button, status);
-  panel.append(scroll, actions);
+  panel.append(favoriteRow, scroll, actions);
 }
 
 function renderMessageList({ append = false } = {}) {
@@ -2036,6 +2051,7 @@ window.openProfileModal = async (options = {}) => {
   profileActionController = new AbortController();
   const actionSignal = profileActionController.signal;
   profileModal.dataset.profileScope = ownProfile ? "private" : "public";
+  refreshFavoriteButtons();
   nameElement.textContent = "Lade Profil...";
   textElement.textContent = "";
   tabsElement.replaceChildren();
@@ -2283,6 +2299,11 @@ window.openProfileModal = async (options = {}) => {
           if (!messageState?.loaded) loadMessages();
         },
       );
+      if (options.initialTab === "messages") {
+        activateProfileTab(messageState.tab);
+        hideCompetitionTabs();
+        loadMessages();
+      }
     }
     const currentCategoryTab = appendProfileTab(
       tabsElement,
@@ -2336,6 +2357,21 @@ window.openProfileModal = async (options = {}) => {
       });
     }
   }
+};
+
+window.openFavoriteOverlay = async (overlay) => {
+  if (["match-result", "match-appointment"].includes(overlay)) {
+    await window.openFavoriteMatchAction(overlay);
+    return;
+  }
+  if (!["profile", "profile-messages"].includes(overlay)) return;
+  if (!getUser()) await ready;
+  if (!getUser()) {
+    window.showToast("Bitte zuerst anmelden.", "error");
+    window.openLoginModal();
+    return;
+  }
+  return window.openProfileModal({ initialTab: overlay === "profile-messages" ? "messages" : "system" });
 };
 
 window.addEventListener("epiber-message-summary", (event) => {
@@ -2467,7 +2503,6 @@ document.getElementById("loginForm").addEventListener("submit", async (event) =>
     await login(loginName, password);
     form.reset();
     closeModal(loginModal);
-    window.showToast("Erfolgreich angemeldet.", "success");
     navigateToPersonalStart().catch(() => {});
   } catch (error) {
     diagnostic.error("login_failed", error);
@@ -2936,7 +2971,6 @@ document.addEventListener("click", async (event) => {
     await endSession();
     closeModal(passwordModal);
     closeModal(adminPasswordModal);
-    window.showToast("Erfolgreich abgemeldet.", "success");
   } catch (error) {
     diagnostic.error("logout_failed", error);
     window.showToast(errorMessage(error, "Abmeldung fehlgeschlagen."), "error");
@@ -3002,8 +3036,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 const requestedFavoriteOverlay = new URLSearchParams(window.location.search).get("favoriteOverlay");
-if (["match-result", "match-appointment"].includes(requestedFavoriteOverlay)) {
+if (["match-result", "match-appointment", "profile", "profile-messages"].includes(requestedFavoriteOverlay)) {
   ready.then(() => {
-    if (getUser()) window.openFavoriteMatchAction(requestedFavoriteOverlay);
+    if (getUser()) window.openFavoriteOverlay(requestedFavoriteOverlay);
   });
 }

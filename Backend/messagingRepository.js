@@ -4,7 +4,7 @@ const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 const { AppError } = require("./errors.js");
 
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 class MessagingRepository {
   constructor(filename, { now = Date.now, log = () => {} } = {}) {
@@ -73,12 +73,12 @@ class MessagingRepository {
       this.migrateV9();
     } else if (version === 9) {
       this.migrateV9();
-    } else if (![10, SCHEMA_VERSION].includes(version)) {
+    } else if (![10, 11, SCHEMA_VERSION].includes(version)) {
       throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     }
-    const migratedVersion = Number(this.db.prepare("PRAGMA user_version").get().user_version);
-    if (migratedVersion === 10) this.migrateV10();
-    else if (migratedVersion !== SCHEMA_VERSION) throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
+    if (Number(this.db.prepare("PRAGMA user_version").get().user_version) === 10) this.migrateV10();
+    if (Number(this.db.prepare("PRAGMA user_version").get().user_version) === 11) this.migrateV11();
+    if (Number(this.db.prepare("PRAGMA user_version").get().user_version) !== SCHEMA_VERSION) throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     if (this.filename !== ":memory:") fs.chmodSync(this.filename, 0o600);
   }
 
@@ -197,7 +197,7 @@ class MessagingRepository {
         revision INTEGER NOT NULL
       );
       INSERT OR IGNORE INTO competition_history_revision(singleton, revision) VALUES (1, 0);
-      PRAGMA user_version = 11;
+      PRAGMA user_version = 12;
     `);
   }
 
@@ -483,6 +483,62 @@ class MessagingRepository {
     } catch {}
   }
 
+  migrateV11() {
+    this.db.exec("BEGIN IMMEDIATE");
+    let contextCount = 0;
+    let subjectCount = 0;
+    try {
+      const events = this.db.prepare(`
+        SELECT event_id, event_type, summary
+        FROM competition_events
+        WHERE event_type IN ('hall_time_booking_changed', 'hall_time_promotion') AND detail = ''
+      `).all();
+      const updateContext = this.db.prepare("UPDATE competition_events SET detail = ? WHERE event_id = ?");
+      const participants = this.db.prepare("SELECT user_id, projection_type, subject, body FROM event_participants WHERE event_id = ?");
+      const updateSubject = this.db.prepare("UPDATE event_participants SET subject = ? WHERE event_id = ? AND user_id = ?");
+      const revise = this.db.prepare("INSERT INTO messaging_revisions(user_id, revision) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET revision = revision + 1");
+      const affectedUsers = new Set();
+
+      for (const event of events) {
+        const prefix = event.event_type === "hall_time_promotion" ? "Fixplatz in " : "Änderung in ";
+        if (event.summary.startsWith(prefix)) {
+          const contextName = event.summary.slice(prefix.length).trim();
+          if (contextName) {
+            updateContext.run(contextName, event.event_id);
+            contextCount += 1;
+          }
+        }
+        for (const participant of participants.all(event.event_id)) {
+          let subject = "";
+          if (participant.projection_type === "hall_time_promotion") subject = "Du bist auf einen Fixplatz nachgerückt";
+          else if (participant.projection_type === "hall_time_booking_changed" && participant.subject.startsWith("Änderung in ")) {
+            if (participant.body.endsWith(" von der Warteliste entfernt.")) subject = "Du wurdest von der Warteliste entfernt";
+            else if (participant.body.endsWith(" abgemeldet.")) subject = "Du wurdest abgemeldet";
+            else if (participant.body.endsWith(" auf die Warteliste gesetzt.")) subject = "Du wurdest auf die Warteliste gesetzt";
+            else if (participant.body.endsWith(" eingetragen.")) subject = "Du wurdest angemeldet";
+          }
+          if (!subject || subject === participant.subject) continue;
+          updateSubject.run(subject, event.event_id, participant.user_id);
+          affectedUsers.add(participant.user_id);
+          subjectCount += 1;
+        }
+      }
+      for (const userId of affectedUsers) revise.run(userId);
+      this.db.exec("PRAGMA user_version = 12; COMMIT");
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+    try {
+      this.log("info", "messaging_schema_migration_completed", {
+        fromVersion: 11,
+        toVersion: 12,
+        hallTimeContextCount: contextCount,
+        hallTimeSubjectCount: subjectCount,
+      });
+    } catch {}
+  }
+
   migrateV1() {
     this.db.exec("PRAGMA foreign_keys = OFF");
     try {
@@ -636,6 +692,7 @@ class MessagingRepository {
       id: row.message_id, eventId: row.event_id, competitionId: row.competition_id || null, recipient: row.user_id,
       participantRole: row.participant_role, displayName: row.display_name, createdAt: Number(row.created_at), subject: row.subject, body: row.body,
       type: row.projection_type, eventType: row.event_type, source: row.source, sourceId: row.source_id, actor: row.actor_id, actorName: row.actor_name,
+      contextName: row.detail,
       acknowledgedAt: row.acknowledged_at === null ? null : Number(row.acknowledged_at),
       deliveries: deliveries.map((entry) => ({ channel: entry.channel, status: entry.status, updatedAt: Number(entry.updated_at) })),
     };

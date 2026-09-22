@@ -138,7 +138,7 @@ test("MessagingRepository migriert v1, gruppiert nur exakte Matchquellen und rei
 
   const repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 11);
+  assert.equal(repository.status().schemaVersion, 12);
   assert.equal(repository.status().eventCount, 2);
   const migratedEventId = repository.getForRecipient("p1", "legacy-challenger").eventId;
   assert.equal(migratedEventId, repository.getForRecipient("p2", "legacy-opponent").eventId);
@@ -280,7 +280,7 @@ test("MessagingRepository migriert Schema 8 mit bestehenden Kommentaren auf Komm
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 11);
+  assert.equal(repository.status().schemaVersion, 12);
   assert.equal(repository.getForRecipient("p2", "before-v9").body, "Private body");
   assert.equal(repository.pageComments("event-before-v9").comments[0].body, "Bestehender Kommentar");
   assert.deepEqual(repository.commentReactionSummaries([comment.commentId], "p2").get(comment.commentId), { reactionTotal: 0, reactions: [], myReaction: null });
@@ -303,7 +303,7 @@ test("MessagingRepository migriert Schema 9 mit unveraenderten Bestandsmeldungen
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 11);
+  assert.equal(repository.status().schemaVersion, 12);
   assert.equal(repository.getForRecipient("p2", "before-v10").body, "Private body");
   assert.equal(repository.summary("p2").unreadCount, 1);
   repository.close();
@@ -333,18 +333,25 @@ test("MessagingRepository migriert ungelesene Forderer-Eigenmeldungen auf Schema
   repository = new MessagingRepository(filename, { now: () => 500, log: (level, event, fields) => logs.push({ level, event, fields }) });
   repository.init();
 
-  assert.equal(repository.status().schemaVersion, 11);
+  assert.equal(repository.status().schemaVersion, 12);
   assert.equal(repository.getForRecipient("p1", "message-old-confirmation").acknowledgedAt, 123);
   assert.equal(repository.getForRecipient("p2", "message-old-challenge").acknowledgedAt, null);
   assert.deepEqual(repository.summary("p1"), { revision: 2, totalCount: 1, unreadCount: 0 });
   assert.deepEqual(repository.summary("p2"), { revision: 1, totalCount: 1, unreadCount: 1 });
   assert.equal(repository.getForRecipient("p1", "message-old-confirmation").deliveries.find(({ channel }) => channel === "Email").status, "not_configured");
   assert.equal(repository.getForRecipient("p2", "message-old-challenge").deliveries.find(({ channel }) => channel === "Email").status, "pending");
-  assert.deepEqual(logs, [{
-    level: "info",
-    event: "messaging_schema_migration_completed",
-    fields: { fromVersion: 10, toVersion: 11, acknowledgedActorReceipts: 1, suppressedPendingDeliveries: 1 },
-  }]);
+  assert.deepEqual(logs, [
+    {
+      level: "info",
+      event: "messaging_schema_migration_completed",
+      fields: { fromVersion: 10, toVersion: 11, acknowledgedActorReceipts: 1, suppressedPendingDeliveries: 1 },
+    },
+    {
+      level: "info",
+      event: "messaging_schema_migration_completed",
+      fields: { fromVersion: 11, toVersion: 12, hallTimeContextCount: 0, hallTimeSubjectCount: 0 },
+    },
+  ]);
   repository.close();
 });
 
@@ -362,7 +369,7 @@ test("MessagingRepository migriert Schema 3 additiv auf das Ergebnisfeld", (t) =
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 11);
+  assert.equal(repository.status().schemaVersion, 12);
   assert.equal(repository.getForRecipient("p2", "before-v4").subject, "Private subject");
   assert.equal(repository.getEvent("before-v4").result, "");
   repository.close();
@@ -420,7 +427,7 @@ test("MessagingRepository migriert Schema 4 mit Datenbestand auf den globalen Ze
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 11);
+  assert.equal(repository.status().schemaVersion, 12);
   assert.equal(repository.getForRecipient("p2", "before-v5").subject, "Private subject");
   assert.equal(repository.db.prepare("PRAGMA index_list('competition_events')").all().some(({ name }) => name === "competition_events_created"), true);
   repository.close();
@@ -453,7 +460,7 @@ test("MessagingRepository migriert bestehende Walkover- und Aufgabe-Texte", (t) 
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 11);
+  assert.equal(repository.status().schemaVersion, 12);
   assert.equal(repository.getForRecipient("p1", "walkover-old-message").body, "Du gewinnst durch W.O. von Peter Player.");
   assert.equal(repository.getForRecipient("p4", "walkover-old-loser-message").body, "Du verlierst durch W.O.");
   assert.equal(repository.getEvent("walkover-old").summary, "Ada Aufschlag gewinnt durch W.O. von Peter Player.");
@@ -464,5 +471,45 @@ test("MessagingRepository migriert bestehende Walkover- und Aufgabe-Texte", (t) 
   assert.equal(repository.getEvent("retirement-old").detail, "Ergebnis: 6-4/2-1 (Aufgabe); Grund: Korrektur");
   assert.equal(repository.getForRecipient("p3", "retirement-empty-old-message").body, "Du gewinnst das Match gegen Peter Player. Ergebnis: (Aufgabe).");
   assert.equal(repository.getEvent("retirement-empty-old").result, "(Aufgabe)");
+  repository.close();
+});
+
+test("MessagingRepository migriert bestehende Hallenzeiten-Kontexte und Betreffe", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-messaging-v11-"));
+  const filename = path.join(directory, "messaging.sqlite");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let repository = new MessagingRepository(filename);
+  repository.init();
+  const oldMessages = [
+    ["registered", "p1", "hall_time_booking_changed", "Änderung in der Piber reserviert", "Spieler Eins hat dich für den Termin am 01.01.2027 von 18:00 bis 20:00 eingetragen."],
+    ["unregistered", "p2", "hall_time_booking_changed", "Änderung in der Piber reserviert", "Spieler Eins hat dich für den Termin am 01.01.2027 von 18:00 bis 20:00 abgemeldet."],
+    ["waitlisted", "p3", "hall_time_booking_changed", "Änderung in Freitag Doppel", "Spieler Eins hat dich für den Termin am 01.01.2027 von 18:00 bis 20:00 auf die Warteliste gesetzt."],
+    ["waitlist-removed", "p4", "hall_time_booking_changed", "Änderung in Freitag Doppel", "Spieler Eins hat dich für den Termin am 01.01.2027 von 18:00 bis 20:00 von der Warteliste entfernt."],
+    ["promoted", "p5", "hall_time_promotion", "Fixplatz in Freitag Doppel", "Du bist für den Termin am 01.01.2027 von der Warteliste auf einen Fixplatz nachgerückt."],
+  ];
+  for (const [id, userId, type, subject, body] of oldMessages) {
+    repository.ensureEvent({ id, createdAt: 10, type, source: "match", sourceId: `slot-${id}`, actorId: "actor", summary: subject, detail: "" }, [{
+      userId, role: "recipient", messageId: `message-${id}`, type, subject, body,
+      deliveries: [{ channel: "Inbox", status: "delivered" }],
+    }]);
+  }
+  repository.close();
+  const db = new DatabaseSync(filename);
+  db.exec("PRAGMA user_version = 11;");
+  db.close();
+
+  repository = new MessagingRepository(filename);
+  repository.init();
+  assert.equal(repository.status().schemaVersion, 12);
+  assert.deepEqual(oldMessages.map(([id, userId]) => {
+    const migrated = repository.getForRecipient(userId, `message-${id}`);
+    return [migrated.contextName, migrated.subject];
+  }), [
+    ["der Piber reserviert", "Du wurdest angemeldet"],
+    ["der Piber reserviert", "Du wurdest abgemeldet"],
+    ["Freitag Doppel", "Du wurdest auf die Warteliste gesetzt"],
+    ["Freitag Doppel", "Du wurdest von der Warteliste entfernt"],
+    ["Freitag Doppel", "Du bist auf einen Fixplatz nachgerückt"],
+  ]);
   repository.close();
 });

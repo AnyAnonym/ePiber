@@ -61,6 +61,9 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   aktive Anmeldesperre nennt anhand der serverseitigen Restdauer die gerundete
   Wartezeit in Minuten. Die Meldung bleibt bis zum naechsten Versuch oder bis zum
   Schliessen des Dialogs sichtbar.
+  Erfolgreiche An- und Abmeldungen wechseln Sitzung und Ansicht ohne zusaetzlichen
+  Erfolgstoast; Fehlerhinweise und andere persoenliche Meldungen bleiben davon
+  unberuehrt.
 
   Im Login kann eine zuvor vom Administrator freigegebene Person ueber
   `Passwort vergessen / Neueingabe` mit Login und zweimaligem neuen Passwort den
@@ -87,6 +90,11 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   wieder her; sie navigiert nicht unmittelbar vom Profil weg. Ein als Favorit
   gespeichertes Dashboard wird in dieser Auswahl nicht zusaetzlich zum festen
   Dashboardeintrag dupliziert.
+  Neben dem Namen des eigenen Profils steht ein Favoritenstern fuer das direkte
+  Profilziel. Der Meldungsreiter besitzt rechts oben im Inhaltsbereich einen
+  eigenen Stern; die Meldungsliste beginnt darunter. Sein Favorit heisst
+  `Meldungen (N)`, oeffnet direkt diesen Reiter und wird bei ungelesenen Meldungen
+  in der Favoritenliste vollstaendig fett dargestellt.
 
 -- Layout und Bereitschaft --
   Der gruene Header bleibt die gemeinsame Desktop- und Mobilnavigation. Darunter
@@ -141,7 +149,8 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   vor den nach rechts rueckenden Zielicons. Pointerziehen und Pfeiltasten aendern
   die revisionsgeschuetzt gespeicherte Reihenfolge. Die Overlayfavoriten
   `Spieleingabe` und `Termin festlegen / aendern` zeigen zuerst ausschliesslich
-  eigene offene Matches mit dem jeweiligen serverseitigen Aktionsrecht. Das
+  eigene offene Matches mit dem jeweiligen serverseitigen Aktionsrecht; `Profil`
+  und `Meldungen` oeffnen die entsprechenden eigenen Profilbereiche direkt. Das
   Dashboard bleibt als fester Menueeintrag und kann zusaetzlich ueber den Stern
   neben `Der Piber gruesst` favorisiert werden. Sein Favoritenlink verwendet
   `index.html?dashboard=1`, damit eine persoenliche Favoriten-Startseite bewusst
@@ -156,7 +165,10 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   optionale Installation als `ePiber Tennis` mit Start auf `/` an. `/`,
   `/index.html`, der Header-Vereinsname und eine erfolgreiche Anmeldung loesen
   fuer angemeldete Benutzer das kontogebundene Startziel auf; anonym bleibt das
-  Dashboard aktiv. Bewusste Dashboard-Links verwenden `dashboard=1`; andere
+  Dashboard aktiv. Bis die persoenliche Zielaufloesung abgeschlossen ist, bleiben
+  Dashboardinhalte verdeckt und ein neutraler Ladespinner sichtbar; vor einer
+  Weiterleitung zu `favorites.html` blitzt dadurch kein Dashboard auf. Bewusste
+  Dashboard-Links verwenden `dashboard=1` und umgehen diese Aufloesung; andere
   direkte Seitenlinks werden nicht umgeleitet. Die
   gemeinsame gruene Primaerfarbe `#176b4a` gilt fuer Header, Navigation,
   Hauptaktionen und Browserleiste. Die installierte Variante bleibt vollstaendig
@@ -169,5 +181,8 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   Browserereignis `dashboard_birthdays_load_failed` fuer den bekannten Seitentyp
   `index`; die Diagnose enthaelt keine Mitgliederdaten.
 
-  Keine URL-Parameter. rankingSidebar.js und SDK.js werden nicht mehr verwendet;
-  die WebSocket-Verbindung wird bei Bedarf same-origin durch dataClient aufgebaut.
+  URL-Parameter: `dashboard=1` fuer den ausdruecklichen Dashboardaufruf sowie
+  intern `favoriteOverlay=match-result|match-appointment|profile|profile-messages`
+  fuer kontrollierte Overlay-Startziele. rankingSidebar.js und SDK.js werden nicht
+  mehr verwendet; die WebSocket-Verbindung wird bei Bedarf same-origin durch
+  dataClient aufgebaut.

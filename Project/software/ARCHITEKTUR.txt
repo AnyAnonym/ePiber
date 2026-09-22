@@ -644,7 +644,10 @@ Fachhistorien und Betriebslogs:
     ein fehlendes KO-Folgematch bleiben davon getrennte kenntnisnahmepflichtige
     Meldungen.
     Messaging-Schema 11 quittiert bestehende ungelesene Forderer-Eigenmeldungen
-    und unterbindet deren noch ausstehende externe Selbstzustellung. Schema 6
+    und unterbindet deren noch ausstehende externe Selbstzustellung. Schema 12
+    uebernimmt fuer kontrolliert erkannte bestehende Hallenzeiten-Meldungen den
+    Rasterkontext und den aktionsbezogenen Betreff und erhoeht die betroffenen
+    persoenlichen Revisionen. Schema 6
     migriert bereits persistierte Ergebnisereignisse mit den
     kontrollierten alten Detailpraefixen `Abschlussart: walkover|retirement`.
     Schema 7 stellt kontrolliert erkannte Walkover-Inboxtexte auf
@@ -1106,21 +1109,28 @@ dem Gruppenchevron oeffnet sie und aktiviert den Sortiermodus. Dann steht links
 anstelle der bisherigen Symbolposition ein tastatur- und pointerbedienbarer
 Drei-Striche-Handle; das Zielicon rueckt nach rechts. Die Reihenfolge wird als
 vollstaendige Liste revisionsgeschuetzt gespeichert. Seitensterne stehen mit
-kleinem Abstand vertikal mittig direkt neben der Hauptueberschrift, beim
-Scoreboard rechts oben im Feld von Platz 1;
-Ergebnis- und Terminmodal zeigen den Stern rechts neben ihrem Titel.
-Sponsorenanzeige, technische Court-Testseite und Profilmodal besitzen keinen
-Stern. Der Stern besteht aus einem einzelnen schwarz umrandeten Pfad und ist
-inaktiv innen weiss sowie aktiv vollstaendig gelb. Das Dashboard bleibt fester
-Menueeintrag und ist kein Favoritenziel. Bewerbsbezogene Ziele werden ueber den
-oeffentlichen `bewerbe`-Stand auf ihre Bezeichnung projiziert; technische IDs
-werden nie als Beschriftung dargestellt. Lange Bezeichnungen sind visuell auf
-zwei Zeilen begrenzt, bleiben aber als zugaengliche Beschriftung und Tooltip
-vollstaendig erhalten. Fehler der Namensprojektion erzeugen ausschliesslich das
-kontrollierte Browserereignis `favorite_labels_load_failed` ohne Bewerbsdaten.
-Overlayfavoriten laden ausschliesslich eigene offene Matches aus
-`myProfile` und verwenden danach die vorhandenen serverautorisierten Ergebnis-
-beziehungsweise Terminaktionen.
+  kleinem Abstand vertikal mittig direkt neben der Hauptueberschrift, beim
+  Scoreboard rechts oben im Feld von Platz 1;
+  Ergebnis- und Terminmodal zeigen den Stern rechts neben ihrem Titel. Das eigene
+  Profil zeigt einen Stern neben dem Namen und der Meldungsreiter einen weiteren
+  rechts oben vor der Liste; fremde Profile, Sponsorenanzeige und technische
+  Court-Testseite besitzen keinen Stern. Der Stern besteht aus einem einzelnen
+  schwarz umrandeten Pfad und ist inaktiv innen weiss sowie aktiv vollstaendig
+  gelb. Das Dashboard bleibt fester Menueeintrag und kann zusaetzlich als
+  explizites `dashboard=1`-Ziel favorisiert werden. Bewerbsbezogene Ziele werden
+  ueber den oeffentlichen `bewerbe`-Stand auf ihre Bezeichnung projiziert;
+  technische IDs werden nie als Beschriftung dargestellt. Lange Bezeichnungen
+  sind visuell auf zwei Zeilen begrenzt, bleiben aber als zugaengliche
+  Beschriftung und Tooltip
+  vollstaendig erhalten. `Meldungen (N)` bezieht seine ungelesene Anzahl aus der
+  bestehenden privaten Meldungszusammenfassung und rendert die gesamte Zeile bei
+  `N > 0` fett. Fehler der Namensprojektion erzeugen ausschliesslich das
+  kontrollierte Browserereignis `favorite_labels_load_failed` ohne Bewerbsdaten.
+  Overlayfavoriten fuer Ergebnis und Termin laden ausschliesslich eigene offene
+  Matches aus `myProfile` und verwenden danach die vorhandenen serverautorisierten
+  Aktionen. Die Overlayfavoriten `profile` und `profile-messages` oeffnen das
+  eigene Profil beziehungsweise direkt dessen Meldungsreiter; Modal und
+  Ladezustand entstehen im selben Klick-Zyklus ohne sichtbaren Zwischenframe.
 Die eigenstaendige Seite `favorites.html` rendert dieselbe kontogebundene Liste
 mit denselben Symbolen, Beschriftungen und Overlayaktionen. Ihr Stift sortiert
 nicht separat, sondern schreibt ueber `setMyFavorites` dieselbe Reihenfolge wie
@@ -1131,10 +1141,12 @@ Das Eigenprofil besitzt nach `System`, `Meldungen`, `Aktuell` und `Archiv` den
 Reiter `Einstellungen`. Die Auswahl `Meine Startseite` speichert ohne separaten
 Button Dashboard, Favoritenseite oder eine Kopie eines vorhandenen Favoritenziels
 revisioniert ueber `setMyStartPage`; ein Fehler stellt die vorige Auswahl wieder
-her. Der Aufruf von `/`, das installierte App-Symbol, eine erfolgreiche Anmeldung
-und der klickbare Vereinsname im Header loesen dieses Ziel auf. Der explizite
-Menuepunkt `Dashboard` und direkte Fachlinks werden nicht umgeleitet. Anonym gilt
-weiterhin das Dashboard. Spaeter fachlich ungueltig gewordene Ziele erhalten
+  her. Der Aufruf von `/`, das installierte App-Symbol, eine erfolgreiche Anmeldung
+  und der klickbare Vereinsname im Header loesen dieses Ziel auf. Bis zum
+  feststehenden Ziel verdeckt ein neutraler Spinner den Dashboardinhalt. Der
+  explizite Menuepunkt `Dashboard` verwendet `dashboard=1` und wird ebenso wie
+  direkte Fachlinks nicht umgeleitet. Anonym gilt weiterhin das Dashboard. Spaeter
+  fachlich ungueltig gewordene Ziele erhalten
 vorerst keine eigene Erkennung oder Ausgrauung, sondern verwenden die bestehende
 Fehlerdarstellung ihrer Zielseite.
 Im selben Reiter listet `myHallTimeGroups` alle aktiven oeffentlich beitretbaren

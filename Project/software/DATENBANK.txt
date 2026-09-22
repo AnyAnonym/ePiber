@@ -508,7 +508,7 @@ und `synchronous=FULL`; es gibt keine automatische fachliche Bereinigung.
 
 `MESSAGING_FILE`, standardmaessig `messaging.sqlite` im Verzeichnis von
 `STATE_FILE`, produktiv `/var/lib/epiber-<system>/messaging.sqlite`, verwendet
-Schema 11:
+Schema 12:
 
 Tabelle `competition_events`:
   event_id PRIMARY KEY, competition_id, created_at, event_type, source,
@@ -603,6 +603,12 @@ die Verliererperspektive `Du verlierst durch W.O.`, Historienzusammenfassung und
   einmalig und beendet nur noch ausstehende externe Selbstzustellungen als
   `not_configured`. Gegnerprojektionen, bereits quittierte Eigenmeldungen und
   abgeschlossene Zustellstaende bleiben unveraendert.
+  Schema 12 uebernimmt fuer kontrolliert erkannte bestehende Hallenzeiten-
+  Meldungen den Rasterkontext aus der bisherigen Zusammenfassung in `detail` und
+  ersetzt die bekannten alten Betreffe anhand des Projektionstyps und der festen
+  Textvorlagen durch die aktionsbezogenen Betreffe fuer Anmeldung, Abmeldung,
+  Warteliste und Nachruecken. Andere Ereignisse und freie Meldungstexte bleiben
+  unveraendert; die betroffenen persoenlichen Messaging-Revisionen werden erhoeht.
 Eine einmalige
 Legacy-Zuordnung ergaenzt bei matchgebundenen Ereignissen fehlende Bewerb-IDs aus
 `Matches1`; beliebige manuelle Sheet-Aenderungen erzeugen dagegen keine

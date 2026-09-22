@@ -6,6 +6,14 @@ const explicitDashboard = new URLSearchParams(window.location.search).get("dashb
 const personalEntry = pathname.endsWith("/")
   || (pathname.endsWith("/index.html") && !explicitDashboard);
 
-if (personalEntry) {
-  ready.then(() => navigateToPersonalStart({ replace: true }));
+function showDashboard() {
+  document.body.classList.remove("personal-start-pending");
+  document.getElementById("personalStartLoading")?.remove();
 }
+
+if (personalEntry) {
+  ready
+    .then(() => navigateToPersonalStart({ replace: true }))
+    .then((navigating) => { if (!navigating) showDashboard(); })
+    .catch(showDashboard);
+} else showDashboard();

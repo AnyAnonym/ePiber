@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.0
+Stand: 4.12.1
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2516,3 +2516,40 @@ Quelle: 4.11.3-paj-1
 
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt und Paket- sowie Lockfileversion auf `4.12.0` gesetzt.
+
+[4.12.1] - 2026-09-22
+Commit: 4.12.1 | Persönlichen Einstieg und Meldungen verfeinert
+Quelle: 4.12.0-paj-1
+
+  Changed
+  - [Frontend] Erfolgreiche An- und Abmeldungen wechseln Sitzung und Ansicht ohne
+    zusaetzlichen Erfolgstoast; Fehlerhinweise und andere Meldungen bleiben
+    unveraendert.
+  - [Frontend] Die persoenliche Startseitenaufloesung verdeckt das Dashboard bis
+    zum feststehenden Ziel mit einem neutralen Spinner, waehrend anonyme und mit
+    `dashboard=1` ausdrueckliche Dashboardaufrufe direkt sichtbar bleiben.
+  - [Messaging] Hallenzeiten-Meldungen verwenden aktionsbezogene Betreffe fuer
+    Anmeldung, Abmeldung, Wartelistenaufnahme, Wartelistenentfernung und
+    Nachruecken sowie die Kategorie `Hallenzeit „<Rastername>“`.
+  - [Datenbank] Messaging-Schema 12 uebernimmt Rasterkontext und Aktionsbetreff
+    auch fuer kontrolliert erkannte bestehende Hallenzeiten-Meldungen und erhoeht
+    deren persoenliche Revision ohne freie Inhalte zu loggen.
+  - [Frontend] Das eigene Profil und sein Meldungsreiter besitzen Favoritensterne
+    und koennen als kontrollierte Overlayziele direkt geoeffnet werden; der
+    Meldungsstern steht rechts oberhalb der nach unten rueckenden Liste.
+  - [Frontend] Der Favorit `Meldungen (N)` zeigt die aktuelle ungelesene Anzahl,
+    hebt seine gesamte Zeile bei `N > 0` deutlich fett hervor und aktualisiert
+    Anzahl sowie Darstellung nach der Quittierung.
+  - [Frontend] Profil- und Meldungsfavoriten oeffnen Modal und Ladezustand im
+    selben Klick-Zyklus ohne sichtbaren Zwischenframe der bisherigen Ansicht.
+  - [Tests] Vertrags-, Fach-, Migrations-, Projektions- und Browsertests sichern
+    die neuen Meldungstexte, Profilfavoriten, dynamischen Zaehler und den
+    flackerfreien Overlayaufruf; die Kernablaeufe laufen in allen acht
+    Browserzielprofilen.
+  - [Dokumentation] Endpoint-, Datenbank-, Dashboard- und Favoritenreferenz auf
+    Startseitenaufloesung, Messaging-Schema 12 und die neuen Overlayfavoriten
+    aktualisiert.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.12.1` gesetzt.

@@ -22,9 +22,16 @@ Meine Favoriten - Persoenliche Start- und Schnellzugriffsseite
   dieselbe Beschriftung wie der entsprechende Menuefavorit. Seitenziele
   navigieren mit ihren kontrollierten Parametern; `Spieleingabe` und `Termin
   festlegen / aendern` oeffnen die vorhandene serverautorisierte Matchauswahl.
+  Die Overlayziele `Profil` und `Meldungen` oeffnen ohne sichtbaren Zwischenframe
+  das eigene Profil beziehungsweise direkt dessen Meldungsreiter samt internem
+  Ladezustand.
   Das Ziel `Dashboard` verwendet `index.html?dashboard=1` und bleibt dadurch auch
   dann direkt erreichbar, wenn `Meine Favoriten` als persoenliche Startseite
   eingestellt ist.
+  `Meldungen (N)` zeigt laufend die Anzahl ungelesener Meldungen. Bei `N > 0` ist
+  die gesamte Zeile deutlich fett, waehrend normale Favoritenzeilen
+  normalgewichtig bleiben; nach einer Quittierung werden Anzahl und Darstellung
+  ueber die bestehende Meldungsrevision aktualisiert.
   Der Stift aktiviert Drei-Striche-Handles. Pointerziehen und Pfeiltasten schreiben
   ueber `setMyFavorites` die eine gemeinsame, revisionierte Reihenfolge; eine
   getrennte Seitensortierung existiert nicht. Positionsaenderungen werden fuer

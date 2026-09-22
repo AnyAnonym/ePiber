@@ -3,6 +3,7 @@ import { createEndpoint, subscribe } from "./dataClient.js";
 import { HISTORY_ICON_PATH } from "./materialSymbols.js";
 import {
   favoriteHref,
+  favoriteHasUnreadMessages,
   favoriteLabel,
   favoriteVisibleForUser,
   reorderFavorites,
@@ -55,7 +56,11 @@ function escapeHtml(value) {
 }
 
 export function favoriteIconName(favorite) {
-  if (favorite.type === "overlay") return favorite.overlay === "match-result" ? "sports_tennis" : "description";
+  if (favorite.type === "overlay") {
+    if (favorite.overlay === "match-result") return "sports_tennis";
+    if (favorite.overlay === "profile") return "person";
+    return "description";
+  }
   if (favorite.page === "Bewerbe" && favorite.params?.history) return "history";
   return {
     index: "dashboard", Matches1: "sports_tennis", players: "person_search", Bewerbe: "swords", scoreboard: "scoreboard",
@@ -83,7 +88,8 @@ function renderMobileFavorites(favorites = []) {
           const attributes = favorite.type === "page"
             ? `href="${favoriteHref(favorite)}"`
             : `href="#" data-favorite-overlay="${favorite.overlay}"`;
-          return `<div class="mobile-nav-row mobile-nav-main-row mobile-nav-favorite" data-favorite-id="${favorite.targetId}">
+          const unreadClass = favoriteHasUnreadMessages(favorite) ? " has-unread-messages" : "";
+          return `<div class="mobile-nav-row mobile-nav-main-row mobile-nav-favorite${unreadClass}" data-favorite-id="${favorite.targetId}">
             <button class="mobile-nav-drag-handle" type="button" tabindex="-1" aria-label="${safeLabel} verschieben">${mobileNavIcon("drag_handle")}</button>
             <a ${attributes} class="mobile-nav-favorite-link" aria-label="${safeLabel}" title="${safeLabel}">
               ${mobileNavIcon(favoriteIconName(favorite), "mobile-nav-icon mobile-nav-favorite-icon")}
@@ -278,6 +284,7 @@ function createAppShiftLayer() {
     if (
       element === layer
       || element.id === "mobile-nav-container"
+      || element.id === "personalStartLoading"
       || element.tagName === "SCRIPT"
       || element.matches(".modal, .diagnostic-mode-notice, .toast-container")
     ) return;
@@ -468,7 +475,7 @@ function initMobileNavigation() {
     if (overlayLink) {
       event.preventDefault();
       closeNavigation();
-      window.openFavoriteMatchAction?.(overlayLink.dataset.favoriteOverlay);
+      window.openFavoriteOverlay?.(overlayLink.dataset.favoriteOverlay);
       return;
     }
     const link = event.target.closest(".mobile-nav-content a");

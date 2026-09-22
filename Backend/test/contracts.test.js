@@ -73,9 +73,11 @@ test("Favoritenvertrag erlaubt nur kontrollierte eindeutige Ziele", () => {
       { type: "page", page: "Bewerbe", params: { history: "competition", id: "cup-1" } },
       { type: "page", page: "navigator", params: { profil: "screen-1" } },
       { type: "overlay", overlay: "match-result" },
+      { type: "overlay", overlay: "profile" },
+      { type: "overlay", overlay: "profile-messages" },
     ],
   });
-  assert.equal(result.favorites.length, 6);
+  assert.equal(result.favorites.length, 8);
   assert.equal(result.favorites.every(({ targetId }) => /^favorite-[A-Za-z0-9_-]{43}$/.test(targetId)), true);
   assert.deepEqual(validateEndpointRequest("setMyFavorites", {
     operationId, expectedRevision: 0, favorites: [{ type: "page", page: "Matches1", params: {} }],

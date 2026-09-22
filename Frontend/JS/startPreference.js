@@ -125,7 +125,7 @@ export function setStartPage(target) {
 
 export async function navigateToPersonalStart({ replace = false } = {}) {
   await ready;
-  if (!getUser()) return;
+  if (!getUser()) return false;
   let snapshot;
   try {
     snapshot = await loadStartPage();
@@ -134,9 +134,10 @@ export async function navigateToPersonalStart({ replace = false } = {}) {
   }
   const href = startTargetHref(snapshot.target);
   const current = `${window.location.pathname.split("/").pop() || "index.html"}${window.location.search}`;
-  if (current === href) return;
+  if (current === href) return false;
   if (replace) window.location.replace(href);
   else window.location.assign(href);
+  return true;
 }
 
 subscribeAuth((user, authState) => {

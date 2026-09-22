@@ -27,6 +27,33 @@ test("Bewerbsrunden werden ohne Paarungsnummer kontrolliert bezeichnet", () => {
   ]);
 });
 
+test("Hallenzeiten-Meldungen projizieren den kontrollierten Rasterkontext", async () => {
+  dataStore.resetForTests();
+  const repository = new MessagingRepository(":memory:");
+  repository.init();
+  const service = new MessagingService({ repository, now: () => 1000 });
+  const created = await service.ensureMessage({
+    identity: "hall-time:test:p2",
+    recipientId: "p2",
+    createdAt: 1000,
+    subject: "Du wurdest angemeldet",
+    body: "Spieler 1 hat dich angemeldet.",
+    type: "hall_time_booking_changed",
+    matchId: "slot-1",
+    actorId: "p1",
+    contextName: "der Piber reserviert",
+    externalDelivery: false,
+  });
+
+  const listEntry = service.messages({ id: "p2" }, { limit: 10 }).messages[0];
+  assert.equal(listEntry.competitionName, "Hallenzeit „der Piber reserviert“");
+  assert.equal(listEntry.subject, "Du wurdest angemeldet");
+  const detail = service.message({ id: "p2" }, created.id).message;
+  assert.equal(detail.competitionName, "Hallenzeit „der Piber reserviert“");
+  assert.equal(Object.hasOwn(detail, "contextName"), false);
+  repository.close();
+});
+
 test("Challenge-Nachricht ist deterministisch, publiziert nur Summary und Dummies behaupten keine Zustellung", async () => {
   dataStore.resetForTests();
   dataStore.set("players", [

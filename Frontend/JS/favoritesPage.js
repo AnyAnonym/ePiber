@@ -1,5 +1,5 @@
 import { getUser, subscribeAuth } from "./authClient.js";
-import { favoriteHref, favoriteLabel, favoriteVisibleForUser, reorderFavorites, subscribeFavorites } from "./favorites.js";
+import { favoriteHasUnreadMessages, favoriteHref, favoriteLabel, favoriteVisibleForUser, reorderFavorites, subscribeFavorites } from "./favorites.js";
 import { favoriteIconName, mobileNavIcon } from "./navbar.js";
 import "./modals.js";
 
@@ -54,6 +54,7 @@ function render() {
   for (const favorite of favorites) {
     const row = document.createElement("div");
     row.className = "favorites-page-item";
+    row.classList.toggle("has-unread-messages", favoriteHasUnreadMessages(favorite));
     row.dataset.favoriteId = favorite.targetId;
     const handle = document.createElement("button");
     handle.type = "button";
@@ -94,7 +95,7 @@ list.addEventListener("click", (event) => {
   const overlay = event.target.closest("[data-favorite-overlay]");
   if (!overlay) return;
   event.preventDefault();
-  window.openFavoriteMatchAction?.(overlay.dataset.favoriteOverlay);
+  window.openFavoriteOverlay?.(overlay.dataset.favoriteOverlay);
 });
 
 list.addEventListener("pointerdown", (event) => {

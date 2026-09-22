@@ -94,7 +94,7 @@ const FAVORITE_PAGES = new Set([
   "bewerbsRaster", "hallzeiten", "adminLogging", "personenNormalisieren", "mitgliederAbgleichen", "servicebereich", "hallzeitenVerwalten", "navigator", "monitor",
 ]);
 const FAVORITE_ID_PAGES = new Set(["RoundRobin", "entryList", "rangliste", "bewerbsRaster", "hallzeiten"]);
-const FAVORITE_OVERLAYS = new Set(["match-result", "match-appointment"]);
+const FAVORITE_OVERLAYS = new Set(["match-result", "match-appointment", "profile", "profile-messages"]);
 
 function favoriteTargetId(target) {
   return `favorite-${crypto.createHash("sha256").update(JSON.stringify(target)).digest("base64url")}`;

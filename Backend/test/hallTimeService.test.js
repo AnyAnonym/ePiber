@@ -49,7 +49,8 @@ test("Fixplatz, Warteliste und atomisches Nachruecken bleiben nachvollziehbar", 
   const removed = await context.service.setBooking(players[0], { operationId: operation(4), gridId, slotId, selected: false });
   assert.equal(removed.grid.entries.find(({ personId }) => personId === "p2").status, "confirmed");
   assert.equal(context.messages.length, 1);
-  assert.match(context.messages[0].subject, /Fixplatz/);
+  assert.equal(context.messages[0].subject, "Du bist auf einen Fixplatz nachgerückt");
+  assert.equal(context.messages[0].contextName, "Winterhalle");
   assert.deepEqual(context.service.history(players[1], gridId).entries.slice(0, 2).map(({ action }) => action), ["waitlist_promoted", "booking_removed"]);
   assert.throws(() => context.service.grid({ id: "other", role: "player" }, gridId), { code: "FORBIDDEN" });
   context.repository.close();
@@ -174,6 +175,8 @@ test("Rasterteilnehmer aendern fremde Zukunftseintraege mit nachvollziehbarem Ak
   assert.equal(context.messages[0].type, "hall_time_booking_changed");
   assert.equal(context.messages[0].externalDelivery, false);
   assert.equal(context.messages[0].acknowledgedAt, undefined);
+  assert.equal(context.messages[0].subject, "Du wurdest angemeldet");
+  assert.equal(context.messages[0].contextName, "Winterhalle");
   assert.match(context.messages[0].body, /Spieler 1 hat dich.*eingetragen/);
 
   await context.service.setBooking(players[0], {
@@ -181,6 +184,7 @@ test("Rasterteilnehmer aendern fremde Zukunftseintraege mit nachvollziehbarem Ak
   });
   assert.equal(context.messages.length, 2);
   assert.equal(context.messages[1].recipientId, players[1].id);
+  assert.equal(context.messages[1].subject, "Du wurdest abgemeldet");
   assert.match(context.messages[1].body, /Spieler 1 hat dich.*abgemeldet/);
   assert.equal(context.service.history(players[1], created.grid.id).entries[0].action, "booking_removed");
   await assert.rejects(
@@ -201,9 +205,11 @@ test("Fremde Wartelisteneintragung erzeugt eine ungelesene persoenliche Meldung"
   await context.service.setBooking(players[0], { operationId: operation(21), gridId: created.grid.id, slotId, personId: players[1].id, selected: true });
   assert.equal(context.messages.length, 1);
   assert.equal(context.messages[0].recipientId, players[1].id);
+  assert.equal(context.messages[0].subject, "Du wurdest auf die Warteliste gesetzt");
   assert.match(context.messages[0].body, /auf die Warteliste gesetzt/);
   await context.service.setBooking(players[0], { operationId: operation(29), gridId: created.grid.id, slotId, personId: players[1].id, selected: false });
   assert.equal(context.messages.length, 2);
+  assert.equal(context.messages[1].subject, "Du wurdest von der Warteliste entfernt");
   assert.match(context.messages[1].body, /von der Warteliste entfernt/);
   context.repository.close();
 });

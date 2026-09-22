@@ -24,7 +24,8 @@ export const login = async () => {
   if (loginError === "LOGIN_RATE_LIMIT") error.details = { retryAfterMs: 610000 };
   throw error;
 };
-export const logout = async () => {};
+window.__logoutCalls = 0;
+export const logout = async () => { window.__logoutCalls += 1; };
 export const changePassword = async () => ({ success: true });
 export const getUser = () => user;
 export const isAuthenticated = () => Boolean(user);
@@ -45,8 +46,14 @@ const initialFavoriteCompetition = new URLSearchParams(window.location.search).g
 const initialTwoFavorites = new URLSearchParams(window.location.search).get("twoFavorites") === "1";
 const initialHistoryFavorites = new URLSearchParams(window.location.search).get("favoriteHistory") === "1";
 const initialDashboardFavorite = new URLSearchParams(window.location.search).get("favoriteDashboard") === "1";
-let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites || initialHistoryFavorites || initialDashboardFavorite ? 1 : 0;
-let favorites = initialDashboardFavorite
+const initialProfileFavorites = new URLSearchParams(window.location.search).get("profileFavorites") === "1";
+let favoritesRevision = initialFavoriteCompetition || initialTwoFavorites || initialHistoryFavorites || initialDashboardFavorite || initialProfileFavorites ? 1 : 0;
+let favorites = initialProfileFavorites
+  ? [
+      { targetId: "favorite-profile", type: "overlay", overlay: "profile" },
+      { targetId: "favorite-profile-messages", type: "overlay", overlay: "profile-messages" },
+    ]
+  : initialDashboardFavorite
   ? [{ targetId: "favorite-dashboard", type: "page", page: "index" }]
   : initialHistoryFavorites
   ? [
@@ -72,6 +79,9 @@ let messages = [
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
   { messageId: "read-new", createdAt: "2026-08-31T11:00:00.000Z", competitionName: "", roundName: "", subject: "Bereits bestätigt", actorName: "System", acknowledged: true, acknowledgedAt: "2026-08-31T11:30:00.000Z" },
 ];
+if (new URLSearchParams(window.location.search).get("hallMessage") === "1") {
+  messages = [{ messageId: "hall-time", createdAt: "2026-09-01T18:00:00.000Z", competitionName: "Hallenzeit „der Piber reserviert“", roundName: "", subject: "Du wurdest angemeldet", actorName: "Spieler Eins", acknowledged: false }];
+}
 if (new URLSearchParams(window.location.search).get("longMessages") === "1") {
   messages.push(...Array.from({ length: 12 }, (_, index) => ({
     messageId: "read-extra-" + index,
@@ -88,6 +98,7 @@ const messageBodies = {
   "unread-new": Array.from({ length: 80 }, (_, index) => "Lange Meldungszeile " + (index + 1)).join("\\n"),
   "unread-old": "Bitte den Turnierhinweis beachten.",
   "read-new": "Diese Meldung wurde bereits bestätigt.",
+  "hall-time": "Spieler Eins hat dich für den Termin am 08.09.2026 von 18:00 bis 20:00 angemeldet.",
 };
 window.__acknowledgeCalls = [];
 window.__acknowledgeAllCalls = [];
@@ -206,7 +217,10 @@ export function createEndpoint(name) {
     const emptyProfile = new URLSearchParams(window.location.search).get("emptyProfile") === "1";
     if (name === "myFavorites") return { data: { success: true, favorites: structuredClone(favorites), revision: favoritesRevision } };
     if (name === "hallTimeGrids") return { data: { success: true, grids: role && new URLSearchParams(window.location.search).get("hallTimes") === "1" ? [{ id: "hall-1", name: "Donnerstag Doppel", mode: "equal" }] : [], revision: 0 } };
-    if (name === "myStartPage") return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision } };
+    if (name === "myStartPage") {
+      if (new URLSearchParams(window.location.search).get("slowStartPage") === "1") await new Promise((resolve) => setTimeout(resolve, 500));
+      return { data: { success: true, target: structuredClone(startPageTarget), revision: startPageRevision } };
+    }
     if (name === "myHallTimeGroups") return { data: { success: true, groups: structuredClone(hallTimeGroups), revision: hallTimeGroupRevision } };
     if (name === "setMyHallTimeGroupMembership") {
       hallTimeGroupRevision += 1;
@@ -974,7 +988,9 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     browser = await launchSelectedBrowser(CHROMIUM_PATH);
     const page = await newProfilePage(browser);
     page.setDefaultTimeout(5000);
-    await page.goto(`http://127.0.0.1:${server.address().port}/?role=player&startFavorites=1`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/?role=player&startFavorites=1&slowStartPage=1`, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator("#personalStartLoading").isVisible(), true);
+    assert.equal(await page.locator(".club-dashboard").evaluate((element) => getComputedStyle(element).visibility), "hidden");
     await page.waitForURL(/\/favorites\.html$/);
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&favoriteCompetition=1&startPageTest=1&publicGroups=1&dashboard=1`, { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator(".header-center .logo").getAttribute("href"), "/");
@@ -1058,11 +1074,13 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await directIndexPage.goto(`http://127.0.0.1:${server.address().port}/index.html?role=player&startFavorites=1&startPageTest=1&dashboard=1`, { waitUntil: "domcontentloaded" });
     await directIndexPage.locator("#hamburgerBtn").waitFor({ state: "visible" });
     assert.match(directIndexPage.url(), /\/index\.html\?.*dashboard=1/);
+    assert.equal(await directIndexPage.locator("#personalStartLoading").count(), 0);
 
     const anonymousIndexPage = await newProfilePage(browser);
     await anonymousIndexPage.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "domcontentloaded" });
     await anonymousIndexPage.locator("#hamburgerBtn").waitFor({ state: "visible" });
     assert.match(anonymousIndexPage.url(), /\/index\.html$/);
+    assert.equal(await anonymousIndexPage.locator("#personalStartLoading").count(), 0);
     await anonymousIndexPage.close();
     await directIndexPage.close();
   } finally {
@@ -1479,6 +1497,35 @@ test("Loginfehler bleiben im mobilen Dialog sichtbar und nennen die Sperrdauer",
         await context.close();
       }
     }
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Erfolgreiche An- und Abmeldung erzeugen keinen Toast", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const address = server.address();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const modalSource = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/modals.js"), "utf8");
+    assert.doesNotMatch(modalSource, /showToast\("Erfolgreich angemeldet\.", "success"\)/);
+    assert.doesNotMatch(modalSource, /showToast\("Erfolgreich abgemeldet\.", "success"\)/);
+
+    const logoutPage = await newProfilePage(browser);
+    await logoutPage.goto(`http://127.0.0.1:${address.port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await logoutPage.evaluate(() => {
+      const button = document.createElement("button");
+      button.id = "signOutButton";
+      button.textContent = "Abmelden";
+      document.body.appendChild(button);
+      button.click();
+    });
+    await logoutPage.waitForFunction(() => window.__logoutCalls === 1);
+    assert.equal(await logoutPage.locator("#toastContainer .toast").count(), 0);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -2350,6 +2397,99 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
     await noChannelsPage.getByRole("tab", { name: "System", exact: true }).waitFor({ state: "visible" });
     assert.match(await noChannelsPage.locator("#profileSystemPanel").textContent(), /Benachrichtigungen:\s*---/);
     await noChannelsPage.close();
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Hallenzeiten-Meldungen nennen Aktion und Raster in Liste und Detail", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const address = server.address();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await page.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player&hallMessage=1`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.openProfileModal());
+    await page.getByRole("tab", { name: "Meldungen (1)", exact: true }).click();
+    const row = page.locator("#profileMessagesPanel .message-row");
+    await row.waitFor({ state: "visible" });
+    assert.equal(await row.locator(".message-row-competition").textContent(), "Hallenzeit „der Piber reserviert“");
+    assert.equal(await row.locator(".message-row-subject").textContent(), "Du wurdest angemeldet");
+    await row.click();
+    await page.locator("#messageDetailModal").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#messageDetailCompetition").textContent(), "Hallenzeit „der Piber reserviert“");
+    assert.equal(await page.locator("#messageDetailSubject").textContent(), "Du wurdest angemeldet");
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Profil und Meldungen sind favorisierbar und zeigen die ungelesene Anzahl", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser, hasSelectedProfile() ? {} : { viewport: { width: 1024, height: 720 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/messages-test.html?role=player&profileFavorites=1`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.openProfileModal());
+    const profile = page.locator("#profileModal");
+    await profile.locator("#profileName").waitFor({ state: "visible" });
+    const profileStar = profile.locator(".profile-favorite-star");
+    assert.equal(await profileStar.getAttribute("aria-pressed"), "true");
+    await profileStar.click();
+    assert.equal(await profileStar.getAttribute("aria-pressed"), "false");
+    await profileStar.click();
+    await profile.getByRole("tab", { name: "Meldungen (2)", exact: true }).click();
+    const messagesStar = profile.locator(".profile-messages-favorite-star");
+    assert.equal(await messagesStar.getAttribute("aria-pressed"), "true");
+    const starLayout = await profile.evaluate((modal) => {
+      const star = modal.querySelector(".profile-messages-favorite-star").getBoundingClientRect();
+      const firstMessage = modal.querySelector(".message-row").getBoundingClientRect();
+      return { starRight: star.right, contentRight: modal.querySelector(".profile-body").getBoundingClientRect().right, starBottom: star.bottom, messageTop: firstMessage.top };
+    });
+    assert.ok(starLayout.contentRight - starLayout.starRight <= 36, JSON.stringify(starLayout));
+    assert.equal(starLayout.starBottom < starLayout.messageTop, true);
+    await profile.locator(".close").click();
+
+    await page.locator("#hamburgerBtn").click();
+    await page.locator(".mobile-nav-favorites-toggle").click();
+    const navRows = page.locator(".mobile-nav-favorite");
+    assert.deepEqual(await navRows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Meldungen (2)", "Profil"]);
+    const messagesFavoriteRow = navRows.filter({ has: page.locator('[data-favorite-overlay="profile-messages"]') });
+    assert.equal(await messagesFavoriteRow.evaluate((row) => row.classList.contains("has-unread-messages") && getComputedStyle(row).fontWeight === "800"), true);
+    await messagesFavoriteRow.locator(".mobile-nav-favorite-link").click();
+    await profile.getByRole("tab", { name: "Meldungen (2)", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await profile.getByRole("tab", { name: "Meldungen (2)", exact: true }).getAttribute("aria-selected"), "true");
+    await profile.locator("#acknowledgeAllMessagesButton").click();
+    await page.waitForFunction(() => document.querySelector("#profileMessagesPanelTab")?.textContent === "Meldungen (0)");
+    await profile.locator(".close").click();
+    await page.locator("#hamburgerBtn").click();
+    await page.locator(".mobile-nav-favorites-toggle").click();
+    assert.deepEqual(await page.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Meldungen (0)", "Profil"]);
+    assert.equal(await page.locator('.mobile-nav-favorite:has([data-favorite-overlay="profile-messages"])').evaluate((row) => row.classList.contains("has-unread-messages")), false);
+
+    const favoritesPage = await newProfilePage(browser, hasSelectedProfile() ? {} : { viewport: { width: 390, height: 844 } });
+    await favoritesPage.goto(`http://127.0.0.1:${server.address().port}/favorites.html?role=player&profileFavorites=1`, { waitUntil: "domcontentloaded" });
+    const pageRows = favoritesPage.locator(".favorites-page-item");
+    await pageRows.nth(1).waitFor({ state: "visible" });
+    assert.deepEqual(await pageRows.locator(".favorites-page-link > span").allTextContents(), ["Profil", "Meldungen (2)"]);
+    assert.deepEqual(await pageRows.evaluateAll((rows) => rows.map((row) => getComputedStyle(row.querySelector(".favorites-page-link")).fontWeight)), ["500", "800"]);
+    const synchronousOverlayState = await pageRows.nth(1).locator(".favorites-page-link").evaluate((link) => {
+      link.click();
+      const modal = document.getElementById("profileModal");
+      return { visible: !modal.classList.contains("hidden"), loading: Boolean(modal.querySelector(".loading-overlay")) };
+    });
+    assert.deepEqual(synchronousOverlayState, { visible: true, loading: true });
+    const favoriteProfile = favoritesPage.locator("#profileModal");
+    await favoriteProfile.getByRole("tab", { name: "Meldungen (2)", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await favoriteProfile.getByRole("tab", { name: "Meldungen (2)", exact: true }).getAttribute("aria-selected"), "true");
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
