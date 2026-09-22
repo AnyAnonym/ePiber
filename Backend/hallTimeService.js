@@ -442,9 +442,10 @@ class HallTimeService {
           await this.messagingService.ensureMessage({
             identity: `hall-time-promotion:${request.operationId}:${promoted.person.id}`,
             recipientId: promoted.person.id, createdAt: now,
-            subject: `Fixplatz in ${promoted.grid.name}`,
+            subject: "Du bist auf einen Fixplatz nachgerückt",
             body: `Du bist für den Termin am ${dateLabel} von der Warteliste auf einen Fixplatz nachgerückt.`,
             type: "hall_time_promotion", matchId: promoted.slot.id, actorId: principal.id,
+            contextName: promoted.grid.name,
           });
         } catch (error) {
           this.log("warn", "hall_time_promotion_message_failed", {
@@ -463,13 +464,21 @@ class HallTimeService {
           : foreignChange.status === "waitlist"
             ? `${actorName} hat dich für den Termin am ${dateLabel} von ${foreignChange.slot.start} bis ${foreignChange.slot.end} auf die Warteliste gesetzt.`
             : `${actorName} hat dich für den Termin am ${dateLabel} von ${foreignChange.slot.start} bis ${foreignChange.slot.end} eingetragen.`;
+        const subject = foreignChange.action === "removed"
+          ? foreignChange.previousStatus === "waitlist"
+            ? "Du wurdest von der Warteliste entfernt"
+            : "Du wurdest abgemeldet"
+          : foreignChange.status === "waitlist"
+            ? "Du wurdest auf die Warteliste gesetzt"
+            : "Du wurdest angemeldet";
         try {
           await this.messagingService.ensureMessage({
             identity: `hall-time-foreign-booking:${request.operationId}:${foreignChange.person.id}`,
             recipientId: foreignChange.person.id, createdAt: now,
-            subject: `Änderung in ${foreignChange.grid.name}`,
+            subject,
             body,
             type: "hall_time_booking_changed", matchId: foreignChange.slot.id, actorId: principal.id,
+            contextName: foreignChange.grid.name,
             externalDelivery: false,
           });
           this.log("info", "hall_time_foreign_booking_message_completed", {

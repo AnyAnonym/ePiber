@@ -10,6 +10,7 @@ const warnedInvalidNotifications = new Set();
 const RESULT_REPORT_TYPES = new Set(["result", "result_corrected", "result_cleared", "match_end_corrected"]);
 const CHALLENGE_REPORT_TYPES = new Set(["challenge", "challenge_confirmation"]);
 const DATE_CHANGE_REPORT_TYPES = new Set(["appointment_changed", "ranking_challenge_date_changed", "ranking_match_date_admin_changed", "match_end_corrected"]);
+const HALL_TIME_MESSAGE_TYPES = new Set(["hall_time_booking_changed", "hall_time_promotion"]);
 const VIENNA_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" });
 const COMMENT_SEGMENTER = new Intl.Segmenter("de", { granularity: "grapheme" });
 
@@ -176,9 +177,9 @@ class MessagingService {
     return this.repository.getEvent(event.id);
   }
 
-  async ensureMessage({ identity, recipientId, createdAt, subject, body, type, matchId, actorId, competitionId = null, acknowledgedAt = null, externalDelivery = true }) {
+  async ensureMessage({ identity, recipientId, createdAt, subject, body, type, matchId, actorId, competitionId = null, contextName = "", acknowledgedAt = null, externalDelivery = true }) {
     const participant = this.participant({ identity, userId: recipientId, role: "recipient", type, subject, body, acknowledgedAt, externalDelivery });
-    const event = await this.ensureEvent({ id: participant.messageId, competitionId, createdAt, type, source: "match", sourceId: matchId, actorId, actorName: "", summary: subject, detail: "" }, [participant]);
+    const event = await this.ensureEvent({ id: participant.messageId, competitionId, createdAt, type, source: "match", sourceId: matchId, actorId, actorName: "", summary: subject, detail: contextName }, [participant]);
     return event.participants[0];
   }
 
@@ -899,6 +900,14 @@ class MessagingService {
     )).filter(Boolean));
   }
 
+  messageCategoryName(message) {
+    if (HALL_TIME_MESSAGE_TYPES.has(message.type)) {
+      const name = String(message.contextName || "").trim();
+      return name ? `Hallenzeit „${name}“ informiert` : "Hallenzeit informiert";
+    }
+    return this.competitionName(message.competitionId);
+  }
+
   messages(principal, params) {
     const page = this.repository.listForRecipient(principal.id, params);
     const rounds = this.matchRoundNames();
@@ -907,22 +916,23 @@ class MessagingService {
       success: true,
       ...this.repository.summary(principal.id),
       nextCursor: page.nextCursor,
-      messages: page.messages.map(({ id, competitionId, createdAt, subject, acknowledgedAt, source, sourceId, actorName }) => ({
-        id,
-        createdAt,
-        competitionName: this.competitionName(competitionId),
-        roundName: source === "match" && !rankingCompetitionIds.has(competitionId) ? rounds.get(sourceId) || "" : "",
-        subject,
-        actorName,
-        acknowledgedAt,
+      messages: page.messages.map((message) => ({
+        id: message.id,
+        createdAt: message.createdAt,
+        competitionName: this.messageCategoryName(message),
+        roundName: message.source === "match" && !rankingCompetitionIds.has(message.competitionId) ? rounds.get(message.sourceId) || "" : "",
+        subject: message.subject,
+        actorName: message.actorName,
+        acknowledgedAt: message.acknowledgedAt,
       })),
     };
   }
 
   message(principal, messageId) {
-    const message = this.repository.getForRecipient(principal.id, messageId);
-    if (!message) throw new AppError("MESSAGE_NOT_FOUND", "Nachricht wurde nicht gefunden", 404);
-    return { success: true, message: { ...message, competitionName: this.competitionName(message.competitionId) } };
+    const stored = this.repository.getForRecipient(principal.id, messageId);
+    if (!stored) throw new AppError("MESSAGE_NOT_FOUND", "Nachricht wurde nicht gefunden", 404);
+    const { contextName, ...message } = stored;
+    return { success: true, message: { ...message, competitionName: this.messageCategoryName(stored) } };
   }
 
   acknowledge(principal, { operationId, messageId }) {

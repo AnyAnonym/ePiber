@@ -73,6 +73,9 @@ let messages = [
   { messageId: "unread-old", createdAt: "2026-08-29T08:30:00.000Z", competitionName: "Wintercup", roundName: "1. Gruppe", subject: "Turnierhinweis", eventType: "notice", actorName: "Turnierleitung", acknowledged: false },
   { messageId: "read-new", createdAt: "2026-08-31T11:00:00.000Z", competitionName: "", roundName: "", subject: "Bereits bestätigt", actorName: "System", acknowledged: true, acknowledgedAt: "2026-08-31T11:30:00.000Z" },
 ];
+if (new URLSearchParams(window.location.search).get("hallMessage") === "1") {
+  messages = [{ messageId: "hall-time", createdAt: "2026-09-01T18:00:00.000Z", competitionName: "Hallenzeit „der Piber reserviert“ informiert", roundName: "", subject: "Du wurdest angemeldet", actorName: "Spieler Eins", acknowledged: false }];
+}
 if (new URLSearchParams(window.location.search).get("longMessages") === "1") {
   messages.push(...Array.from({ length: 12 }, (_, index) => ({
     messageId: "read-extra-" + index,
@@ -89,6 +92,7 @@ const messageBodies = {
   "unread-new": Array.from({ length: 80 }, (_, index) => "Lange Meldungszeile " + (index + 1)).join("\\n"),
   "unread-old": "Bitte den Turnierhinweis beachten.",
   "read-new": "Diese Meldung wurde bereits bestätigt.",
+  "hall-time": "Spieler Eins hat dich für den Termin am 08.09.2026 von 18:00 bis 20:00 angemeldet.",
 };
 window.__acknowledgeCalls = [];
 window.__acknowledgeAllCalls = [];
@@ -2387,6 +2391,32 @@ test("Persoenliche Meldungen bleiben privat, geordnet und werden explizit bestae
     await noChannelsPage.getByRole("tab", { name: "System", exact: true }).waitFor({ state: "visible" });
     assert.match(await noChannelsPage.locator("#profileSystemPanel").textContent(), /Benachrichtigungen:\s*---/);
     await noChannelsPage.close();
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Hallenzeiten-Meldungen nennen Aktion und Raster in Liste und Detail", {
+  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const address = server.address();
+  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await page.goto(`http://127.0.0.1:${address.port}/messages-test.html?role=player&hallMessage=1`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.openProfileModal());
+    await page.getByRole("tab", { name: "Meldungen (1)", exact: true }).click();
+    const row = page.locator("#profileMessagesPanel .message-row");
+    await row.waitFor({ state: "visible" });
+    assert.equal(await row.locator(".message-row-competition").textContent(), "Hallenzeit „der Piber reserviert“ informiert");
+    assert.equal(await row.locator(".message-row-subject").textContent(), "Du wurdest angemeldet");
+    await row.click();
+    await page.locator("#messageDetailModal").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#messageDetailCompetition").textContent(), "Hallenzeit „der Piber reserviert“ informiert");
+    assert.equal(await page.locator("#messageDetailSubject").textContent(), "Du wurdest angemeldet");
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
