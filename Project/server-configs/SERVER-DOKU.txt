@@ -69,7 +69,7 @@ Loopback gebundenen Live-/PAJ-Backends unter `/internal/messaging-report` und
 verlangen zusaetzlich einen gemeinsamen Maschinen-Bearer. Caddy beantwortet
 `/internal/*` auf allen drei Browser-Origins explizit mit 404.
 
-Der Sollstand provisioniert neun Dashboards, darunter `ePiber
+Der Sollstand provisioniert zehn Dashboards, darunter `ePiber
 Personennormalisierung`. Dessen Auditpanel zeigt kontrolliert Adminname/-ID,
 Ziel-Personen-ID und resultierenden Zielnamen. Nur Aktiv und Rolle enthalten
 kanonische Alt-/Neuwerte; fuer andere Normalisierungsfelder erscheint allein der
@@ -79,7 +79,7 @@ einzelnen Platz die hoechstens 14 Tage zurueckreichenden Scoreaenderungen und
 Court-Snapshots. Match-ID, Bewerb und Anzeigenamen der Paarung bleiben
 kontrollierte JSON-Felder und werden weder Loki-Labels noch Teil einer
 zusaetzlichen dauerhaften Historie.
-Das neunte Dashboard `ePiber Persoenliche Meldungen` verwendet das signierte,
+Das Dashboard `ePiber Persoenliche Meldungen` verwendet das signierte,
 exakt auf `4.0.0` gepinnte Infinity-Plugin. Seine nicht editierbare Datasource
 darf nur `http://127.0.0.1:8080` und `http://127.0.0.1:8083` ansprechen. Sie
 projiziert fuer hoechstens 31 Tage vertrauliche Meldungsdetails direkt aus der

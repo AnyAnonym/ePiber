@@ -53,6 +53,13 @@ test("Prometheusmetriken begrenzen Labels und rendern kumulative Histogramme", (
       issueCount: 9,
       issueCounts: { LOGIN_DUPLICATE: 2, PHONE_FORMAT_INVALID: 3 },
     },
+    hallTimes: {
+      historyLimit: 10000,
+      grids: [{
+        id: "grid-1", name: "Winterhalle", mode: "equal", active: true,
+        participants: 12, futureSlots: 8, capacity: 32, confirmed: 28, waitlist: 3, historyEntries: 7500,
+      }],
+    },
   });
 
   assert.match(output, /epiber_http_requests_total\{method="GET",result="success",route="\/api\/session"\} 1/);
@@ -91,6 +98,10 @@ test("Prometheusmetriken begrenzen Labels und rendern kumulative Histogramme", (
   assert.match(output, /epiber_people_normalization_issues 9/);
   assert.match(output, /epiber_people_normalization_issue_count\{code="LOGIN_DUPLICATE"\} 2/);
   assert.match(output, /epiber_people_normalization_issue_count\{code="ROLE_INVALID"\} 0/);
+  assert.match(output, /epiber_hall_time_grid_info\{active="true",grid_id="grid-1",grid_name="Winterhalle",mode="equal"\} 1/);
+  assert.match(output, /epiber_hall_time_entries\{grid_id="grid-1",grid_name="Winterhalle",status="confirmed"\} 28/);
+  assert.match(output, /epiber_hall_time_history_entries\{grid_id="grid-1",grid_name="Winterhalle"\} 7500/);
+  assert.match(output, /epiber_hall_time_history_utilization_ratio\{grid_id="grid-1",grid_name="Winterhalle"\} 0\.75/);
   assert.equal(output.includes("person-p1"), false);
   assert.equal(output.includes("Ada"), false);
   assert.equal(output.includes("ada@example.test"), false);

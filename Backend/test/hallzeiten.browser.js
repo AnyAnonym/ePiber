@@ -47,7 +47,11 @@ let lastSave = null;
 let lastBooking = null;
 let distributionCount = 0;
 let statusClearCount = 0;
-const history = [{ id: "h1", at: Date.now(), action: "booking_added", actorName: "Spieler Eins", personName: "Spieler Eins", slotId: "slot-1", slot: grid.slots[0] }];
+const history = [
+  { id: "h2", at: Date.now(), action: "grid_updated", actorId: "admin-1", actorName: "Anna Admin", personId: "", personName: "", slotId: "", slot: null },
+  { id: "h-distribution", at: Date.now() - 1, action: "distribution_replaced", actorId: "admin-1", actorName: "Anna Admin", personId: "", personName: "", slotId: "", slot: null, summary: { assignedCount: 6, promotedCount: 2, removedCount: 4, unchangedCount: 28 } },
+  { id: "h1", at: Date.now() - 2, action: "booking_added", actorId: "p1", actorName: "Spieler Eins", personId: "p1", personName: "Eins Spieler", slotId: "slot-1", slot: grid.slots[0] },
+];
 export function createEndpoint(name) { return async (params = {}) => {
   if (name === "hallTimeGrid" && new URLSearchParams(location.search).has("failWithReference")) throw new Error("Raster konnte nicht geladen werden. (Referenz: intern-123)");
   if (name === "hallTimeGrid") { const params = new URLSearchParams(location.search); return { data: { success: true, grid: structuredClone({ ...grid, slots: params.has("evenSlots") ? grid.slots.slice(0, 8) : grid.slots, waitlistEnabled: !params.has("withoutWaitlist"), currentPersonId: params.has("withoutParticipant") ? "admin-1" : grid.currentPersonId, canAdminister: location.pathname.includes("Drucken") }) } }; }
@@ -60,7 +64,7 @@ export function createEndpoint(name) { return async (params = {}) => {
     const target = grid.participants.find(({ id }) => id === targetId);
     grid.entries = grid.entries.filter((entry) => !(entry.slotId === params.slotId && entry.personId === targetId));
     if (params.selected) grid.entries.push({ slotId: params.slotId, personId: targetId, status: "confirmed" });
-    history.unshift({ id: "h" + revision, at: Date.now(), action: params.selected ? "booking_added" : "booking_removed", actorName: "Spieler Eins", personName: target?.name || targetId, slotId: params.slotId, slot: grid.slots.find(({ id }) => id === params.slotId) });
+    history.unshift({ id: "h" + revision, at: Date.now(), action: params.selected ? "booking_added" : "booking_removed", actorId: "p1", actorName: "Spieler Eins", personId: targetId, personName: target ? [target.firstName, target.lastName].filter(Boolean).join(" ") : targetId, slotId: params.slotId, slot: grid.slots.find(({ id }) => id === params.slotId) });
     revision += 1; grid.revision = revision;
     return { data: { success: true, grid: structuredClone(grid), revision } };
   }
@@ -288,6 +292,9 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.ok(stableViewportHeight.pageScroll > 0);
     assert.ok(Math.abs(stableViewportHeight.after - stableViewportHeight.before) < 1, JSON.stringify(stableViewportHeight));
     assert.deepEqual(await page.locator(".hall-time-legend span").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht Dabei"]);
+    assert.equal(await page.locator("#hall-time-history-list li").first().locator(".competition-history-entry-title").textContent(), "Anna Admin hat Einstellungen geändert");
+    assert.equal(await page.locator("#hall-time-history-list li").nth(1).locator(".competition-history-entry-title").textContent(), "Anna Admin hat die zukünftige Verteilung neu erstellt (6 neu zugeteilt, 2 nachgerückt, 4 entfernt, 28 unverändert)");
+    assert.equal(await page.locator("#hall-time-history-list li").nth(2).locator(".competition-history-entry-title").textContent(), "Spieler Eins hat sich angemeldet");
     const legendRows = await page.locator(".hall-time-legend span").evaluateAll((items) => new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size);
     assert.equal(legendRows, 1);
     assert.equal(await page.locator("#hall-time-foot td").nth(2).textContent(), "1/1 (1)");
@@ -298,7 +305,7 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     const foreignRowTop = await page.locator('#hall-time-body [data-person-id="p9"]').evaluate((row) => row.getBoundingClientRect().top);
     await foreignButton.click({ timeout: 5000 });
     assert.equal((await page.evaluate(() => window.__lastHallTimeBooking())).personId, "p9");
-    assert.equal(await page.locator("#hall-time-history-list li").first().locator(".competition-history-entry-title").textContent(), "Spieler Eins hat Leitner Lisa angemeldet");
+    assert.equal(await page.locator("#hall-time-history-list li").first().locator(".competition-history-entry-title").textContent(), "Spieler Eins hat Lisa Leitner angemeldet");
     assert.match(await page.locator("#hall-time-history-list li").first().locator("time").textContent(), /^Geändert am: .+$/);
     assert.equal(await page.locator("#hall-time-history-list li").first().locator(".competition-history-slot").textContent(), "Freitag, 06.11.2099, 19:00–21:00");
     assert.equal(await page.locator("#hall-time-history-list li").first().locator(".competition-history-slot").evaluate((element) => Number(getComputedStyle(element).fontWeight) < 700), true);

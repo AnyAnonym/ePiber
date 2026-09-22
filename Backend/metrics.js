@@ -185,7 +185,7 @@ function metricType(lines, name, type) {
   lines.push(`# TYPE ${name} ${type}`);
 }
 
-function render({ appVersion, processStartedAt, activeHttpRequests, readiness, ws, sheetPoller, court, state, sheets, peopleNormalization } = {}) {
+function render({ appVersion, processStartedAt, activeHttpRequests, readiness, ws, sheetPoller, court, state, sheets, peopleNormalization, hallTimes } = {}) {
   const lines = [];
   for (const name of [
     "epiber_info", "epiber_process_uptime_seconds", "epiber_http_requests_active", "epiber_ready",
@@ -202,6 +202,9 @@ function render({ appVersion, processStartedAt, activeHttpRequests, readiness, w
     "epiber_people_normalization_active_members", "epiber_people_normalization_active_privileged",
     "epiber_people_normalization_affected_people", "epiber_people_normalization_issues",
     "epiber_people_normalization_issue_count",
+    "epiber_hall_time_grid_info", "epiber_hall_time_participants", "epiber_hall_time_future_slots",
+    "epiber_hall_time_capacity", "epiber_hall_time_entries", "epiber_hall_time_history_entries",
+    "epiber_hall_time_history_limit", "epiber_hall_time_history_utilization_ratio",
   ]) metricType(lines, name, name.endsWith("_total") ? "counter" : "gauge");
   gauge(lines, "epiber_info", 1, { version: appVersion || "unknown" });
   gauge(lines, "epiber_process_uptime_seconds", Math.max(0, Date.now() - number(processStartedAt, Date.now())) / 1000);
@@ -239,6 +242,22 @@ function render({ appVersion, processStartedAt, activeHttpRequests, readiness, w
   gauge(lines, "epiber_people_normalization_issues", Math.max(0, number(peopleNormalization?.issueCount)));
   for (const code of ISSUE_CODES) {
     gauge(lines, "epiber_people_normalization_issue_count", Math.max(0, number(peopleNormalization?.issueCounts?.[code])), { code });
+  }
+
+  const historyLimit = Math.max(0, number(hallTimes?.historyLimit));
+  for (const grid of hallTimes?.grids || []) {
+    const labels = { grid_id: String(grid.id || ""), grid_name: String(grid.name || "") };
+    gauge(lines, "epiber_hall_time_grid_info", 1, {
+      ...labels, mode: ["equal", "fair_use"].includes(grid.mode) ? grid.mode : "unknown", active: grid.active ? "true" : "false",
+    });
+    gauge(lines, "epiber_hall_time_participants", Math.max(0, number(grid.participants)), labels);
+    gauge(lines, "epiber_hall_time_future_slots", Math.max(0, number(grid.futureSlots)), labels);
+    gauge(lines, "epiber_hall_time_capacity", Math.max(0, number(grid.capacity)), labels);
+    gauge(lines, "epiber_hall_time_entries", Math.max(0, number(grid.confirmed)), { ...labels, status: "confirmed" });
+    gauge(lines, "epiber_hall_time_entries", Math.max(0, number(grid.waitlist)), { ...labels, status: "waitlist" });
+    gauge(lines, "epiber_hall_time_history_entries", Math.max(0, number(grid.historyEntries)), labels);
+    gauge(lines, "epiber_hall_time_history_limit", historyLimit, labels);
+    gauge(lines, "epiber_hall_time_history_utilization_ratio", historyLimit > 0 ? Math.max(0, number(grid.historyEntries)) / historyLimit : 0, labels);
   }
 
   gauge(lines, "epiber_court_poller_running", court?.running ? 1 : 0);

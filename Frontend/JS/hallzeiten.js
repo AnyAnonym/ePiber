@@ -325,23 +325,38 @@ const HISTORY_TEXT = {
   booking_removed: "hat sich abgemeldet", waitlist_promoted: "ist von der Warteliste nachgerückt",
   waitlist_expired: "ist nach Terminende von der Warteliste entfernt worden",
   assigned_by_distribution: "wurde automatisch eingeteilt", distribution_replaced: "hat die zukünftige Verteilung neu erstellt",
-  grid_created: "hat den Raster erstellt", grid_updated: "hat den Raster geändert", all_statuses_cleared: "hat alle Stati auf den Terminen gelöscht",
+  grid_created: "hat den Raster erstellt", grid_updated: "hat Einstellungen geändert", all_statuses_cleared: "hat alle Stati auf den Terminen gelöscht",
   group_joined: "ist der Gruppe beigetreten", group_left: "hat die Gruppe verlassen",
 };
+
+function distributionSummary(summary) {
+  if (!summary) return "";
+  const parts = [
+    [summary.assignedCount, "neu zugeteilt"],
+    [summary.promotedCount, "nachgerückt"],
+    [summary.removedCount, "entfernt"],
+    [summary.unchangedCount, "unverändert"],
+  ].filter(([count]) => Number(count) > 0).map(([count, label]) => `${count} ${label}`);
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
 
 function renderHistory(entries) {
   const list = byId("hall-time-history-list"); list.replaceChildren();
   for (const item of entries) {
     const li = document.createElement("li"); li.className = "competition-history-entry";
-    const actorChangedOther = item.actorName && item.actorName !== "System" && item.actorName !== item.personName;
+    const hasPersonIds = Boolean(item.actorId && item.personId);
+    const actorIsPerson = hasPersonIds ? item.actorId === item.personId : item.actorName === item.personName;
+    const actorChangedOther = item.actorName && item.actorName !== "System" && !actorIsPerson;
     const otherActions = {
       booking_added: "angemeldet", waitlist_added: "auf die Warteliste gesetzt", booking_removed: "abgemeldet",
     };
     let text;
     if (actorChangedOther && item.personName && otherActions[item.action]) text = `${item.actorName} hat ${item.personName} ${otherActions[item.action]}`;
     else {
-      const person = item.personName ? `${item.personName} ` : item.actorName && item.actorName !== "System" ? `${item.actorName} ` : "";
+      const personName = actorIsPerson && item.actorName && item.actorName !== "System" ? item.actorName : item.personName;
+      const person = personName ? `${personName} ` : item.actorName && item.actorName !== "System" ? `${item.actorName} ` : "";
       text = `${person}${HISTORY_TEXT[item.action] || item.action}`;
+      if (item.action === "distribution_replaced") text += distributionSummary(item.summary);
     }
     const changedAt = new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(item.at);
     const meta = document.createElement("time"); meta.className = "competition-history-entry-meta"; meta.dateTime = new Date(item.at).toISOString(); meta.textContent = `Geändert am: ${changedAt}`; li.appendChild(meta);

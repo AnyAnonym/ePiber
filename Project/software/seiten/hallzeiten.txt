@@ -35,5 +35,9 @@ Hallenzeiten - Reservierungsraster
   Wartelistenvergabe geprueft. Das eigene Wartelistenkontingent ist parametriert.
   Ablehnungen erscheinen ohne Supportnummer in einem mittigen Dialog; die interne
   Browserdiagnose behaelt den kontrollierten Fehlercode. Die Historie nennt Zeit,
-  Aktion, Akteur, Zielperson und Termin. Automatische Verteilungen erscheinen nur
-  als Gesamtvorgang und erzeugen keine personenbezogenen Einzelmeldungen.
+  Aktion, Akteur, Zielperson und Termin; Personennamen erscheinen als Vorname und
+  Nachname. Sie ist je Raster auf 10000 Eintraege begrenzt. Automatische
+  Verteilungen erscheinen als Gesamtvorgang mit sichtbaren Summen und einem
+  strukturierten Batch aller Statusaenderungen, sodass die Verteilung innerhalb
+  des aufbewahrten Fensters rueckrechenbar bleibt. Sie erzeugen keine
+  personenbezogenen Einzelmeldungen.
