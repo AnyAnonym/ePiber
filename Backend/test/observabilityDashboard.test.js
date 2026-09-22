@@ -27,6 +27,10 @@ const messagingDashboardFile = path.resolve(
   __dirname,
   "../../Project/server-configs/observability/grafana/dashboards/epiber-messaging.json",
 );
+const hallTimesDashboardFile = path.resolve(
+  __dirname,
+  "../../Project/server-configs/observability/grafana/dashboards/epiber-hall-times.json",
+);
 const grafanaConfigFile = path.resolve(
   __dirname,
   "../../Project/server-configs/observability/grafana/grafana.ini",
@@ -130,7 +134,7 @@ test("Grafana blendet die experimentellen Panelansichtsregler aus", () => {
 test("Alle Grafana-Panels und Targets verwenden eine explizite Datenquelle", () => {
   const dashboardDir = path.join(observabilityRoot, "grafana/dashboards");
   const dashboardFiles = fs.readdirSync(dashboardDir).filter((file) => file.endsWith(".json"));
-  assert.equal(dashboardFiles.length, 9);
+  assert.equal(dashboardFiles.length, 10);
   for (const file of dashboardFiles) {
     const dashboard = JSON.parse(fs.readFileSync(path.join(dashboardDir, file), "utf8"));
     for (const panel of dashboard.panels) {
@@ -144,6 +148,32 @@ test("Alle Grafana-Panels und Targets verwenden eine explizite Datenquelle", () 
         );
       }
     }
+  }
+});
+
+test("Hallenreservierungs-Dashboard kombiniert begrenzte Metriken und datensparsame Fachlogs", () => {
+  const dashboard = JSON.parse(fs.readFileSync(hallTimesDashboardFile, "utf8"));
+  assert.equal(dashboard.uid, "epiber-hall-times");
+  assert.equal(dashboard.title, "ePiber Hallenreservierung");
+  assert.equal(dashboard.time.from, "now-14d");
+  assert.deepEqual(dashboard.templating.list.map(({ name }) => name), ["deployment", "grid"]);
+
+  const utilization = dashboard.panels.find(({ title }) => title === "Aktuelle Auslastung");
+  assert.deepEqual(utilization.datasource, { type: "prometheus", uid: "prometheus" });
+  assert.match(utilization.targets[0].expr, /epiber_hall_time_entries/);
+  assert.match(utilization.targets[0].expr, /epiber_hall_time_capacity/);
+  const distribution = dashboard.panels.find(({ title }) => title === "Neuverteilungen");
+  assert.deepEqual(distribution.datasource, { type: "loki", uid: "loki" });
+  assert.match(distribution.targets[0].expr, /event="hall_time_history_recorded"/);
+  for (const field of ["assignedCount", "promotedCount", "removedCount", "unchangedCount", "batchId"]) {
+    assert.match(distribution.targets[0].expr, new RegExp(`\\b${field}\\b`));
+  }
+  const events = dashboard.panels.find(({ title }) => title === "Letzte Fachereignisse");
+  assert.match(events.targets[0].expr, /personId/);
+  assert.equal(events.targets[0].expr.includes("personName"), false);
+  const serialized = JSON.stringify(dashboard).toLowerCase();
+  for (const forbidden of ["email", "phone", "telefon", "address", "geburt", "password", "token", "payload"]) {
+    assert.equal(serialized.includes(forbidden), false, `${forbidden} darf nicht im Dashboard vorkommen`);
   }
 });
 

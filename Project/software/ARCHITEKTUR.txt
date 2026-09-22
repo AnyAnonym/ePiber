@@ -119,7 +119,10 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   Wartende atomar nach und berechnet die gleichberechtigte Verteilung. Manuelle
   Fremdaenderungen und automatisches Nachruecken erzeugen kontrollierte
   persoenliche Meldungen; automatische Verteilung erzeugt keine
-  personenbezogenen Meldungen oder Einzelhistorie.
+  personenbezogenen Meldungen. Neuverteilungen werden als kompakter Batch mit
+  gemeinsamen Summen und den kontrollierten Statusdeltas je Termin und Person
+  historisiert; dadurch sind sie innerhalb der 10000 Eintraege umfassenden
+  Rasterhistorie rueckrechenbar.
 
 `messagingRepository.js`, `messagingService.js`
   Persistieren das versionierte zentrale Bewerbsereignismodell, normalisierte
@@ -784,6 +787,15 @@ Fachhistorien und Betriebslogs:
   - Prometheus scrapt die Backend-`/metrics`-Endpunkte von Live und PAJ alle 15 Sekunden und
     speichert die Zeitreihen lokal. Node Exporter liefert einmalig die gemeinsam
     genutzten Hostressourcen und Zustandsmetriken der aktiven ePiber-Units.
+    Hallenzeiten liefern je Raster kontrollierte Gauges fuer Teilnehmer,
+    zukuenftige Termine, Kapazitaet, Fix-/Wartelistenplaetze und
+    Historienfuellstand. Raster-ID und der adminverwaltete Rastername duerfen als
+    begrenzte Labels erscheinen; Personenwerte sind ausgeschlossen. Erfolgreich
+    persistierte Fachereignisse werden zusaetzlich als
+    `hall_time_history_recorded` mit kontrollierten IDs, Namenssnapshot des
+    Akteurs, Statuswerten und Batchzaehlern nach Loki gespiegelt. Zielpersonen
+    erscheinen dort nur als ID, nicht mit Namen, und alle Personen-/Batchwerte
+    bleiben JSON-Felder statt Loki-Labels.
   - Eine Grafana-Instanz unter `https://epiber.at/grafana/` verwendet Prometheus
     und Loki als nicht editierbare Datenquellen. `/grafana/` auf PAJ leitet zur
     zentralen Live-Origin weiter; die unveraenderte PK-Origin besitzt keine

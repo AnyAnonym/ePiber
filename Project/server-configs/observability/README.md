@@ -99,9 +99,10 @@ projiziert und weder nach Loki geschrieben noch als Prometheus-Metrik oder
 
 ## Dashboards und Alerts
 
-Neun Dashboards werden provisioniert: Uebersicht, Hostressourcen,
+Zehn Dashboards werden provisioniert: Uebersicht, Hostressourcen,
 Loggingpipeline, Fehler/Recovery, Personennormalisierung, Ranglistenaktivitaeten,
-Matchergebnisse, Platz- und Scoreverlauf sowie `ePiber Persoenliche Meldungen`.
+Matchergebnisse, Platz- und Scoreverlauf, `ePiber Persoenliche Meldungen` sowie
+`ePiber Hallenreservierung`.
 Anwendungsdashboards besitzen die feste Auswahl `live|paj`; Hostmetriken werden
 nur einmal gezeigt. Das Normalisierungsdashboard zeigt den aktuellen
 aggregierten Problemstand, RPC-/Write-Ergebnisse und technische Diagnosen ohne
@@ -183,6 +184,17 @@ verwendet nur `matchId`, `competitionId`, `changeType`, `completionType`,
 Kontaktdaten, Passwoerter und Tokens sind ausgeschlossen. Die Ansicht reicht
 hoechstens 14 Tage zurueck und ersetzt nicht die dauerhafte Historie in
 `audit.sqlite`.
+
+Das Dashboard `ePiber Hallenreservierung` kombiniert den aktuellen
+Prometheus-Stand je Raster mit der hoechstens 14 Tage umfassenden
+Loki-Fachprojektion. Es zeigt Kapazitaet, Fixplaetze, Warteliste, zukuenftige
+Termine, Historienfuellstand, Fachaktivitaeten, Neuverteilungssummen und
+problematische Schreibausgaenge. Prometheus verwendet nur Raster-ID,
+adminverwalteten Rastername, Modus, Aktivstatus und kontrollierte Statuswerte als
+Labels. Loki behaelt Raster-, Termin-, Akteur-, Zielpersonen-, Historien- und
+Batch-IDs sowie Akteurname und Statuswerte als JSON-Felder; Zielpersonennamen,
+Kontaktdaten und freie Payloads sind ausgeschlossen. Die Projektion ersetzt nicht
+die auf 10000 Eintraege begrenzte Fachhistorie in `state.sqlite`.
 
 Die Uebersicht zeigt zusaetzlich den verbleibenden Google-Sheets-Read-Cooldown,
 die tatsaechlichen API-Versuche sowie logische Readrequests nach festem Zweck und

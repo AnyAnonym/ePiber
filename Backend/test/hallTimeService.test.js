@@ -84,8 +84,29 @@ test("Gleichberechtigte Neuverteilung ersetzt Zukunft und haelt Summendifferenz 
   assert.equal(distributed.grid.entries.length, 4);
   assert.ok(Math.max(...counts) - Math.min(...counts) <= 1);
   const history = context.service.history(admin, created.grid.id).entries;
-  assert.equal(history.some(({ action }) => action === "distribution_replaced"), true);
+  const distribution = history.find(({ action }) => action === "distribution_replaced");
+  assert.equal(distribution.batchId, operation(9));
+  assert.deepEqual(distribution.summary, {
+    slotCount: 2, assignedCount: 4, promotedCount: 0, removedCount: 0, unchangedCount: 0,
+  });
+  assert.equal(distribution.changes.length, 4);
+  assert.equal(distribution.changes.every(({ from, to, slot }) => from === "red" && to === "confirmed" && slot.date), true);
+  const reversed = new Map(distributed.grid.entries.map((entry) => [JSON.stringify([entry.slotId, entry.personId]), entry.status]));
+  for (const change of distribution.changes) {
+    const key = JSON.stringify([change.slotId, change.personId]);
+    if (change.from === "red") reversed.delete(key); else reversed.set(key, change.from);
+  }
+  assert.deepEqual([...reversed], []);
+  assert.equal(Object.hasOwn(context.service.history(players[0], created.grid.id).entries.find(({ action }) => action === "distribution_replaced"), "changes"), false);
   assert.equal(history.some(({ action }) => action === "assigned_by_distribution"), false);
+  const distributionLog = context.logs.find(({ event, fields }) => event === "hall_time_history_recorded" && fields.action === "distribution_replaced");
+  assert.equal(distributionLog.fields.changeCount, 4);
+  assert.equal(distributionLog.fields.assignedCount, 4);
+  assert.equal(Object.hasOwn(distributionLog.fields, "personName"), false);
+  const historyLogCount = context.logs.filter(({ event }) => event === "hall_time_history_recorded").length;
+  const repeated = context.service.distribute(admin, { operationId: operation(9), gridId: created.grid.id, expectedRevision: created.revision });
+  assert.equal(repeated.repeated, true);
+  assert.equal(context.logs.filter(({ event }) => event === "hall_time_history_recorded").length, historyLogCount);
   assert.equal(context.messages.length, 0);
   context.repository.close();
 });
@@ -333,6 +354,107 @@ test("Hallenzeiten speichern strukturierte Teilnehmer nach Nachname und Vorname 
   assert.deepEqual(created.grid.participants.map(({ id, name }) => [id, name]), [
     ["p2", "Aigner Berta"], ["p3", "Aigner Clara"], ["p1", "Zeller Anna"],
   ]);
+  context.repository.close();
+});
+
+test("Hallenzeiten-Historie projiziert alle bekannten Personen als Vorname Nachname", async () => {
+  const context = setup();
+  const people = new Map([
+    ["p1", { firstName: "Anna", lastName: "Zeller", name: "Zeller Anna" }],
+    ["p2", { firstName: "Berta", lastName: "Aigner", name: "Aigner Berta" }],
+    ["p3", { firstName: "Clara", lastName: "Aigner", name: "Aigner Clara" }],
+  ]);
+  const created = context.service.saveGrid(admin, gridRequest(0), people);
+  await context.service.setBooking(
+    { ...players[0], firstName: "Anna", lastName: "Zeller", name: "Zeller Anna" },
+    { operationId: operation(23), gridId: created.grid.id, slotId: created.grid.slots[0].id, personId: "p2", selected: true },
+  );
+  const snapshot = context.repository.getState("hall-times:v1", { grids: [] });
+  const booking = snapshot.value.grids[0].history.find(({ action }) => action === "booking_added");
+  booking.actorName = "Zeller Anna";
+  booking.personName = "Aigner Berta";
+  const createdEntry = snapshot.value.grids[0].history.find(({ action }) => action === "grid_created");
+  createdEntry.actorName = "Admin Anna";
+  context.repository.setState("hall-times:v1", snapshot.value, snapshot.revision);
+
+  const historyNames = new Map([...people, [admin.id, "Anna Admin"]]);
+  const history = context.service.history(admin, created.grid.id, historyNames).entries;
+  assert.equal(history.find(({ action }) => action === "booking_added").actorName, "Anna Zeller");
+  assert.equal(history.find(({ action }) => action === "booking_added").personName, "Berta Aigner");
+  assert.equal(history.find(({ action }) => action === "grid_created").actorName, "Anna Admin");
+  context.repository.close();
+});
+
+test("Rasteraenderungen bleiben als eigener Einstellungseintrag historisiert", () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const created = context.service.saveGrid(admin, gridRequest(0), names);
+  context.service.saveGrid(admin, gridRequest(created.revision, {
+    operationId: operation(24), gridId: created.grid.id, description: "Neue Einstellung",
+  }), names);
+  const entry = context.service.history(admin, created.grid.id).entries[0];
+  assert.equal(entry.action, "grid_updated");
+  assert.equal(entry.actorName, "Admin");
+  context.repository.close();
+});
+
+test("Terminbezogene Historie behaelt ihren Snapshot nach Entfernen eines Zukunftstermins", async () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const created = context.service.saveGrid(admin, gridRequest(0), names);
+  const booked = await context.service.setBooking(players[0], {
+    operationId: operation(26), gridId: created.grid.id, slotId: created.grid.slots[0].id, selected: true,
+  });
+  context.service.saveGrid(admin, gridRequest(booked.revision, {
+    operationId: operation(27), gridId: created.grid.id,
+    slots: [{ ...created.grid.slots[1] }],
+  }), names);
+  const booking = context.service.history(admin, created.grid.id).entries.find(({ action }) => action === "booking_added");
+  assert.deepEqual(booking.slot, created.grid.slots[0]);
+  context.repository.close();
+});
+
+test("Hallenzeiten-Historie behaelt hoechstens 10000 Eintraege", () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const created = context.service.saveGrid(admin, gridRequest(0), names);
+  const snapshot = context.repository.getState("hall-times:v1", { grids: [] });
+  snapshot.value.grids[0].history = Array.from({ length: 10000 }, (_, index) => ({
+    id: `old-${index}`, at: index, action: "grid_updated", actorId: admin.id, actorName: admin.name,
+    personId: "", personName: "", slotId: "", from: "red", to: "red", detail: "",
+  }));
+  const seeded = context.repository.setState("hall-times:v1", snapshot.value, snapshot.revision);
+  context.service.saveGrid(admin, gridRequest(seeded.revision, {
+    operationId: operation(25), gridId: created.grid.id, description: "Limit",
+  }), names);
+  const history = context.service.history(admin, created.grid.id).entries;
+  assert.equal(history.length, 10000);
+  assert.equal(history.at(-1).id, "old-1");
+  context.repository.close();
+});
+
+test("Hallenzeiten projizieren aktuelle Rastergauges ohne Personendimension", async () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const created = context.service.saveGrid(admin, gridRequest(0, { capacity: 2 }), names);
+  await context.service.setBooking(players[0], {
+    operationId: operation(28), gridId: created.grid.id, slotId: created.grid.slots[0].id, selected: true,
+  });
+  const status = context.service.metricsStatus();
+  assert.equal(status.historyLimit, 10000);
+  assert.deepEqual(status.grids[0], {
+    id: created.grid.id,
+    name: "Winterhalle",
+    mode: "equal",
+    active: true,
+    participants: 3,
+    futureSlots: 2,
+    capacity: 4,
+    confirmed: 1,
+    waitlist: 0,
+    historyEntries: 2,
+  });
+  assert.equal(JSON.stringify(status).includes("Spieler"), false);
   context.repository.close();
 });
 

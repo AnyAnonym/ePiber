@@ -448,7 +448,7 @@ werden keine Labels. Caddy entfernt Querystrings, Request-/Responseheader und
 Quelladressen aus den Access-Logs. Loki ist ein gemeinsamer Tenant: Jeder
 zugelassene Grafana-Admin darf bewusst Daten beider aktiver Systeme sehen.
 
-Neun Dashboards werden provisioniert. `ePiber Personennormalisierung` trennt
+Zehn Dashboards werden provisioniert. `ePiber Personennormalisierung` trennt
 Live und PAJ ueber die Deploymentauswahl und kombiniert aggregierte
 Prometheus-Zustaende mit kontrollierten Loki-Ereignissen. Sein Auditpanel zeigt
 Adminname/-ID, Ziel-Personen-ID und resultierenden Zielnamen. Fuer Aktiv und
@@ -473,6 +473,10 @@ Meldungsdetails direkt aus der jeweiligen `messaging.sqlite`. Empfaengername und
 -rolle, Betreff, Text, Ereignisdetail, Ergebnis, Akteur, Quittierungszeit,
 Zustellungen sowie Ereignis- und Meldungs-ID gelangen weder nach Loki noch in
 Prometheus. Ein Export aus Grafana ist wie `messaging.sqlite` zu schuetzen.
+`ePiber Hallenreservierung` kombiniert aktuelle Prometheus-Gauges je Raster mit
+der normalen 14-Tage-Loki-Projektion erfolgreicher Fachereignisse und
+problematischer Schreibausgaenge. Zielpersonennamen und freie Payloads gelangen
+weder in das Dashboard noch in Prometheus- oder Loki-Labels.
 
 Grafana besitzt genau eine kanonische Origin `https://epiber.at/grafana/`. PAJ
 antwortet auf `/grafana/` mit einer permanenten Weiterleitung dorthin. Der

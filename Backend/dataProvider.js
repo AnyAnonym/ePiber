@@ -1381,7 +1381,7 @@ const endpoints = {
   },
   hallTimeHistory: {
     access: "authenticated",
-    handler: (params, context) => dependencies.hallTimeService.history(context.principal, params.gridId),
+    handler: (params, context) => dependencies.hallTimeService.history(context.principal, params.gridId, playerNameMap()),
   },
   adminHallTimeGrids: {
     access: ["admin"],

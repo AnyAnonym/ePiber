@@ -361,6 +361,7 @@ function createApplication(overrides = {}) {
           state: status.state,
           sheets: status.sheets,
           peopleNormalization: peopleNormalizationMetrics(),
+          hallTimes: hallTimeService.metricsStatus?.(),
         }), "text/plain; version=0.0.4; charset=utf-8");
       }
 

@@ -6,3 +6,16 @@ Commit: 4.12.1-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.1-paj-1-1` gesetzt.
+
+[4.12.1-paj-1-2] - 2026-09-22
+Commit: 4.12.1-paj-1-2 | Hallenzeiten-Historie und Monitoring erweitert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.1-paj-1-1-x` gesetzt.
+  - [Hallenzeiten] Gespeicherte Rasteraenderungen erscheinen in der Fachhistorie als `<Vorname Nachname> hat Einstellungen geändert`.
+  - [Historien] Sichtbare Personennamen werden in allen Hallenzeiten-Historieneintraegen anhand ihrer Personen-ID als `Vorname Nachname` projiziert; Eigenaktionen werden ebenfalls anhand der Personen-ID statt einer potenziell abweichenden Namensreihenfolge erkannt. Unbekannte oder geloeschte Personen behalten den gespeicherten Namensfallback. Die bereits entsprechend erzeugten Namenssnapshots der Bewerbs-, Match- und Ranglistenhistorie bleiben unveraendert.
+  - [Tests] Service- und Browsertests sichern die Namensreihenfolge fuer bestehende und neue Hallenzeiten-Historieneintraege sowie den neuen Einstellungstext ab.
+  - [Hallenzeiten] Die Rasterhistorie behaelt 10000 Eintraege und speichert Neuverteilungen sowie das vollstaendige Statusloeschen als kompakte, rueckrechenbare Batches mit Terminsnapshots, Statusdeltas und Summenzaehlern.
+  - [Observability] Erfolgreiche Hallenzeiten-Fachereignisse erhalten die datensparsame Loki-Projektion `hall_time_history_recorded`; Zielpersonen erscheinen dort nur als ID. Prometheus liefert aktuelle Raster-, Kapazitaets-, Belegungs-, Wartelisten- und Historiengauges.
+  - [Grafana] Das neue Dashboard `ePiber Hallenreservierung` kombiniert aktuelle Prometheus-Zustaende mit 14 Tagen Loki-Aktivitaet, Neuverteilungssummen und problematischen Schreibausgaengen.
+  - [Tests] Zusaetzliche Service-, Metrik-, Dashboard- und Browsertests pruefen Batchdeltas, das 10000er-Limit, datensparsame Projektionen und die sichtbare Neuverteilungszusammenfassung.

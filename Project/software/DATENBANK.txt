@@ -836,7 +836,14 @@ Tabelle `app_state`:
   oeffentliche Beitrittsfreigabe, Fixplatzkapazitaet, Wartelistenaktivierung und
   persoenliches Wartelistenlimit, Fair-Use-Parameter, strukturierte Teilnehmer,
   chronologische Termine, Fix-/Wartelisteneintraege mit Queuezeit sowie eine auf
-  5000 Eintraege begrenzte Fachhistorie. Wartelistenpositionen werden aus Queuezeit
+  10000 Eintraege begrenzte Fachhistorie. Historieneintraege speichern Aktion,
+  Zeitpunkt, Akteur, Zielperson, Statusuebergang und bei Terminbezug einen
+  unveraenderlichen Snapshot aus ID, Datum, Beginn und Ende. Neuverteilungen und
+  das vollstaendige Loeschen von Stati speichern unter einer Batch-ID kontrollierte
+  Einzel-Deltas samt Summenzaehlern in jeweils einem kompakten Historieneintrag.
+  Damit bleibt ihr Vorher-Zustand innerhalb des aufbewahrten Fensters
+  rekonstruierbar, ohne das Eintragslimit durch einen einzelnen Massenlauf zu
+  sprengen. Wartelistenpositionen werden aus Queuezeit
   und Personen-ID abgeleitet und nicht redundant gespeichert. Alle Mutationen
   verwenden dieselbe State-Revision und idempotente `operations`-Datensaetze.
   Compare-and-set meldet bei falscher Revision

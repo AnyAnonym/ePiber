@@ -3,7 +3,7 @@ const { AppError } = require("./errors.js");
 
 const STATE_KEY = "hall-times:v1";
 const EMPTY_STATE = Object.freeze({ grids: [] });
-const HISTORY_LIMIT = 5000;
+const HISTORY_LIMIT = 10000;
 const DEFAULT_MAX_WAITLIST_ENTRIES = 2;
 const VIENNA_DATE = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
@@ -48,17 +48,47 @@ function isAdmin(principal) {
   return principal?.role === "admin" || principal?.roles?.includes?.("admin");
 }
 
-function historyEntry({ now, action, actor, person = null, slotId = "", from = "red", to = "red", detail = "" }) {
+function historyPersonName(person, fallback = "") {
+  if (typeof person === "string") return person.trim() || fallback;
+  const structured = [person?.firstName, person?.lastName]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return structured || String(person?.name || fallback).trim();
+}
+
+function historySlot(slot) {
+  if (!slot) return null;
   return {
-    id: crypto.randomUUID(), at: now, action,
-    actorId: String(actor?.id || "system"), actorName: String(actor?.name || "System"),
-    personId: String(person?.id || ""), personName: String(person?.name || ""),
-    slotId: String(slotId || ""), from, to, detail,
+    id: String(slot.id || ""), date: String(slot.date || ""),
+    start: String(slot.start || ""), end: String(slot.end || ""),
   };
+}
+
+function historyEntry({
+  now, action, actor, person = null, slot = null, slotId = "", from = "red", to = "red", detail = "",
+  batchId = "", summary = null, changes = null,
+}) {
+  const entry = {
+    id: crypto.randomUUID(), at: now, action,
+    actorId: String(actor?.id || "system"), actorName: historyPersonName(actor, "System"),
+    personId: String(person?.id || ""), personName: historyPersonName(person),
+    slotId: String(slot?.id || slotId || ""), from, to, detail,
+  };
+  if (slot) entry.slot = historySlot(slot);
+  if (batchId) entry.batchId = String(batchId);
+  if (summary) entry.summary = clone(summary);
+  if (changes) entry.changes = clone(changes);
+  return entry;
 }
 
 function appendHistory(grid, entries) {
   grid.history = [...(grid.history || []), ...entries].slice(-HISTORY_LIMIT);
+}
+
+function recordHistory(grid, entries, records = null) {
+  appendHistory(grid, entries);
+  if (records && entries.length) records.push({ gridId: grid.id, gridName: grid.name, entries: clone(entries) });
 }
 
 function compareParticipants(left, right) {
@@ -109,7 +139,7 @@ function slotExpired(slot, now) {
   return viennaDateTimeMs(slot.date, slot.end) <= now;
 }
 
-function normalizeExpired(state, now) {
+function normalizeExpired(state, now, records = null) {
   let changed = false;
   for (const grid of state.grids) {
     const expiredIds = new Set(grid.slots.filter((slot) => slotExpired(slot, now)).map(({ id }) => id));
@@ -117,10 +147,11 @@ function normalizeExpired(state, now) {
     if (!removed.length) continue;
     const participants = new Map(grid.participants.map((person) => [person.id, person]));
     grid.entries = grid.entries.filter((entry) => !(entry.status === "waitlist" && expiredIds.has(entry.slotId)));
-    appendHistory(grid, removed.map((entry) => historyEntry({
-      now, action: "waitlist_expired", actor: null, person: participants.get(entry.personId), slotId: entry.slotId,
+    const slots = new Map(grid.slots.map((slot) => [slot.id, slot]));
+    recordHistory(grid, removed.map((entry) => historyEntry({
+      now, action: "waitlist_expired", actor: null, person: participants.get(entry.personId), slot: slots.get(entry.slotId),
       from: "waitlist", to: "red",
-    })));
+    })), records);
     grid.updatedAt = now;
     changed = true;
   }
@@ -157,6 +188,58 @@ class HallTimeService {
     this.now = now;
   }
 
+  logHistory(records) {
+    for (const record of records) {
+      for (const entry of record.entries) {
+        const summary = entry.summary || {};
+        this.log("info", "hall_time_history_recorded", {
+          historyId: entry.id,
+          batchId: entry.batchId || "",
+          action: entry.action,
+          gridId: record.gridId,
+          gridName: record.gridName,
+          actorId: entry.actorId,
+          actorName: entry.actorName,
+          personId: entry.personId,
+          slotId: entry.slotId,
+          slotStart: entry.slot ? `${entry.slot.date}T${entry.slot.start}` : "",
+          from: entry.from,
+          to: entry.to,
+          changeCount: Array.isArray(entry.changes) ? entry.changes.length : 0,
+          assignedCount: Number(summary.assignedCount || 0),
+          removedCount: Number(summary.removedCount || 0),
+          promotedCount: Number(summary.promotedCount || 0),
+          unchangedCount: Number(summary.unchangedCount || 0),
+        });
+      }
+    }
+  }
+
+  metricsStatus() {
+    const snapshot = this.repository.getState(STATE_KEY, EMPTY_STATE);
+    if (!snapshot.value || !Array.isArray(snapshot.value.grids)) return { historyLimit: HISTORY_LIMIT, grids: [] };
+    const now = this.now();
+    return {
+      historyLimit: HISTORY_LIMIT,
+      grids: snapshot.value.grids.map((grid) => {
+        const futureIds = new Set(grid.slots.filter((slot) => !slotExpired(slot, now)).map(({ id }) => id));
+        const futureEntries = grid.entries.filter((entry) => futureIds.has(entry.slotId));
+        return {
+          id: grid.id,
+          name: grid.name,
+          mode: grid.mode,
+          active: grid.active === true,
+          participants: grid.participants.length,
+          futureSlots: futureIds.size,
+          capacity: futureIds.size * grid.capacity,
+          confirmed: futureEntries.filter(({ status }) => status === "confirmed").length,
+          waitlist: futureEntries.filter(({ status }) => status === "waitlist").length,
+          historyEntries: (grid.history || []).length,
+        };
+      }),
+    };
+  }
+
   snapshot({ normalize = true } = {}) {
     if (normalize) this.cleanupExpired();
     const snapshot = this.repository.getState(STATE_KEY, EMPTY_STATE);
@@ -170,11 +253,13 @@ class HallTimeService {
       if (!snapshot.value || !Array.isArray(snapshot.value.grids)) throw new AppError("STATE_CORRUPT", "Hallenzeiten-State ist ungueltig", 503);
       const value = clone(snapshot.value);
       const before = new Map(value.grids.map((grid) => [grid.id, grid.entries.filter(({ status }) => status === "waitlist").length]));
-      if (!normalizeExpired(value, this.now())) return { changed: false, revision: snapshot.revision };
+      const historyRecords = [];
+      if (!normalizeExpired(value, this.now(), historyRecords)) return { changed: false, revision: snapshot.revision };
       try {
         const result = this.repository.setState(STATE_KEY, value, snapshot.revision);
         const changedGridIds = value.grids.filter((grid) => grid.entries.filter(({ status }) => status === "waitlist").length !== before.get(grid.id)).map(({ id }) => id);
         for (const gridId of changedGridIds) this.publish("hall-times", { gridId, revision: result.revision });
+        this.logHistory(historyRecords);
         this.log("info", "hall_time_expiration_completed", { gridCount: changedGridIds.length, revision: result.revision, result: "success" });
         return { changed: true, revision: result.revision, gridIds: changedGridIds };
       } catch (error) {
@@ -214,12 +299,13 @@ class HallTimeService {
 
   setPublicMembership(principal, request, person) {
     const now = this.now();
+    const historyRecords = [];
     const operation = this.repository.applyStateOperation({
       stateKey: STATE_KEY, fallback: EMPTY_STATE, expectedRevision: request.expectedRevision,
       actorKey: `user:${principal.id}`, operationId: request.operationId,
       endpoint: "setMyHallTimeGroupMembership", payload: request,
       update: (state) => {
-        normalizeExpired(state, now);
+        normalizeExpired(state, now, historyRecords);
         const grid = state.grids.find(({ id }) => id === request.gridId);
         if (!grid?.active || grid.publicJoinable !== true) {
           throw new AppError("HALL_TIME_GROUP_NOT_PUBLIC", "Diese Hallenzeiten-Gruppe ist nicht öffentlich beitretbar", 409);
@@ -233,7 +319,7 @@ class HallTimeService {
             name: person.name || principal.name || principal.id,
           });
           grid.participants.sort(compareParticipants);
-          appendHistory(grid, [historyEntry({ now, action: "group_joined", actor: principal, person })]);
+          recordHistory(grid, [historyEntry({ now, action: "group_joined", actor: principal, person })], historyRecords);
           grid.updatedAt = now;
         } else if (!request.selected && participantIndex >= 0) {
           const hasCurrentEntries = grid.entries.some((entry) => entry.personId === principal.id
@@ -242,7 +328,7 @@ class HallTimeService {
             throw new AppError("HALL_TIME_GROUP_ACTIVE_ENTRIES", "Vor dem Austritt müssen alle eigenen aktuellen Einträge entfernt werden", 409);
           }
           grid.participants.splice(participantIndex, 1);
-          appendHistory(grid, [historyEntry({ now, action: "group_left", actor: principal, person })]);
+          recordHistory(grid, [historyEntry({ now, action: "group_left", actor: principal, person })], historyRecords);
           grid.updatedAt = now;
         }
         return state;
@@ -257,7 +343,10 @@ class HallTimeService {
         };
       },
     });
-    if (!operation.repeated) this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    if (!operation.repeated) {
+      this.logHistory(historyRecords);
+      this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    }
     return { ...operation.result, repeated: operation.repeated };
   }
 
@@ -274,7 +363,7 @@ class HallTimeService {
     return { success: true, grid: projectedGrid(grid, snapshot.revision, principal) };
   }
 
-  history(principal, gridId) {
+  history(principal, gridId, personNames = new Map()) {
     const snapshot = this.snapshot();
     const grid = snapshot.value.grids.find(({ id }) => id === gridId);
     if (!grid || !grid.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
@@ -282,7 +371,22 @@ class HallTimeService {
     const slots = new Map(grid.slots.map((slot) => [slot.id, slot]));
     return {
       success: true,
-      entries: [...(grid.history || [])].reverse().map((entry) => ({ ...clone(entry), slot: slots.get(entry.slotId) || null })),
+      entries: [...(grid.history || [])].reverse().map((entry) => {
+        const projected = clone(entry);
+        delete projected.changes;
+        return {
+          ...projected,
+          actorName: entry.actorId === "system" ? "System" : historyPersonName(personNames.get(entry.actorId), entry.actorName),
+          personName: entry.personId ? historyPersonName(personNames.get(entry.personId), entry.personName) : "",
+          slot: clone(entry.slot || slots.get(entry.slotId) || null),
+          ...(isAdmin(principal) && Array.isArray(entry.changes) ? {
+            changes: entry.changes.map((change) => ({
+              ...clone(change),
+              personName: historyPersonName(personNames.get(change.personId), change.personName),
+            })),
+          } : {}),
+        };
+      }),
     };
   }
 
@@ -298,11 +402,12 @@ class HallTimeService {
     const endpoint = "adminSaveHallTimeGrid";
     const actorKey = `user:${principal.id}`;
     const payload = { ...request, participantNames: undefined };
+    const historyRecords = [];
     const operation = this.repository.applyStateOperation({
       stateKey: STATE_KEY, fallback: EMPTY_STATE, expectedRevision: request.expectedRevision,
       actorKey, operationId: request.operationId, endpoint, payload,
       update: (state) => {
-        normalizeExpired(state, now);
+        normalizeExpired(state, now, historyRecords);
         const existingIndex = request.gridId ? state.grids.findIndex(({ id }) => id === request.gridId) : -1;
         if (request.gridId && existingIndex < 0) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
         if (state.grids.some((grid, index) => index !== existingIndex && grid.active && request.active && grid.name.toLocaleLowerCase("de") === request.name.toLocaleLowerCase("de"))) {
@@ -342,7 +447,7 @@ class HallTimeService {
           }).sort(compareParticipants),
           slots, entries, history: clone(existing?.history || []), createdAt: existing?.createdAt || now, updatedAt: now,
         };
-        appendHistory(grid, [historyEntry({ now, action: existing ? "grid_updated" : "grid_created", actor: principal, detail: grid.name })]);
+        recordHistory(grid, [historyEntry({ now, action: existing ? "grid_updated" : "grid_created", actor: principal, detail: grid.name })], historyRecords);
         if (existingIndex >= 0) state.grids[existingIndex] = grid; else state.grids.push(grid);
         return state;
       },
@@ -351,7 +456,10 @@ class HallTimeService {
         return { success: true, grid: projectedGrid(grid, snapshot.revision, principal), revision: snapshot.revision };
       },
     });
-    if (!operation.repeated) this.publish("hall-times", { gridId: operation.result.grid.id, revision: operation.result.revision });
+    if (!operation.repeated) {
+      this.logHistory(historyRecords);
+      this.publish("hall-times", { gridId: operation.result.grid.id, revision: operation.result.revision });
+    }
     return { ...operation.result, repeated: operation.repeated };
   }
 
@@ -360,12 +468,13 @@ class HallTimeService {
     const endpoint = "setHallTimeBooking";
     let promoted = null;
     let foreignChange = null;
+    const historyRecords = [];
     const operation = this.repository.applyStateOperation({
       stateKey: STATE_KEY, fallback: EMPTY_STATE,
       actorKey: `user:${principal.id}`, operationId: request.operationId, endpoint,
       payload: request,
       update: (state) => {
-        normalizeExpired(state, now);
+        normalizeExpired(state, now, historyRecords);
         const grid = state.grids.find(({ id }) => id === request.gridId);
         if (!grid?.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
         const admin = isAdmin(principal);
@@ -383,7 +492,7 @@ class HallTimeService {
         if (!request.selected) {
           if (!current) return state;
           grid.entries.splice(currentIndex, 1);
-          events.push(historyEntry({ now, action: "booking_removed", actor: principal, person, slotId: slot.id, from: current.status, to: "red" }));
+          events.push(historyEntry({ now, action: "booking_removed", actor: principal, person, slot, from: current.status, to: "red" }));
           if (personId !== principal.id) foreignChange = { person, grid, slot, action: "removed", previousStatus: current.status };
           if (current.status === "confirmed") {
             const next = grid.entries.filter((entry) => entry.slotId === slot.id && entry.status === "waitlist")
@@ -392,7 +501,7 @@ class HallTimeService {
               next.status = "confirmed";
               const promotedPerson = grid.participants.find(({ id }) => id === next.personId);
               promoted = { person: promotedPerson, grid, slot };
-              events.push(historyEntry({ now, action: "waitlist_promoted", actor: null, person: promotedPerson, slotId: slot.id, from: "waitlist", to: "confirmed" }));
+              events.push(historyEntry({ now, action: "waitlist_promoted", actor: null, person: promotedPerson, slot, from: "waitlist", to: "confirmed" }));
             }
           }
         } else if (!current) {
@@ -422,10 +531,10 @@ class HallTimeService {
             if (waiting >= limit) throw new AppError("HALL_TIME_WAITLIST_LIMIT", `Es sind höchstens ${limit} Wartelisteneinträge erlaubt`, 409, { limit });
           }
           grid.entries.push({ slotId: slot.id, personId, status, queuedAt: now });
-          events.push(historyEntry({ now, action: status === "confirmed" ? "booking_added" : "waitlist_added", actor: principal, person, slotId: slot.id, from: "red", to: status }));
+          events.push(historyEntry({ now, action: status === "confirmed" ? "booking_added" : "waitlist_added", actor: principal, person, slot, from: "red", to: status }));
           if (personId !== principal.id) foreignChange = { person, grid, slot, action: "added", status };
         }
-        appendHistory(grid, events);
+        recordHistory(grid, events, historyRecords);
         grid.updatedAt = now;
         return state;
       },
@@ -435,6 +544,7 @@ class HallTimeService {
       },
     });
     if (!operation.repeated) {
+      this.logHistory(historyRecords);
       this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
       if (promoted?.person?.id && this.messagingService) {
         const dateLabel = promoted.slot.date.split("-").reverse().join(".");
@@ -499,17 +609,19 @@ class HallTimeService {
   distribute(principal, request) {
     if (!isAdmin(principal)) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
     const now = this.now();
+    const historyRecords = [];
     const operation = this.repository.applyStateOperation({
       stateKey: STATE_KEY, fallback: EMPTY_STATE, expectedRevision: request.expectedRevision,
       actorKey: `user:${principal.id}`, operationId: request.operationId, endpoint: "adminDistributeHallTimeGrid", payload: request,
       update: (state) => {
-        normalizeExpired(state, now);
+        normalizeExpired(state, now, historyRecords);
         const grid = state.grids.find(({ id }) => id === request.gridId);
         if (!grid?.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
         if (grid.mode !== "equal") throw new AppError("HALL_TIME_MODE_INVALID", "Automatische Verteilung ist nur im Modus Gleichberechtigte Aufteilung verfuegbar", 409);
         if (!grid.participants.length) throw new AppError("HALL_TIME_NO_PARTICIPANTS", "Dem Raster sind keine Spieler zugeordnet", 409);
         const futureSlots = grid.slots.filter((slot) => !slotExpired(slot, now));
         const futureIds = new Set(futureSlots.map(({ id }) => id));
+        const previousEntries = grid.entries.filter((entry) => futureIds.has(entry.slotId));
         grid.entries = grid.entries.filter((entry) => !futureIds.has(entry.slotId));
         const counts = new Map(grid.participants.map(({ id }) => [id, grid.entries.filter((entry) => entry.personId === id && entry.status === "confirmed").length]));
         const pairCounts = new Map();
@@ -543,7 +655,31 @@ class HallTimeService {
             }
           }
         });
-        appendHistory(grid, [historyEntry({ now, action: "distribution_replaced", actor: principal, detail: `${futureSlots.length}` })]);
+        const nextEntries = grid.entries.filter((entry) => futureIds.has(entry.slotId));
+        const previous = new Map(previousEntries.map((entry) => [JSON.stringify([entry.slotId, entry.personId]), entry.status]));
+        const next = new Map(nextEntries.map((entry) => [JSON.stringify([entry.slotId, entry.personId]), entry.status]));
+        const people = new Map(grid.participants.map((person) => [person.id, person]));
+        const slots = new Map(futureSlots.map((slot) => [slot.id, slot]));
+        const changes = [...new Set([...previous.keys(), ...next.keys()])].sort().map((key) => {
+          const [slotId, personId] = JSON.parse(key);
+          const from = previous.get(key) || "red";
+          const to = next.get(key) || "red";
+          return {
+            slotId, personId, personName: historyPersonName(people.get(personId)),
+            slot: historySlot(slots.get(slotId)), from, to,
+          };
+        });
+        const summary = {
+          slotCount: futureSlots.length,
+          assignedCount: changes.filter(({ from, to }) => from === "red" && to === "confirmed").length,
+          promotedCount: changes.filter(({ from, to }) => from === "waitlist" && to === "confirmed").length,
+          removedCount: changes.filter(({ from, to }) => from !== "red" && to === "red").length,
+          unchangedCount: changes.filter(({ from, to }) => from === to).length,
+        };
+        recordHistory(grid, [historyEntry({
+          now, action: "distribution_replaced", actor: principal, detail: `${futureSlots.length}`,
+          batchId: request.operationId, summary, changes,
+        })], historyRecords);
         grid.updatedAt = now;
         return state;
       },
@@ -552,7 +688,10 @@ class HallTimeService {
         return { success: true, grid: projectedGrid(grid, snapshot.revision, principal), revision: snapshot.revision };
       },
     });
-    if (!operation.repeated) this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    if (!operation.repeated) {
+      this.logHistory(historyRecords);
+      this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    }
     return { ...operation.result, repeated: operation.repeated };
   }
 
@@ -560,6 +699,7 @@ class HallTimeService {
     if (!isAdmin(principal)) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
     const now = this.now();
     let deletedEntryCount = 0;
+    const historyRecords = [];
     const operation = this.repository.applyStateOperation({
       stateKey: STATE_KEY, fallback: EMPTY_STATE, expectedRevision: request.expectedRevision,
       actorKey: `user:${principal.id}`, operationId: request.operationId, endpoint: "adminClearAllHallTimeStatuses", payload: request,
@@ -567,8 +707,23 @@ class HallTimeService {
         const grid = state.grids.find(({ id }) => id === request.gridId);
         if (!grid?.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
         deletedEntryCount = grid.entries.length;
+        const people = new Map(grid.participants.map((person) => [person.id, person]));
+        const slots = new Map(grid.slots.map((slot) => [slot.id, slot]));
+        const changes = grid.entries.map((entry) => ({
+          slotId: entry.slotId,
+          personId: entry.personId,
+          personName: historyPersonName(people.get(entry.personId)),
+          slot: historySlot(slots.get(entry.slotId)),
+          from: entry.status,
+          to: "red",
+        }));
         grid.entries = [];
-        appendHistory(grid, [historyEntry({ now, action: "all_statuses_cleared", actor: principal, detail: `${deletedEntryCount}` })]);
+        recordHistory(grid, [historyEntry({
+          now, action: "all_statuses_cleared", actor: principal, detail: `${deletedEntryCount}`,
+          batchId: request.operationId,
+          summary: { removedCount: deletedEntryCount },
+          changes,
+        })], historyRecords);
         grid.updatedAt = now;
         return state;
       },
@@ -580,7 +735,10 @@ class HallTimeService {
         };
       },
     });
-    if (!operation.repeated) this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    if (!operation.repeated) {
+      this.logHistory(historyRecords);
+      this.publish("hall-times", { gridId: request.gridId, revision: operation.result.revision });
+    }
     return { ...operation.result, repeated: operation.repeated };
   }
 }
