@@ -263,30 +263,41 @@ test("Matchergebnis-Dashboard begrenzt Auditqueries auf kontrollierte Felder", (
   }
 });
 
-test("Messaging-Dashboard nutzt nur gepinnte interne Infinity-Abfragen", () => {
+test("Meldungsdashboard kombiniert dynamisch ausgewaehlte geschuetzte Projektionen", () => {
   const dashboard = JSON.parse(fs.readFileSync(messagingDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-messaging");
+  assert.equal(dashboard.title, "ePiber Meldungen");
   assert.equal(dashboard.timezone, "Europe/Vienna");
   assert.equal(dashboard.time.from, "now-30d");
   assert.equal(dashboard.refresh, "5m");
-  assert.deepEqual(dashboard.templating.list.map(({ name }) => name), ["deployment"]);
+  assert.deepEqual(dashboard.templating.list.map(({ name }) => name), ["deployment", "sources"]);
   assert.equal(dashboard.templating.list[0].query, "Live : http://127.0.0.1:8080, PAJ : http://127.0.0.1:8083");
+  const sources = dashboard.templating.list[1];
+  assert.equal(sources.multi, true);
+  assert.equal(sources.includeAll, true);
+  assert.equal(sources.allValue, "all");
+  assert.equal(sources.query.infinityQuery.url, "$deployment/internal/messaging-report?view=options");
+  assert.equal(sources.query.infinityQuery.root_selector, "$.options");
+  assert.equal(sources.query.infinityQuery.parser, "backend");
   const targets = dashboard.panels.flatMap(({ targets = [] }) => targets);
-  assert.equal(targets.length, 6);
+  assert.equal(targets.length, 7);
   for (const target of targets) {
     assert.deepEqual(target.datasource, { type: "yesoreyeram-infinity-datasource", uid: "epiber-messaging" });
     assert.equal(target.type, "json");
     assert.equal(target.source, "url");
     assert.equal(target.parser, "backend");
     assert.equal(target.url_options.method, "GET");
-    assert.equal(target.url, "$deployment/internal/messaging-report?from=${__from}&to=${__to}");
+    assert.equal(target.url, "$deployment/internal/messaging-report?from=${__from}&to=${__to}&selection=${sources:csv}");
     assert.equal(Object.hasOwn(target, "headers"), false);
   }
-  const trend = dashboard.panels.find(({ title }) => title === "Persoenliche Meldungen pro Tag");
-  assert.deepEqual(trend.targets[0].columns.map(({ selector }) => selector), ["time", "total", "results", "challenges", "dateChanges"]);
+  const trend = dashboard.panels.find(({ title }) => title === "Meldungen pro Tag");
+  assert.deepEqual(trend.targets[0].columns.map(({ selector }) => selector), ["time", "total", "personal", "competitions", "halls"]);
   assert.equal(trend.fieldConfig.defaults.custom.stacking.mode, "none");
-  const details = dashboard.panels.find(({ title }) => title === "Meldungsdetails");
-  for (const field of ["subject", "body", "summary", "detail", "result", "actorName", "acknowledgedAt", "deliveries"]) {
+  for (const title of ["Meldungen gesamt", "Persönliche Meldungen", "Bewerbshistorien", "Hallenraster-Historien"]) {
+    assert.equal(dashboard.panels.find(({ title: value }) => value === title).type, "stat");
+  }
+  const details = dashboard.panels.find(({ title }) => title === "Meldungsliste");
+  for (const field of ["area", "contextName", "subject", "body", "detail", "result", "actorName", "personName", "participants", "statusChange", "acknowledgedAt", "deliveries"]) {
     assert.equal(details.targets[0].columns.some(({ selector }) => selector === field), true, field);
   }
 });

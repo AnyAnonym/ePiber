@@ -395,14 +395,24 @@ function createApplication(overrides = {}) {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
         if (!new Set(["127.0.0.1", "::1"]).has(getRequestIp(request))) throw new AppError("REPORTING_AUTH_REQUIRED", "Reporting-Autorisierung ist erforderlich", 401);
         assertBearerToken(request, messagingReporting.token);
-        const allowedParameters = new Set(["from", "to"]);
+        const allowedParameters = new Set(["from", "to", "selection", "view"]);
         for (const key of url.searchParams.keys()) if (!allowedParameters.has(key) || url.searchParams.getAll(key).length !== 1) throw new AppError("VALIDATION_ERROR", "Reporting-Parameter sind ungueltig", 400);
-        if (![...allowedParameters].every((key) => url.searchParams.has(key))) throw new AppError("VALIDATION_ERROR", "Reporting-Zeitraum fehlt", 400);
+        if (url.searchParams.get("view") === "options") {
+          if ([...url.searchParams.keys()].some((key) => key !== "view")) throw new AppError("VALIDATION_ERROR", "Reporting-Parameter sind ungueltig", 400);
+          const hallTimes = hallTimeService.reportingSnapshot(0, 0);
+          return sendJson(response, 200, messagingService.messagingReportOptions({ deployment: messagingReporting.deployment, hallTimes, logCompletion: true }));
+        }
+        if (url.searchParams.has("view")) throw new AppError("VALIDATION_ERROR", "Reporting-Ansicht ist ungueltig", 400);
+        if (!["from", "to"].every((key) => url.searchParams.has(key))) throw new AppError("VALIDATION_ERROR", "Reporting-Zeitraum fehlt", 400);
         const fromMs = Number(url.searchParams.get("from"));
         const toMs = Number(url.searchParams.get("to"));
         if (![fromMs, toMs].every(Number.isSafeInteger) || fromMs < 0 || toMs <= fromMs) throw new AppError("REPORTING_RANGE_INVALID", "Reporting-Zeitraum ist ungueltig", 400);
         if (toMs - fromMs > 31 * 24 * 60 * 60 * 1000) throw new AppError("REPORTING_RANGE_TOO_LARGE", "Reporting-Zeitraum darf hoechstens 31 Tage umfassen", 400);
-        return sendJson(response, 200, messagingService.messagingReport({ fromMs, toMs, deployment: messagingReporting.deployment }));
+        const selection = url.searchParams.has("selection") ? url.searchParams.get("selection").split(",") : ["personal"];
+        if (selection.length > 100 || selection.some((value) => !value || value.length > 160)) throw new AppError("REPORTING_SELECTION_INVALID", "Meldungsauswahl ist ungueltig", 400);
+        const people = messagingService.reportingPeople();
+        const hallTimes = hallTimeService.reportingSnapshot(fromMs, toMs, people);
+        return sendJson(response, 200, messagingService.messagingReport({ fromMs, toMs, deployment: messagingReporting.deployment, selection, hallTimes }));
       }
 
       const cookies = parseCookies(request.headers.cookie);

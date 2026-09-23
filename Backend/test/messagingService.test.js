@@ -832,6 +832,25 @@ test("Messaging-Reporting aggregiert Wiener Tage, ueberlappende Typen und aktuel
   ]);
   assert.equal(report.messages.find(({ id }) => id === "result-message").competitionName, "Sommercup");
   assert.equal(report.messages.find(({ id }) => id === "result-message").isDateChange, true);
+  const options = service.messagingReportOptions({ deployment: "paj", hallTimes: { grids: [{ id: "winter", name: "Winterhalle" }] } });
+  assert.deepEqual(options.options.map(({ __value }) => __value), ["personal", "competitions:*", "competition:cup", "halls:*", "hall:winter"]);
+  const combined = service.messagingReport({
+    fromMs: Date.parse("2026-03-28T23:00:00Z"), toMs: Date.parse("2026-03-30T22:00:00Z"), deployment: "paj",
+    selection: ["all"],
+    hallTimes: {
+      grids: [{ id: "winter", name: "Winterhalle" }],
+      entries: [{ id: "hall-1", time: Date.parse("2026-03-30T10:00:00Z"), gridId: "winter", gridName: "Winterhalle", action: "booking_added", actorName: "Peter Player", personName: "Peter Player", from: "red", to: "confirmed", summary: "Peter Player hat sich angemeldet", detail: "", }],
+    },
+  });
+  assert.deepEqual(combined.totals, { totalCount: 6, messageCount: 3, personalCount: 3, competitionCount: 2, hallCount: 1, recipientCount: 3 });
+  assert.deepEqual(new Set(combined.entries.map(({ area }) => area)), new Set(["Persönliche Meldung", "Bewerbshistorie", "Hallenraster-Historie"]));
+  assert.equal(combined.series.reduce((sum, day) => sum + day.total, 0), 6);
+  const deduplicated = service.messagingReport({
+    fromMs: Date.parse("2026-03-28T23:00:00Z"), toMs: Date.parse("2026-03-30T22:00:00Z"), deployment: "paj",
+    selection: ["competitions:*", "competition:cup"], hallTimes: { grids: [], entries: [] },
+  });
+  assert.equal(deduplicated.totals.competitionCount, 2);
+  assert.throws(() => service.messagingReport({ fromMs: 1, toMs: 2, deployment: "paj", selection: ["competition:missing"] }), { code: "REPORTING_SELECTION_INVALID" });
   assert.equal(JSON.stringify(logs).includes("Betreff"), false);
   assert.equal(logs.at(-1).event, "messaging_report_completed");
   repository.close();

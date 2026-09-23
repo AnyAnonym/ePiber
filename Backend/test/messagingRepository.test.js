@@ -409,6 +409,10 @@ test("MessagingRepository liefert zeitbegrenzte persoenliche Reportingprojektion
     { channel: "Email", status: "not_configured" },
     { channel: "Inbox", status: "delivered" },
   ]);
+  assert.deepEqual(repository.reportEvents(1000, 2000).map(({ id, competitionId }) => ({ id, competitionId })), [
+    { id: "event-report", competitionId: "cup" },
+  ]);
+  assert.deepEqual(repository.reportEvents(1001, 2000), []);
   assert.equal(repository.db.prepare("PRAGMA index_list('competition_events')").all().some(({ name }) => name === "competition_events_created"), true);
   repository.close();
 });

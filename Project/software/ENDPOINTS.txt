@@ -108,22 +108,37 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
   erreichbar und verlangt `Authorization: Bearer <EPIBER_OBSERVABILITY_API_TOKEN>`
   mit timing-safe geprueftem starkem Base64url-Token. Browserzugriffe werden von
   Caddy unter `/internal/*` mit 404 gesperrt. Erlaubt sind ausschliesslich die
-  einmaligen Queryparameter `from` und `to` als nichtnegative Unixzeit in
-  Millisekunden mit `to > from`; der halb offene Zeitraum `[from,to)` darf
-  hoechstens 31 Tage umfassen.
+  Der Optionsaufruf verwendet ausschliesslich `view=options` und liefert
+  `{ success, deployment, generatedAt, options }`. Jeder Eintrag in `options`
+  besitzt `__text` und `__value` fuer die dynamische Grafana-Mehrfachauswahl.
+  Angeboten werden `personal`, `competitions:*`, `competition:<id>`, `halls:*`
+  und `hall:<id>` mit kontrollierten aktuellen Bewerbs- und Rasternamen.
 
-  Die Antwort wird direkt aus `messaging.sqlite` erzeugt und mit aktuellen Rollen,
-  Empfaengerklassen und Bewerbsnamen aus dem Last-good-Snapshot angereichert. Sie
-  enthaelt `{ success, deployment, from, to, generatedAt, totals, series,
-  roleSummary, recipients, messages }`. `series` aggregiert Wiener Kalendertage
-  mit `total`, `results`, `challenges` und `dateChanges`; Kategorien duerfen sich
-  fachlich ueberlappen. `messages` ist die vollstaendige, aber geschlossene
-  Reportingprojektion der persoenlichen Meldungen samt Ereignis, Empfaenger,
-  aktuellem Rollenbezug, Bewerb, Quittierung und kontrollierten Zustellstatus.
-  Es gibt keine zweite Reporting-Datenbank. Fehlender oder falscher Bearer
+  Der Berichtsaufruf verwendet die einmaligen Queryparameter `from` und `to` als
+  nichtnegative Unixzeit in Millisekunden mit `to > from`; der halb offene
+  Zeitraum `[from,to)` darf hoechstens 31 Tage umfassen. Der optionale Parameter
+  `selection` ist eine kommagetrennte Mehrfachauswahl der angebotenen Werte;
+  `all` steht fuer persoenliche Meldungen sowie alle Bewerbs- und
+  Hallenrasterhistorien. Ohne `selection` bleibt aus Kompatibilitaetsgruenden nur
+  `personal` aktiv. Ueberlappende Gesamt- und Einzelauswahlen erzeugen keine
+  Duplikate.
+
+  Die Antwort kombiniert persoenliche Projektionen und neutrale Bewerbsereignisse
+  aus `messaging.sqlite` mit der gewaehlten Hallenrasterhistorie aus
+  `state.sqlite` und reichert sie mit aktuellen Rollen, Empfaengerklassen und
+  Bewerbsnamen aus dem Last-good-Snapshot an. Sie enthaelt `{ success, deployment,
+  from, to, generatedAt, selection, totals, series, roleSummary, recipients,
+  messages, entries }`. `series` aggregiert Wiener Kalendertage mit `total`,
+  `personal`, `competitions` und `halls`; `totals` fuehrt dieselben Bereiche als
+  Summen. `messages`, `roleSummary` und `recipients` bleiben die geschlossene
+  persoenliche Projektion. `entries` ist die gemeinsame absteigend sortierte
+  Liste mit kontrollierten Bereichs-, Kontext-, Ereignis-, Akteur-, Personen-,
+  Ergebnis-, Status-, Quittierungs- und Zustellfeldern. Es gibt keine zweite
+  Reporting-Datenbank. Fehlender oder falscher Bearer
   beziehungsweise Nicht-Loopback liefert 401, ein ungueltiger Zeitraum 400,
   fehlende aktuelle Grunddaten 503. Der Abschluss wird ohne Token oder freie
-  Meldungsinhalte als `messaging_report_completed` protokolliert.
+  Meldungsinhalte als `messaging_report_completed` beziehungsweise
+  `messaging_report_options_completed` protokolliert.
 
 ----- GET /status (admin) -----
    Verlangt ein gueltiges Admin-Sessioncookie und liefert

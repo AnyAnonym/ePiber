@@ -6,3 +6,16 @@ Commit: 4.12.2-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.2-paj-1-1` gesetzt.
+
+[4.12.2-paj-1-2] - 2026-09-23
+Commit: 4.12.2-paj-1-2 | Meldungsdashboard um Historien erweitert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.2-paj-1-1-x` gesetzt.
+  - [Observability] Das Grafana-Dashboard `ePiber Meldungen` kombiniert persoenliche Meldungen sowie einzelne oder alle Bewerbs- und Hallenrasterhistorien in einer dynamischen Checkbox-Auswahl, gemeinsamen Tagesreihe, Bereichskennzahlen und Meldungsliste.
+  - [Backend] Der geschuetzte interne Meldungsbericht liefert einen dynamischen Auswahlkatalog und fuehrt selektierte Projektionen aus `messaging.sqlite` und `state.sqlite` fuer hoechstens 31 Tage dedupliziert zusammen.
+  - [Datenschutz] Vertrauliche Empfaenger-, Personen-, Text-, Ereignis-, Quittierungs- und Zustelldetails verbleiben in der geschuetzten HTTP-Projektion und werden weiterhin weder nach Loki noch nach Prometheus exportiert.
+
+  Tests
+  - [Backend] Repository-, Messaging-, Hallenzeiten- und HTTP-Integrationstests decken Auswahlkatalog, Einzelauswahl, Gesamtauswahl, Deduplizierung, Aggregation, Authentifizierung und Fehlerpfade ab.
+  - [Observability] Dashboard-Vertragstest deckt dynamische Infinity-Mehrfachauswahl, gemeinsame Kennzahlen und kontrollierte Detailfelder ab.

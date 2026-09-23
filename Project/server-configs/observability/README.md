@@ -101,7 +101,7 @@ projiziert und weder nach Loki geschrieben noch als Prometheus-Metrik oder
 
 Zehn Dashboards werden provisioniert: Uebersicht, Hostressourcen,
 Loggingpipeline, Fehler/Recovery, Personennormalisierung, Ranglistenaktivitaeten,
-Matchergebnisse, Platz- und Scoreverlauf, `ePiber Persoenliche Meldungen` sowie
+Matchergebnisse, Platz- und Scoreverlauf, `ePiber Meldungen` sowie
 `ePiber Hallenreservierung`.
 Anwendungsdashboards besitzen die feste Auswahl `live|paj`; Hostmetriken werden
 nur einmal gezeigt. Das Normalisierungsdashboard zeigt den aktuellen
@@ -162,16 +162,18 @@ JSON-Felder und werden keine Loki-Labels. Kontaktwerte und freie Inhalte sind
 ausgeschlossen; die Ansicht reicht hoechstens 14 Tage zurueck und ersetzt nicht
 die dauerhafte Historie in `audit.sqlite`.
 
-Das Dashboard `ePiber Persoenliche Meldungen` fragt fuer maximal 31 Tage die
-jeweilige Live- oder PAJ-`messaging.sqlite` direkt ueber die geschuetzte
-Infinity-Datasource ab. Es zeigt Wiener Tagesreihen fuer Gesamt-, Ergebnis-,
-Forderungs- und datumsaendernde Meldungen, aktuelle Rollenklassen,
-Empfaengerzaehler und die vertrauliche vollstaendige Meldungsprojektion. Die
-Kategorien duerfen sich ueberschneiden; erstmalige Terminsetzungen zaehlen nicht
-als Datumsaenderung. Rollenwechsel wirken auf die Auswertung des gesamten
-gewaehlten Zeitraums. Exporte aus Detailpanels besitzen dieselbe Schutzklasse wie
-`messaging.sqlite` und duerfen nicht in Loki, Prometheus, Tickets oder
-Freigabeprotokolle uebernommen werden.
+Das Dashboard `ePiber Meldungen` fragt fuer maximal 31 Tage die jeweilige Live-
+oder PAJ-`messaging.sqlite` sowie die Hallenrasterhistorien aus `state.sqlite`
+direkt ueber die geschuetzte Infinity-Datasource ab. Eine dynamische
+Mehrfachauswahl mit Checkboxen bietet persoenliche Meldungen, einzelne oder alle
+Bewerbshistorien und einzelne oder alle Hallenrasterhistorien; standardmaessig
+sind alle Bereiche aktiv. Ueberlappende Gesamt- und Einzelauswahlen werden
+dedupliziert. Das Dashboard zeigt Wiener Tagesreihen und Summen je Bereich, die
+persoenliche Empfaengeruebersicht und eine gemeinsame vertrauliche Meldungsliste.
+Rollenwechsel wirken auf die persoenliche Auswertung des gesamten gewaehlten
+Zeitraums. Exporte aus Detailpanels besitzen dieselbe Schutzklasse wie
+`messaging.sqlite` und `state.sqlite` und duerfen nicht in Loki, Prometheus,
+Tickets oder Freigabeprotokolle uebernommen werden.
 
 Das Dashboard `ePiber Matchergebnisse` zeigt erfolgreiche Ergebniseintraege,
 Korrekturen, Ruecknahmen und MatchEnd-Korrekturen sowie fehlgeschlagene, unklare
