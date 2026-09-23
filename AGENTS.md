@@ -62,6 +62,15 @@ moeglichst wenigen Datei- und Suchzugriffen.
     zusaetzlich die festgelegten Android-, iPhone- und iPad-Profile. Neue Browser-
     APIs werden ueber Feature Detection statt User-Agent-Erkennung behandelt;
     Abweichungen und notwendige Fallbacks sind im selben Auftrag zu pruefen.
+14. Nach jeder erfolgreich geprueften Neuerstellung oder Aenderung einer
+    Grafana-Dashboard-JSON unter
+    `Project/server-configs/observability/grafana/dashboards/` wird die betroffene
+    Datei im PAJ-Testsystem ohne weitere Rueckfrage mit einem einzeiligen
+    `install -m 0644 /srv/http/ePiber/paj/Project/server-configs/observability/grafana/dashboards/<datei>.json /etc/grafana/dashboards/epiber/<datei>.json`
+    installiert und die Zieldatei anschliessend geprueft. Das Zielverzeichnis ist
+    dafuer `root:PiberDevel` und `2775`; Grafana uebernimmt die Datei automatisch.
+    Diese Freigabe gilt nicht fuer Live, Backend-Neustarts oder andere
+    Observability-Konfigurationen.
 
 ## Projekt
 

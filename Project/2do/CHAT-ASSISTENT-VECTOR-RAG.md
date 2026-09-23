@@ -1,6 +1,6 @@
 # Chat-Assistent mit Hybrid- und Vector-RAG
 
-Stand: 22.09.2026
+Stand: 23.09.2026
 Status: Nicht-kanonische fachliche und technische Arbeitsgrundlage; noch nicht
 implementiert, freigegeben oder als verbindliche Sollarchitektur dokumentiert
 Gegenstand: Benutzerassistent mit Spracheingabe, versioniertem Fachwissen,
@@ -38,29 +38,38 @@ providerunabhaengigen AI-SDK umgesetzt. OpenCode ist fuer ihn nicht erforderlich
 
 ## 2. Gesamtsystem
 
-```text
-Browser / Chatoberflaeche
-  |-- Textnachricht ------------------------------+
-  |                                               v
-  |                                    ePiber Node.js Assistant API
-  |                                               |
-  |                                               |-- bestehende Session-/Rollenpruefung
-  |                                               |-- PostgreSQL: Chats und Transkripte
-  |                                               |-- Hybrid Retrieval
-  |                                               |     |-- PostgreSQL Full Text Search
-  |                                               |     `-- pgvector
-  |                                               |-- kontrollierte Fachtools
-  |                                               |     `-- ePiber-Fachservices
-  |                                               `-- AI-SDK-Provideradapter
-  |                                                     `-- externer Modellprovider
-  |
-  `-- Audio -> Transkriptions-API -> Azure Speech -> editierbarer Text
+```mermaid
+flowchart TD
+    Browser[Browser / Chatoberflaeche]
 
-Technischer Administrator
-  -> ePiber Admin-API
-  -> @opencode/client
-  -> separater OpenCode-Dienst
-  -> kontrollierter Code-, Dokumentations- und Diagnosezugriff
+    Browser -->|Textnachricht| AssistantAPI[ePiber Node.js Assistant API]
+    Browser -->|Audioaufnahme| SpeechAPI[Transkriptions-API]
+
+    SpeechAPI --> AzureSpeech[Azure AI Speech]
+    AzureSpeech --> SpeechAPI
+    SpeechAPI --> Browser
+
+    AssistantAPI --> Auth[ePiber-Session und Rollenpruefung]
+    AssistantAPI --> ChatDB[(PostgreSQL Chatdaten)]
+    AssistantAPI --> Retrieval[Hybrid Retrieval]
+    AssistantAPI --> Tools[Fachliche Live-Tools]
+    AssistantAPI --> ModelAdapter[AI-SDK-Provideradapter]
+
+    Retrieval --> FTS[PostgreSQL Full Text Search]
+    Retrieval --> Vector[pgvector]
+    FTS --> KnowledgeDB[(PostgreSQL Wissensindex)]
+    Vector --> KnowledgeDB
+
+    Tools --> Services[ePiber-Fachservices]
+    Services --> AppDB[(PostgreSQL Fachdaten)]
+    Services --> Runtime[Cache / Court- und Laufzeitdaten]
+
+    ModelAdapter --> Provider[Externer Modellprovider]
+
+    Admin[Technischer Administrator]
+    Admin --> AdminAPI[ePiber Admin-API]
+    AdminAPI --> OpenCodeClient["@opencode/client"]
+    OpenCodeClient --> OpenCode[Separater OpenCode-Dienst]
 ```
 
 Die kuenftige Persistenzgrundlage ist PostgreSQL. Neue Chat-, Wissens- und
@@ -103,18 +112,27 @@ Nachvollziehbarkeit erfassbar.
 
 Ablauf:
 
-```text
-Benutzer startet Mikrofon
-  -> Browser nimmt mit MediaRecorder auf
-  -> Benutzer oder Zeitlimit beendet die Aufnahme
-  -> POST /api/assistant/transcriptions
-  -> Node.js validiert Groesse und Medientyp
-  -> Azure AI Speech transkribiert die Aufnahme
-  -> Backend speichert das Rohtranskript
-  -> Browser erhaelt Text und transcriptionId
-  -> Text wird editierbar in das Eingabefeld eingesetzt
-  -> Benutzer korrigiert und sendet bewusst
-  -> gesendeter Text wird dem Rohtranskript zugeordnet
+```mermaid
+sequenceDiagram
+    actor User as Benutzer
+    participant Browser
+    participant Backend as Node.js-Backend
+    participant Azure as Azure AI Speech
+    participant DB as PostgreSQL
+
+    User->>Browser: Mikrofon starten
+    Browser->>Browser: MediaRecorder nimmt auf
+    User->>Browser: Aufnahme beenden
+    Browser->>Backend: POST /api/assistant/transcriptions
+    Backend->>Backend: Groesse und Medientyp validieren
+    Backend->>Azure: Audio transkribieren
+    Azure-->>Backend: Rohtranskript
+    Backend->>DB: Rohtranskript speichern
+    Backend-->>Browser: Text und transcriptionId
+    Browser->>Browser: Text editierbar einsetzen
+    User->>Browser: Text korrigieren und senden
+    Browser->>Backend: Nachricht und transcriptionId
+    Backend->>DB: Gesendeten Text zuordnen
 ```
 
 Zur Qualitaetssicherung werden Benutzer-ID, Namenssnapshot, Zeitpunkt,
@@ -246,15 +264,27 @@ documents:
 
 ### 7.1 Importablauf
 
-```text
-TXT-/MD-Dateien + Wissensmanifest
-  -> Parser
-  -> fachlich zusammenhaengende Abschnitte
-  -> PostgreSQL tsvector
-  -> Embedding-Provider
-  -> inaktive neue Wissensversion
-  -> Validierung
-  -> atomare Aktivierung
+```mermaid
+flowchart LR
+    Files[TXT-/MD-Dateien in Git]
+    Manifest[Wissensmanifest]
+    Parser[Dokumentparser]
+    Chunks[Fachliche Abschnitte]
+    FTS[PostgreSQL tsvector]
+    Embeddings[Embedding-Provider]
+    Staging[Inaktive neue Wissensversion]
+    Validation[Validierung]
+    Active[Atomare Aktivierung]
+
+    Files --> Parser
+    Manifest --> Parser
+    Parser --> Chunks
+    Chunks --> FTS
+    Chunks --> Embeddings
+    FTS --> Staging
+    Embeddings --> Staging
+    Staging --> Validation
+    Validation --> Active
 ```
 
 Der Import wird nach relevanten Dokumentaenderungen automatisch im Deployment
@@ -388,17 +418,36 @@ Fachwrites sind nicht Bestandteil dieses Planungsstands.
 
 ## 12. Orchestrierungsablauf
 
-```text
-1. Benutzer sendet eine Nachricht.
-2. Backend prueft Sitzung, Rolle, Eigentum der Unterhaltung und Limits.
-3. Benutzernachricht wird in PostgreSQL gespeichert.
-4. Hybrid Retrieval bestimmt erlaubte Dokument-Chunks.
-5. Modell erhaelt Frage, begrenzten Verlauf, Wissenskontext und Tooldefinitionen.
-6. Fordert das Modell ein Tool an, validiert und autorisiert das Backend den Call.
-7. Der Fachservice liefert eine kontrollierte Live-Projektion.
-8. Das Toolresultat wird dem Modell fuer die Antwortformulierung uebergeben.
-9. Die Antwort wird gestreamt und mit Erstellungszeitpunkt angezeigt.
-10. Antwort, interne Quellen und Toolaufrufe werden gespeichert.
+```mermaid
+sequenceDiagram
+    actor User as Benutzer
+    participant UI as Chatoberflaeche
+    participant API as Node.js-Orchestrator
+    participant DB as PostgreSQL
+    participant RAG as Hybrid Retrieval
+    participant LLM as Modellprovider
+    participant Tool as ePiber-Fachtool
+
+    User->>UI: Frage senden
+    UI->>API: Nachricht uebermitteln
+    API->>API: Sitzung, Rolle, Eigentum und Limits pruefen
+    API->>DB: Benutzernachricht speichern
+    API->>RAG: Dokumentwissen suchen
+    RAG-->>API: Erlaubte Chunks und interne Quellen
+    API->>LLM: Frage, Verlauf, Wissenskontext und Tools
+
+    alt Modell benoetigt Live-Daten
+        LLM-->>API: Tool Call
+        API->>API: Parameter und Berechtigung pruefen
+        API->>Tool: Fachliche Abfrage
+        Tool-->>API: Kontrolliertes Ergebnis
+        API->>DB: Toolaufruf protokollieren
+        API->>LLM: Toolergebnis
+    end
+
+    LLM-->>API: Gestreamte Antwort
+    API-->>UI: Antwortteile mit Erstellungszeitpunkt
+    API->>DB: Antwort und interne Quellen speichern
 ```
 
 Die Zahl der Modell- und Toolschritte wird begrenzt, beispielsweise auf maximal
@@ -649,13 +698,15 @@ oder ausgewertet.
 
 Der optionale technische Assistent verwendet:
 
-```text
-angemeldeter Administrator
-  -> getrennte technische Assistenzoberflaeche
-  -> ePiber Admin-API
-  -> @opencode/client
-  -> separater OpenCode-Dienst
-  -> kontrollierter Code-, Dokumentations- und Diagnosezugriff
+```mermaid
+flowchart LR
+    Admin[Angemeldeter Administrator]
+    Admin --> AdminUI[Technische Assistenzoberflaeche]
+    AdminUI --> Backend[ePiber Admin-API]
+    Backend --> Client["@opencode/client"]
+    Client --> Service[Separater OpenCode-Dienst]
+    Service --> Repo[Code und technische Dokumentation]
+    Service --> Logs[Kontrollierte Diagnosequellen]
 ```
 
 `@opencode/client` ist der typisierte Node.js-Client fuer die OpenCode-HTTP-API.

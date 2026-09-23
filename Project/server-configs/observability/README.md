@@ -259,6 +259,21 @@ abweichenden Version ab und prueft danach beide Reporting-Endpunkte mit dem
 Maschinen-Bearer. Paket- und Pluginversionen werden am Ende ohne Geheimniswert
 ausgegeben.
 
+Fuer einzelne, erfolgreich gepruefte Dashboard-Aenderungen im PAJ-Testbetrieb
+ist kein vollstaendiger Installerlauf erforderlich. Das Verzeichnis
+`/etc/grafana/dashboards/epiber/` gehoert `root:PiberDevel`, hat Modus `2775` und
+erlaubt dem Benutzer `paj`, genau die geaenderte JSON-Datei direkt zu ersetzen.
+Der aus dem Repository-Root ausfuehrbare Einzeiler lautet:
+
+```text
+install -m 0644 /srv/http/ePiber/paj/Project/server-configs/observability/grafana/dashboards/<datei>.json /etc/grafana/dashboards/epiber/<datei>.json
+```
+
+Grafana liest die Datei durch die provisionierte Aktualisierung automatisch ein;
+ein Dienstneustart ist dafuer nicht erforderlich. Dieser Direktweg gilt nur fuer
+PAJ-Dashboard-JSON-Dateien, nicht fuer Live, Datasources, Plugins, Credentials
+oder andere Observability-Konfigurationen.
+
 Das lokale Grafana-Adminpasswort ist ausschliesslich Break-glass. Es wird nur in
 einem Wartungsfenster mit gestopptem Normaldienst, deaktiviertem Auth Proxy,
 separatem Loopback-Vordergrundprozess und SSH-Tunnel verwendet. Der Normalzugang

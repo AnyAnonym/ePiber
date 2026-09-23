@@ -6,3 +6,11 @@ Commit: 4.12.3-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-1` gesetzt.
+
+[4.12.3-paj-1-2] - 2026-09-23
+Commit: 4.12.3-paj-1-2 | Chat-Diagramme und Dashboard-Deployment dokumentiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-1-x` gesetzt.
+  - [Planung] Die fuenf Architektur-, Sprach-, Import-, Orchestrierungs- und OpenCode-Ablaeufe der Chat-Assistent-Arbeitsgrundlage als renderbare Mermaid-Flowcharts beziehungsweise Sequenzdiagramme statt einfacher Textdarstellungen hinterlegt.
+  - [Dokumentation] Den direkten, automatisch auszufuehrenden Installationsweg fuer erfolgreich gepruefte Grafana-Dashboard-JSON-Dateien im PAJ-Testsystem als Agenten- und Betriebsvorgabe festgehalten; Live und andere Observability-Konfigurationen bleiben ausgeschlossen.
