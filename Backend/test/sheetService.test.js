@@ -311,6 +311,13 @@ function fixtures() {
   };
 }
 
+function removeRankingId(tables) {
+  for (const ranking of new Set([tables.Rangliste, tables["RL-Platzierung"]])) {
+    const idIndex = ranking[0].indexOf("ID");
+    if (idIndex >= 0) ranking.forEach((row) => row.splice(idIndex, 1));
+  }
+}
+
 function seedStore(tables) {
   dataStore.resetForTests();
   dataStore.set("players", structuredClone(tables.Personen), { source: "test" });
@@ -2652,13 +2659,18 @@ test("Vollstaendig unveraendertes Ergebnis mit Rangplan bleibt ohne Write", asyn
   repository.close();
 });
 
-test("Neueinsteiger-Clear lehnt fremde Zellen ab und entfernt eine saubere Mitgliedschaft atomar", async () => {
+test("Neueinsteiger ohne ID-Spalte kann korrigiert und atomar entfernt werden", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
   const initial = fixtures();
+  removeRankingId(initial);
   initial.Matches1.push(["", "newcomer-win", "260904-1000", "", "cup-1", "", "p3", "", "p1", "", "", ""]);
   const fake = fakeSheets(initial);
   seedStore(fake.tables);
+  const rankingHeader = fake.tables["RL-Platzierung"][0];
+  const competitionIndex = rankingHeader.indexOf("BewerbID");
+  const personIndex = rankingHeader.indexOf("PersonID");
+  const rankIndex = rankingHeader.indexOf("Rang");
   const service = new SheetService({ repository, messagingService, clientFactory: async () => fake.client, now: () => new Date(2026, 8, 4, 12, 0).getTime() });
   const principal = { type: "user", id: "p3", role: "player", name: "Chris Challenger" };
   const original = initial.Matches1.at(-1);
@@ -2667,20 +2679,20 @@ test("Neueinsteiger-Clear lehnt fremde Zellen ab und entfernt eine saubere Mitgl
     matchStart: "260904-1000", matchEnd: "260904-1100", expectedFingerprint: matchCompletionFingerprint(original, initial.Matches1[0]),
   });
   assert.deepEqual(fake.tables.Matches1.at(-1).slice(12, 14), [0, 2]);
-  assert.deepEqual(fake.tables["RL-Platzierung"].filter((row) => row[1] === "cup-1").map((row) => [row[2], Number(row[3])]), [["p2", 1], ["p1", 3], ["p3", 2]]);
-  assert.equal(fake.tables["RL-Platzierung"].filter((row) => row[1] === "cup-1" && row[2] === "p3").length, 1);
+  assert.deepEqual(fake.tables["RL-Platzierung"].filter((row) => row[competitionIndex] === "cup-1").map((row) => [row[personIndex], Number(row[rankIndex])]), [["p2", 1], ["p1", 3], ["p3", 2]]);
+  assert.equal(fake.tables["RL-Platzierung"].filter((row) => row[competitionIndex] === "cup-1" && row[personIndex] === "p3").length, 1);
 
   const corrected = await service.setMatchResult(principal, {
     operationId: "00000000-0000-4000-8000-000000000521", matchId: "newcomer-win", kind: "regular", result: "2-6/3-6",
     expectedFingerprint: first.fingerprint,
   });
   assert.deepEqual(fake.tables.Matches1.at(-1).slice(12, 14), [0, 2]);
-  assert.deepEqual(fake.tables["RL-Platzierung"].filter((row) => row[1] === "cup-1").map((row) => [row[2], Number(row[3])]), [["p2", 1], ["p1", 2], ["p3", 3]]);
+  assert.deepEqual(fake.tables["RL-Platzierung"].filter((row) => row[competitionIndex] === "cup-1").map((row) => [row[personIndex], Number(row[rankIndex])]), [["p2", 1], ["p1", 2], ["p3", 3]]);
 
   const clearParams = {
     operationId: "00000000-0000-4000-8000-000000000522", matchId: "newcomer-win", expectedFingerprint: corrected.fingerprint, reason: "Test",
   };
-  const insertedRow = fake.tables["RL-Platzierung"].find((row) => row[1] === "cup-1" && row[2] === "p3");
+  const insertedRow = fake.tables["RL-Platzierung"].find((row) => row[competitionIndex] === "cup-1" && row[personIndex] === "p3");
   insertedRow[6] = "=IF(C4=\"\",\"\",D4*2)";
   const writesBeforeClear = fake.calls.valueUpdates.length;
   await assert.rejects(service.adminClearMatchResult({ type: "user", id: "p1", role: "admin", name: "Ada Admin" }, clearParams), { code: "RANKING_REPAIR_REQUIRED" });
@@ -2693,7 +2705,7 @@ test("Neueinsteiger-Clear lehnt fremde Zellen ab und entfernt eine saubere Mitgl
     ...clearParams,
     operationId: "00000000-0000-4000-8000-000000000545",
   });
-  assert.deepEqual(fake.tables["RL-Platzierung"].filter((row) => row[1] === "cup-1").map((row) => [row[2], Number(row[3])]), [["p2", 1], ["p1", 2]]);
+  assert.deepEqual(fake.tables["RL-Platzierung"].filter((row) => row[competitionIndex] === "cup-1").map((row) => [row[personIndex], Number(row[rankIndex])]), [["p2", 1], ["p1", 2]]);
   assert.equal(insertedRow.some((value) => String(value || "").trim()), false);
   assert.equal(repository.getState("match-result-ranking:newcomer-win", null).value, null);
   assert.deepEqual(fake.tables.Matches1.at(-1).slice(12, 14), ["", ""]);
@@ -2713,7 +2725,9 @@ test("Neueinsteiger-Niederlage reiht bei weniger als zehn Folgepositionen am End
     operationId: "00000000-0000-4000-8000-000000000523", matchId: "newcomer-loss-short", kind: "regular", result: "2-6/3-6",
     matchStart: "260904-1000", matchEnd: "260904-1100", expectedFingerprint: matchCompletionFingerprint(initial.Matches1.at(-1), initial.Matches1[0]),
   });
-  assert.equal(fake.tables["RL-Platzierung"].find((row) => row[1] === "cup-1" && row[2] === "p3")[3], 3);
+  const inserted = fake.tables["RL-Platzierung"].find((row) => row[1] === "cup-1" && row[2] === "p3");
+  assert.match(inserted[0], /^result-[0-9a-f]{32}$/);
+  assert.equal(inserted[3], 3);
   await service.stop();
   repository.close();
 });
@@ -2777,13 +2791,17 @@ test("Rueckkehrer-Niederlage reiht unmittelbar hinter dem Geforderten ein", asyn
   repository.close();
 });
 
-test("Ergebnisrecovery bestaetigt eine eingefuegte Mitgliedschaft ohne Duplikat oder zweiten Business-Write", async () => {
+test("Ergebnisrecovery bestaetigt eine Mitgliedschaft ohne ID-Spalte ohne Duplikat oder zweiten Business-Write", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
   const initial = fixtures();
+  removeRankingId(initial);
   initial.Matches1.push(["", "newcomer-recovery", "260904-1000", "", "cup-1", "", "p3", "", "p1", "", "", ""]);
   const fake = fakeSheets(initial);
   seedStore(fake.tables);
+  const rankingHeader = fake.tables["RL-Platzierung"][0];
+  const competitionIndex = rankingHeader.indexOf("BewerbID");
+  const personIndex = rankingHeader.indexOf("PersonID");
   const originalBatchUpdate = fake.client.spreadsheets.values.batchUpdateByDataFilter;
   let batchAttempts = 0;
   fake.client.spreadsheets.values.batchUpdateByDataFilter = async (request) => {
@@ -2808,7 +2826,7 @@ test("Ergebnisrecovery bestaetigt eine eingefuegte Mitgliedschaft ohne Duplikat 
   assert.equal(recovered.recovered, true);
   assert.equal(recovered.repeated, true);
   assert.equal(fake.calls.valueUpdates.length, writeCount);
-  assert.equal(fake.tables["RL-Platzierung"].filter((row) => row[1] === "cup-1" && row[2] === "p3").length, 1);
+  assert.equal(fake.tables["RL-Platzierung"].filter((row) => row[competitionIndex] === "cup-1" && row[personIndex] === "p3").length, 1);
   assert.equal(batchAttempts, 1);
   assert.equal(eventAttempts, 2);
   await service.stop();

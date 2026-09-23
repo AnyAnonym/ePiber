@@ -108,6 +108,12 @@ function rowForHeader(header, valuesByName) {
   return row;
 }
 
+function rankingMembershipRow(header, recordId, competitionId, personId, rank) {
+  const values = { BewerbID: competitionId, PersonID: personId, Rang: rank };
+  if (headerIndex(header, "id") >= 0) values.ID = recordId;
+  return rowForHeader(header, values);
+}
+
 function requireCurrentData(...tableNames) {
   for (const tableName of tableNames) {
     if (!dataStore.isTableCurrent(tableName)) {
@@ -2443,7 +2449,7 @@ class SheetService {
             for (const entry of provenance.after.filter((candidate) => candidate.inserted)) {
               const currentRow = current.find((candidate) => String(candidate[personIndex] || "").trim() === entry.personId);
               const rankingIdIndex = headerIndex(rankingHeader, "id");
-              if (!currentRow || String(currentRow[rankingIdIndex] || "").trim() !== resultMembershipId(params.matchId, context.competitionId, entry.personId)) {
+              if (!currentRow || (rankingIdIndex >= 0 && String(currentRow[rankingIdIndex] || "").trim() !== resultMembershipId(params.matchId, context.competitionId, entry.personId))) {
                 throw new AppError("RANKING_REPAIR_REQUIRED", "Eingefuegte Ranglistenmitgliedschaft wurde nach dem Ergebnis veraendert", 409);
               }
             }
@@ -2469,7 +2475,7 @@ class SheetService {
             for (const target of nextTargets) {
               let targetRow = virtualRows.find((candidate) => String(candidate[personIndex] || "").trim() === target.personId);
               if (!targetRow && target.inserted) {
-                targetRow = rowForHeader(rankingHeader, { ID: target.recordId, BewerbID: context.competitionId, PersonID: target.personId, Rang: target.afterRank });
+                targetRow = rankingMembershipRow(rankingHeader, target.recordId, context.competitionId, target.personId, target.afterRank);
                 const empty = virtual.slice(1).findIndex((candidate) => !candidate.some((value) => String(value || "").trim()));
                 if (empty >= 0) virtual[empty + 1].splice(0, virtual[empty + 1].length, ...targetRow);
                 else {
@@ -2560,7 +2566,7 @@ class SheetService {
           const before = provenance.before.find((candidate) => candidate.personId === entry.personId);
           if (before?.inserted) {
             const idIndex = headerIndex(rankingHeader, "id");
-            if (String(current[idIndex] || "").trim() !== resultMembershipId(params.matchId, context.competitionId, entry.personId)) {
+            if (idIndex >= 0 && String(current[idIndex] || "").trim() !== resultMembershipId(params.matchId, context.competitionId, entry.personId)) {
               throw new AppError("RANKING_REPAIR_REQUIRED", "Eingefuegte Ranglistenmitgliedschaft wurde nach dem Ergebnis veraendert", 409);
             }
           }
@@ -2584,10 +2590,10 @@ class SheetService {
         if (rankingRow) throw new AppError("RANK_CONFLICT", "Ranglistenmitgliedschaft wurde zwischenzeitlich angelegt", 409);
         const emptyOffset = rankingValues.slice(1).findIndex((entry) => !entry.some((value) => String(value || "").trim()));
         const rowNumber = emptyOffset >= 0 ? emptyOffset + 2 : rankingValues.length + 1;
-        const afterRow = rowForHeader(rankingHeader, { ID: target.recordId, BewerbID: context.competitionId, PersonID: target.personId, Rang: target.afterRank });
-        const changes = ["id", "bewerbid", "personid", "rang"].map((name) => {
+        const afterRow = rankingMembershipRow(rankingHeader, target.recordId, context.competitionId, target.personId, target.afterRank);
+        const changes = ["id", "bewerbid", "personid", "rang"].flatMap((name) => {
           const index = headerIndex(rankingHeader, name);
-          return { index, name, before: "", after: afterRow[index] ?? "" };
+          return index < 0 ? [] : [{ index, name, before: "", after: afterRow[index] ?? "" }];
         });
         return [{ table: "rlPlatzierung", recordId: `membership:${context.competitionId}:${target.personId}`, personId: target.personId, beforeRank: null, afterRank: target.afterRank, inserted: true, rowNumber, changes, identity: [] }];
       }

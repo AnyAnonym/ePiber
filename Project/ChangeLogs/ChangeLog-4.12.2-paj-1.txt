@@ -19,3 +19,13 @@ Commit: 4.12.2-paj-1-2 | Meldungsdashboard um Historien erweitert
   Tests
   - [Backend] Repository-, Messaging-, Hallenzeiten- und HTTP-Integrationstests decken Auswahlkatalog, Einzelauswahl, Gesamtauswahl, Deduplizierung, Aggregation, Authentifizierung und Fehlerpfade ab.
   - [Observability] Dashboard-Vertragstest deckt dynamische Infinity-Mehrfachauswahl, gemeinsame Kennzahlen und kontrollierte Detailfelder ab.
+
+[4.12.2-paj-1-3] - 2026-09-23
+Commit: 4.12.2-paj-1-3 | Ranglisteneinreihung ohne ID-Spalte korrigiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.2-paj-1-2-x` gesetzt.
+  - [Backend] Ergebniswrites koennen Neueinsteiger nun auch in eine vertragskonforme `RL-Platzierung` ohne optionale `ID`-Spalte einreihen; vorhandene ID-Spalten und die recovery-sichere zusammengesetzte Identitaet bleiben unterstuetzt.
+
+  Tests
+  - [Backend] Ergebnis-, Korrektur-, Clear- und Recoverytests decken automatisch angelegte Ranglistenmitgliedschaften ohne `ID`-Spalte sowie die bestehende Kompatibilitaet mit ID-Spalten ab.
