@@ -29,3 +29,9 @@ Commit: 4.12.2-paj-1-3 | Ranglisteneinreihung ohne ID-Spalte korrigiert
 
   Tests
   - [Backend] Ergebnis-, Korrektur-, Clear- und Recoverytests decken automatisch angelegte Ranglistenmitgliedschaften ohne `ID`-Spalte sowie die bestehende Kompatibilitaet mit ID-Spalten ab.
+
+[4.12.2-paj-1-4] - 2026-09-23
+Commit: 4.12.2-paj-1-4 | Seitenbranch abgeschlossen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.2-paj-1-3-x` gesetzt.
