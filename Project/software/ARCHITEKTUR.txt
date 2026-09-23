@@ -812,15 +812,19 @@ Fachhistorien und Betriebslogs:
     in `/var/lib/grafana/grafana.db` mit SQLite/WAL. Diese Datenbank ist kein
     ePiber-System-of-Record. SMTP und aktive Benachrichtigungen sind deaktiviert;
     Alarmzustaende werden manuell kontrolliert.
-  - Das Meldungsdashboard ruft je aktiver Instanz ausschliesslich
-    `/internal/messaging-report?from=<ms>&to=<ms>` ueber deren festen Loopbackhost
-    und einen lokal als root-only Credential bereitgestellten Bearer ab. Der
-    Endpunkt akzeptiert maximal 31 Tage, liest `messaging.sqlite` im halb offenen
-    Zeitraum und aggregiert nach Wiener Kalendertagen. Rollen und Bewerbsnamen
-    kommen aus dem aktuellen Last-good-Snapshot; Meldungsdetails bleiben in der
-    kontrollierten HTTP-Projektion und erreichen weder Loki noch Prometheus. Live
-    und PAJ verwenden getrennte Deploymentkennungen, PK ist ausgeschlossen. Es
-    gibt weder einen Browserpfad noch eine zweite Reporting-Datenbank.
+  - Das Meldungsdashboard ruft je aktiver Instanz ausschliesslich den Options- und
+    Berichtsmodus von `/internal/messaging-report` ueber deren festen Loopbackhost
+    und einen lokal als root-only Credential bereitgestellten Bearer ab. Eine
+    dynamische Grafana-Mehrfachauswahl aktiviert persoenliche Meldungen, einzelne
+    oder alle Bewerbshistorien sowie einzelne oder alle Hallenrasterhistorien.
+    Der Endpunkt akzeptiert maximal 31 Tage, kombiniert `messaging.sqlite` und
+    den Hallenzeiten-State aus `state.sqlite`, dedupliziert ueberlappende Gesamt-
+    und Einzelauswahlen und aggregiert nach Wiener Kalendertagen. Rollen und
+    Bewerbsnamen kommen aus dem aktuellen Last-good-Snapshot; vertrauliche
+    Details bleiben in der kontrollierten HTTP-Projektion und erreichen weder
+    Loki noch Prometheus. Live und PAJ verwenden getrennte Deploymentkennungen,
+    PK ist ausgeschlossen. Es gibt weder einen Browserpfad noch eine zweite
+    Reporting-Datenbank.
 
 
 ================================================================================

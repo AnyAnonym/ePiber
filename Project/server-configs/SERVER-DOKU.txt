@@ -79,13 +79,14 @@ einzelnen Platz die hoechstens 14 Tage zurueckreichenden Scoreaenderungen und
 Court-Snapshots. Match-ID, Bewerb und Anzeigenamen der Paarung bleiben
 kontrollierte JSON-Felder und werden weder Loki-Labels noch Teil einer
 zusaetzlichen dauerhaften Historie.
-Das Dashboard `ePiber Persoenliche Meldungen` verwendet das signierte,
+Das Dashboard `ePiber Meldungen` verwendet das signierte,
 exakt auf `4.0.0` gepinnte Infinity-Plugin. Seine nicht editierbare Datasource
 darf nur `http://127.0.0.1:8080` und `http://127.0.0.1:8083` ansprechen. Sie
-projiziert fuer hoechstens 31 Tage vertrauliche Meldungsdetails direkt aus der
-jeweiligen `messaging.sqlite`; private Empfaenger-, Text-, Ereignis-,
-Quittierungs- und Zustellfelder werden weder nach Loki noch nach Prometheus
-exportiert.
+projiziert fuer hoechstens 31 Tage eine dynamisch mehrfach auswaehlbare gemeinsame
+Liste aus persoenlichen Meldungen, einzelnen oder allen Bewerbshistorien und
+einzelnen oder allen Hallenrasterhistorien direkt aus `messaging.sqlite` und
+`state.sqlite`. Private Empfaenger-, Personen-, Text-, Ereignis-, Quittierungs-
+und Zustellfelder werden weder nach Loki noch nach Prometheus exportiert.
 Prometheus und Loki werden seit Grafana 13.2 ebenfalls als separate Datasource-
 Plugins betrieben und bei deaktivierter automatischer Plugininstallation exakt
 auf `13.1.9` beziehungsweise `13.2.0` gepinnt. Alle Dashboard-Panels und Targets

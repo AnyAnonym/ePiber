@@ -52,6 +52,10 @@ test("Fixplatz, Warteliste und atomisches Nachruecken bleiben nachvollziehbar", 
   assert.equal(context.messages[0].subject, "Du bist auf einen Fixplatz nachgerückt");
   assert.equal(context.messages[0].contextName, "Winterhalle");
   assert.deepEqual(context.service.history(players[1], gridId).entries.slice(0, 2).map(({ action }) => action), ["waitlist_promoted", "booking_removed"]);
+  const report = context.service.reportingSnapshot(0, Date.parse("2026-02-01T00:00:00Z"), names);
+  assert.deepEqual(report.grids, [{ id: gridId, name: "Winterhalle" }]);
+  assert.equal(report.entries.some(({ action, gridName, personName, summary }) => action === "waitlist_promoted" && gridName === "Winterhalle" && personName === "Spieler 2" && summary.includes("nachgerückt")), true);
+  assert.deepEqual(context.service.reportingSnapshot(Date.parse("2026-02-01T00:00:00Z"), Date.parse("2026-03-01T00:00:00Z")).entries, []);
   assert.throws(() => context.service.grid({ id: "other", role: "player" }, gridId), { code: "FORBIDDEN" });
   context.repository.close();
 });

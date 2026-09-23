@@ -12,6 +12,20 @@ const VIENNA_PARTS = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
   hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
 });
+const HISTORY_TEXT = Object.freeze({
+  booking_added: "hat sich angemeldet",
+  waitlist_added: "hat sich auf die Warteliste gesetzt",
+  booking_removed: "hat sich abgemeldet",
+  waitlist_promoted: "ist von der Warteliste nachgerückt",
+  waitlist_expired: "ist nach Terminende von der Warteliste entfernt worden",
+  assigned_by_distribution: "wurde automatisch eingeteilt",
+  distribution_replaced: "hat die zukünftige Verteilung neu erstellt",
+  grid_created: "hat den Raster erstellt",
+  grid_updated: "hat Einstellungen geändert",
+  all_statuses_cleared: "hat alle Stati auf den Terminen gelöscht",
+  group_joined: "ist der Gruppe beigetreten",
+  group_left: "hat die Gruppe verlassen",
+});
 
 function parts(formatter, value) {
   return Object.fromEntries(formatter.formatToParts(value).filter(({ type }) => type !== "literal").map(({ type, value: part }) => [type, part]));
@@ -388,6 +402,39 @@ class HallTimeService {
         };
       }),
     };
+  }
+
+  reportingSnapshot(fromMs, toMs, personNames = new Map()) {
+    const snapshot = this.repository.getState(STATE_KEY, EMPTY_STATE);
+    if (!snapshot.value || !Array.isArray(snapshot.value.grids)) throw new AppError("STATE_CORRUPT", "Hallenzeiten-State ist ungueltig", 503);
+    const grids = snapshot.value.grids.map((grid) => ({ id: grid.id, name: grid.name || `Hallenraster ${grid.id}` }));
+    const entries = snapshot.value.grids.flatMap((grid) => (grid.history || []).flatMap((entry) => {
+      if (!Number.isSafeInteger(entry.at) || entry.at < fromMs || entry.at >= toMs) return [];
+      const actorName = entry.actorId === "system" ? "System" : historyPersonName(personNames.get(entry.actorId), entry.actorName);
+      const personName = entry.personId ? historyPersonName(personNames.get(entry.personId), entry.personName) : "";
+      const actorIsPerson = Boolean(entry.actorId && entry.personId && entry.actorId === entry.personId);
+      const actorChangedOther = Boolean(actorName && actorName !== "System" && personName && !actorIsPerson);
+      const changedOtherText = { booking_added: "angemeldet", waitlist_added: "auf die Warteliste gesetzt", booking_removed: "abgemeldet" };
+      const subjectName = actorIsPerson ? actorName : personName || (actorName === "System" ? "" : actorName);
+      let summary = actorChangedOther && changedOtherText[entry.action]
+        ? `${actorName} hat ${personName} ${changedOtherText[entry.action]}`
+        : `${subjectName ? `${subjectName} ` : ""}${HISTORY_TEXT[entry.action] || entry.action}`;
+      if (entry.action === "distribution_replaced" && entry.summary) {
+        const values = [
+          [entry.summary.assignedCount, "neu zugeteilt"], [entry.summary.promotedCount, "nachgerückt"],
+          [entry.summary.removedCount, "entfernt"], [entry.summary.unchangedCount, "unverändert"],
+        ].filter(([count]) => Number(count) > 0).map(([count, label]) => `${count} ${label}`);
+        if (values.length) summary += ` (${values.join(", ")})`;
+      }
+      return [{
+        id: entry.id, time: entry.at, gridId: grid.id, gridName: grid.name || `Hallenraster ${grid.id}`,
+        action: entry.action, actorId: entry.actorId, actorName, personId: entry.personId,
+        personName, slotId: entry.slotId, slot: clone(entry.slot || null), from: entry.from, to: entry.to,
+        slotTime: entry.slot ? `${entry.slot.date} ${entry.slot.start}–${entry.slot.end}` : "",
+        batchId: entry.batchId || "", summary, detail: entry.detail || "",
+      }];
+    }));
+    return { grids, entries };
   }
 
   adminGrids(principal) {

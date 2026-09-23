@@ -1070,6 +1070,14 @@ class MessagingRepository {
     }));
   }
 
+  reportEvents(fromMs, toMs) {
+    this.ensureOpen();
+    const rows = this.db.prepare(`SELECT event_id FROM competition_events
+      WHERE competition_id IS NOT NULL AND created_at >= ? AND created_at < ?
+      ORDER BY created_at DESC, event_id DESC`).all(fromMs, toMs);
+    return rows.map(({ event_id: eventId }) => this.getEvent(eventId));
+  }
+
   competitionHistory(competitionId, options) {
     return this.listCompetitionHistory(competitionId, options);
   }

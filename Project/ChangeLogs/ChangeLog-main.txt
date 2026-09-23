@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.2
+Stand: 4.12.3
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2590,3 +2590,32 @@ Quelle: 4.12.1-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.12.2` gesetzt.
+
+[4.12.3] - 2026-09-23
+Commit: 4.12.3 | Meldungsdashboard erweitert und Ranglisteneinreihung korrigiert
+Quelle: 4.12.2-paj-1
+
+  Changed
+  - [Observability] Das Grafana-Dashboard `ePiber Meldungen` kombiniert
+    persoenliche Meldungen sowie einzelne oder alle Bewerbs- und
+    Hallenrasterhistorien in einer dynamischen Checkbox-Auswahl, gemeinsamen
+    Tagesreihe, Bereichskennzahlen und Meldungsliste.
+  - [Backend] Der geschuetzte interne Meldungsbericht liefert einen dynamischen
+    Auswahlkatalog und fuehrt selektierte Projektionen aus `messaging.sqlite` und
+    `state.sqlite` fuer hoechstens 31 Tage dedupliziert zusammen.
+  - [Datenschutz] Vertrauliche Empfaenger-, Personen-, Text-, Ereignis-,
+    Quittierungs- und Zustelldetails verbleiben in der geschuetzten HTTP-Projektion
+    und werden weiterhin weder nach Loki noch nach Prometheus exportiert.
+
+  Fixed
+  - [Backend] Ergebniswrites reihen Neueinsteiger auch in eine vertragskonforme
+    `RL-Platzierung` ohne optionale `ID`-Spalte ein; vorhandene ID-Spalten und die
+    recovery-sichere zusammengesetzte Identitaet bleiben unterstuetzt.
+  - [Tests] Repository-, Messaging-, Hallenzeiten-, HTTP-, Ergebnis-, Korrektur-,
+    Clear-, Recovery- und Dashboard-Vertragstests decken Auswahl, Aggregation,
+    Authentifizierung, Fehlerpfade und Ranglistenmitgliedschaften mit sowie ohne
+    ID-Spalte ab.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.12.3` gesetzt.

@@ -463,16 +463,19 @@ JSON-Felder sind nur Platz, Score, Match-/Bewerbskennung, Bewerbsbezeichnung,
 Anzeigenamen der Paarung, Aktivstatus und Court-Revision erlaubt. Diese Werte
 werden keine Loki-Labels. Die Ansicht unterliegt der normalen 14-Tage-Retention;
 alte Eintraege ohne diesen Kontext werden nicht nachtraeglich angereichert.
-`ePiber Persoenliche Meldungen` verwendet das signierte und exakt auf Version
+`ePiber Meldungen` verwendet das signierte und exakt auf Version
 `4.0.0` gepinnte Plugin `yesoreyeram-infinity-datasource`. Die nicht editierbare
 Datasource akzeptiert ausschliesslich die festen Hosts
 `http://127.0.0.1:8080` und `http://127.0.0.1:8083`; die Dashboardauswahl kann
-daher nur Live oder PAJ adressieren. Der maximal 31-taegige Bericht zeigt Wiener
-Tagesreihen, aktuelle Rollenklassen, Empfaengerzaehler und vertrauliche
-Meldungsdetails direkt aus der jeweiligen `messaging.sqlite`. Empfaengername und
--rolle, Betreff, Text, Ereignisdetail, Ergebnis, Akteur, Quittierungszeit,
-Zustellungen sowie Ereignis- und Meldungs-ID gelangen weder nach Loki noch in
-Prometheus. Ein Export aus Grafana ist wie `messaging.sqlite` zu schuetzen.
+daher nur Live oder PAJ adressieren. Der maximal 31-taegige Bericht bietet eine
+dynamische Checkbox-Mehrfachauswahl fuer persoenliche Meldungen sowie einzelne
+oder alle Bewerbs- und Hallenrasterhistorien. Er zeigt Wiener Tagesreihen,
+Bereichssummen, persoenliche Empfaengerzaehler und eine gemeinsame vertrauliche
+Meldungsliste direkt aus `messaging.sqlite` und `state.sqlite`. Empfaenger- und
+Personenname, Rolle, Betreff, Text, Ereignisdetail, Ergebnis, Akteur,
+Quittierungszeit, Zustellungen sowie Ereignis- und Meldungs-ID gelangen weder
+nach Loki noch in Prometheus. Ein Export aus Grafana ist wie die beiden
+Quelldatenbanken zu schuetzen.
 `ePiber Hallenreservierung` kombiniert aktuelle Prometheus-Gauges je Raster mit
 der normalen 14-Tage-Loki-Projektion erfolgreicher Fachereignisse und
 problematischer Schreibausgaenge. Zielpersonennamen und freie Payloads gelangen
