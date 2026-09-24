@@ -477,6 +477,49 @@ body.modal-open {
   max-width: 680px;
 }
 
+.match-duration-confirmation {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.match-duration-confirmation[hidden] {
+  display: none;
+}
+
+.match-duration-confirmation-panel {
+  width: min(100%, 420px);
+  padding: 22px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.match-duration-confirmation-panel h3 {
+  margin: 0 0 10px;
+  color: var(--accent);
+}
+
+.match-duration-confirmation-panel p {
+  margin: 0;
+}
+
+.match-duration-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.match-duration-confirmation-actions .btn-login {
+  flex: 1 1 160px;
+  margin-top: 0;
+}
+
 .match-result-target {
   text-align: center;
 }
@@ -1960,6 +2003,19 @@ body.mobile-nav-open {
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
+}
+
+.favorite-match-picker-heading,
+.favorite-match-picker-teams {
+  display: block;
+}
+
+.favorite-match-picker-heading {
+  font-weight: 700;
+}
+
+.favorite-match-picker-teams {
+  margin-top: 2px;
 }
 
 .favorite-match-picker-item:hover,

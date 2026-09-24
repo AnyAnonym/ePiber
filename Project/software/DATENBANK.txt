@@ -104,9 +104,11 @@ Matches1 enthaelt offene und gespielte Matches.
                   | behalten den Wert, Clear leert ihn.
   MatchEnde       | Fachlicher Abschlusszeitpunkt `YYMMDD-HHMM`. Beim ersten
                   | regulaeren Abschluss oder Retirement zwingend strikt nach
-                  | MatchStart, maximal sechs Stunden danach und nicht in der
-                  | Zukunft. Beim Walkover bleibt das Feld leer. Beteiligte behalten
-                  | ihn bei Korrekturen unveraendert; nur Admins korrigieren ihn
+                  | MatchStart und nicht in der Zukunft; mehr als vier Stunden
+                  | erfordern eine bewusste Bestaetigung, eine feste Hoechstdauer
+                  | besteht nicht. Beim Walkover bleibt das Feld leer.
+                  | Beteiligte behalten ihn bei Korrekturen unveraendert; nur
+                  | Admins korrigieren ihn
                   | mit Grund. Historisch leer faellt fuer Abschlussregeln auf
                   | MatchDate zurueck.
   ErgebnisErfasstAm | Wiener Serverzeit `YYMMDD-HHMM` des ersten Abschlusses.

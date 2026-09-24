@@ -175,13 +175,17 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   oder Doppelnamen bezeichneten Verliererseite; bei Korrekturen ist die bestehende
   Seite vorausgewaehlt. Retirement kann ein Teilergebnis behalten. Beim ersten
   regulaeren Abschluss oder einer Aufgabe sind Matchstart und Matchende
-  erforderlich; ein vergangener vereinbarter Termin wird als Start vorgeschlagen,
-  ohne Termin gilt die editierbare Vorgabe `aktuelle Zeit minus 90 Minuten`.
+  erforderlich; ein vereinbarter Termin plus 15 Minuten wird als Start
+  vorgeschlagen, ohne Termin gilt die editierbare Vorgabe
+  `aktuelle Zeit minus 90 Minuten`.
   Beschriftung und Datum-/Zeitfeld stehen fuer Start und Ende jeweils in einer
   kompakten Zeile nebeneinander. Bei W.O. werden Start und Ende weder abgefragt
   noch geschrieben; der Server setzt stattdessen `MatchDate` auf den aktuellen
   Wiener W.O.-Zeitpunkt. Bei regulaerem Abschluss und Aufgabe liegt das Ende nach
-  dem Start, hoechstens sechs Stunden danach und nicht in der Zukunft. Bei
+  dem Start und nicht in der Zukunft. Bei mehr als vier Stunden fragt ein
+  Bestaetigungsdialog mit `Ja Passt` und `Zurueck fuer Korrektur` nach; die zweite
+  Aktion fokussiert direkt das Matchende, waehrend die erste auch eine Dauer von
+  mehr als sechs Stunden speichert. Eine feste Hoechstdauer besteht nicht. Bei
   spaeterer Ergebniskorrektur bleiben Start und Ende ausgeblendet und unveraendert.
   Die Schaltflaeche `Match vom Scoreboard übernehmen` fragt beide Plaetze ab und
   uebernimmt nur genau einen verfuegbaren Vorschlag aus dem aktuellen exakt

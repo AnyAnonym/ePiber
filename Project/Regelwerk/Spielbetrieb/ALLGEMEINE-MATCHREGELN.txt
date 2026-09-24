@@ -89,9 +89,10 @@ gesamte Einzel- oder Doppelseite. [Bestaetigt]
 tatsaechliche minutengenaue Spielbeginn und `MatchEnde` der tatsaechliche
 minutengenaue Abschlusszeitpunkt. Beim ersten regulaeren Abschluss oder Retirement
 sind `MatchStart` und `MatchEnde` verpflichtend. `MatchStart` muss strikt vor
-`MatchEnde` liegen, das Ende darf nicht in der Zukunft liegen und die Spieldauer
-darf hoechstens sechs Stunden betragen. Diese Pruefung ist vom geplanten
-`MatchDate` unabhaengig. [Bestaetigt]
+`MatchEnde` liegen und das Ende darf nicht in der Zukunft liegen. Eine Spieldauer
+von mehr als vier Stunden erfordert beim Ergebniseintrag eine bewusste
+Bestaetigung; eine feste Hoechstdauer besteht nicht. Diese Pruefung ist vom
+geplanten `MatchDate` unabhaengig. [Bestaetigt]
 
 Beim erstmaligen Abschluss speichert der Server `ErgebnisErfasstAm` als aktuellen
 Wiener Zeitpunkt des Ergebniseintrags. Dieser Zeitpunkt bleibt bei jeder

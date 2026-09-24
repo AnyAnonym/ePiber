@@ -492,8 +492,10 @@ Universelles Matchergebnis:
   Operatoren keines. Beim ersten Walkover setzt der Server `MatchDate` auf den
   aktuellen Wiener W.O.-Zeitpunkt und laesst MatchStart und MatchEnde leer. Bei
   regulaerem Abschluss
-  und Retirement liegt MatchEnde strikt nach MatchStart, maximal sechs Stunden
-  danach und nicht zukuenftig; `MatchDate` bleibt nur der vereinbarte Plantermin.
+  und Retirement liegt MatchEnde strikt nach MatchStart und nicht zukuenftig. Bei
+  mehr als vier Stunden verlangt der Server die kontrollierte Bestaetigung des
+  Ergebnisdialogs; eine feste Hoechstdauer besteht nicht. `MatchDate` bleibt nur
+  der vereinbarte Plantermin.
   Der erste Abschluss setzt `ErgebnisErfasstAm` auf die Wiener Serverzeit.
   Beteiligte duerfen bis einschliesslich 60 Minuten danach korrigieren; die Frist
   wird weder aus Messaging/Audit rekonstruiert noch durch Korrekturen verlaengert,

@@ -376,10 +376,11 @@ getrennter Modus ohne personenbezogene Verteilungsmeldungen verfuegbar.
 
   LF-41 Der vereinbarte Spieltermin ist vom tatsaechlichen Spielbeginn und
         Matchende getrennt. Beim ersten regulaeren Abschluss oder Retirement sind
-        Beginn und Ende erforderlich; der Beginn liegt strikt vor dem Ende, die
-        Dauer betraegt hoechstens sechs Stunden und das Ende liegt nicht in der
-        Zukunft. Der serverseitig gespeicherte Zeitpunkt des ersten
-        Ergebniseintrags bleibt unveraendert und begrenzt Korrekturen durch
+        Beginn und Ende erforderlich; der Beginn liegt strikt vor dem Ende und
+        das Ende liegt nicht in der Zukunft. Eine Dauer von mehr als vier Stunden
+        muss beim Ergebniseintrag bewusst bestaetigt werden; eine feste
+        Hoechstdauer besteht nicht. Der serverseitig gespeicherte Zeitpunkt des
+        ersten Ergebniseintrags bleibt unveraendert und begrenzt Korrekturen durch
         Beteiligte auf einschliesslich 60 Minuten. Administratoren besitzen
         begruendungspflichtige Korrektur- und Loeschmoeglichkeiten. Ein Walkover
         besitzt keinen tatsaechlichen Spielbeginn und kein Matchende. [Bestaetigt]

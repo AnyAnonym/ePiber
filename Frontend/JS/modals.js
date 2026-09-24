@@ -67,6 +67,7 @@ let favoriteMatchPickerReturnFocus = null;
 let favoriteMatchPickerGeneration = 0;
 let matchResultScore = [];
 let matchResultStatusTimer = null;
+let confirmedLongMatchDuration = "";
 
 function errorMessage(value, fallback) {
   if (value instanceof Error && value.message) return value.message;
@@ -179,6 +180,8 @@ function closeModal(modal) {
   if (modal?.id === "matchAppointmentClearModal") matchAppointmentClearContext = null;
   if (modal?.id === "adminRankingActionModal") adminRankingActionContext = null;
   if (modal?.id === "matchResultModal") {
+    hideMatchDurationConfirmation();
+    confirmedLongMatchDuration = "";
     matchResultContext = null;
     matchResultScore = [];
     clearTimeout(matchResultStatusTimer);
@@ -650,12 +653,61 @@ const matchResultModal = createModal("matchResultModal", `
     <p id="matchResultStatus" class="match-result-status" role="status" aria-live="polite" hidden></p>
     <button type="submit" id="matchResultSubmit" class="btn-login">Speichern</button>
   </form>
+  <div id="matchDurationConfirmation" class="match-duration-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="matchDurationConfirmationTitle" aria-describedby="matchDurationConfirmationText" hidden>
+    <div class="match-duration-confirmation-panel">
+      <h3 id="matchDurationConfirmationTitle">Lange Matchdauer bestätigen</h3>
+      <p id="matchDurationConfirmationText">Die eingetragene Matchdauer beträgt mehr als vier Stunden. Stimmt das wirklich?</p>
+      <div class="match-duration-confirmation-actions">
+        <button type="button" id="matchDurationConfirm" class="btn-login">Ja Passt</button>
+        <button type="button" id="matchDurationCorrect" class="btn-login">Zurück für Korrektur</button>
+      </div>
+    </div>
+  </div>
 `, { explicitDismiss: true });
 matchResultModal.classList.add("match-result-modal");
 matchResultModal.setAttribute("role", "dialog");
 matchResultModal.setAttribute("aria-modal", "true");
 matchResultModal.setAttribute("aria-labelledby", "matchResultTitle");
 matchResultModal.querySelector(".close")?.setAttribute("aria-label", "Ergebnisdialog abbrechen");
+
+function matchDurationKey(startValue, endValue) {
+  return `${String(startValue || "")}|${String(endValue || "")}`;
+}
+
+function hideMatchDurationConfirmation() {
+  const confirmation = document.getElementById("matchDurationConfirmation");
+  const form = document.getElementById("matchResultForm");
+  if (confirmation) confirmation.hidden = true;
+  if (form) form.inert = false;
+  const close = matchResultModal?.querySelector(".close");
+  if (close) close.disabled = false;
+}
+
+function showMatchDurationConfirmation() {
+  const confirmation = document.getElementById("matchDurationConfirmation");
+  const form = document.getElementById("matchResultForm");
+  if (!confirmation || !form) return;
+  form.inert = true;
+  const close = matchResultModal.querySelector(".close");
+  if (close) close.disabled = true;
+  confirmation.hidden = false;
+  document.getElementById("matchDurationConfirm")?.focus();
+}
+
+document.getElementById("matchDurationConfirm").addEventListener("click", () => {
+  const form = document.getElementById("matchResultForm");
+  confirmedLongMatchDuration = matchDurationKey(form.elements.matchStart.value, form.elements.matchEnd.value);
+  hideMatchDurationConfirmation();
+  form.requestSubmit();
+});
+
+document.getElementById("matchDurationCorrect").addEventListener("click", () => {
+  confirmedLongMatchDuration = "";
+  hideMatchDurationConfirmation();
+  const endInput = document.getElementById("matchResultEnd");
+  endInput.focus();
+  endInput.select?.();
+});
 
 const favoriteMatchPickerModal = createModal("favoriteMatchPickerModal", `
   <h2 id="favoriteMatchPickerTitle">Match auswählen</h2>
@@ -1001,6 +1053,8 @@ function openMatchResultModal(action, profile, competition, match) {
   endInput.readOnly = false;
   delete startInput.dataset.defaultValue;
   delete endInput.dataset.defaultValue;
+  hideMatchDurationConfirmation();
+  confirmedLongMatchDuration = "";
   showMatchResultStatus("");
   document.getElementById("matchResultCompetition").textContent = competition.competitionName;
   document.getElementById("matchResultEncounter").textContent = match.teams.map((team) => team.names.join(" / ")).join(" gegen ");
@@ -1045,7 +1099,7 @@ function openMatchResultModal(action, profile, competition, match) {
     if (match.status === "open") {
       const now = new Date();
       const scheduled = compactDateValue(match.matchDate);
-      const defaultStart = scheduled && scheduled <= now ? scheduled : new Date(now.getTime() - 90 * 60 * 1000);
+      const defaultStart = scheduled ? new Date(scheduled.getTime() + 15 * 60 * 1000) : new Date(now.getTime() - 90 * 60 * 1000);
       startInput.max = localDateTimeValue(now);
       startInput.value = localDateTimeValue(defaultStart);
       endInput.min = "";
@@ -1450,6 +1504,16 @@ function favoriteMatchDescription(competition, match) {
   return `${competition.competitionName || "Bewerb"} · ${formatProfileRound(match.round)} · ${teams}`;
 }
 
+function favoriteResultMatchDescription(competition, match) {
+  const competitionName = competition.competitionName || "Bewerb";
+  const round = String(match.round || "").trim() ? formatProfileRound(match.round) : "";
+  const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" vs. ") || "Match";
+  return {
+    heading: round ? `${competitionName} - ${round}` : competitionName,
+    teams,
+  };
+}
+
 window.openFavoriteMatchAction = async (overlay) => {
   if (!["match-result", "match-appointment"].includes(overlay)) return;
   await ready;
@@ -1495,7 +1559,19 @@ window.openFavoriteMatchAction = async (overlay) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "favorite-match-picker-item";
-      button.textContent = favoriteMatchDescription(competition, match);
+      if (resultAction) {
+        const description = favoriteResultMatchDescription(competition, match);
+        const heading = document.createElement("span");
+        heading.className = "favorite-match-picker-heading";
+        heading.textContent = description.heading;
+        const teams = document.createElement("span");
+        teams.className = "favorite-match-picker-teams";
+        teams.textContent = description.teams;
+        button.setAttribute("aria-label", `${description.heading}: ${description.teams}`);
+        button.append(heading, teams);
+      } else {
+        button.textContent = favoriteMatchDescription(competition, match);
+      }
       button.addEventListener("click", () => {
         closeModal(favoriteMatchPickerModal);
         if (resultAction) openMatchResultModal("result", profile, competition, match);
@@ -2788,11 +2864,22 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
       }
     }
     if (context.match.status === "open" && payload.kind !== "walkover") {
-      payload.matchStart = compactResultDate(form.elements.matchStart.value);
-      payload.matchEnd = compactResultDate(form.elements.matchEnd.value);
+      const startValue = form.elements.matchStart.value;
+      const endValue = form.elements.matchEnd.value;
+      payload.matchStart = compactResultDate(startValue);
+      payload.matchEnd = compactResultDate(endValue);
       if (!payload.matchStart || !payload.matchEnd) {
         showMatchResultStatus("Bitte geben Sie einen gültigen Matchstart und ein gültiges Matchende an.");
         return;
+      }
+      const durationMs = new Date(endValue).getTime() - new Date(startValue).getTime();
+      if (durationMs > 4 * 60 * 60 * 1000) {
+        const durationKey = matchDurationKey(startValue, endValue);
+        if (confirmedLongMatchDuration !== durationKey) {
+          showMatchDurationConfirmation();
+          return;
+        }
+        payload.longDurationConfirmed = true;
       }
     }
     if (context.action === "rankingRepair") {
@@ -2997,7 +3084,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Tab" && !matchResultModal.classList.contains("hidden")) {
     const focusable = [...matchResultModal.querySelectorAll("button:not([hidden]):not(:disabled), input:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled), textarea:not([hidden]):not(:disabled)")]
-      .filter((element) => !element.closest("[hidden]"));
+      .filter((element) => !element.closest("[hidden]") && !element.closest("[inert]"));
     if (!focusable.length) return;
     const currentIndex = focusable.indexOf(document.activeElement);
     const nextIndex = event.shiftKey

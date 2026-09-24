@@ -945,6 +945,9 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     const picker = page.locator("#favoriteMatchPickerModal");
     await picker.waitFor({ state: "visible" });
     assert.equal(await picker.locator(".favorite-match-picker-item").count() > 0, true);
+    const firstMatchChoice = picker.locator(".favorite-match-picker-item").first();
+    assert.equal(await firstMatchChoice.locator(".favorite-match-picker-heading").textContent(), "Herren - 1. Gruppe");
+    assert.equal(await firstMatchChoice.locator(".favorite-match-picker-teams").textContent(), "Own Player / Doubles Partner vs. Foreign Player");
     await picker.locator(".modal-favorite-star:visible").click();
     await picker.locator(".close").click();
 
@@ -972,6 +975,62 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     await rows.nth(1).locator(".mobile-nav-favorite-link").click();
     await picker.waitFor({ state: "visible" });
     assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Spieleingabe zeigt zweizeilige Auswahl und bestaetigt lange Matchdauer", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.openFavoriteMatchAction("match-result"));
+    const picker = page.getByRole("dialog", { name: "Spieleingabe" });
+    const choice = picker.locator(".favorite-match-picker-item").first();
+    await choice.waitFor({ state: "visible" });
+    assert.equal(await choice.locator(".favorite-match-picker-heading").textContent(), "Herren - 1. Gruppe");
+    assert.equal(await choice.locator(".favorite-match-picker-teams").textContent(), "Own Player / Doubles Partner vs. Foreign Player");
+    const choiceHeadings = await picker.locator(".favorite-match-picker-heading").allTextContents();
+    assert.equal(choiceHeadings.includes("Herren"), true);
+    assert.equal(choiceHeadings.includes("Herren - Match"), false);
+    assert.equal(await choice.evaluate((button) => {
+      const heading = button.querySelector(".favorite-match-picker-heading").getBoundingClientRect();
+      const teams = button.querySelector(".favorite-match-picker-teams").getBoundingClientRect();
+      return teams.top >= heading.bottom;
+    }), true);
+    await choice.click();
+
+    const dialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
+    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:15");
+    for (const [label, value] of [
+      ["Set 1, Own Player / Doubles Partner", "6"], ["Set 1, Foreign Player", "4"],
+      ["Set 2, Own Player / Doubles Partner", "6"], ["Set 2, Foreign Player", "4"],
+    ]) {
+      const input = dialog.getByLabel(label, { exact: true });
+      await input.fill(value);
+      await input.blur();
+    }
+    await dialog.locator("#matchResultEnd").fill("2026-09-03T16:30");
+    await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    const confirmation = dialog.getByRole("alertdialog", { name: "Lange Matchdauer bestätigen" });
+    await confirmation.waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 0);
+    await confirmation.getByRole("button", { name: "Zurück für Korrektur", exact: true }).click();
+    assert.equal(await dialog.locator("#matchResultEnd").evaluate((input) => document.activeElement === input), true);
+    await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await confirmation.getByRole("button", { name: "Ja Passt", exact: true }).click();
+    await page.waitForFunction(() => window.__matchResultCalls.length === 1);
+    const request = await page.evaluate(() => window.__matchResultCalls[0]);
+    assert.equal(request.matchStart, "260903-1015");
+    assert.equal(request.matchEnd, "260903-1630");
+    assert.equal(request.longDurationConfirmed, true);
+    await page.close();
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -1936,7 +1995,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(await dialog.locator("#matchResultEncounter").textContent(), "Own Player / Doubles Partner gegen Foreign Player");
     assert.equal(await dialog.locator("#matchResultTarget").evaluate((target) => getComputedStyle(target).textAlign), "center");
     assert.equal(await dialog.locator("#matchResultStart").getAttribute("required"), "");
-    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:00");
+    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:15");
     assert.equal(await dialog.locator("#matchResultEnd").getAttribute("required"), "");
     assert.deepEqual(await dialog.locator(".match-result-score-column > h3").allTextContents(), ["Set 1", "Set 2", "Set 3"]);
     assert.equal(await dialog.locator('input[name="result"]').count(), 0);
@@ -1966,7 +2025,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(await dialog.locator("#matchResultLosingSide").getAttribute("required"), "");
     await dialog.locator("#matchResultLosingSide").selectOption("2");
     await dialog.locator("#matchResultKind").selectOption("regular");
-    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:00");
+    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:15");
     assert.equal(await dialog.locator("#matchResultStart").getAttribute("readonly"), null);
     await page.keyboard.press("Shift+Tab");
     assert.equal(await page.evaluate(() => document.activeElement?.closest("#matchResultModal")?.id), "matchResultModal");
@@ -2000,13 +2059,20 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     const tieBreakBottom = dialog.getByLabel("Tie-Break in Set 1, Foreign Player", { exact: true });
     await tieBreakBottom.fill("5");
     await tieBreakBottom.blur();
-    await dialog.locator("#matchResultEnd").fill("2026-09-03T12:00");
+    await dialog.locator("#matchResultEnd").fill("2026-09-03T16:30");
     await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    const durationConfirmation = dialog.getByRole("alertdialog", { name: "Lange Matchdauer bestätigen" });
+    await durationConfirmation.waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 0);
+    await durationConfirmation.getByRole("button", { name: "Zurück für Korrektur", exact: true }).click();
+    assert.equal(await dialog.locator("#matchResultEnd").evaluate((input) => document.activeElement === input), true);
+    await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await durationConfirmation.getByRole("button", { name: "Ja Passt", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 1);
     const initial = await page.evaluate(() => window.__matchResultCalls[0]);
     assert.deepEqual(initial, {
       endpoint: "setMatchResult", matchId: "match-open", expectedFingerprint: "a".repeat(64), kind: "regular",
-      result: "7-6(5)/6-4", matchStart: "260903-1000", matchEnd: "260903-1200",
+      result: "7-6(5)/6-4", matchStart: "260903-1015", matchEnd: "260903-1630", longDurationConfirmed: true,
       operationId: initial.operationId,
     });
     assert.match(initial.operationId, /^operation-match-result:result:match-open:/);

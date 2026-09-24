@@ -48,6 +48,7 @@ const matchCompletionFields = {
   losingSide: optional(integer("losingSide", { min: 1, max: 2 })),
   matchStart: optionalMatchStart,
   matchEnd: optionalMatchEnd,
+  longDurationConfirmed: optional((value) => booleanValue(value, "longDurationConfirmed")),
   expectedFingerprint: fingerprint,
 };
 const matchCorrectionFields = {

@@ -185,15 +185,15 @@ function appResultRuleError(error) {
   return new AppError(error.code || "MATCH_RESULT_INVALID", error.message || "Matchergebnis ist ungueltig", 409);
 }
 
-function assertMatchEnd(matchStartValue, matchEndValue, now, { allowEqual = false } = {}) {
+function assertMatchEnd(matchStartValue, matchEndValue, now, { allowEqual = false, longDurationConfirmed = true } = {}) {
   const matchStart = parseMatchDate(matchStartValue);
   const matchEnd = parseMatchDate(matchEndValue);
   if (!matchStart || !matchEnd) throw new AppError("MATCH_TIME_INVALID", "Matchstart und Matchende sind ungueltig", 409);
   if (matchEnd < matchStart || !allowEqual && matchEnd.getTime() === matchStart.getTime()) {
     throw new AppError("MATCH_END_BEFORE_START", allowEqual ? "Matchende darf nicht vor dem Matchstart liegen" : "Matchende muss nach dem Matchstart liegen", 409);
   }
-  if (matchEnd.getTime() > matchStart.getTime() + 6 * 60 * 60 * 1000) {
-    throw new AppError("MATCH_END_AFTER_LIMIT", "Matchende darf hoechstens sechs Stunden nach Matchbeginn liegen", 409);
+  if (matchEnd.getTime() > matchStart.getTime() + 4 * 60 * 60 * 1000 && !longDurationConfirmed) {
+    throw new AppError("MATCH_DURATION_CONFIRMATION_REQUIRED", "Matchdauern ueber vier Stunden muessen bestaetigt werden", 409);
   }
   if (matchEnd.getTime() > now) throw new AppError("MATCH_END_FUTURE", "Matchende darf nicht in der Zukunft liegen", 409);
   return matchEnd;
@@ -2369,7 +2369,9 @@ class SheetService {
       const targetEnd = validated.kind === "walkover" ? "" : state.closed ? state.matchEnd : suppliedEnd;
       const targetStart = validated.kind === "walkover" ? "" : state.closed ? state.matchStart : suppliedStart;
       if (validated.kind === "walkover") targetRow[matchDateIndex] = walkoverTime;
-      else assertMatchEnd(targetStart || row[matchDateIndex], targetEnd, this.now());
+      else assertMatchEnd(targetStart || row[matchDateIndex], targetEnd, this.now(), {
+        longDurationConfirmed: state.closed || params.longDurationConfirmed === true,
+      });
       let encoded;
       try {
         encoded = encodeCompletion({

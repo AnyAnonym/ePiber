@@ -2858,6 +2858,52 @@ test("Matchergebnis lehnt fremde Spieler, Zukunftsende und veraltete Fingerprint
   repository.close();
 });
 
+test("Matchergebnis verlangt ueber vier Stunden eine Bestaetigung und erlaubt danach mehr als sechs Stunden", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const initial = fixtures();
+  initial.Matches1.push(
+    ["", "four-hour-result", "260904-0700", "", "cup-2", "", "p3", "", "p4", "", "", ""],
+    ["", "long-result", "260904-0400", "", "cup-2", "", "p3", "", "p4", "", "", ""],
+  );
+  const fake = fakeSheets(initial);
+  seedStore(fake.tables);
+  const service = new SheetService({ repository, messagingService, clientFactory: async () => fake.client, now: () => new Date(2026, 8, 4, 12, 0).getTime() });
+  const fourHourRow = initial.Matches1.find((row) => row[1] === "four-hour-result");
+  const fourHour = await service.setMatchResult({ type: "user", id: "p3", role: "player" }, {
+    operationId: "00000000-0000-4000-8000-000000000528",
+    matchId: "four-hour-result",
+    kind: "regular",
+    result: "6-4/6-4",
+    matchStart: "260904-0700",
+    matchEnd: "260904-1100",
+    expectedFingerprint: matchCompletionFingerprint(fourHourRow, initial.Matches1[0]),
+  });
+  assert.equal(fourHour.success, true);
+  const writesBeforeLongResult = fake.calls.valueUpdates.length;
+  const longRow = initial.Matches1.find((row) => row[1] === "long-result");
+  const params = {
+    operationId: "00000000-0000-4000-8000-000000000529",
+    matchId: "long-result",
+    kind: "regular",
+    result: "6-4/6-4",
+    matchStart: "260904-0400",
+    matchEnd: "260904-1100",
+    expectedFingerprint: matchCompletionFingerprint(longRow, initial.Matches1[0]),
+  };
+  await assert.rejects(service.setMatchResult({ type: "user", id: "p3", role: "player" }, params), { code: "MATCH_DURATION_CONFIRMATION_REQUIRED" });
+  assert.equal(fake.calls.valueUpdates.length, writesBeforeLongResult);
+  const completed = await service.setMatchResult({ type: "user", id: "p3", role: "player" }, {
+    ...params,
+    operationId: "00000000-0000-4000-8000-000000000530",
+    longDurationConfirmed: true,
+  });
+  assert.equal(completed.success, true);
+  assert.equal(fake.calls.valueUpdates.length > 0, true);
+  await service.stop();
+  repository.close();
+});
+
 test("Walkover und Aufgabe kodieren nur den exakten Verlierermarker", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();

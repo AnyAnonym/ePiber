@@ -22,3 +22,13 @@ Commit: 4.12.3-paj-1-3 | Männer-Doppel-Platzierungen im Dashboard ergänzt
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-2-x` gesetzt.
   - [Dashboard] Tobias Noebauer und Moritz Halva als Maenner-Doppel-Vereinsmeister sowie Roland Strauss und Jakob Packy als Vizemeister eingetragen.
   - [Tests] Die statischen Maenner-Doppel-Platzierungen im Dashboard-Browsertest abgesichert.
+
+[4.12.3-paj-1-4] - 2026-09-24
+Commit: 4.12.3-paj-1-4 | Ergebniszeiten und Spieleingabe verbessert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-3-x` gesetzt.
+  - [Ergebniseingabe] Den vereinbarten Termin plus 15 Minuten als Matchstart vorgeschlagen und bei mehr als vier Stunden eine explizite Bestaetigung mit Ruecksprung zum Matchende eingefuehrt.
+  - [Matchzeiten] Die bisherige Sechs-Stunden-Hoechstgrenze entfernt und lange Ergebniswrites serverseitig an die kontrollierte Bestaetigung gebunden.
+  - [Favoriten] Die direkte Spieleingabe-Matchauswahl zweizeilig mit Bewerb, optionaler Runde und Begegnung mit `vs.` dargestellt.
+  - [Tests] Zeitgrenzen, Langdauerbestaetigung, Fokusfuehrung und Matchauswahl erweitert abgesichert.
