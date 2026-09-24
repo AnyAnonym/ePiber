@@ -33,6 +33,10 @@ function entry(slotId, personId) {
   return grid.entries.find((value) => value.slotId === slotId && value.personId === personId) || null;
 }
 
+function constraint(slotId, personId) {
+  return (grid.constraints || []).find((value) => value.slotId === slotId && value.personId === personId)?.kind || "";
+}
+
 function comparePeople(left, right) {
   return String(left.lastName || left.name || "").localeCompare(String(right.lastName || right.name || ""), "de")
     || String(left.firstName || "").localeCompare(String(right.firstName || ""), "de")
@@ -267,6 +271,8 @@ function render() {
   const playerHead = document.createElement("th"); playerHead.scope = "col"; playerHead.className = "hall-time-player"; playerHead.setAttribute("aria-label", "Spieler"); head.appendChild(playerHead);
   const firstUpcomingSlot = upcomingSlot();
   if (!selectedSlotId || !grid.slots.some(({ id }) => id === selectedSlotId)) selectedSlotId = firstUpcomingSlot?.id || null;
+  const visibleSlots = grid.slots.filter((slot) => viewMode !== "person" || entry(slot.id, selectedPersonId));
+  const visibleSlotIds = new Set(visibleSlots.map(({ id }) => id));
   for (const slot of grid.slots) {
     const th = document.createElement("th"); th.scope = "col"; th.title = dateLabel(slot).full;
     const past = slotPast(slot);
@@ -281,7 +287,7 @@ function render() {
     select.addEventListener("click", () => selectView("selected", slot.id)); th.appendChild(select);
     head.appendChild(th);
   }
-  const sumHead = document.createElement("th"); sumHead.scope = "col"; sumHead.textContent = String(grid.slots.length); sumHead.title = `${grid.slots.length} Termine`; sumHead.className = "hall-time-sum"; head.appendChild(sumHead);
+  const sumHead = document.createElement("th"); sumHead.scope = "col"; sumHead.textContent = String(visibleSlots.length); sumHead.title = `${visibleSlots.length} sichtbare Termine`; sumHead.className = "hall-time-sum"; head.appendChild(sumHead);
 
   const body = byId("hall-time-body"); body.replaceChildren();
   for (const person of [...grid.participants].sort(comparePeople)) {
@@ -292,9 +298,9 @@ function render() {
     row.classList.toggle("is-selected-player", person.id === selectedPersonId);
     row.hidden = viewMode === "selected" && !entry(selectedSlotId, person.id);
     const name = document.createElement("th"); name.scope = "row"; name.className = "hall-time-player"; appendPersonName(name, person); name.querySelector("button").addEventListener("click", () => selectPerson(person.id)); row.appendChild(name);
-    for (const slot of grid.slots) { const cell = document.createElement("td"); cell.hidden = viewMode === "person" && !entry(slot.id, selectedPersonId); cell.classList.toggle("is-past-slot", slotPast(slot)); cell.classList.toggle("is-selected-slot", slot.id === selectedSlotId); cell.appendChild(statusButton(slot, person)); row.appendChild(cell); }
-    const confirmed = grid.entries.filter((value) => value.personId === person.id && value.status === "confirmed").length;
-    const waiting = grid.entries.filter((value) => value.personId === person.id && value.status === "waitlist").length;
+    for (const slot of grid.slots) { const cell = document.createElement("td"); cell.dataset.slotId = slot.id; cell.hidden = !visibleSlotIds.has(slot.id); cell.classList.toggle("is-past-slot", slotPast(slot)); cell.classList.toggle("is-selected-slot", slot.id === selectedSlotId); const kind = constraint(slot.id, person.id); if (kind) cell.classList.add("has-constraint", `constraint-${kind}`); cell.appendChild(statusButton(slot, person)); row.appendChild(cell); }
+    const confirmed = grid.entries.filter((value) => visibleSlotIds.has(value.slotId) && value.personId === person.id && value.status === "confirmed").length;
+    const waiting = grid.entries.filter((value) => visibleSlotIds.has(value.slotId) && value.personId === person.id && value.status === "waitlist").length;
     const sum = document.createElement("td"); sum.className = "hall-time-sum"; sum.textContent = `${confirmed}${waiting ? ` (${waiting})` : ""}`; sum.title = `${confirmed} Fixplätze, ${waiting} Wartelistenplätze`; row.appendChild(sum);
     body.appendChild(row);
   }
@@ -304,9 +310,9 @@ function render() {
   for (const slot of grid.slots) {
     const confirmed = grid.entries.filter((value) => value.slotId === slot.id && value.status === "confirmed").length;
     const waiting = grid.entries.filter((value) => value.slotId === slot.id && value.status === "waitlist").length;
-    const cell = document.createElement("td"); cell.hidden = viewMode === "person" && !entry(slot.id, selectedPersonId); cell.classList.toggle("is-past-slot", slotPast(slot)); cell.classList.toggle("is-selected-slot", slot.id === selectedSlotId); cell.classList.add(confirmed >= grid.capacity ? "is-capacity-full" : "has-capacity"); cell.textContent = `${confirmed}/${grid.capacity}${waiting ? ` (${waiting})` : ""}`; cell.title = `${confirmed} von ${grid.capacity} Fixplätzen, ${waiting} auf der Warteliste`; foot.appendChild(cell);
+    const cell = document.createElement("td"); cell.hidden = !visibleSlotIds.has(slot.id); cell.classList.toggle("is-past-slot", slotPast(slot)); cell.classList.toggle("is-selected-slot", slot.id === selectedSlotId); cell.classList.add(confirmed >= grid.capacity ? "is-capacity-full" : "has-capacity"); cell.textContent = `${confirmed}/${grid.capacity}${waiting ? ` (${waiting})` : ""}`; cell.title = `${confirmed} von ${grid.capacity} Fixplätzen, ${waiting} auf der Warteliste`; foot.appendChild(cell);
   }
-  const totalConfirmed = grid.entries.filter(({ status }) => status === "confirmed").length;
+  const totalConfirmed = grid.entries.filter(({ slotId, status }) => visibleSlotIds.has(slotId) && status === "confirmed").length;
   const total = document.createElement("td"); total.className = "hall-time-sum hall-time-total"; total.textContent = String(totalConfirmed); total.title = `${totalConfirmed} Fixplätze insgesamt`; foot.appendChild(total);
   if (previousScroll && scroll) {
     scroll.scrollLeft = previousScroll.left;

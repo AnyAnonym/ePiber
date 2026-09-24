@@ -165,7 +165,10 @@ test("Admin-Verhinderungen erzeugen zuerst nur eine Vorschau und werden kontroll
   assert.equal(constrained.grid.constraints.length, 2);
   assert.equal(context.service.reportingSnapshot(0, Date.parse("2026-02-01T00:00:00Z")).entries
     .find(({ action }) => action === "distribution_constraints_updated").summary, "Admin hat Termineinschränkungen für die Verteilung vorgenommen");
-  assert.equal(Object.hasOwn(context.service.grid(players[0], created.grid.id).grid, "constraints"), false);
+  assert.deepEqual(context.service.grid(players[0], created.grid.id).grid.constraints, [
+    { personId: "p1", slotId: firstSlot.id, kind: "unavailable" },
+    { personId: "p2", slotId: secondSlot.id, kind: "avoid" },
+  ]);
   const previewed = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: constrained.revision });
   assert.equal(previewed.preview.quality, "complete");
   assert.equal(previewed.preview.openPlaceCount, 0);

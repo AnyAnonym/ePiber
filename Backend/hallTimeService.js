@@ -414,7 +414,7 @@ function projectedGrid(grid, revision, principal) {
       slotId: entry.slotId, personId: entry.personId, status: entry.status,
       ...(entry.status === "waitlist" ? { waitlistPosition: waitlists.get(`${entry.slotId}:${entry.personId}`) } : {}),
     })),
-    ...(isAdmin(principal) ? { constraints: clone(grid.constraints || []) } : {}),
+    constraints: (grid.constraints || []).map(({ personId, slotId, kind }) => ({ personId, slotId, kind })),
     revision, canAdminister: isAdmin(principal), currentPersonId: principal?.id || "",
     createdAt: grid.createdAt, updatedAt: grid.updatedAt,
   };

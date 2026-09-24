@@ -28,10 +28,14 @@ Hallenzeiten - Reservierungsraster
   moeglichen Termins. Ein Terminspaltenkopf verwendet denselben Filter fuer seine
   Spalte. Ein Klick auf einen Namen zeigt nur Terminspalten mit Eintrag dieser
   Person; die ausgewaehlte Zeile und Spalte sind blau. Rechts zeigt der Kopf die
-  Gesamtzahl aller Termine und jede Spielerzeile ihre Fixplatz- und
-  Wartelistenanzahl ueber alle Termine. Unten stehen Belegung/Kapazitaet und
+  Anzahl sichtbarer Termine und jede Spielerzeile ihre Fixplatz- und
+  Wartelistenanzahl innerhalb dieser sichtbaren Terminspalten. Unten stehen Belegung/Kapazitaet und
   Wartende je Termin: freie Kapazitaet ist gruen, voll belegte Kapazitaet rot.
-  Die rechte untere Ecke summiert alle bestaetigten Fixplaetze ohne Warteliste.
+  Die rechte untere Ecke summiert alle bestaetigten Fixplaetze in den sichtbaren
+  Terminspalten ohne Warteliste. Harte Verhinderungen erhalten einen roten und
+  weiche Vermeidungswuensche einen gelben Innenrahmen samt Legende. Alle
+  berechtigten Rasterteilnehmer sehen diese kontrollierten Vorgabearten fuer alle
+  Spieler; Gruende oder Freitexte werden nicht uebertragen.
 
 -- Regeln, Historie und Fehler --
   Fair Use zaehlt Fix- und Wartelistenplaetze gemeinsam und wird vor einer

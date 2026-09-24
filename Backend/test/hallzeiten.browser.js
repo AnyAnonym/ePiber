@@ -40,6 +40,7 @@ let grid = {
     { id: "slot-6", date: "2099-12-04", start: "19:00", end: "21:00" },
     { id: "slot-7", date: "2099-12-11", start: "19:00", end: "21:00" },
   ],
+  constraints: [{ personId: "p1", slotId: "slot-1", kind: "unavailable" }, { personId: "p2", slotId: "slot-2", kind: "avoid" }],
   entries: [{ slotId: "slot-1", personId: "p1", status: "confirmed" }, { slotId: "slot-1", personId: "p2", status: "waitlist", waitlistPosition: 1 }],
 };
 let adminGrids = [];
@@ -304,19 +305,29 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     });
     assert.ok(stableViewportHeight.pageScroll > 0);
     assert.ok(Math.abs(stableViewportHeight.after - stableViewportHeight.before) < 1, JSON.stringify(stableViewportHeight));
-    assert.deepEqual(await page.locator(".hall-time-legend span").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht Dabei"]);
+    assert.deepEqual(await page.locator(".hall-time-legend span").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht Dabei", "Verhindert", "Möglichst vermeiden"]);
+    assert.equal(await page.locator('.hall-time-legend i.constraint-unavailable').count(), 1);
+    assert.equal(await page.locator('.hall-time-legend i.constraint-avoid').count(), 1);
     assert.equal(await page.locator("#hall-time-head .hall-time-sum").textContent(), "9");
-    assert.equal(await page.locator("#hall-time-head .hall-time-sum").getAttribute("title"), "9 Termine");
+    assert.equal(await page.locator("#hall-time-head .hall-time-sum").getAttribute("title"), "9 sichtbare Termine");
+    assert.match(await page.locator('#hall-time-body [data-person-id="p1"] [data-slot-id="slot-1"]').evaluate((element) => getComputedStyle(element).boxShadow), /rgb\(198, 40, 40\).*inset/);
+    assert.match(await page.locator('#hall-time-body [data-person-id="p2"] [data-slot-id="slot-2"]').evaluate((element) => getComputedStyle(element).boxShadow), /rgb\(211, 154, 0\).*inset/);
     assert.equal(await page.locator("#hall-time-history-list li").first().locator(".competition-history-entry-title").textContent(), "Anna Admin hat Einstellungen geändert");
     assert.equal(await page.locator("#hall-time-history-list li").nth(1).locator(".competition-history-entry-title").textContent(), "Anna Admin hat die zukünftige Verteilung neu erstellt (6 neu zugeteilt, 2 nachgerückt, 4 entfernt, 28 unverändert)");
     assert.equal(await page.locator("#hall-time-history-list li").nth(2).locator(".competition-history-entry-title").textContent(), "Alfred Pimminger hat Termineinschränkungen für die Verteilung vorgenommen");
     assert.equal(await page.locator("#hall-time-history-list li").nth(3).locator(".competition-history-entry-title").textContent(), "Spieler Eins hat sich angemeldet");
     const legendRows = await page.locator(".hall-time-legend span").evaluateAll((items) => new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size);
-    assert.equal(legendRows, 1);
+    assert.equal(legendRows, 2);
     assert.equal(await page.locator("#hall-time-foot td").nth(2).textContent(), "1/1 (1)");
     assert.equal(await page.locator("#hall-time-foot .hall-time-total").textContent(), "1");
     assert.equal(await page.locator("#hall-time-foot td").first().evaluate((element) => getComputedStyle(element).color), "rgb(23, 107, 53)");
     assert.equal(await page.locator("#hall-time-foot td").nth(2).evaluate((element) => getComputedStyle(element).color), "rgb(165, 43, 43)");
+    await page.locator('#hall-time-body [data-person-id="p1"] .hall-time-player-select').click();
+    assert.equal(await page.locator("#hall-time-head .hall-time-sum").textContent(), "1");
+    assert.equal(await page.locator('#hall-time-body [data-person-id="p1"] .hall-time-sum').textContent(), "1");
+    assert.equal(await page.locator('#hall-time-body [data-person-id="p2"] .hall-time-sum').textContent(), "0 (1)");
+    assert.equal(await page.locator("#hall-time-foot .hall-time-total").textContent(), "1");
+    await page.getByRole("button", { name: "Alle", exact: true }).click();
     assert.deepEqual(await page.locator("#hall-time-body .hall-time-player").first().locator(".hall-time-person-name > span").allTextContents(), ["Aigner", "Anton"]);
     assert.equal(await page.locator("#hall-time-body .hall-time-player").first().locator(".hall-time-person-name > span").evaluateAll((lines) => lines.every((line) => getComputedStyle(line).whiteSpace === "nowrap")), true);
     const foreignButton = page.getByRole("button", { name: /Leitner Lisa.*06\.11.*anmelden/ });
@@ -390,8 +401,9 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.ok(compactLayout.legendTop < compactLayout.viewportBottom);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&withoutWaitlist=1`);
     await page.getByRole("heading", { name: "Donnerstag Doppel" }).waitFor({ timeout: 5000 });
+    await page.locator(".hall-time-legend .is-waitlist").waitFor({ state: "hidden" });
     assert.equal(await page.locator(".hall-time-legend .is-waitlist").isHidden(), true);
-    assert.deepEqual(await page.locator(".hall-time-legend span:visible").allTextContents(), ["✓ Dabei", "× nicht Dabei"]);
+    assert.deepEqual(await page.locator(".hall-time-legend span:visible").allTextContents(), ["✓ Dabei", "× nicht Dabei", "Verhindert", "Möglichst vermeiden"]);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&failWithReference=1`);
     await page.getByText("Raster konnte nicht geladen werden.", { exact: true }).waitFor({ timeout: 5000 });
     assert.equal((await page.locator("body").textContent()).includes("intern-123"), false);
