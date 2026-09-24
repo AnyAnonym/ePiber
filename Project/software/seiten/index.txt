@@ -176,8 +176,9 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
 
   Vereinstermin und Vereinsmeisterschaftsergebnisse sind derzeit statisch in
   `Frontend/index.html` gepflegt. Frauen Einzel: Anita Pimminger,
-  Sabine Stocker, Sara Graf. Offene Maenner-Doppelplaetze erscheinen als
-  Gedankenstrich. Fehler beim Laden der Geburtstage erzeugen das kontrollierte
+  Sabine Stocker, Sara Graf. Maenner Doppel: Tobias Noebauer und Moritz Halva;
+  Vizemeister sind Roland Strauss und Jakob Packy. Fehler beim Laden der
+  Geburtstage erzeugen das kontrollierte
   Browserereignis `dashboard_birthdays_load_failed` fuer den bekannten Seitentyp
   `index`; die Diagnose enthaelt keine Mitgliederdaten.
 

@@ -1352,6 +1352,10 @@ test("Dashboard zeigt aktuelle Geburtstage mit Alter und oeffnet das bestehende 
     const highlightCount = await highlights.count();
     assert.match(await highlights.nth(highlightCount - 2).textContent(), /Mixed Doppel.*Elke Hahn & Alexander Hrazdera/s);
     assert.match(await highlights.nth(highlightCount - 1).textContent(), /Mixed Doppel.*Monika Strauß & Alfred Pimminger/s);
+    const mensDoublesChampion = page.locator(".highlight-list > .highlight", { hasText: "Männer Doppel · Vereinsmeister" });
+    const mensDoublesRunnerUp = page.locator(".highlight-list > .highlight", { hasText: "Männer Doppel · Vizemeister" });
+    assert.equal(await mensDoublesChampion.locator("h3").textContent(), "Tobias Nöbauer & Moritz Halva");
+    assert.equal(await mensDoublesRunnerUp.locator("h3").textContent(), "Roland Strauß & Jakob Packy");
     await page.evaluate(() => {
       window.openProfileModal = (options) => { window.__openedDashboardProfile = options; };
     });

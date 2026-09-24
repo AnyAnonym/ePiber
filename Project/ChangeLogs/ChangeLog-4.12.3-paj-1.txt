@@ -14,3 +14,11 @@ Commit: 4.12.3-paj-1-2 | Chat-Diagramme und Dashboard-Deployment dokumentiert
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-1-x` gesetzt.
   - [Planung] Die fuenf Architektur-, Sprach-, Import-, Orchestrierungs- und OpenCode-Ablaeufe der Chat-Assistent-Arbeitsgrundlage als renderbare Mermaid-Flowcharts beziehungsweise Sequenzdiagramme statt einfacher Textdarstellungen hinterlegt.
   - [Dokumentation] Den direkten, automatisch auszufuehrenden Installationsweg fuer erfolgreich gepruefte Grafana-Dashboard-JSON-Dateien im PAJ-Testsystem als Agenten- und Betriebsvorgabe festgehalten; Live und andere Observability-Konfigurationen bleiben ausgeschlossen.
+
+[4.12.3-paj-1-3] - 2026-09-24
+Commit: 4.12.3-paj-1-3 | Männer-Doppel-Platzierungen im Dashboard ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-2-x` gesetzt.
+  - [Dashboard] Tobias Noebauer und Moritz Halva als Maenner-Doppel-Vereinsmeister sowie Roland Strauss und Jakob Packy als Vizemeister eingetragen.
+  - [Tests] Die statischen Maenner-Doppel-Platzierungen im Dashboard-Browsertest abgesichert.
