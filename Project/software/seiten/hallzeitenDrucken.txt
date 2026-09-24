@@ -6,17 +6,26 @@ Hallenzeiten drucken - Admin-Druckvorlagen
   JS:   Frontend/JS/hallzeitenDrucken.js
   CSS:  Frontend/CSS/hallzeitenDrucken.css
   URL:  hallzeitenDrucken.html?id=<Raster-ID>&ansicht=mine|all
+        hallzeitenDrucken.html?id=<Raster-ID>&ansicht=all&vorschau=<SHA-256>
   Die Seite ist ausschliesslich fuer Administratoren erreichbar.
 
 -- Projektionen --
   `mine` zeigt die eigene Teilnehmerzeile; ist der Administrator kein Teilnehmer,
   wird eine leere Namensvorlage erzeugt. `all` zeigt alle Teilnehmer nach Nachname
-  und Vorname sortiert. Die Ausgabe enthaelt ausschliesslich zwei Rasterbloecke
-  ohne Titel, Hinweise, Legende, Summenspalte oder Belegungsfuss.
+  und Vorname sortiert. Die regulaere Ausgabe enthaelt ausschliesslich zwei
+  Rasterbloecke ohne Titel, Hinweise, Legende, Summenspalte oder Belegungsfuss.
+  Der ausschliesslich aus dem Admin-Vorschauoverlay verlinkte `vorschau`-Modus
+  berechnet die zustandslose Neuverteilung unter der aktuellen Rasterrevision
+  erneut und verlangt den exakt passenden Vorschau-Hash. Er ersetzt nur fuer die
+  Darstellung die zukuenftigen Eintraege, ohne den State zu schreiben. Ein
+  veralteter Hash wird kontrolliert abgelehnt. Harte Verhinderungen erhalten
+  einen roten, weiche Vermeidungswuensche einen gelben Innenrahmen; die Legende
+  erscheint einmal unter dem zweiten Rasterblock.
 
 -- Drucklayout --
   Termine werden moeglichst gleichmaessig auf Vorder- und Rueckseite verteilt. Bei
   ungerader Anzahl erhaelt Block 2 eine leere Ausgleichsspalte. Datum und Zeit sind
   kompakt; Namens-, Termin- und Gesamtbreite werden einmal global aus den
   tatsaechlichen Inhalten berechnet, sodass beide Bloecke mit und ohne
-  Ausgleichsspalte exakt gleich breit bleiben.
+  Ausgleichsspalte exakt gleich breit bleiben. Die Vorgabenrahmen beeinflussen
+  diese Geometrie nicht und bleiben auch im Druckmedium farblich erhalten.

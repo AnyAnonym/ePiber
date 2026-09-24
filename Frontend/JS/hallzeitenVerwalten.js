@@ -208,6 +208,7 @@ function renderPreview(preview) {
   const body = document.createElement("tbody");
   for (const value of preview.personSummaries) { const row = document.createElement("tr"); for (const text of [value.personName, value.pastCount, value.futureCount, value.totalCount]) { const cell = document.createElement(row.children.length ? "td" : "th"); cell.textContent = text; row.appendChild(cell); } body.appendChild(row); }
   table.appendChild(body); details.appendChild(table);
+  byId("hall-time-preview-print").href = `hallzeitenDrucken.html?id=${encodeURIComponent(selectedId)}&ansicht=all&vorschau=${encodeURIComponent(preview.previewHash)}`;
   byId("hall-time-distribute-confirm").hidden = preview.openPlaceCount > 0;
 }
 

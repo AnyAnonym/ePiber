@@ -25,8 +25,12 @@ Hallenzeiten verwalten - Administration
   Zuteilungen, offenen Plaetzen, Wunschkonflikten und Einsatzsummen. Sie veraendert
   den bestehenden Raster nicht. Unvollstaendige Vorschlaege koennen nicht
   uebernommen werden; vollstaendige Vorschlaege benoetigen eine ausdrueckliche,
-  revisions- und hashgeschuetzte Uebernahme. `Alle Stati auf Termin loeschen`
+  revisions- und hashgeschuetzte Uebernahme. Aus dem Vorschauoverlay oeffnet
+  `Uebersicht drucken` exakt den angezeigten Vorschlag in einer neuen, markierten
+  Gesamtraster-Druckansicht; ein nicht mehr passender Vorschau-Hash wird abgelehnt.
+  `Alle Stati auf Termin loeschen`
   entfernt nach Bestaetigung alle gruenen und gelben Stati, aber keine Termine.
   Schreiboperationen sind revisioniert, idempotent, auditiert und strukturiert
-  geloggt. Die Vorschau loggt nur kontrollierte Summen. Fuer bestehende Raster fuehren Links zu persoenlicher und vollstaendiger
-  Druckvorlage.
+  geloggt. Die Vorschau loggt nur kontrollierte Summen. Fuer bestehende Raster
+  fuehren die oberen Links unveraendert zur persoenlichen und unmarkierten
+  vollstaendigen Druckvorlage.

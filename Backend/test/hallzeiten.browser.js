@@ -55,7 +55,7 @@ const history = [
 ];
 export function createEndpoint(name) { return async (params = {}) => {
   if (name === "hallTimeGrid" && new URLSearchParams(location.search).has("failWithReference")) throw new Error("Raster konnte nicht geladen werden. (Referenz: intern-123)");
-  if (name === "hallTimeGrid") { const params = new URLSearchParams(location.search); return { data: { success: true, grid: structuredClone({ ...grid, slots: params.has("evenSlots") ? grid.slots.slice(0, 8) : grid.slots, waitlistEnabled: !params.has("withoutWaitlist"), currentPersonId: params.has("withoutParticipant") ? "admin-1" : grid.currentPersonId, canAdminister: location.pathname.includes("Drucken") }) } }; }
+  if (name === "hallTimeGrid") { const params = new URLSearchParams(location.search); const printing = location.pathname.includes("Drucken"); return { data: { success: true, grid: structuredClone({ ...grid, slots: params.has("evenSlots") ? grid.slots.slice(0, 8) : grid.slots, waitlistEnabled: !params.has("withoutWaitlist"), currentPersonId: params.has("withoutParticipant") ? "admin-1" : grid.currentPersonId, canAdminister: printing, ...(printing ? { constraints: [{ personId: "p1", slotId: "slot-1", kind: "unavailable" }, { personId: "p2", slotId: "slot-2", kind: "avoid" }] } : {}) }) } }; }
   if (name === "hallTimeHistory") return { data: { success: true, entries: structuredClone(history) } };
   if (name === "setHallTimeBooking") {
     if (params.slotId === "slot-3") throw new Error("Termin ist bereits voll belegt. (Referenz: intern-voll-123)");
@@ -75,10 +75,13 @@ export function createEndpoint(name) { return async (params = {}) => {
   if (name === "adminDistributeHallTimeGrid") { distributionCount += 1; adminGrids[0].entries = adminGrids[0].slots.map((slot) => ({ slotId: slot.id || slot.date, personId: "p1", status: "confirmed" })); revision += 1; return { data: { success: true, revision } }; }
   if (name === "adminSaveHallTimeConstraints") { adminConstraints = structuredClone(params.constraints); adminGrids[0].constraints = structuredClone(adminConstraints); revision += 1; return { data: { success: true, grid: structuredClone(adminGrids[0]), revision } }; }
   if (name === "adminPreviewHallTimeDistribution") {
-    const entries = adminGrids[0].slots.flatMap((slot) => adminConstraints.some(({ slotId, personId, kind }) => slotId === slot.id && personId === "p1" && kind === "unavailable") ? [] : [{ slotId: slot.id, personId: "p1", status: "confirmed" }]);
-    const openPlaceCount = adminGrids[0].slots.length - entries.length;
-    const softConflictCount = entries.filter((entry) => adminConstraints.some(({ slotId, personId, kind }) => slotId === entry.slotId && personId === entry.personId && kind === "avoid")).length;
-    return { data: { success: true, preview: { gridId: adminGrids[0].id, revision, quality: openPlaceCount ? "incomplete" : softConflictCount ? "warning" : "complete", entries, slotCount: adminGrids[0].slots.length, assignedCount: entries.length, openPlaceCount, softConflictCount, spread: 0, previewHash: "a".repeat(64), slotSummaries: adminGrids[0].slots.map((slot) => ({ slot, assignedCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, openCount: entries.some(({ slotId }) => slotId === slot.id) ? 0 : 1, availableCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, assignedPersonIds: entries.some(({ slotId }) => slotId === slot.id) ? ["p1"] : [] })), personSummaries: [{ personId: "p1", personName: "p1", pastCount: 0, futureCount: entries.length, totalCount: entries.length }], softConflicts: [] } } };
+    const source = adminGrids[0] || { ...grid, constraints: [{ personId: "p1", slotId: "slot-1", kind: "unavailable" }, { personId: "p2", slotId: "slot-2", kind: "avoid" }] };
+    const sourceConstraints = source.constraints || adminConstraints;
+    const previewSlots = source.slots.filter(({ date }) => date.startsWith("2099-"));
+    const entries = previewSlots.flatMap((slot) => sourceConstraints.some(({ slotId, personId, kind }) => slotId === slot.id && personId === "p1" && kind === "unavailable") ? [] : [{ slotId: slot.id, personId: "p1", status: "confirmed" }]);
+    const openPlaceCount = previewSlots.length - entries.length;
+    const softConflictCount = entries.filter((entry) => sourceConstraints.some(({ slotId, personId, kind }) => slotId === entry.slotId && personId === entry.personId && kind === "avoid")).length;
+    return { data: { success: true, preview: { gridId: source.id, revision, quality: openPlaceCount ? "incomplete" : softConflictCount ? "warning" : "complete", entries, slotCount: previewSlots.length, assignedCount: entries.length, openPlaceCount, softConflictCount, spread: 0, previewHash: "a".repeat(64), slotSummaries: previewSlots.map((slot) => ({ slot, assignedCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, openCount: entries.some(({ slotId }) => slotId === slot.id) ? 0 : 1, availableCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, assignedPersonIds: entries.some(({ slotId }) => slotId === slot.id) ? ["p1"] : [] })), personSummaries: [{ personId: "p1", personName: "p1", pastCount: 0, futureCount: entries.length, totalCount: entries.length }], softConflicts: [] } } };
   }
   if (name === "adminApplyHallTimeDistribution") { distributionCount += 1; adminGrids[0].entries = adminGrids[0].slots.map((slot) => ({ slotId: slot.id, personId: "p1", status: "confirmed" })); revision += 1; return { data: { success: true, grid: structuredClone(adminGrids[0]), revision } }; }
   if (name === "adminClearAllHallTimeStatuses") { statusClearCount += 1; const deletedEntryCount = adminGrids[0]?.entries?.length || 0; adminGrids[0].entries = []; revision += 1; return { data: { success: true, grid: structuredClone(adminGrids[0]), deletedEntryCount, revision } }; }
@@ -427,6 +430,8 @@ test("Hallenzeiten-Verwaltung speichert Verhinderungen und uebernimmt nur eine v
     await page.getByRole("button", { name: "Neuverteilung berechnen" }).click({ timeout: 5000 });
     await page.getByRole("heading", { name: "Vorschau der Neuverteilung" }).waitFor({ timeout: 5000 });
     assert.match(await page.locator("#hall-time-preview-summary").textContent(), /Keine vollständige Lösung/);
+    assert.match(await page.getByRole("link", { name: "Übersicht drucken" }).getAttribute("href"), /hallzeitenDrucken\.html\?id=grid-new&ansicht=all&vorschau=a{64}$/);
+    assert.equal(await page.getByRole("link", { name: "Übersicht drucken" }).getAttribute("target"), "_blank");
     assert.equal(await page.getByRole("button", { name: "Vorschau übernehmen" }).isHidden(), true);
     const dialogLayout = await page.locator("#hall-time-distribute-dialog").evaluate((dialog) => {
       const rect = dialog.getBoundingClientRect();
@@ -492,8 +497,22 @@ test("Hallenzeiten-Druckansichten zeigen dem Admin den eigenen oder gesamten sic
     const sharedColumnWidths = await page.locator(".hall-time-print-table").evaluateAll((tables) => tables.map((table) => [...table.querySelectorAll("thead th")].map((cell) => Math.round(cell.getBoundingClientRect().width))));
     assert.deepEqual(sharedColumnWidths[0], sharedColumnWidths[1]);
     assert.equal(await page.locator(".hall-time-print-table tbody tr").first().locator("th").textContent(), "Aigner Anton");
+    assert.equal(await page.locator(".hall-time-print-legend").count(), 0);
+    assert.equal(await page.locator(".has-constraint").count(), 0);
+    await page.goto(`http://127.0.0.1:${server.address().port}/hallzeitenDrucken.html?id=grid-1&ansicht=all&vorschau=${"a".repeat(64)}`);
+    await page.locator(".hall-time-print-legend").waitFor({ timeout: 5000 });
+    assert.equal(await page.locator(".hall-time-print-legend").count(), 1);
+    assert.deepEqual(await page.locator(".hall-time-print-legend span").allTextContents(), ["Verhindert", "Möglichst vermeiden"]);
+    assert.equal(await page.locator(".hall-time-print-page").first().locator(".hall-time-print-legend").count(), 0);
+    assert.equal(await page.locator(".hall-time-print-page").nth(1).locator(".hall-time-print-legend").count(), 1);
+    assert.equal(await page.locator('[data-person-id="p1"] [data-slot-id="slot-1"]').getAttribute("class"), "is-empty has-constraint constraint-unavailable");
+    assert.equal(await page.locator('[data-person-id="p2"] [data-slot-id="slot-2"]').getAttribute("class"), "is-empty has-constraint constraint-avoid");
+    assert.equal(await page.locator('[data-person-id="p1"] [data-slot-id="slot-2"]').textContent(), "✓");
     await page.emulateMedia({ media: "print" });
     assert.equal(await page.locator("#hall-time-print-app").evaluate((element) => getComputedStyle(element).display), "block");
+    await page.goto(`http://127.0.0.1:${server.address().port}/hallzeitenDrucken.html?id=grid-1&ansicht=all&vorschau=${"b".repeat(64)}`);
+    await page.getByText("Diese Druckvorschau ist nicht mehr aktuell. Bitte berechne sie erneut.").waitFor({ timeout: 5000 });
+    assert.equal(await page.locator("#hall-time-print-app").isHidden(), true);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeitenDrucken.html?id=grid-1&ansicht=all&asPlayer=1`);
     await page.getByText("Diese Druckvorlagen sind ausschließlich für Administratoren verfügbar.").waitFor({ timeout: 5000 });
     assert.equal(await page.locator("#hall-time-print-app").isHidden(), true);

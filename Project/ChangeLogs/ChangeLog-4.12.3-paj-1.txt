@@ -157,3 +157,13 @@ Commit: 4.12.3-paj-1-17 | Pruefnachweise und Browser-Smokes beschleunigt
   - [Robustheit] Browsercontainer pro Lauf eindeutig benannt, per CID verfolgt und bei regulaerem Ende oder Abbruchsignal kontrolliert entfernt, sodass Timeouts keinen Folgelauf durch Namenskonflikte blockieren.
   - [Bedienung] Den Commit-Kurzkommentar im offenen Branch-Changelog hinterlegt und `next-task` ohne redundante `--subject`-Angabe ausfuehrbar gemacht; bestehende offene Abschnitte bleiben kompatibel.
   - [Tests] Fingerprint-Invalidierung, sessionsuebergreifenden Nachweis, Testprofilzuordnung, Kurzkommentar-Fallback sowie Browserprofil- und Containervertraege automatisiert abgesichert.
+
+[4.12.3-paj-1-18] - 2026-09-24
+Commit: 4.12.3-paj-1-18 | Markierte Hallenraster-Druckvorschau ergaenzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-17-x` gesetzt.
+  - [Hallenzeiten/Druck] Aus dem Neuverteilungs-Overlay eine hashgebundene Druckansicht der exakten, noch nicht uebernommenen Vorschau in einem neuen Tab ergaenzt; der regulaere Gesamtraster bleibt unveraendert.
+  - [Hallenzeiten/Bedienung] Harte Verhinderungen in der Vorschau rot und weiche Vermeidungswuensche gelb eingerahmt sowie eine einmalige Legende unter dem zweiten Druckblock eingefuegt.
+  - [Sicherheit/Datenschutz] Nur Raster-ID und Vorschau-Hash in die Druck-URL aufgenommen und veraltete oder ungueltige Vorschauen ohne Statewrite kontrolliert abgelehnt.
+  - [Tests] Unmarkierte Standardansicht, Overlay-Link, exakte Vorschauprojektion, beide Vorgabenrahmen, einmalige Legende und veralteten Hash im Browser abgesichert.
