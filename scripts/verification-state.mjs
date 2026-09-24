@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const RECEIPT_VERSION = 1;
+const RECEIPT_VERSION = 2;
 const SECRET_PATH_RE = /(^|\/)(\.env(?:\.[^/]*)?|[^/]*service[-_.]?account[^/]*\.json|[^/]*private[^/]*key[^/]*|id_(?:rsa|dsa|ecdsa|ed25519)|[^/]*\.(?:pem|key|p12|pfx))$/i;
 const WORKFLOW_METADATA = new Set(["Backend/package.json", "Backend/package-lock.json"]);
 const SUITE_ORDER = ["docs", "build", "browser-core", "browser-lifecycle", "browser-full"];
@@ -78,6 +78,10 @@ function isDocumentation(file) {
   return file === "AGENTS.md" || /\.(?:md|txt)$/i.test(file);
 }
 
+function isBranchChangelog(file) {
+  return /^Project\/ChangeLogs\/ChangeLog-[^/]+\.txt$/.test(file);
+}
+
 export function requiredSuites(paths, root) {
   const substantive = paths.filter((file) => !isWorkflowMetadata(file, root));
   if (!substantive.length) return [];
@@ -106,12 +110,40 @@ export function requiredSuites(paths, root) {
   return SUITE_ORDER.filter((suite) => suites.has(suite));
 }
 
-export function worktreeFingerprint(root) {
+function suiteIncludes(file, suite) {
+  if (isBranchChangelog(file)) return false;
+  if (WORKFLOW_METADATA.has(file)) return suite !== "docs";
+  if (suite === "docs") return isDocumentation(file);
+  if (suite === "build") return !isDocumentation(file);
+  return file.startsWith("Frontend/")
+    || /^Backend\/test\/.*\.browser\.js$/.test(file)
+    || file === "Backend/test/browserProfiles.js"
+    || file.startsWith("Backend/scripts/run-browser-smoke");
+}
+
+function normalizedFileContent(file, content) {
+  if (!WORKFLOW_METADATA.has(file)) return content;
+  try {
+    const value = JSON.parse(content.toString("utf8"));
+    value.version = "<workflow-version>";
+    if (file.endsWith("package-lock.json") && value.packages?.[""]) {
+      value.packages[""].version = "<workflow-version>";
+    }
+    return Buffer.from(`${JSON.stringify(value)}\n`);
+  } catch {
+    return content;
+  }
+}
+
+export function suiteFingerprint(root, suite) {
+  if (!SUITE_ORDER.includes(suite)) throw new Error(`Unbekanntes Pruefprofil: ${suite}`);
   const hash = crypto.createHash("sha256");
   const head = git(root, ["rev-parse", "HEAD"]).stdout.trim();
-  const status = git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]).stdout;
-  const paths = parseStatusPaths(status);
-  hash.update(`head\0${head}\0status\0${status}\0`);
+  const paths = [...new Set([
+    ...changedPaths(root).filter((file) => suiteIncludes(file, suite)),
+    ...(suite === "docs" ? [] : [...WORKFLOW_METADATA].filter((file) => fs.existsSync(path.join(root, file)))),
+  ])].sort();
+  hash.update(`suite\0${suite.startsWith("browser-") ? "browser" : suite}\0head\0${head}\0`);
 
   for (const file of paths) {
     if (SECRET_PATH_RE.test(file) && path.basename(file) !== ".env.example") {
@@ -126,12 +158,15 @@ export function worktreeFingerprint(root) {
     const stat = fs.lstatSync(absolute);
     hash.update(`mode\0${stat.mode}\0`);
     if (stat.isSymbolicLink()) hash.update(`symlink\0${fs.readlinkSync(absolute)}\0`);
-    else if (stat.isFile()) hash.update(fs.readFileSync(absolute));
+    else if (stat.isFile()) hash.update(normalizedFileContent(file, fs.readFileSync(absolute)));
     else hash.update("non-file\0");
   }
+  return hash.digest("hex");
+}
 
-  const lockFile = path.join(root, "Backend/package-lock.json");
-  if (fs.existsSync(lockFile)) hash.update(fs.readFileSync(lockFile));
+export function worktreeFingerprint(root) {
+  const hash = crypto.createHash("sha256");
+  for (const suite of SUITE_ORDER) hash.update(`${suite}\0${suiteFingerprint(root, suite)}\0`);
   return hash.digest("hex");
 }
 
@@ -158,10 +193,6 @@ function suiteSatisfied(required, completed) {
   return false;
 }
 
-function fileHash(file) {
-  return fs.existsSync(file) ? crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex") : null;
-}
-
 function currentBranch(root) {
   return git(root, ["branch", "--show-current"]).stdout.trim() || null;
 }
@@ -170,19 +201,19 @@ export function verificationStatus(root, paths = changedPaths(root)) {
   const fingerprint = worktreeFingerprint(root);
   const required = requiredSuites(paths, root);
   const receipt = readReceipt(root);
-  const receiptMatches = Boolean(
+  const contextMatches = Boolean(
     receipt
-    && receipt.fingerprint === fingerprint
     && receipt.headSha === git(root, ["rev-parse", "HEAD"]).stdout.trim()
     && receipt.branch === currentBranch(root)
-    && receipt.node === process.version
-    && receipt.packageLockHash === fileHash(path.join(root, "Backend/package-lock.json")),
+    && receipt.node === process.version,
   );
-  const completed = new Set(receiptMatches
-    ? Object.entries(receipt.suites || {}).filter(([, value]) => value?.success === true).map(([suite]) => suite)
+  const completed = new Set(contextMatches
+    ? Object.entries(receipt.suites || {})
+      .filter(([suite, value]) => value?.success === true && value.fingerprint === suiteFingerprint(root, suite))
+      .map(([suite]) => suite)
     : []);
   const missing = required.filter((suite) => !suiteSatisfied(suite, completed));
-  return { fingerprint, required, completed: [...completed].sort(), missing, receiptMatches };
+  return { fingerprint, required, completed: [...completed].sort(), missing, receiptMatches: contextMatches && missing.length === 0 };
 }
 
 export function assertVerification(root, paths = changedPaths(root)) {
@@ -200,22 +231,17 @@ function writeReceipt(root, fingerprint, suite, command, durationMs, success) {
   const headSha = git(root, ["rev-parse", "HEAD"]).stdout.trim();
   const current = readReceipt(root);
   const branch = currentBranch(root);
-  const packageLockHash = fileHash(path.join(root, "Backend/package-lock.json"));
-  const suites = current?.fingerprint === fingerprint
-    && current?.headSha === headSha
+  const suites = current?.headSha === headSha
     && current?.branch === branch
     && current?.node === process.version
-    && current?.packageLockHash === packageLockHash
     ? { ...current.suites }
     : {};
-  suites[suite] = { success, command, durationMs, finishedAt: new Date().toISOString() };
+  suites[suite] = { success, fingerprint, command, durationMs, finishedAt: new Date().toISOString() };
   const receipt = {
     version: RECEIPT_VERSION,
     headSha,
     branch,
-    fingerprint,
     node: process.version,
-    packageLockHash,
     suites,
   };
   const file = receiptPath(root);
@@ -227,7 +253,7 @@ function writeReceipt(root, fingerprint, suite, command, durationMs, success) {
 
 export function runSuite(root, suite) {
   if (!SUITE_ORDER.includes(suite)) throw new Error(`Unbekanntes Pruefprofil: ${suite}`);
-  const before = worktreeFingerprint(root);
+  const before = suiteFingerprint(root, suite);
   const startedAt = Date.now();
   const command = suite === "docs"
     ? "git diff --check"
@@ -247,7 +273,7 @@ export function runSuite(root, suite) {
       stdio: "inherit",
     });
   }
-  const after = worktreeFingerprint(root);
+  const after = suiteFingerprint(root, suite);
   if (after !== before) throw new Error(`Arbeitsstand hat sich waehrend des Pruefprofils ${suite} geaendert`);
   writeReceipt(root, after, suite, command, Date.now() - startedAt, true);
 }

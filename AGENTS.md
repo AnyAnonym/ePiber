@@ -221,6 +221,10 @@ Schnellauftrag `nächste Aufgabe`:
   Fehlt ein Nachweis, wird ausschliesslich das von der versionierten Pfadpolicy
   verlangte Profil ueber `verification-workflow.mjs verify --suite auto`
   ausgefuehrt; `next-task` startet keine unerwartete breite Testsuite.
+- Steht der offene Changelog-Kurzkommentar noch auf `offen`, wird nach der
+  Verifikation nicht die Datei geaendert, sondern der Kurzkommentar mit
+  `next-task --subject` uebergeben. Reine Workflow-Metadaten duerfen gueltige
+  Build- und Browsernachweise nicht entwerten.
 - Der Auftrag startet noch keine neue fachliche Umsetzung und autorisiert keinen
   Push, Merge, Netzwerkabgleich oder Main-Versionssprung.
 - Ohne den eindeutigen Auftrag `nächste Aufgabe` gelten die normalen Freigabe- und

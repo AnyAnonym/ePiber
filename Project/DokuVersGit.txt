@@ -70,10 +70,13 @@ die Vorbereitung des naechsten Arbeitsstands:
 1. Branch, Arbeitsbaum, Index, Diff, letzten Commit, Paketversionen, offenen
    Branch-Changelogabschnitt und den diffgebundenen Pruefnachweis kontrollieren.
    Erfolgreiche Pruefprofile werden ausserhalb des Arbeitsbaums unter `.git`
-   zusammen mit HEAD, Node-Version und einem Fingerprint aller geaenderten und
-   unversionierten Dateien gespeichert. Ein unveraenderter Stand darf diesen
-   Nachweis auch in einer neuen OpenCode-Session verwenden; jede relevante
-   Dateiaenderung macht ihn automatisch ungueltig. Fehlende Profile werden mit
+   zusammen mit HEAD, Node-Version und einem profilspezifischen Fingerprint der
+   testrelevanten Eingaben gespeichert. Ein unveraenderter fachlicher Stand darf
+   diesen Nachweis auch in einer neuen OpenCode-Session verwenden. Aenderungen an
+   Code, Abhaengigkeiten oder den Eingaben des jeweiligen Profils machen nur die
+   betroffenen Nachweise ungueltig. Das temporaere Branch-Changelog sowie reine
+   Workflow-Versionswechsel in den Paketdateien sind keine Testeingaben und
+   entwerten Build- oder Browsernachweise nicht. Fehlende Profile werden mit
 
      node scripts/verification-workflow.mjs verify --suite auto
 
@@ -82,10 +85,12 @@ die Vorbereitung des naechsten Arbeitsstands:
    Browsermatrix. `next-task` startet selbst keine fachlichen Tests und bricht
    mit den konkret fehlenden Profilen ab, statt unerwartet eine breite Suite
    auszufuehren.
-2. Im offenen Changelog steht `Kurzkommentar: <Text>` als einzeiliger
-   Commit-Kurzkommentar ohne `|`. Fuer bestehende offene Abschnitte ohne dieses
-   Feld bleibt `--subject <Kurzkommentar>` als kompatibler Fallback zulaessig.
-   Unerwartete oder nicht zuordenbare Aenderungen blockieren den Schnellablauf.
+2. Im offenen Changelog kann `Kurzkommentar: <Text>` als einzeiliger
+   Commit-Kurzkommentar ohne `|` stehen. Ist das Feld beim Abschluss noch `offen`
+   oder fehlt es, wird die Datei nach der Verifikation nicht allein deswegen
+   geaendert, sondern der bestimmte Kurzkommentar direkt mit
+   `--subject <Kurzkommentar>` uebergeben. Unerwartete oder nicht zuordenbare
+   Aenderungen blockieren den Schnellablauf.
 3. Den offenen `-x`-Stand auf die naechste lueckenlose Branch-Commit-ID
    finalisieren, alle aktuell geaenderten und zuvor als zusammengehoerig geprueften
    Dateien als geschlossene Abschlussmenge stagen und den nummerierten
@@ -98,7 +103,7 @@ die Vorbereitung des naechsten Arbeitsstands:
 
 Der Normalablauf wird mit folgendem Repository-Skript ausgefuehrt:
 
-  node scripts/version-workflow.mjs next-task --all-changed --apply
+  node scripts/version-workflow.mjs next-task [--subject <Kurzkommentar>] --all-changed --apply
 
 `--all-changed` ist ausschliesslich fuer `next-task` zulaessig und darf nicht mit
 `--path` kombiniert werden. Es uebernimmt nach dem Statusabgleich exakt alle

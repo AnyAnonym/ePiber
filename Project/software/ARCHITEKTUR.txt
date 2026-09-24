@@ -1243,9 +1243,13 @@ WebKit und Firefox aus. `lifecycle` begrenzt den fachlichen Umfang auf den
 Aufwach-/Reconnect-Ablauf, prueft diesen aber in allen acht Zielprofilen. `full`
 entspricht der vollstaendigen bisherigen Smokesuite. Der diffgebundene lokale
 Pruefnachweis liegt ausschliesslich unter `.git`, wird nicht versioniert und ist
-nur bei identischem HEAD, identischer Node-Version und unveraendertem Arbeitsbaum
-gueltig. Der Containerwrapper verwendet eindeutige Lauf-IDs und entfernt einen
-gestarteten Container auch bei einem kontrollierten Abbruchsignal.
+nur bei identischem HEAD, identischer Node-Version und unveraenderten Eingaben des
+jeweiligen Pruefprofils gueltig. Dokumentation, Build und Browserprofile besitzen
+getrennte Fingerprints. Temporaeres Branch-Changelog und reine Paketversions-
+wechsel sind keine Code- oder Browsertesteingaben; Abhaengigkeiten und
+Paket-Skripte bleiben dagegen Bestandteil der betroffenen Fingerprints. Der
+Containerwrapper verwendet eindeutige Lauf-IDs und entfernt einen gestarteten
+Container auch bei einem kontrollierten Abbruchsignal.
 
 Neue Browser-APIs werden gegen diese Matrix geprueft und ueber Feature Detection
 statt User-Agent-Erkennung verwendet. Kritische Bedienung erhaelt bei fehlender
