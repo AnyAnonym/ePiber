@@ -67,6 +67,8 @@ let favoriteMatchPickerReturnFocus = null;
 let favoriteMatchPickerGeneration = 0;
 let matchResultScore = [];
 let matchResultStatusTimer = null;
+let matchResultProgressTimer = null;
+let matchResultRetryTimer = null;
 let confirmedLongMatchDuration = "";
 
 function errorMessage(value, fallback) {
@@ -185,6 +187,8 @@ function closeModal(modal) {
     matchResultContext = null;
     matchResultScore = [];
     clearTimeout(matchResultStatusTimer);
+    clearTimeout(matchResultProgressTimer);
+    clearTimeout(matchResultRetryTimer);
   }
   if (modal?.id === "profileModal") {
     closeModal(matchDateModal);
@@ -822,20 +826,45 @@ function compactResultDate(value) {
 function endpointResultError(data, fallback) {
   const error = new Error(errorMessage(data, fallback));
   error.code = data?.error?.code || "UNEXPECTED_ERROR";
+  error.details = data?.error?.details;
   error.supportId = data?.supportId || "";
   return error;
 }
 
-function showMatchResultStatus(message, type = "error") {
+function showMatchResultStatus(message, type = "error", { autoHideMs = 3000 } = {}) {
   const status = document.getElementById("matchResultStatus");
   clearTimeout(matchResultStatusTimer);
   status.textContent = String(message || "");
   status.className = `match-result-status ${type}`;
   status.hidden = !message;
-  if (message) matchResultStatusTimer = setTimeout(() => {
+  if (message && autoHideMs > 0) matchResultStatusTimer = setTimeout(() => {
     status.hidden = true;
     status.textContent = "";
-  }, 3000);
+  }, autoHideMs);
+}
+
+function startMatchResultRetryCooldown(submit, originalLabel, retryAfterMs) {
+  clearTimeout(matchResultRetryTimer);
+  const retryAt = Date.now() + Math.max(1000, Number(retryAfterMs) || 60000);
+  const update = () => {
+    if (!matchResultContext || matchResultModal.classList.contains("hidden")) return;
+    const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+    if (seconds === 0) {
+      submit.disabled = false;
+      submit.textContent = originalLabel;
+      showMatchResultStatus("Sie können das Ergebnis jetzt erneut speichern.", "info");
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = `Erneut in ${seconds} s`;
+    showMatchResultStatus(
+      `Google Sheets ist vorübergehend ausgelastet. Dieser Versuch wurde nicht gespeichert. Neuer Versuch in ${seconds} ${seconds === 1 ? "Sekunde" : "Sekunden"}.`,
+      "error",
+      { autoHideMs: 0 },
+    );
+    matchResultRetryTimer = setTimeout(update, Math.min(1000, Math.max(1, retryAt - Date.now())));
+  };
+  update();
 }
 
 function matchResultRules() {
@@ -2926,8 +2955,16 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   payload.operationId = getOperationId(operationKey);
   const submit = document.getElementById("matchResultSubmit");
   const originalLabel = submit.textContent;
+  let retryAfterMs = 0;
+  clearTimeout(matchResultProgressTimer);
+  clearTimeout(matchResultRetryTimer);
   setModalBusy(form, true);
   submit.textContent = "Wird gespeichert...";
+  showMatchResultStatus("Ergebnis und Rangliste werden gespeichert. Bitte warten …", "info", { autoHideMs: 0 });
+  matchResultProgressTimer = setTimeout(() => {
+    if (!matchResultContext || matchResultModal.classList.contains("hidden")) return;
+    showMatchResultStatus("Die Rangliste wird weiterhin aktualisiert. Der Vorgang läuft – bitte warten …", "info", { autoHideMs: 0 });
+  }, 8000);
   try {
     const response = await endpoint(payload);
     if (!response.data?.success) throw endpointResultError(response.data, "Matchänderung konnte nicht gespeichert werden.");
@@ -2938,12 +2975,20 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   } catch (error) {
     releaseOperationId(operationKey, error);
     diagnostic.error("match_result_action_failed", error);
-    showMatchResultStatus(error?.code === "RANKING_REPAIR_REQUIRED"
-      ? "Ranglistenstand muss mit einem vollständigen Rangplan administrativ repariert werden."
-      : errorMessage(error, "Matchänderung konnte nicht gespeichert werden."));
+    if (error?.code === "SHEETS_RATE_LIMITED") {
+      retryAfterMs = Math.max(1000, Number(error.details?.retryAfterMs) || 60000);
+    } else {
+      showMatchResultStatus(error?.code === "RANKING_REPAIR_REQUIRED"
+        ? "Ranglistenstand muss mit einem vollständigen Rangplan administrativ repariert werden."
+        : errorMessage(error, "Matchänderung konnte nicht gespeichert werden."));
+    }
   } finally {
+    clearTimeout(matchResultProgressTimer);
     setModalBusy(form, false);
-    if (matchResultContext) submit.textContent = originalLabel;
+    if (matchResultContext) {
+      submit.textContent = originalLabel;
+      if (retryAfterMs > 0) startMatchResultRetryCooldown(submit, originalLabel, retryAfterMs);
+    }
   }
 });
 

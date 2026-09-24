@@ -2713,6 +2713,35 @@ test("Neueinsteiger ohne ID-Spalte kann korrigiert und atomar entfernt werden", 
   repository.close();
 });
 
+test("Neueinsteiger-Ergebnis buendelt viele Rangverschiebungen in konstante Metadaten-Reads", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const initial = fixtures();
+  for (let rank = 3; rank <= 30; rank++) {
+    initial.Rangliste.push([`bulk-r${rank}`, "cup-1", `bulk-p${rank}`, String(rank), "", "", ""]);
+  }
+  initial.Matches1.push(["", "newcomer-bulk-win", "260904-1000", "", "cup-1", "", "p3", "", "p2", "", "", ""]);
+  const fake = fakeSheets(initial);
+  seedStore(fake.tables);
+  const service = new SheetService({ repository, messagingService, clientFactory: async () => fake.client, now: () => new Date(2026, 8, 4, 12, 0).getTime() });
+
+  await service.setMatchResult({ type: "user", id: "p3", role: "player" }, {
+    operationId: "00000000-0000-4000-8000-000000000550",
+    matchId: "newcomer-bulk-win",
+    kind: "regular",
+    result: "6-2/6-3",
+    matchStart: "260904-1000",
+    matchEnd: "260904-1100",
+    expectedFingerprint: matchCompletionFingerprint(initial.Matches1.at(-1), initial.Matches1[0]),
+  });
+
+  assert.equal(fake.calls.metadataRows, 4);
+  assert.equal(Number(fake.tables["RL-Platzierung"].find((row) => row[2] === "p3")[3]), 2);
+  assert.equal(Number(fake.tables["RL-Platzierung"].find((row) => row[2] === "bulk-p30")[3]), 31);
+  await service.stop();
+  repository.close();
+});
+
 test("Neueinsteiger-Niederlage reiht bei weniger als zehn Folgepositionen am Ende ein", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();

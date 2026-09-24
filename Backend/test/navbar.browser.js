@@ -361,6 +361,21 @@ export function createEndpoint(name) {
     }
     if (["setMatchResult", "adminSetMatchEnd", "adminClearMatchResult", "adminCorrectRankingResult"].includes(name)) {
       window.__matchResultCalls.push({ endpoint: name, ...params });
+      const search = new URLSearchParams(window.location.search);
+      if (search.get("resultRateLimited") === "1") {
+        const error = new Error("Die Google-Sheets-Schnittstelle hat ihr Zugriffslimit erreicht.");
+        error.code = "SHEETS_RATE_LIMITED";
+        error.details = { retryAfterMs: Number(search.get("retryMs")) || 60000 };
+        throw error;
+      }
+      if (search.get("pendingResult") === "1") {
+        return new Promise((resolve) => {
+          window.__resolveMatchResult = () => {
+            delete window.__resolveMatchResult;
+            resolve({ data: { success: true, matchId: params.matchId, fingerprint: "e".repeat(64) } });
+          };
+        });
+      }
       return { data: { success: true, matchId: params.matchId, fingerprint: "e".repeat(64) } };
     }
     return { data: { success: true } };
@@ -1024,12 +1039,17 @@ test("Spieleingabe zeigt zweizeilige Auswahl und bestaetigt lange Matchdauer", {
     await confirmation.getByRole("button", { name: "Zurück für Korrektur", exact: true }).click();
     assert.equal(await dialog.locator("#matchResultEnd").evaluate((input) => document.activeElement === input), true);
     await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&pendingResult=1`));
     await confirmation.getByRole("button", { name: "Ja Passt", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 1);
+    assert.equal(await dialog.locator("#matchResultSubmit").isDisabled(), true);
+    assert.match(await dialog.locator("#matchResultStatus").textContent(), /Ergebnis und Rangliste werden gespeichert/);
     const request = await page.evaluate(() => window.__matchResultCalls[0]);
     assert.equal(request.matchStart, "260903-1015");
     assert.equal(request.matchEnd, "260903-1630");
     assert.equal(request.longDurationConfirmed, true);
+    await page.evaluate(() => window.__resolveMatchResult());
+    await page.waitForFunction(() => document.getElementById("profileModal")?.getAttribute("inert") === null);
     await page.close();
   } finally {
     await browser.close();
@@ -2067,8 +2087,15 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     await durationConfirmation.getByRole("button", { name: "Zurück für Korrektur", exact: true }).click();
     assert.equal(await dialog.locator("#matchResultEnd").evaluate((input) => document.activeElement === input), true);
     await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&pendingResult=1`));
     await durationConfirmation.getByRole("button", { name: "Ja Passt", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 1);
+    assert.equal(await dialog.locator("#matchResultSubmit").isDisabled(), true);
+    assert.match(await dialog.locator("#matchResultStatus").textContent(), /Ergebnis und Rangliste werden gespeichert/);
+    await page.evaluate(() => window.__resolveMatchResult());
+    await page.waitForFunction(() => !window.__resolveMatchResult);
+    await page.waitForFunction(() => document.getElementById("profileModal")?.getAttribute("inert") === null);
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player`));
     const initial = await page.evaluate(() => window.__matchResultCalls[0]);
     assert.deepEqual(initial, {
       endpoint: "setMatchResult", matchId: "match-open", expectedFingerprint: "a".repeat(64), kind: "regular",
@@ -2109,6 +2136,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(Object.hasOwn(corrected, "matchEnd"), false);
     assert.equal(corrected.expectedFingerprint, "b".repeat(64));
 
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&resultRateLimited=1&retryMs=1200`));
     await page.getByRole("tab", { name: "Herren", exact: true }).click();
     await page.locator('[data-match-id="match-without-date"]').getByRole("button", { name: "Ergebnis eintragen", exact: true }).click();
     const walkoverDialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
@@ -2116,7 +2144,14 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     await walkoverDialog.locator("#matchResultLosingSide").selectOption("1");
     await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 3);
-    const walkoverRequest = await page.evaluate(() => window.__matchResultCalls[2]);
+    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /Google Sheets ist vorübergehend ausgelastet/);
+    assert.match(await walkoverDialog.locator("#matchResultSubmit").textContent(), /^Erneut in [12] s$/);
+    await page.waitForFunction(() => document.getElementById("matchResultSubmit")?.textContent === "Ergebnis speichern");
+    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /jetzt erneut speichern/);
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player`));
+    await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await page.waitForFunction(() => window.__matchResultCalls.length === 4);
+    const walkoverRequest = await page.evaluate(() => window.__matchResultCalls[3]);
     assert.equal(walkoverRequest.kind, "walkover");
     assert.equal(walkoverRequest.losingSide, 1);
     assert.equal(Object.hasOwn(walkoverRequest, "matchStart"), false);

@@ -32,3 +32,12 @@ Commit: 4.12.3-paj-1-4 | Ergebniszeiten und Spieleingabe verbessert
   - [Matchzeiten] Die bisherige Sechs-Stunden-Hoechstgrenze entfernt und lange Ergebniswrites serverseitig an die kontrollierte Bestaetigung gebunden.
   - [Favoriten] Die direkte Spieleingabe-Matchauswahl zweizeilig mit Bewerb, optionaler Runde und Begegnung mit `vs.` dargestellt.
   - [Tests] Zeitgrenzen, Langdauerbestaetigung, Fokusfuehrung und Matchauswahl erweitert abgesichert.
+
+[4.12.3-paj-1-5] - 2026-09-24
+Commit: 4.12.3-paj-1-5 | Ergebnisspeicherung beschleunigt und Rückmeldung verbessert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-4-x` gesetzt.
+  - [Ergebnisspeicherung] Metadatenpruefungen fuer umfangreiche Rangverschiebungen in konstante Batch-Reads gebuendelt und eine doppelte Matchzeilenabfrage vermieden.
+  - [Rueckmeldung] Den Ergebnisdialog waehrend laufender Ranglistenaktualisierung dauerhaft informieren und ein Google-Sheets-Zugriffslimit mit Countdown bis zum erneuten Versuch erklaeren.
+  - [Tests] Grosse Neueinsteiger-Rangverschiebung, laufendes Speicherfeedback und Rate-Limit-Wartezeit abgesichert.
