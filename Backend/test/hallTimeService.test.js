@@ -219,6 +219,25 @@ test("Unvermeidbarer weicher Wunsch bleibt vollstaendig und wird transparent aus
   context.repository.close();
 });
 
+test("Vermeidbarer weicher Wunsch wird bei gleich guter Einsatzverteilung global aufgeloest", () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const slots = Array.from({ length: 3 }, (_, index) => ({ date: `2026-01-${20 + index}`, start: "19:00", end: "21:00" }));
+  const created = context.service.saveGrid(admin, gridRequest(0, { participantIds: ["p1", "p2"], slots }), names);
+  const constrained = context.service.saveConstraints(admin, {
+    operationId: operation(25), gridId: created.grid.id, expectedRevision: created.revision,
+    constraints: [{ personId: "p2", slotId: created.grid.slots[1].id, kind: "avoid" }],
+  });
+  const preview = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: constrained.revision }).preview;
+  const counts = ["p1", "p2"].map((personId) => preview.entries.filter((entry) => entry.personId === personId).length);
+  assert.equal(preview.quality, "complete");
+  assert.equal(preview.softConflictCount, 0);
+  assert.equal(preview.entries.some(({ slotId, personId }) => slotId === created.grid.slots[1].id && personId === "p2"), false);
+  assert.equal(Math.max(...counts) - Math.min(...counts), 1);
+  assert.equal(context.logs.find(({ event }) => event === "hall_time_distribution_preview_completed").fields.softConflictCount, 0);
+  context.repository.close();
+});
+
 test("Vorausschauende Reparatur nutzt knappe Verfuegbarkeit fuer eine moegliche Gleichverteilung", () => {
   const context = setup();
   const names = new Map(players.map(({ id, name }) => [id, name]));

@@ -1,6 +1,6 @@
 # Mandantenplattform, Vereins-Cells und Releasearchitektur
 
-Stand: 17.09.2026
+Stand: 24.09.2026
 Status: Nicht-kanonische fachliche und technische Arbeitsgrundlage; noch nicht
 implementiert, freigegeben oder als verbindliche Sollarchitektur dokumentiert
 Gegenstand: Kommerzielle ePiber-Plattform fuer mehrere Tennisvereine mit
@@ -674,15 +674,16 @@ Wiederaufnahme und vollstaendige Auditierung administrativer Aktionen.
 |---|---|---|---|
 | Lokal | Entwicklung einzelner Features | ausschliesslich synthetisch | Entwicklergeraet |
 | CI/Ephemeral | automatisierte Tests pro Aenderung | automatisch erzeugt | kurzlebig, intern |
-| Integration | gemeinsamer technischer Test | synthetisch/anonymisiert | intern geschuetzt |
+| Integration | gemeinsamer technischer Test | ausschliesslich synthetisch | intern geschuetzt |
 | Testuser | manuelle Abnahme durch Versuchsbenutzer | synthetisch, keine Produktivkopie | kontrolliert erreichbar |
 | Produktion | Vereine mit echten Daten | Produktivdaten | oeffentlich ueber HTTPS |
 
 Produktion und Test muessen in getrennten Accounts, Projekten oder mindestens
 getrennten Netz- und Ausfallbereichen liegen. Produktivdaten werden nicht in
-lokale, CI- oder allgemeine Testumgebungen kopiert. Falls realistische
-Konstellationen benoetigt werden, sind synthetische Generatoren oder
-nachweisbar anonymisierte Datensaetze zu verwenden.
+lokale, CI- oder allgemeine Testumgebungen kopiert. Realistische Konstellationen
+werden in der aktuellen Ausbaustufe durch synthetische Generatoren bereitgestellt.
+Eine spaetere Verwendung nachweisbar anonymisierter Datensaetze bedarf einer
+eigenen Datenschutz- und Freigabeentscheidung.
 
 ### 8.2 Mandantentypen
 
@@ -714,6 +715,129 @@ Jeder Pull Request soll nach Moeglichkeit automatisiert erhalten:
 - automatisches Entfernen nach Abschluss.
 
 Secrets aus Produktion duerfen nie in ephemere Testumgebungen gelangen.
+
+### 8.4 Bestaetigte aktuelle Auspraegungsstufe der Systemlandschaft
+
+Fuer die erste Ausbaustufe wird die Systemlandschaft bewusst in vier
+betriebliche Bereiche gegliedert. Diese Aufteilung ist der aktuelle Zielstand;
+sie nimmt noch keine spaetere Einzelserver- oder Clusterstruktur vorweg:
+
+```text
+Entwicklerrechner
+  -> lokale Entwicklung mit synthetischen Daten
+
+Engineering-/Testserver
+  -> Gitea
+  -> Gitea Container Registry
+  -> CI/CD-Steuerung und zunaechst isolierter CI-Runner
+  -> Integrationstestumgebung
+  -> QA- und Testuser-Tenants
+  -> ausschliesslich synthetische Testdaten
+
+Produktionsserver
+  -> produktive Vereins-Cells
+  -> produktive Worker
+  -> Zugriff auf produktive Datenbanken
+
+Unabhaengiges Backupziel
+  -> verschluesselte, moeglichst unveraenderliche Off-site-Backups
+```
+
+Der Engineering-/Testserver ist kein manuell gepflegter Ersatz fuer lokale
+Entwicklerrechner. Er stellt gemeinsame, reproduzierbare Engineeringdienste und
+nichtproduktive Zielumgebungen bereit. Lokale Entwicklung, CI, Integration,
+manuelle QA, Testuser und Produktion bleiben als unterschiedliche Stufen
+erhalten, auch wenn CI, Integration und manuelle Testtenants anfangs denselben
+physischen Server mit getrennten Diensten, Identitaeten und Ressourcenlimits
+nutzen.
+
+Der Engineering-/Testserver uebernimmt in dieser Stufe insbesondere:
+
+- selbst gehostete Git-Repositories, Reviews und technische Dokumentation in
+  Gitea;
+- die OCI-kompatible Gitea Container Registry fuer versionierte
+  Anwendungsimages;
+- Gitea Actions oder eine gleichwertige CI/CD-Steuerung;
+- Build, Tests, Scans, SBOM-Erzeugung und Vorbereitung der
+  Artefaktsignatur durch einen eingeschraenkten Runner;
+- Integration, manuelle QA und kontrollierte Tests durch Versuchsbenutzer;
+- nichtproduktive PostgreSQL-Datenbanken mit synthetischen Seed-Daten;
+- mindestens zwei synthetische Tenants fuer positive Ablauftests und negative
+  Cross-Tenant-Isolationstests.
+
+Produktion baut keine Software und startet keine Anwendung direkt aus einem
+Git-Checkout. Sie bezieht ausschliesslich ausdruecklich freigegebene,
+nachvollziehbare OCI-Images aus der Registry und referenziert Releases technisch
+ueber den unveraenderlichen Image-Digest. Ein Ausfall von Gitea oder Registry
+darf bereits laufende Produktions-Cells nicht beenden; er darf jedoch weitere
+Builds, Deployments und einen unvorbereiteten Neuaufbau blockieren und wird
+deshalb ueberwacht und in Backup und Restore einbezogen.
+
+Fuer die Erststufe gelten folgende Trennungsregeln:
+
+- keine Produktivdaten oder unkontrollierten Produktivkopien auf
+  Entwicklerrechnern oder dem Engineering-/Testserver;
+- keine produktiven Datenbank-, Tenant-, Session- oder Integrationscredentials
+  in Gitea, Testtenants oder allgemeinen CI-Jobs;
+- getrennte PostgreSQL-Instanzen beziehungsweise Cluster, DB-Rollen, Secrets,
+  Domains und Netzwerkfreigaben fuer Test und Produktion;
+- kein allgemeiner Root- oder Plattformadministratorzugang des CI-Runners zur
+  Produktion;
+- Produktionspromotion nur mit einer eng begrenzten Deploymentidentitaet und
+  auditierten Freigaben;
+- Signaturschluessel und andere hochprivilegierte Freigabecredentials nicht
+  ungeschuetzt im allgemeinen Runner ablegen;
+- Gitea, Registrymetadaten und benoetigte OCI-Artefakte duerfen nicht nur auf dem
+  Engineering-/Testserver existieren, sondern werden unabhaengig gesichert;
+- das Off-site-Backupziel liegt nicht im Ausfall- und Administrationsbereich des
+  einzigen Engineering-/Test- oder Produktionsservers.
+
+Der CI-Runner fuehrt veraenderlichen Code aus und ist daher eine eigene
+Sicherheitszone. In der ersten Stufe darf er aus Kostengruenden auf dem
+Engineering-/Testserver betrieben werden, jedoch nur mit eigener
+Serviceidentitaet, isolierten Buildumgebungen, eingeschraenkten Credentials sowie
+CPU-, RAM-, Prozess- und Speicherlimits. Buildumgebungen sollen kurzlebig und
+reproduzierbar sein. Sobald Builds andere Testdienste messbar beeintraechtigen,
+nicht vertrauenswuerdiger Code ausgefuehrt wird oder staerkere
+Produktionsberechtigungen erforderlich waeren, wird der Runner auf eine eigene
+VM oder einen eigenen Host verlagert.
+
+### 8.5 Moegliche spaetere Auftrennung
+
+Die aktuelle Vier-Bereiche-Struktur ist kein dauerhaftes Verbot weiterer
+Trennung. Bei wachsender Flotte, Last, Verfuegbarkeitszusage oder
+Betriebskomplexitaet kann daraus schrittweise folgende Struktur entstehen:
+
+```text
+Management/Engineering -> Gitea, Registry und CI-Steuerung
+CI-Runner              -> Builds und automatisierte Tests
+Testplattform          -> Integration, QA und Testuser
+Produktions-App        -> Vereins-Cells und Worker
+Produktions-DB         -> PostgreSQL und PgBouncer
+Backup/DR              -> unabhaengiger Anbieter oder Account
+```
+
+Diese Darstellung ist ein moeglicher spaeterer Ausbau und noch keine
+beschlossene unmittelbar folgende Auspraegungsstufe. Komponenten werden nicht
+allein aufgrund einer abstrakten Zielarchitektur ausgelagert. Eine Auftrennung
+wird insbesondere geprueft, wenn mindestens einer der folgenden Ausloeser
+eintritt:
+
+- CI-Builds oder Testlast beeintraechtigen Gitea, Registry oder manuelle QA;
+- unterschiedliche Vertrauens- oder Berechtigungsniveaus verlangen eine eigene
+  Runner-Isolation;
+- produktive App- und Datenbanklast konkurrieren messbar um CPU, RAM, I/O oder
+  Netzwerk;
+- Backup-, Restore-, Wartungs- oder Deploymentarbeiten ueberschreiten die
+  freigegebenen RPO-/RTO- oder Wartungsziele;
+- die vereinbarte Verfuegbarkeit verlangt getrennte Ausfallbereiche;
+- Flottengroesse, Supportaufwand oder Compliance machen unabhaengige
+  Verantwortungs- und Zugriffszonen notwendig.
+
+Auch nach einer spaeteren Auftrennung bleiben Images, Konfiguration und
+Provisionierung reproduzierbar. Die zusaetzlichen Systeme duerfen keine
+manuellen Sonderinstallationen oder kundenspezifischen Softwarestaende
+erzwingen.
 
 ## 9. Release-Ringe
 
@@ -911,7 +1035,10 @@ praktisch zu bewerten:
 - OpenTofu fuer Cloud-Ressourcen, Netzwerk, Firewall und DNS;
 - Cloud-init nur fuer den reproduzierbaren Bootstrap;
 - Ansible fuer Hostkonfiguration und Betriebsdienste;
-- OCI-Images und eine externe Registry fuer Softwareartefakte;
+- OCI-Images sowie selbst gehostetes Gitea fuer Git, Reviews und
+  CI/CD-Steuerung mit dessen OCI-kompatibler Container Registry; die Registry
+  liegt ausserhalb des produktiven App-Laufzeitbereichs, muss aber nicht von
+  einem fremden SaaS-Anbieter betrieben werden;
 - Podman mit systemd-Quadlets fuer Cells und zentrale Dienste;
 - Caddy fuer Edge, TLS und validiertes Domainrouting;
 - PostgreSQL mit PgBouncer;
@@ -945,7 +1072,7 @@ Die Werte sind Startpunkte und werden durch Messung und Lasttests ersetzt:
 
 | Stufe | Rechenleistung | RAM | Primaerspeicher | Betriebsform |
 |---|---:|---:|---:|---|
-| ASKÖ plus erste Testtenants | 4 vCPU | 8 GB, bevorzugt 16 GB | 160 bis 250 GB NVMe | ein Plattformhost |
+| ASKÖ als erster Produktivtenant | 4 vCPU | 8 GB, bevorzugt 16 GB | 160 bis 250 GB NVMe | ein Produktionshost; Testtenants getrennt auf Engineering/Test |
 | etwa 10 Tenants | 4 bis 8 vCPU | 16 GB | 160 bis 250 GB NVMe | ein Plattformhost mit externen Backups |
 | etwa 50 Tenants, zusammen | 12 bis 16 vCPU | 32 GB | 300 bis 500 GB NVMe | technisch moeglich, Trennung empfohlen |
 | etwa 50 Tenants, getrennt | App 8 vCPU; DB 4 bis 8 vCPU | App 16 bis 32 GB; DB 16 bis 32 GB | DB 250 bis 500 GB | App-/Edge- und PostgreSQL-Host getrennt |
@@ -1035,7 +1162,9 @@ Vor kommerziellem Produktivbetrieb erforderlich:
 - verbindliche RPO- und RTO-Ziele;
 - Sitzungs-, Reset- und Geraeteinvalidierung bei Restore;
 - Loeschregister fuer datenschutzrechtliche Loeschungen nach Restore;
-- klare Trennung von Backup-, Prune- und Restoreberechtigungen.
+- klare Trennung von Backup-, Prune- und Restoreberechtigungen;
+- gesicherte und praktisch getestete Wiederherstellung von Gitea-Repositories,
+  Registrymetadaten, benoetigten OCI-Artefakten und CI/CD-Konfiguration.
 
 Das DR-Runbook beginnt regelmaessig testweise mit einem nackten Providerimage.
 Es provisioniert Host, Netzwerk und Rechte, laedt bekannte OCI-Artefakte, stellt
@@ -1134,6 +1263,9 @@ gefaehrden.
 - [x] ASKÖ Piberbach bis Mai 2027 als realen Referenz- und Testverein festlegen.
 - [x] Etwa 20 bis 50 Mandanten in drei bis vier Jahren und hoechstens etwa 100
       Mandanten als erste Kapazitaetsgrenze festlegen.
+- [x] Entwicklerrechner, Engineering-/Testserver, Produktionsserver und
+      unabhaengiges Off-site-Backup als aktuelle Auspraegungsstufe festlegen;
+      spaetere weitere Trennung bleibt bedarfsabhaengig.
 - [ ] Rollen, Reservierungsregeln, RPO/RTO, Retention, Datenregionen und
       Verantwortlichkeiten verbindlich freigeben.
 - [ ] Istwerte fuer Prozessspeicher, Benutzer, WebSockets, Datenmengen,
@@ -1177,8 +1309,14 @@ Berechtigung, Audit, Backup und Restore sind praktisch abgenommen.
 - [ ] Hetzner-Cloud-Ressourcen mit OpenTofu definieren.
 - [ ] Arch-Linux-Basis mit Cloud-init und Ansible reproduzierbar aufbauen.
 - [ ] OCI-Registry, Podman-Quadlets, Caddy und Secretbereitstellung einrichten.
+- [ ] Engineering-/Testserver mit Gitea, Container Registry, eingeschraenktem
+      CI-Runner und getrennten nichtproduktiven PostgreSQL-Datenbanken aufbauen.
+- [ ] Integration, QA und Testuser als getrennte nichtproduktive Stufen mit
+      ausschliesslich synthetischen Daten bereitstellen.
 - [ ] Automatisierte verschluesselte Off-site-Backups, Backupaltermonitoring und
       aktive Alarmzustellung umsetzen.
+- [ ] Gitea-, Registry- und CI/CD-Restore aus dem unabhaengigen Backup praktisch
+      testen.
 - [ ] Rebuild-and-Restore ab nacktem Image innerhalb des Ziel-RTO testen.
 - [ ] Deklarative Tenantdefinitionen und Provisionierung ohne Secrets erstellen.
 - [ ] Einen synthetischen zweiten Tenant samt eigener DB und DB-Rolle

@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.4
+Stand: 4.12.5
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2695,3 +2695,33 @@ Quelle: 4.12.3-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.12.4` gesetzt.
+
+[4.12.5] - 2026-09-24
+Commit: 4.12.5 | Engineering-Plattform und Hallenzeiten verbessert
+Quelle: 4.12.4-paj-1
+
+  Changed
+  - [Architektur] Die aktuelle Vier-Bereiche-Struktur aus Entwicklerrechner,
+    Engineering-/Testserver, Produktionsserver und unabhaengigem Off-site-Backup
+    als erste Ausbaustufe festgelegt.
+  - [Engineering] Gitea, OCI-Registry, CI/CD-Steuerung, Runner-Isolation sowie
+    synthetische Integrations-, QA- und Testuser-Umgebungen konkretisiert und
+    Kriterien fuer eine spaetere Auftrennung der Plattformbereiche dokumentiert.
+  - [Hallenzeiten] Gleichberechtigte Neuverteilungen optimieren weiche
+    Vermeidungswuensche global nach der Einsatzgleichheit und behalten bei
+    gleichwertigen Loesungen moeglichst viele Zuordnungen des urspruenglichen
+    Vorschlags bei.
+
+  Fixed
+  - [Hallenzeiten] Vermeidbare Konflikte mit `Moeglichst vermeiden` werden nicht
+    mehr allein aufgrund der schrittweisen Terminvergabe als unerfuellt
+    ausgewiesen.
+
+  Tests
+  - [Backend] Regressionstest fuer einen global aufloesbaren Vermeidungswunsch
+    bei unveraendert gleichmaessiger Einsatzverteilung ergaenzt; Build und
+    Drei-Engine-Kernsmoke erfolgreich abgeschlossen.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.12.5` gesetzt.

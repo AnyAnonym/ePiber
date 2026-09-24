@@ -156,6 +156,127 @@ function selectDistributedParticipants({ participants, capacity, counts, pairCou
   return selected;
 }
 
+function addFlowEdge(graph, from, to, capacity, cost) {
+  const forward = { to, reverse: graph[to].length, capacity, cost };
+  const backward = { to: from, reverse: graph[from].length, capacity: 0, cost: -cost };
+  graph[from].push(forward);
+  graph[to].push(backward);
+  return forward;
+}
+
+function pushHeap(heap, value) {
+  heap.push(value);
+  let index = heap.length - 1;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (heap[parent][0] < value[0] || (heap[parent][0] === value[0] && heap[parent][1] <= value[1])) break;
+    heap[index] = heap[parent]; index = parent;
+  }
+  heap[index] = value;
+}
+
+function popHeap(heap) {
+  const first = heap[0];
+  const last = heap.pop();
+  if (heap.length) {
+    let index = 0;
+    while (true) {
+      const left = (index * 2) + 1;
+      if (left >= heap.length) break;
+      const right = left + 1;
+      const child = right < heap.length
+        && (heap[right][0] < heap[left][0] || (heap[right][0] === heap[left][0] && heap[right][1] < heap[left][1])) ? right : left;
+      if (heap[child][0] > last[0] || (heap[child][0] === last[0] && heap[child][1] >= last[1])) break;
+      heap[index] = heap[child]; index = child;
+    }
+    heap[index] = last;
+  }
+  return first;
+}
+
+function minimumCostFlow(graph, source, sink, targetFlow) {
+  const potentials = Array(graph.length).fill(0);
+  let flow = 0;
+  while (flow < targetFlow) {
+    const distances = Array(graph.length).fill(Number.POSITIVE_INFINITY);
+    const previousNodes = Array(graph.length).fill(-1);
+    const previousEdges = Array(graph.length).fill(-1);
+    const heap = [];
+    distances[source] = 0;
+    pushHeap(heap, [0, source]);
+    while (heap.length) {
+      const [distance, node] = popHeap(heap);
+      if (distance !== distances[node]) continue;
+      for (let edgeIndex = 0; edgeIndex < graph[node].length; edgeIndex++) {
+        const edge = graph[node][edgeIndex];
+        if (edge.capacity <= 0) continue;
+        const nextDistance = distance + edge.cost + potentials[node] - potentials[edge.to];
+        if (nextDistance >= distances[edge.to]) continue;
+        distances[edge.to] = nextDistance;
+        previousNodes[edge.to] = node;
+        previousEdges[edge.to] = edgeIndex;
+        pushHeap(heap, [nextDistance, edge.to]);
+      }
+    }
+    if (!Number.isFinite(distances[sink])) break;
+    for (let node = 0; node < graph.length; node++) if (Number.isFinite(distances[node])) potentials[node] += distances[node];
+    let addition = targetFlow - flow;
+    for (let node = sink; node !== source; node = previousNodes[node]) {
+      if (previousNodes[node] < 0) return flow;
+      addition = Math.min(addition, graph[previousNodes[node]][previousEdges[node]].capacity);
+    }
+    for (let node = sink; node !== source; node = previousNodes[node]) {
+      const edge = graph[previousNodes[node]][previousEdges[node]];
+      edge.capacity -= addition;
+      graph[node][edge.reverse].capacity += addition;
+    }
+    flow += addition;
+  }
+  return flow;
+}
+
+function minimizeAvoidedAssignments({ participants, futureSlots, entries, pastCounts, constraints }) {
+  const currentKeys = new Set(entries.map(({ slotId, personId }) => constraintKey(slotId, personId)));
+  const currentSoftConflictCount = entries.filter(({ slotId, personId }) => constraints.get(constraintKey(slotId, personId)) === "avoid").length;
+  if (!currentSoftConflictCount || !entries.length) return entries;
+
+  const source = 0;
+  const slotOffset = 1;
+  const personOffset = slotOffset + futureSlots.length;
+  const sink = personOffset + participants.length;
+  const graph = Array.from({ length: sink + 1 }, () => []);
+  const assignmentEdges = [];
+  const assignedBySlot = new Map(futureSlots.map(({ id }) => [id, entries.filter(({ slotId }) => slotId === id).length]));
+  const assignmentCount = entries.length;
+  // Lexikografische Kosten: Einsatzgleichheit vor Wunschkonflikten, Wunschkonflikte vor Aenderungen am Vorschlag.
+  const avoidScale = assignmentCount + 1;
+  const fairnessScale = (assignmentCount * avoidScale) + assignmentCount + 1;
+
+  futureSlots.forEach((slot, slotIndex) => {
+    addFlowEdge(graph, source, slotOffset + slotIndex, assignedBySlot.get(slot.id) || 0, 0);
+    participants.forEach((person, personIndex) => {
+      const key = constraintKey(slot.id, person.id);
+      const kind = constraints.get(key);
+      if (kind === "unavailable") return;
+      const cost = (kind === "avoid" ? avoidScale : 0) + (currentKeys.has(key) ? 0 : 1);
+      const edge = addFlowEdge(graph, slotOffset + slotIndex, personOffset + personIndex, 1, cost);
+      assignmentEdges.push({ edge, slotId: slot.id, personId: person.id });
+    });
+  });
+  participants.forEach((person, personIndex) => {
+    const pastCount = pastCounts.get(person.id) || 0;
+    for (let assignment = 1; assignment <= futureSlots.length; assignment++) {
+      const total = pastCount + assignment;
+      addFlowEdge(graph, personOffset + personIndex, sink, 1, fairnessScale * ((2 * total) - 1));
+    }
+  });
+  if (minimumCostFlow(graph, source, sink, assignmentCount) !== assignmentCount) return entries;
+  const optimized = assignmentEdges.filter(({ edge }) => edge.capacity === 0)
+    .map(({ slotId, personId }) => ({ slotId, personId, status: "confirmed" }));
+  const optimizedSoftConflictCount = optimized.filter(({ slotId, personId }) => constraints.get(constraintKey(slotId, personId)) === "avoid").length;
+  return optimizedSoftConflictCount < currentSoftConflictCount ? optimized : entries;
+}
+
 function distributionPreview(grid, now, revision) {
   const futureSlots = grid.slots.filter((slot) => !slotExpired(slot, now))
     .sort((left, right) => `${left.date}T${left.start}`.localeCompare(`${right.date}T${right.start}`));
@@ -177,7 +298,7 @@ function distributionPreview(grid, now, revision) {
       pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
     }
   }
-  const entries = [];
+  let entries = [];
   const slotSummaries = [];
   const softConflicts = [];
   let softConflictCount = 0;
@@ -224,6 +345,8 @@ function distributionPreview(grid, now, revision) {
     counts.set(replacement.high.id, counts.get(replacement.high.id) - 1);
     counts.set(replacement.low.id, counts.get(replacement.low.id) + 1);
   }
+  entries = minimizeAvoidedAssignments({ participants: grid.participants, futureSlots, entries, pastCounts, constraints });
+  for (const person of grid.participants) counts.set(person.id, (pastCounts.get(person.id) || 0) + entries.filter(({ personId }) => personId === person.id).length);
   softConflicts.length = 0;
   softConflictCount = 0;
   const peopleById = new Map(grid.participants.map((person) => [person.id, person]));
