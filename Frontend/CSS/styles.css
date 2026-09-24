@@ -1998,6 +1998,15 @@ body.mobile-nav-open {
   gap: 8px;
 }
 
+.match-action-picker-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.match-action-picker-actions[hidden] {
+  display: none;
+}
+
 .favorite-match-picker-item {
   width: 100%;
   padding: 11px 12px;

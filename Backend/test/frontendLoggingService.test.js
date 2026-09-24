@@ -279,7 +279,7 @@ test("Favoriten- und Startseitenfehler sind kontrollierte Browserdiagnosen ohne 
       appVersion: "test",
       clientSessionId: "00000000-0000-4000-8000-000000000032",
       pageType: "index",
-      events: ["favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "favorite_labels_load_failed", "start_page_load_failed", "start_page_save_failed"].map((event) => ({
+      events: ["favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "match_action_picker_load_failed", "favorite_labels_load_failed", "start_page_load_failed", "start_page_save_failed"].map((event) => ({
         event,
         level: "error",
         timestamp: "2026-09-02T10:00:00.000Z",
@@ -287,9 +287,9 @@ test("Favoriten- und Startseitenfehler sind kontrollierte Browserdiagnosen ohne 
       })),
     },
   });
-  assert.deepEqual(result, { success: true, accepted: 6, dropped: 0 });
+  assert.deepEqual(result, { success: true, accepted: 7, dropped: 0 });
   assert.deepEqual(logs.map(({ fields }) => fields.frontendEvent), [
-    "favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "favorite_labels_load_failed", "start_page_load_failed", "start_page_save_failed",
+    "favorites_load_failed", "favorites_save_failed", "favorite_match_picker_load_failed", "match_action_picker_load_failed", "favorite_labels_load_failed", "start_page_load_failed", "start_page_save_failed",
   ]);
 });
 

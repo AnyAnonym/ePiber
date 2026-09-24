@@ -19,11 +19,15 @@ const responses = {
     ["walkover", "260903-1800", "", "", "260831-1200", "cup", "HF-P1", "p1", "", "p2[wo]", "", ""],
     ["retirement-result", "260902-1800", "260902-2330", "260903-0100", "260830-1200", "cup", "HF-P2", "p1[ret]", "", "p2", "", "6-4/2-1"],
     ["retirement-empty", "260901-1800", "260901-1805", "", "", "cup", "VF-P1", "p1", "", "p2[ret]", "", ""],
+    ["own-open", "", "", "", "", "cup", "R1-P1", "p1", "", "p2", "", ""],
+    ["foreign-open", "", "", "", "", "cup", "R1-P2", "p3", "", "p4", "", ""],
   ] } },
   players: { data: { success: true, values: [
     ["ID", "Vorname", "Nachname", "Aktiv"],
     ["p1", "Anna", "Links", "1"],
     ["p2", "Berta", "Rechts", "1"],
+    ["p3", "Clara", "Oben", "1"],
+    ["p4", "Dora", "Unten", "1"],
   ] } },
   bewerbe: { data: { success: true, values: [
     ["ID", "Bezeichnung"],
@@ -51,12 +55,13 @@ function startServer() {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     if (pathname === "/matches-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      response.end(`<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"><link rel="stylesheet" href="/CSS/Matches1.css"></head><body aria-busy="true"><div class="app-shift-layer"><div class="loading-overlay" data-initial-loading-overlay role="status" aria-live="polite" aria-atomic="true"><div class="loading-overlay-content"><div class="loading-spinner" aria-hidden="true"></div><div class="loading-text">Lade Daten ...</div></div></div></div><main><section><div id="matches1-controls"><div class="m1-category-bar"><button class="m1-cat-btn active" data-cat="played">Gespielt</button><button class="m1-cat-btn" data-cat="open">Offen</button><button class="m1-cat-btn" data-cat="all">Alle</button></div><button class="m1-filter-toggle" id="filterToggle">Filter</button><div id="filterPanel" class="hidden"><input type="checkbox" id="filterCompleteWithoutDate"><input type="checkbox" id="filterBewerb"><select id="filterBewerbSelect" disabled></select><input type="checkbox" id="filterSpieler"><select id="filterSpielerSelect" disabled></select><input type="checkbox" id="filterDatum"><div id="datumRow" class="hidden"><input id="datumVon"><input id="datumBis"></div><input type="checkbox" id="filterMissing"></div></div><div id="matches1-count"></div><div id="matches1-container"></div></section></main><footer id="test-footer">Footer darf initial nicht aufblitzen</footer><script type="module" src="/JS/Matches1-under-test.js"></script></body></html>`);
+      response.end(`<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"><link rel="stylesheet" href="/CSS/Matches1.css"></head><body aria-busy="true"><div class="app-shift-layer"><div class="loading-overlay" data-initial-loading-overlay role="status" aria-live="polite" aria-atomic="true"><div class="loading-overlay-content"><div class="loading-spinner" aria-hidden="true"></div><div class="loading-text">Lade Daten ...</div></div></div></div><main><section><div id="matches1-controls"><div class="m1-category-bar"><button class="m1-cat-btn active" data-cat="played">Gespielt</button><button class="m1-cat-btn" data-cat="open">Offen</button><button class="m1-cat-btn" data-cat="all">Alle</button></div><button class="m1-filter-toggle" id="filterToggle">Filter</button><div id="filterPanel" class="hidden"><input type="checkbox" id="filterCompleteWithoutDate"><input type="checkbox" id="filterBewerb"><select id="filterBewerbSelect" disabled></select><input type="checkbox" id="filterSpieler"><select id="filterSpielerSelect" disabled></select><input type="checkbox" id="filterDatum"><div id="datumRow" class="hidden"><input id="datumVon"><input id="datumBis"></div><input type="checkbox" id="filterMissing"></div></div><div id="matches1-count"></div><div id="matches1-container"></div></section></main><footer id="test-footer">Footer darf initial nicht aufblitzen</footer><script>window.__matchActionCalls = []; window.openMatchActionPicker = (matchId) => window.__matchActionCalls.push(matchId);</script><script type="module" src="/JS/Matches1-under-test.js"></script></body></html>`);
       return;
     }
     if (pathname === "/JS/Matches1-under-test.js") {
       const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/Matches1.js"), "utf8")
         .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
         .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"')
         .replace('"./monitorReady.js"', '"/test/monitorReady.js"');
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
@@ -66,6 +71,11 @@ function startServer() {
     if (pathname === "/test/dataClient.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
       response.end(dataClientStub);
+      return;
+    }
+    if (pathname === "/test/authClient.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end('const user = new URLSearchParams(location.search).get("role") === "player" ? { id: "p1", role: "player" } : null; export const getUser = () => user; export const subscribeAuth = (callback) => { queueMicrotask(() => callback(user)); return () => {}; };\n');
       return;
     }
     if (pathname === "/test/loadingHelper.js") {
@@ -109,7 +119,7 @@ test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergeb
   try {
     browser = await launchSelectedBrowser(CHROMIUM_PATH);
     const page = await newProfilePage(browser, { viewport: { width: 800, height: 700 } });
-    await page.goto(`http://127.0.0.1:${address.port}/matches-test.html`, { waitUntil: "domcontentloaded" });
+    await page.goto(`http://127.0.0.1:${address.port}/matches-test.html?role=player`, { waitUntil: "domcontentloaded" });
     await page.locator(".m1-card").nth(3).waitFor({ state: "visible" });
 
     const cards = page.locator(".m1-card");
@@ -162,6 +172,20 @@ test("Matches zeigen WO und RET nur als Namensbadge und rechts nur das Satzergeb
       return { direction: getComputedStyle(meta).flexDirection, requestBelowDate: request.top >= date.bottom };
     });
     assert.deepEqual(mobileMeta, { direction: "column", requestBelowDate: true });
+
+    await page.locator('[data-cat="open"]').click();
+    const ownOpen = page.locator('.m1-card[data-match-id="own-open"]');
+    const foreignOpen = page.locator('.m1-card[data-match-id="foreign-open"]');
+    assert.equal(await ownOpen.getAttribute("role"), "button");
+    assert.match(await ownOpen.getAttribute("aria-label"), /Aktionen für Anna Links gegen Berta Rechts öffnen/);
+    assert.equal(await foreignOpen.getAttribute("role"), null);
+    await ownOpen.click();
+    await ownOpen.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Space");
+    assert.deepEqual(await page.evaluate(() => window.__matchActionCalls), ["own-open", "own-open", "own-open"]);
+    await foreignOpen.click();
+    assert.deepEqual(await page.evaluate(() => window.__matchActionCalls), ["own-open", "own-open", "own-open"]);
   } finally {
     await browser?.close();
     await new Promise((resolve) => server.close(resolve));

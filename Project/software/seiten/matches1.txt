@@ -32,6 +32,12 @@ Matches-Uebersicht mit Filtern - Zentrale Match-Seite
   sowie [wo]/[ret] gelten als gespielt. Das Filterpanel ist am Desktop offen und
   mobil einklappbar. Filterbeschriftung, Trefferanzahl und Forderungshinweise
   verwenden kontrastreiche Sekundaertexte.
+  Angemeldete Spieler koennen eigene offene und vollstaendige Matchkarten per
+  Klick, Touch, Enter oder Leertaste oeffnen, sofern Ergebnis- und Terminaktion
+  serverseitig gemeinsam erlaubt sind. Ein vorgeschalteter Dialog bietet dann
+  `Ergebnis eingeben` und `Termin festlegen/aendern`; X, Escape oder ein Klick
+  ausserhalb brechen ohne Aenderung ab. Die Auswahl oeffnet den bereits
+  bestehenden Ergebnis- beziehungsweise Termindialog.
 
 -- Darstellung und Sicherheit --
   Einzel und Doppel, Runde, Ergebnis, Forderungs-/Matchdatum sowie wo/ret-Badges

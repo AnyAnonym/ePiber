@@ -1010,17 +1010,56 @@ test("Ergebniseingabe und Terminauswahl formatieren Matchkarten und bestaetigen 
   try {
     const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      const origin = document.createElement("button");
+      origin.id = "matchActionOrigin";
+      origin.textContent = "Match öffnen";
+      document.body.appendChild(origin);
+      origin.focus();
+      window.openMatchActionPicker("match-r2", { returnFocus: origin });
+    });
+    const actionPicker = page.getByRole("dialog", { name: "Matchaktion auswählen" });
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await actionPicker.getByRole("button", { name: "Termin festlegen/ändern", exact: true }).isVisible(), true);
+    await actionPicker.getByRole("button", { name: "Matchaktion abbrechen" }).click();
+    assert.equal(await page.locator("#matchActionOrigin").evaluate((element) => document.activeElement === element), true);
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).waitFor({ state: "visible" });
+    await actionPicker.click({ position: { x: 2, y: 2 } });
+    await actionPicker.waitFor({ state: "hidden" });
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await actionPicker.waitFor({ state: "hidden" });
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).click();
+    const actionResultDialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
+    await actionResultDialog.waitFor({ state: "visible" });
+    await actionResultDialog.getByRole("button", { name: "Ergebnisdialog abbrechen" }).click();
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Termin festlegen/ändern", exact: true }).click();
+    const actionAppointmentDialog = page.getByRole("dialog", { name: "Termin abändern" });
+    await actionAppointmentDialog.waitFor({ state: "visible" });
+    await actionAppointmentDialog.getByRole("button", { name: "Terminauswahl schließen" }).click();
+
     await page.evaluate(() => window.openFavoriteMatchAction("match-appointment"));
     const appointmentPicker = page.getByRole("dialog", { name: "Termin festlegen / ändern" });
     const appointmentChoice = appointmentPicker.locator(".favorite-match-picker-item").first();
     await appointmentChoice.waitFor({ state: "visible" });
     assert.equal(await appointmentChoice.locator(".favorite-match-picker-heading").textContent(), "Damen Doppel Lang - Finale");
+    assert.equal(await appointmentChoice.locator(".favorite-match-picker-appointment").textContent(), "05.09.2026, 16:00 Uhr");
     assert.equal(await appointmentChoice.locator(".favorite-match-picker-teams").textContent(), "Own Player vs. Test Gegner");
-    assert.equal(await appointmentChoice.locator(".favorite-match-picker-appointment").count(), 0);
+    const undatedAppointmentChoice = appointmentPicker.locator(".favorite-match-picker-item", { hasText: "noch kein Spieltermin fixiert" }).first();
+    assert.equal(await undatedAppointmentChoice.locator(".favorite-match-picker-appointment").textContent(), "noch kein Spieltermin fixiert");
     assert.equal(await appointmentChoice.evaluate((button) => {
       const heading = button.querySelector(".favorite-match-picker-heading").getBoundingClientRect();
+      const appointment = button.querySelector(".favorite-match-picker-appointment").getBoundingClientRect();
       const teams = button.querySelector(".favorite-match-picker-teams").getBoundingClientRect();
-      return teams.top >= heading.bottom;
+      return appointment.top >= heading.bottom && teams.top >= appointment.bottom;
     }), true);
     await appointmentPicker.getByRole("button", { name: "Matchauswahl schließen" }).click();
 

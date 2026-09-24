@@ -93,3 +93,13 @@ Commit: 4.12.3-paj-1-11 | Spaltenfilter für Meldungsliste aktiviert
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-10-x` gesetzt.
   - [Grafana] In der Meldungsliste die eingebauten Spaltenfilter mit Wertauswahl, Checkboxen und Such- beziehungsweise Vergleichsausdruecken aktiviert.
   - [Tests] Den aktivierten Spaltenfilter im statischen Meldungsdashboard-Vertrag abgesichert.
+
+[4.12.3-paj-1-12] - 2026-09-24
+Commit: 4.12.3-paj-1-12 | Matchaktionen in Übersicht ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-11-x` gesetzt.
+  - [Matches] Eigene offene und vollstaendige Matches in der zentralen Uebersicht mit einer vorgeschalteten Auswahl fuer Ergebniseingabe oder Terminpflege bedienbar gemacht.
+  - [Terminauswahl] Den aktuellen Termin beziehungsweise den Hinweis auf einen noch fehlenden Spieltermin wie bei der Ergebniseingabe in einer eigenen zweiten Zeile dargestellt.
+  - [Observability] Fehler beim Laden der neuen Matchaktionsauswahl als kontrollierte, datensparsame Browserdiagnose erfasst.
+  - [Tests] Eigene und fremde Matchkarten, Tastaturbedienung, Fokusfuehrung, Abbruchwege, beide Folgeaktionen und die dreizeilige Terminauswahl in Chromium sowie der vollstaendigen Browser-Profilmatrix abgesichert.
