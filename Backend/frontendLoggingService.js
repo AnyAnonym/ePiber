@@ -121,10 +121,10 @@ const EVENT_LEVELS = new Map([
 ]);
 
 const EVENT_KEYS = new Set([
-  "attempt", "attemptCount", "category", "closeCode", "code", "count",
-  "durationMs", "endpoint", "event", "level", "nextState", "online", "outcome",
-  "phase", "previousState", "reconnectAttempt", "resourceType", "supportId",
-  "timestamp",
+  "attempt", "attemptCount", "authWaitMs", "category", "clickToOverlayMs",
+  "closeCode", "code", "connectionToProfileMs", "count", "durationMs", "endpoint",
+  "event", "level", "nextState", "online", "outcome", "overlayToConnectionMs",
+  "phase", "previousState", "reconnectAttempt", "resourceType", "supportId", "timestamp",
 ]);
 
 function exactObject(value, allowedKeys, name) {
@@ -214,6 +214,10 @@ function validateClientEvent(value) {
     supportId: optionalToken(event.supportId, "supportId", /^[A-Za-z0-9_.:-]{1,128}$/, 128),
     endpoint: optionalToken(event.endpoint, "endpoint", /^[A-Za-z][A-Za-z0-9]{0,63}$/, 64),
     durationMs: optionalInteger(event.durationMs, "durationMs", 0, 600000),
+    authWaitMs: optionalInteger(event.authWaitMs, "authWaitMs", 0, 600000),
+    clickToOverlayMs: optionalInteger(event.clickToOverlayMs, "clickToOverlayMs", 0, 600000),
+    overlayToConnectionMs: optionalInteger(event.overlayToConnectionMs, "overlayToConnectionMs", 0, 600000),
+    connectionToProfileMs: optionalInteger(event.connectionToProfileMs, "connectionToProfileMs", 0, 600000),
     closeCode: optionalInteger(event.closeCode, "closeCode", 0, 4999),
     reconnectAttempt: optionalInteger(event.reconnectAttempt, "reconnectAttempt", 0, 1000),
     attempt: optionalInteger(event.attempt, "attempt", 0, 1000),
@@ -414,6 +418,10 @@ class FrontendLoggingService {
         supportId: event.supportId,
         endpoint: event.endpoint,
         durationMs: event.durationMs,
+        authWaitMs: event.authWaitMs,
+        clickToOverlayMs: event.clickToOverlayMs,
+        overlayToConnectionMs: event.overlayToConnectionMs,
+        connectionToProfileMs: event.connectionToProfileMs,
         closeCode: event.closeCode,
         reconnectAttempt: event.reconnectAttempt,
         attempt: event.attempt,

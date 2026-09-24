@@ -119,6 +119,10 @@ export const subscribeInvalidations = (topics, callback) => {
   return () => topics.forEach((topic) => window.__invalidationCallbacks.delete(topic));
 };
 export const subscribe = () => () => {};
+export const onConnectionState = (callback) => {
+  callback({ connected: true, state: "connected" });
+  return () => {};
+};
 const rankings = [
   { competitionId: "r1", competitionName: "Herren", competitionEndAt: 1, competitionEnded: false, rank: 1, status: "active", canChallenge: true, canWithdraw: true },
   { competitionId: "r2", competitionName: "Damen Doppel Lang", competitionEndAt: 2, competitionEnded: false, rank: 2, status: "active", canChallenge: false, canWithdraw: false, openChallenge: { matchId: "match-r2", direction: "challenger", opponentName: "Test Gegner", opponentRank: 5, challengedAt: "260829-1200", matchDate: "260905-1600" } },

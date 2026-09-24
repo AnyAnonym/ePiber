@@ -32,8 +32,10 @@ const DEFAULT_POLICY = Object.freeze({
   flushIntervalMs: 5000,
 });
 const TRANSPORT_FIELDS = Object.freeze([
-  "attempt", "attemptCount", "closeCode", "durationMs", "endpoint", "nextState",
-  "online", "outcome", "phase", "previousState", "reconnectAttempt", "resourceType",
+  "attempt", "attemptCount", "authWaitMs", "clickToOverlayMs", "closeCode",
+  "connectionToProfileMs", "durationMs", "endpoint", "nextState", "online",
+  "outcome", "overlayToConnectionMs", "phase", "previousState", "reconnectAttempt",
+  "resourceType",
 ]);
 
 let transportPolicy = { ...DEFAULT_POLICY };

@@ -1,4 +1,4 @@
-import { createEndpoint, getOperationId, releaseOperationId } from "./dataClient.js";
+import { createEndpoint, getOperationId, onConnectionState, releaseOperationId } from "./dataClient.js";
 import { formatWalkoverResult } from "./matchCompletionText.js";
 import {
   ready,
@@ -68,6 +68,18 @@ let favoriteMatchPickerGeneration = 0;
 let matchResultScore = [];
 let matchResultStatusTimer = null;
 let matchResultProgressTimer = null;
+let profileConnectionState = "idle";
+let profileConnectionReadyAt = null;
+
+onConnectionState(({ connected, state }) => {
+  profileConnectionState = state;
+  profileConnectionReadyAt = connected ? performance.now() : null;
+});
+
+function profileTimingMs(startedAt, completedAt) {
+  if (!Number.isFinite(startedAt) || !Number.isFinite(completedAt)) return undefined;
+  return Math.min(600000, Math.max(0, Math.round(completedAt - startedAt)));
+}
 let matchResultRetryTimer = null;
 let confirmedLongMatchDuration = "";
 
@@ -2154,6 +2166,13 @@ window.openLoginModal = () => {
 };
 
 window.openProfileModal = async (options = {}) => {
+  const invokedAt = performance.now();
+  const requestedInteractionAt = Number(options.interactionStartedAt);
+  const interactionStartedAt = Number.isFinite(requestedInteractionAt)
+    && requestedInteractionAt <= invokedAt
+    && requestedInteractionAt >= invokedAt - 600000
+    ? requestedInteractionAt
+    : invokedAt;
   const requestGeneration = ++profileRequestGeneration;
   const requestedId = String(options.playerId || "").trim();
   let sessionUser = getUser();
@@ -2163,9 +2182,12 @@ window.openProfileModal = async (options = {}) => {
     sessionUser = getUser();
   }
   if (!sessionUser) return;
+  const authReadyAt = performance.now();
   const ownProfile = !requestedId || (sessionUser && requestedId === String(sessionUser.id));
-  const profileOpenStartedAt = performance.now();
   let profileOpenOutcome = "success";
+  let overlayVisibleAt = null;
+  let connectionReadyAt = profileConnectionState === "connected" ? authReadyAt : null;
+  let profileResponseAt = null;
 
   const nameElement = document.getElementById("profileName");
   const textElement = document.getElementById("profileText");
@@ -2203,12 +2225,17 @@ window.openProfileModal = async (options = {}) => {
   const loadingScope = profileModal.querySelector(".modal-content");
   showLoadingOverlay(undefined, loadingScope);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  overlayVisibleAt = performance.now();
   if (requestGeneration !== profileRequestGeneration || profileModal.classList.contains("hidden")) return;
 
   try {
+    const profileRequestStartedAt = performance.now();
+    if (profileConnectionState === "connected") connectionReadyAt ??= profileRequestStartedAt;
     const result = ownProfile
       ? await readMyProfile()
       : await readPublicProfile({ id: requestedId });
+    profileResponseAt = performance.now();
+    connectionReadyAt ??= profileConnectionReadyAt ?? profileResponseAt;
     if (requestGeneration !== profileRequestGeneration) {
       profileOpenOutcome = "cancelled";
       return;
@@ -2483,14 +2510,18 @@ window.openProfileModal = async (options = {}) => {
       hideLoadingOverlay(loadingScope);
       diagnostic.info("profile_open_completed", {
         category: ownProfile ? "private" : "public",
-        durationMs: Math.max(0, Math.round(performance.now() - profileOpenStartedAt)),
+        durationMs: profileTimingMs(interactionStartedAt, performance.now()),
+        authWaitMs: profileTimingMs(interactionStartedAt, authReadyAt),
+        clickToOverlayMs: profileTimingMs(interactionStartedAt, overlayVisibleAt),
+        overlayToConnectionMs: profileTimingMs(overlayVisibleAt, connectionReadyAt),
+        connectionToProfileMs: profileTimingMs(connectionReadyAt, profileResponseAt),
         outcome: profileOpenOutcome,
       });
     }
   }
 };
 
-window.openFavoriteOverlay = async (overlay) => {
+window.openFavoriteOverlay = async (overlay, options = {}) => {
   if (["match-result", "match-appointment"].includes(overlay)) {
     await window.openFavoriteMatchAction(overlay);
     return;
@@ -2502,7 +2533,10 @@ window.openFavoriteOverlay = async (overlay) => {
     window.openLoginModal();
     return;
   }
-  return window.openProfileModal({ initialTab: overlay === "profile-messages" ? "messages" : "system" });
+  return window.openProfileModal({
+    initialTab: overlay === "profile-messages" ? "messages" : "system",
+    interactionStartedAt: options.interactionStartedAt,
+  });
 };
 
 window.addEventListener("epiber-message-summary", (event) => {
@@ -3119,7 +3153,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (authAction.id === "profileButton" || authAction.id === "profileButtonMobile") {
-    window.openProfileModal();
+    window.openProfileModal({ interactionStartedAt: performance.now() });
     return;
   }
   if (logoutInProgress) return;

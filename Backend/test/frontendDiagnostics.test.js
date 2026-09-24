@@ -263,6 +263,59 @@ test("Frontenddiagnose uebertraegt nur die kontrollierte Projektion gebuendelt",
   assert.equal(requests[0].options.body.includes("secret"), false);
 });
 
+test("Profiloeffnung transportiert getrennte UX-Zeiten ohne Profilkontext", async () => {
+  const requests = [];
+  const { applyDiagnosticPolicy, diagnostic } = loadFrontendModule(
+    "diagnostics.js",
+    ["applyDiagnosticPolicy", "diagnostic"],
+    {
+      APP_VERSION: "4.3.0-test",
+      console: { debug() {}, error() {}, info() {}, log() {}, warn() {} },
+      crypto: { randomUUID: () => "00000000-0000-4000-8000-000000000015" },
+      fetch: async (url, options) => {
+        requests.push({ url, options });
+        return { ok: true, status: 200 };
+      },
+      location: { pathname: "/favorites.html" },
+    },
+  );
+  applyDiagnosticPolicy({
+    enabled: true,
+    level: "info",
+    targeted: true,
+    sampleRatePercent: 100,
+    batchSize: 1,
+    flushIntervalMs: 5000,
+  });
+  diagnostic.info("profile_open_completed", {
+    category: "private",
+    durationMs: 7310,
+    authWaitMs: 10,
+    clickToOverlayMs: 32,
+    overlayToConnectionMs: 7200,
+    connectionToProfileMs: 18,
+    outcome: "success",
+    profile: { personId: "sensitive-person" },
+  });
+  await Promise.resolve();
+
+  const event = JSON.parse(requests[0].options.body).events[0];
+  assert.deepEqual(event, {
+    event: "profile_open_completed",
+    level: "info",
+    timestamp: event.timestamp,
+    authWaitMs: 10,
+    category: "private",
+    clickToOverlayMs: 32,
+    connectionToProfileMs: 18,
+    durationMs: 7310,
+    outcome: "success",
+    overlayToConnectionMs: 7200,
+  });
+  assert.equal(requests[0].options.body.includes("sensitive-person"), false);
+  assert.equal(requests[0].options.body.includes("personId"), false);
+});
+
 test("Personennormalisierungsfehler transportiert Code und Zaehler ohne Fachdaten", async () => {
   const requests = [];
   const fetch = async (url, options) => {

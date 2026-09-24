@@ -77,3 +77,11 @@ Commit: 4.12.3-paj-1-9 | Court-Automatik für geplante Matches
   - [Navigator] Die Platzaktivierung zeigt anstehenden Automatikstart, erfolgten Start, abgelaufene Startzeit und ergebnisbedingte Deaktivierung responsiv an.
   - [Betrieb] Automatische Court-Mutationen sind revisionsgeschuetzt, wiederholbar, strukturiert geloggt und mit kontrollierten System-Audits abgesichert.
   - [Tests] Zeitsteuerung, Neustartfenster, Terminverschiebung, Ergebnisarten, Audit-Retry sowie Navigator-Darstellung in Chromium und der vollstaendigen Browser-Profilmatrix geprueft.
+
+[4.12.3-paj-1-10] - 2026-09-24
+Commit: 4.12.3-paj-1-10 | Profilöffnungs-Timings präzisiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-9-x` gesetzt.
+  - [Profil/Observability] Die kontrollierte Browserdiagnose `profile_open_completed` trennt nun Auth-Wartezeit, Klick-bis-Overlay, Overlay-bis-WebSocket und WebSocket-bis-Profilantwort, ohne Profil- oder Personendaten zu uebertragen.
+  - [Profil] Profilaufrufe aus Navigation und Favoriten uebernehmen den unmittelbaren Interaktionszeitpunkt; Darstellung und Bedienung des Profilmodals bleiben unveraendert.
