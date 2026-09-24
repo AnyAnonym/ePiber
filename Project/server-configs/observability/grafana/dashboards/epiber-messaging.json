@@ -1,7 +1,7 @@
 {
   "annotations": { "list": [] },
   "description": "Geschützte gemeinsame Ansicht persönlicher Meldungen sowie der Bewerbs- und Hallenraster-Historien.",
-  "editable": false,
+  "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "links": [],
@@ -128,6 +128,6 @@
   "timezone": "Europe/Vienna",
   "title": "ePiber Meldungen",
   "uid": "epiber-messaging",
-  "version": 2,
+  "version": 3,
   "weekStart": "monday"
 }

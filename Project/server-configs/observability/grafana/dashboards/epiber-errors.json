@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "panels": [
     { "type": "timeseries", "title": "HTTP-Ergebnisse", "id": 1, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (route, result) (rate(epiber_http_requests_total{deployment=\"$deployment\"}[5m]))", "legendFormat": "{{route}} {{result}}", "refId": "A" }] },
@@ -17,5 +17,5 @@
   "timezone": "browser",
   "title": "ePiber Fehler und Recovery",
   "uid": "epiber-errors",
-  "version": 2
+  "version": 3
 }

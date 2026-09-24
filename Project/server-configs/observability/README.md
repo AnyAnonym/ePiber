@@ -47,6 +47,13 @@ PAJ sehen. Prometheus und Loki sind nicht editierbare Datenquellen. Loki
 verwendet bewusst einen gemeinsamen Tenant; `deployment=live|paj` ist ein
 Abfragefilter und keine Berechtigungsgrenze.
 
+Alle zehn provisionierten Dashboards sind fuer diese Administratoren editierbar;
+`allowUiUpdates` erlaubt auch das Speichern in Grafanas Datenbank. Solche
+UI-Aenderungen werden nicht in die versionierten JSON-Dateien zurueckgeschrieben
+und koennen durch eine spaetere Neuinstallation der jeweiligen Repository-JSON
+ueberschrieben werden. Datasources, Plugins und Credentials bleiben davon
+unberuehrt und nicht editierbar.
+
 Anonyme Anmeldung, Registrierung, oeffentliche Dashboards, Snapshots,
 Pluginverwaltung, automatische Plugininstallation und Pluginupdates sind
 deaktiviert. Grafana akzeptiert keine TCP-Verbindung; der Socket gehoert der

@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "panels": [
     { "type": "stat", "title": "Alloy erreichbar", "id": 1, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "up{job=\"alloy\"}", "refId": "A" }] },
@@ -19,5 +19,5 @@
   "timezone": "browser",
   "title": "ePiber Loggingpipeline",
   "uid": "epiber-pipeline",
-  "version": 2
+  "version": 3
 }

@@ -103,3 +103,13 @@ Commit: 4.12.3-paj-1-12 | Matchaktionen in Übersicht ergänzt
   - [Terminauswahl] Den aktuellen Termin beziehungsweise den Hinweis auf einen noch fehlenden Spieltermin wie bei der Ergebniseingabe in einer eigenen zweiten Zeile dargestellt.
   - [Observability] Fehler beim Laden der neuen Matchaktionsauswahl als kontrollierte, datensparsame Browserdiagnose erfasst.
   - [Tests] Eigene und fremde Matchkarten, Tastaturbedienung, Fokusfuehrung, Abbruchwege, beide Folgeaktionen und die dreizeilige Terminauswahl in Chromium sowie der vollstaendigen Browser-Profilmatrix abgesichert.
+
+[4.12.3-paj-1-13] - 2026-09-24
+Commit: 4.12.3-paj-1-13 | Grafana-Dashboards editierbar gemacht
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-12-x` gesetzt.
+  - [Grafana] Alle zehn provisionierten Dashboards fuer Administratoren editierbar gemacht und das Speichern von UI-Aenderungen in Grafanas Datenbank freigegeben; Datasources bleiben unveraendert geschuetzt.
+  - [Grafana] Dashboard-Versionen lueckenlos erhoeht, damit der bereits aktive Provider alle Ressourcen mit der neuen UI-Schreibfreigabe erneut provisioniert.
+  - [Betrieb] Dokumentiert, dass gespeicherte UI-Aenderungen nicht ins Repository zurueckfliessen und bei einer spaeteren JSON-Neuinstallation ueberschrieben werden koennen.
+  - [Tests] Editierbarkeit aller Dashboard-JSON-Dateien und `allowUiUpdates` im Provisioning statisch abgesichert.

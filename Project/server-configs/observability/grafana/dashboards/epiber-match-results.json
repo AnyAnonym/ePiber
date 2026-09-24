@@ -1,7 +1,7 @@
 {
   "annotations": { "list": [] },
   "description": "Erfolgreiche, korrigierte, zurueckgenommene und technisch problematische Matchergebnisvorgaenge fuer Live und PAJ.",
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "links": [],
   "panels": [
@@ -95,5 +95,5 @@
   "timezone": "browser",
   "title": "ePiber Matchergebnisse",
   "uid": "epiber-match-results",
-  "version": 1
+  "version": 2
 }

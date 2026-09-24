@@ -6,7 +6,7 @@ providers:
     folder: ePiber
     type: file
     disableDeletion: false
-    allowUiUpdates: false
+    allowUiUpdates: true
     updateIntervalSeconds: 30
     options:
       path: /etc/grafana/dashboards/epiber

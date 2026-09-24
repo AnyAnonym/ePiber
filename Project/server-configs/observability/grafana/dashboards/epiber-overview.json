@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "panels": [
     { "type": "stat", "title": "Backend Ready", "id": 1, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "epiber_ready{deployment=\"$deployment\"}", "refId": "A" }] },
@@ -22,5 +22,5 @@
   "timezone": "browser",
   "title": "ePiber Uebersicht",
   "uid": "epiber-overview",
-  "version": 3
+  "version": 4
 }

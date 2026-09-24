@@ -1,7 +1,7 @@
 {
   "annotations": { "list": [] },
   "description": "Aktueller Datenqualitaetsstand, Nutzung, Writes, Audit und Fehler der ePiber-Personennormalisierung.",
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "links": [],
   "panels": [
@@ -313,5 +313,5 @@
   "timezone": "browser",
   "title": "ePiber Personennormalisierung",
   "uid": "epiber-people-normalization",
-  "version": 3
+  "version": 4
 }
