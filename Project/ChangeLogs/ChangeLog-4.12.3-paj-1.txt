@@ -177,3 +177,9 @@ Commit: 4.12.3-paj-1-19 | Metadatenstabile Pruefnachweise eingefuehrt
   - [Workflow/Metadaten] Temporaeres Branch-Changelog und reine Paketversionswechsel aus Code- und Browserfingerprints ausgenommen; Abhaengigkeiten und Paket-Skripte bleiben weiterhin pruefrelevant.
   - [Schnellabschluss] Bei noch offenem Kurzkommentar die direkte `--subject`-Uebergabe vorgeschrieben, statt nach erfolgreicher Verifikation den Changelog zu veraendern und dadurch Wiederholungspruefungen auszuloesen.
   - [Tests] Den beobachteten Neun-Minuten-Regressionsfall, reine Versionswechsel, Paket-Skript-Aenderungen sowie fachlich relevante Frontendaenderungen als Fingerprint-Vertraege abgesichert.
+
+[4.12.3-paj-1-20] - 2026-09-24
+Commit: 4.12.3-paj-1-20 | Seitenbranch fuer Release abgeschlossen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-19-x` gesetzt.
