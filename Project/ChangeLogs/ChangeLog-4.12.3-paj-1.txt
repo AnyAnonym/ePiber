@@ -134,3 +134,14 @@ Commit: 4.12.3-paj-1-15 | Mobilen WebSocket-Reconnect beschleunigt
   - [Sicherheit/Robustheit] Beschleunigte Wiederverbindungen auf sichtbare, online befindliche und nicht terminal gestoppte Clients begrenzt sowie direkte Request-Beschleunigungen gegen Wiederholungsstueme entprellt.
   - [Dokumentation] Den verbindlichen WebSocket-Reconnectvertrag um Vordergrundfenster, Backoff-Grenze, Request-Beschleunigung sowie Offline-/Terminalausnahmen ergaenzt.
   - [Tests] Android-aehnlichen Vordergrund-Reconnect mit mehreren Fehlversuchen und das kontrollierte Ueberholen eines passiven Backoffs durch einen sichtbaren Request abgedeckt.
+
+[4.12.3-paj-1-16] - 2026-09-24
+Commit: 4.12.3-paj-1-16 | Hallenraster-Neuverteilung mit Verhinderungen abgesichert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-15-x` gesetzt.
+  - [Hallenzeiten] Ausschliesslich administrativ pflegbare harte Verhinderungen und weiche Vermeidungswuensche je Spieler und Zukunftstermin eingefuehrt.
+  - [Hallenzeiten/Sicherheit] Gleichberechtigte Neuverteilungen zuerst als unverbindliche, revisionsgebundene Vorschau mit offenen Plaetzen, Wunschkonflikten und Einsatzsummen berechnet; unvollstaendige Vorschlaege bleiben ohne Statewrite und koennen nicht uebernommen werden.
+  - [Hallenzeiten/Bedienung] Screenshotfreundlichen Vorschaudialog und eine scrollbare Eingabematrix fuer Verhinderungen und Wuensche ergaenzt; der bestehende Raster bleibt bis zur ausdruecklichen Uebernahme unveraendert.
+  - [Observability/Datenschutz] Speichern und Uebernehmen mit kontrollierter Auditprojektion und strukturiertem Abschlusslog versehen; Vorschaulogs enthalten nur Summen und Verhinderungsgruende werden nicht als Freitext gespeichert.
+  - [Tests] Harte und weiche Vorgaben, reine Vorschau, gesperrte unvollstaendige Uebernahme, Vorschau-Hash, geschlossene RPC-Vertraege sowie den responsiven Adminablauf abgedeckt.

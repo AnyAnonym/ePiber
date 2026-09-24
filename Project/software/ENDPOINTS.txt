@@ -1103,8 +1103,38 @@ ADMIN:
   `adminDistributeHallTimeGrid { operationId, gridId, expectedRevision }`
       Ersetzt im Modus `equal` alle zukuenftigen Eintraege durch eine moeglichst
       ausgeglichene Verteilung, die wiederholte Gruppen und direkte Folgeeinsaetze
-      reduziert. Historisiert wird der Gesamtvorgang, nicht jede Zuweisung; es
-      entstehen keine persoenlichen Meldungen.
+      reduziert. Gespeicherte harte Verhinderungen werden nie, weiche
+      Vermeidungswuensche nach Moeglichkeit nicht belegt. Eine unvollstaendige
+      Verteilung wird abgelehnt. Der Endpoint bleibt fuer kompatible Adminclients;
+      die Verwaltungsseite verwendet den sicheren Vorschauablauf. Historisiert
+      wird der Gesamtvorgang, nicht jede Zuweisung; es entstehen keine
+      persoenlichen Meldungen.
+
+  `adminSaveHallTimeConstraints { operationId, gridId, expectedRevision,
+  constraints }`
+      Ersetzt die Adminvorgaben fuer zukuenftige Termine revisioniert. Jeder
+      Eintrag ist `{ personId, slotId, kind:"unavailable"|"avoid" }`; pro Person
+      und Termin ist hoechstens ein Eintrag erlaubt. `unavailable` ist hart,
+      `avoid` ein weicher Vermeidungswunsch. Teilnehmer und Termin muessen zum
+      aktiven gleichberechtigten Raster gehoeren. Erfolg liefert den Raster und
+      die neue Revision. Der Write ist idempotent, auditiert und erzeugt keine
+      persoenliche Meldung.
+
+  `adminPreviewHallTimeDistribution { gridId, expectedRevision }`
+      Berechnet ohne Zustandsaenderung eine deterministische Vorschau. Die Antwort
+      enthaelt Qualitaet `complete|warning|incomplete`, vorgeschlagene Eintraege,
+      Termin- und Personensummen, offene Plaetze, verletzte weiche Wuensche,
+      Einsatzspreizung und einen SHA-256-`previewHash`. Harte Verhinderungen werden
+      nie verletzt. Kontrollierte Betriebslogs enthalten nur Summen.
+
+  `adminApplyHallTimeDistribution { operationId, gridId, expectedRevision,
+  previewHash }`
+      Berechnet die Vorschau unter derselben Revision erneut und uebernimmt sie nur,
+      wenn Hash und Revision weiterhin passen und kein Platz offen bleibt. Bei
+      Abweichung gilt `HALL_TIME_PREVIEW_STALE`, bei offenen Plaetzen
+      `HALL_TIME_DISTRIBUTION_INCOMPLETE`. Erfolg ersetzt nur zukuenftige Stati,
+      historisiert den Batch, ist idempotent und erzeugt keine persoenlichen
+      Meldungen.
 
   `adminClearAllHallTimeStatuses { operationId, gridId, expectedRevision }`
       Entfernt nach Bestaetigung alle Fix- und Wartelistenstati, behaelt aber alle

@@ -17,9 +17,16 @@ Hallenzeiten verwalten - Administration
 
 -- Termine und Aktionen --
   Ein Ausgangstermin kann mit bis zu 249 woechentlichen Folgeterminen uebernommen
-  werden; Duplikate werden uebersprungen. Gleichberechtigte Neuverteilung ersetzt
-  nach Sicherheitsdialog nur zukuenftige Stati. `Alle Stati auf Termin loeschen`
+  werden; Duplikate werden uebersprungen. Fuer bestehende gleichberechtigte Raster
+  erfasst ausschliesslich der Administrator je Spieler und zukuenftigem Termin
+  harte Verhinderungen oder den weichen Wunsch `moeglichst vermeiden`. Eine
+  Verhinderung wird nie uebergangen; ein Wunsch wird erst nach der Einsatzanzahl
+  optimiert. Die Neuverteilung zeigt zunaechst eine zustandslose Vorschau mit
+  Zuteilungen, offenen Plaetzen, Wunschkonflikten und Einsatzsummen. Sie veraendert
+  den bestehenden Raster nicht. Unvollstaendige Vorschlaege koennen nicht
+  uebernommen werden; vollstaendige Vorschlaege benoetigen eine ausdrueckliche,
+  revisions- und hashgeschuetzte Uebernahme. `Alle Stati auf Termin loeschen`
   entfernt nach Bestaetigung alle gruenen und gelben Stati, aber keine Termine.
-  Beide Operationen sind revisioniert, idempotent, auditiert und strukturiert
-  geloggt. Fuer bestehende Raster fuehren Links zu persoenlicher und vollstaendiger
+  Schreiboperationen sind revisioniert, idempotent, auditiert und strukturiert
+  geloggt. Die Vorschau loggt nur kontrollierte Summen. Fuer bestehende Raster fuehren Links zu persoenlicher und vollstaendiger
   Druckvorlage.

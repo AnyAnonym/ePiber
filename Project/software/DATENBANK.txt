@@ -839,7 +839,12 @@ Tabelle `app_state`:
   Raster speichert ID, Name, Beschreibung, Modus `equal|fair_use`, Aktivstatus,
   oeffentliche Beitrittsfreigabe, Fixplatzkapazitaet, Wartelistenaktivierung und
   persoenliches Wartelistenlimit, Fair-Use-Parameter, strukturierte Teilnehmer,
-  chronologische Termine, Fix-/Wartelisteneintraege mit Queuezeit sowie eine auf
+  chronologische Termine, Fix-/Wartelisteneintraege mit Queuezeit sowie
+  administrative Verteilungsvorgaben `{ personId, slotId,
+  kind:"unavailable"|"avoid" }`. Harte Verhinderungen und weiche
+  Vermeidungswuensche bleiben von den eigentlichen Terminbuchungen getrennt und
+  werden beim Entfernen eines Teilnehmers oder Termins ebenfalls bereinigt. Die
+  zustandslose Verteilungsvorschau wird nicht persistiert. Der Raster besitzt eine auf
   10000 Eintraege begrenzte Fachhistorie. Historieneintraege speichern Aktion,
   Zeitpunkt, Akteur, Zielperson, Statusuebergang und bei Terminbezug einen
   unveraenderlichen Snapshot aus ID, Datum, Beginn und Ende. Neuverteilungen und
