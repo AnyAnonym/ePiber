@@ -123,3 +123,14 @@ Commit: 4.12.3-paj-1-14 | Matchergebnis am Scoreboard anzeigen
   - [Ergebnisfolgen] Korrekturen unmittelbar uebernommen und nach einer Ergebnisloeschung den weiterhin inaktiven Court auf Nullstaende gesetzt; Walkover ohne Zahlen bleibt rein numerisch bei Null.
   - [Datenhaltung] Die Abschlussanzeige aus den autoritativen Matchdaten projiziert, sodass weder Receiver-Rohwerte noch ScoreLog veraendert werden und der Stand einen Backendneustart ueberlebt.
   - [Tests] Regulaeren Abschluss, Tie-Break, Match-Tie-Break, Aufgabe, Walkover, Korrektur-/Loeschpfad, exakte Matchbindung, Drei-Satz-Anzeigegrenze und responsive Scoreboard-Darstellung abgesichert.
+
+[4.12.3-paj-1-15] - 2026-09-24
+Commit: 4.12.3-paj-1-15 | Mobilen WebSocket-Reconnect beschleunigt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-14-x` gesetzt.
+  - [WebSocket/Mobil] Nach dem Entsperren beziehungsweise der Rueckkehr in den Vordergrund den Reconnect-Zaehler zurueckgesetzt und Wiederholungsabstaende waehrend eines begrenzten Wiederanlauffensters auf hoechstens zwei Sekunden beschraenkt.
+  - [Profil/Scoreboard] Sichtbare Leseanforderungen ueberholen einen laufenden passiven Reconnect-Backoff kontrolliert, sodass Profile zeitnah laden und das Scoreboard seinen bereits vorgesehenen aktuellen Snapshot ohne manuellen Seitenreload beziehen kann.
+  - [Sicherheit/Robustheit] Beschleunigte Wiederverbindungen auf sichtbare, online befindliche und nicht terminal gestoppte Clients begrenzt sowie direkte Request-Beschleunigungen gegen Wiederholungsstueme entprellt.
+  - [Dokumentation] Den verbindlichen WebSocket-Reconnectvertrag um Vordergrundfenster, Backoff-Grenze, Request-Beschleunigung sowie Offline-/Terminalausnahmen ergaenzt.
+  - [Tests] Android-aehnlichen Vordergrund-Reconnect mit mehreren Fehlversuchen und das kontrollierte Ueberholen eines passiven Backoffs durch einen sichtbaren Request abgedeckt.

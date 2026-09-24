@@ -196,6 +196,15 @@ Bei temporaeren Gruenden wie 1012, 1013, 4000, 4001 und 4408 wird grundsaetzlich
 mit ansteigender Wartezeit bis maximal 30 Sekunden neu verbunden. Beim Wechsel
 von offline zu online wird die Verbindung ebenfalls neu aufgebaut.
 
+Nach dem Wechsel einer Seite aus dem Hintergrund in den sichtbaren Vordergrund
+setzt der Browserclient den Reconnect-Zaehler zurueck. Fuer ein begrenztes
+Wiederanlauffenster von 30 Sekunden betraegt der Backoff hoechstens zwei Sekunden,
+damit ein nach dem Entsperren noch nicht nutzbares Mobilfunk- oder WLAN-Netz nicht
+sofort wieder einen langen passiven Backoff aufbaut. Ein neuer Request einer
+sichtbaren Seite darf einen bereits laufenden Reconnect-Timer hoechstens alle zwei
+Sekunden einmal unmittelbar ueberholen. Offline erkannte Clients und terminale
+Close-Codes bleiben von beiden Beschleunigungen ausgeschlossen.
+
 Bei 1000 `Session changed` erzeugt der Auth-Client unmittelbar eine neue
 Verbindung mit dem aktuellen Sessioncookie. Bei 1000 `Client stopped` ist keine
 Wiederverbindung beabsichtigt, weil die Seite oder der Client bewusst beendet
