@@ -145,3 +145,15 @@ Commit: 4.12.3-paj-1-16 | Hallenraster-Neuverteilung mit Verhinderungen abgesich
   - [Hallenzeiten/Bedienung] Screenshotfreundlichen Vorschaudialog und eine scrollbare Eingabematrix fuer Verhinderungen und Wuensche ergaenzt; der bestehende Raster bleibt bis zur ausdruecklichen Uebernahme unveraendert.
   - [Observability/Datenschutz] Speichern und Uebernehmen mit kontrollierter Auditprojektion und strukturiertem Abschlusslog versehen; Vorschaulogs enthalten nur Summen und Verhinderungsgruende werden nicht als Freitext gespeichert.
   - [Tests] Harte und weiche Vorgaben, reine Vorschau, gesperrte unvollstaendige Uebernahme, Vorschau-Hash, geschlossene RPC-Vertraege sowie den responsiven Adminablauf abgedeckt.
+
+[4.12.3-paj-1-17] - 2026-09-24
+Commit: 4.12.3-paj-1-17 | Pruefnachweise und Browser-Smokes beschleunigt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-16-x` gesetzt.
+  - [Workflow] Erfolgreiche Pruefprofile mit HEAD, Node-Version und vollstaendigem Arbeitsbaum-Fingerprint ausserhalb des Repository-Diffs unter `.git` gespeichert und bei `next-task` sessionsuebergreifend validiert.
+  - [Testpolicy] Dokumentation, Build, Drei-Engine-Kernsmoke, fokussierten Browser-Lifecycle und Vollmatrix deterministisch aus den geaenderten Pfaden abgeleitet; fehlende Profile werden konkret gemeldet und ueber einen einheitlichen Verifikationsbefehl ausgefuehrt.
+  - [Browsertests] Den Lifecycle-Smoke auf den Aufwachablauf in allen acht Zielprofilen fokussiert und fuer Kernablaeufe eine separate Chromium-/WebKit-/Firefox-Matrix bereitgestellt.
+  - [Robustheit] Browsercontainer pro Lauf eindeutig benannt, per CID verfolgt und bei regulaerem Ende oder Abbruchsignal kontrolliert entfernt, sodass Timeouts keinen Folgelauf durch Namenskonflikte blockieren.
+  - [Bedienung] Den Commit-Kurzkommentar im offenen Branch-Changelog hinterlegt und `next-task` ohne redundante `--subject`-Angabe ausfuehrbar gemacht; bestehende offene Abschnitte bleiben kompatibel.
+  - [Tests] Fingerprint-Invalidierung, sessionsuebergreifenden Nachweis, Testprofilzuordnung, Kurzkommentar-Fallback sowie Browserprofil- und Containervertraege automatisiert abgesichert.

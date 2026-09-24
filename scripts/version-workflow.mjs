@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { assertVerification, verificationStatus } from "./verification-state.mjs";
 
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 const BRANCH_RE = /^(\d+\.\d+\.\d+)-(paj|pk)-(\d+)$/;
@@ -221,14 +222,17 @@ function plan(lines) {
 
 function inspect() {
   const branch = currentBranch();
+  const changedPaths = statusPaths();
+  const verification = verificationStatus(root, changedPaths);
   const data = {
     root,
     branch: branch || null,
     head: gitText(["rev-parse", "HEAD"]),
     subject: gitText(["log", "-1", "--pretty=%s"]),
     versions: versions(),
-    changedPaths: statusPaths(),
+    changedPaths,
     mergeHead: mergeHead(),
+    verification,
   };
   if (options.json) {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
@@ -238,6 +242,7 @@ function inspect() {
     process.stdout.write(`Version: ${data.versions.packageVersion}\n`);
     process.stdout.write(`Arbeitsbaum: ${data.changedPaths.length ? `${data.changedPaths.length} geaenderte Pfade` : "sauber"}\n`);
     process.stdout.write(`Merge: ${data.mergeHead ?? "keiner"}\n`);
+    process.stdout.write(`Pruefnachweis: ${verification.missing.length ? `fehlt (${verification.missing.join(", ")})` : "vollstaendig"}\n`);
   }
 }
 
@@ -262,7 +267,7 @@ function initialChangelog(branch, initialId) {
 }
 
 function openSection(currentId, targetId) {
-  return `\n[${currentId}-x] - In Arbeit seit ${today()}\nZielcommit: ${targetId}\nStatus: uncommitted\n\n  Changed\n  - [Repository] Paketversion in \`Backend/package.json\` und \`Backend/package-lock.json\` auf \`${currentId}-x\` gesetzt.\n`;
+  return `\n[${currentId}-x] - In Arbeit seit ${today()}\nZielcommit: ${targetId}\nStatus: uncommitted\nKurzkommentar: offen\n\n  Changed\n  - [Repository] Paketversion in \`Backend/package.json\` und \`Backend/package-lock.json\` auf \`${currentId}-x\` gesetzt.\n`;
 }
 
 function branchStart() {
@@ -318,10 +323,16 @@ function workStart() {
   plan([`Paketversionen auf ${head.id}-x setzen`, `Offenen Changelogabschnitt mit Zielcommit ${targetId} anlegen`]);
 }
 
-function requireSubject() {
-  const subject = options.subject?.trim();
+function requireSubject(changelog = "") {
+  const changelogSubject = [...changelog.matchAll(/^Kurzkommentar: ([^\n]+)$/gm)].at(-1)?.[1]?.trim();
+  const configuredSubject = changelogSubject && changelogSubject !== "offen" ? changelogSubject : null;
+  const optionSubject = options.subject?.trim();
+  if (configuredSubject && optionSubject && configuredSubject !== optionSubject) {
+    fail(`--subject stimmt nicht mit Kurzkommentar im offenen Changelog ueberein: ${configuredSubject}`);
+  }
+  const subject = optionSubject || configuredSubject;
   if (!subject || subject.includes("\n") || subject.includes("|")) {
-    fail("--subject muss ein einzeiliger Kurzkommentar ohne | sein");
+    fail("Kurzkommentar fehlt: im offenen Changelog setzen oder --subject als einzeiligen Wert ohne | angeben");
   }
   return subject;
 }
@@ -329,12 +340,12 @@ function requireSubject() {
 function branchFinalize() {
   const { branch } = assertSideBranch();
   assertNoMergeState();
-  const subject = requireSubject();
   const head = headIdentity(branch);
   assertSynchronizedVersions(`${head.id}-x`);
   const targetId = `${branch}-${head.number + 1}`;
   const logFile = changelogPath(branch);
   const content = fs.readFileSync(logFile, "utf8");
+  const subject = requireSubject(content);
   const marker = `[${head.id}-x] - In Arbeit seit `;
   if (!content.includes(marker) || !content.includes(`Zielcommit: ${targetId}\nStatus: uncommitted`)) {
     fail("Offener Branch-Changelogabschnitt passt nicht zum aktuellen Entwicklungsstand");
@@ -342,7 +353,7 @@ function branchFinalize() {
 
   if (options.apply) {
     const escapedId = head.id.replace(/\./g, "\\.");
-    const expression = new RegExp(`\\[${escapedId}-x\\] - In Arbeit seit [^\\n]+\\nZielcommit: ${targetId.replace(/\./g, "\\.")}\\nStatus: uncommitted\\n`);
+    const expression = new RegExp(`\\[${escapedId}-x\\] - In Arbeit seit [^\\n]+\\nZielcommit: ${targetId.replace(/\./g, "\\.")}\\nStatus: uncommitted\\n(?:Kurzkommentar: [^\\n]+\\n)?`);
     const finalized = content.replace(expression, `[${targetId}] - ${today()}\nCommit: ${targetId} | ${subject}\n`);
     if (finalized === content) fail("Branch-Changelog konnte nicht finalisiert werden");
     fs.writeFileSync(logFile, finalized);
@@ -530,7 +541,6 @@ function branchCommit() {
 function completeBranchWork({ openNext }) {
   const { branch } = assertSideBranch();
   assertNoMergeState();
-  const subject = requireSubject();
   if (options.allChanged && options.paths.length) fail("--all-changed und --path duerfen nicht kombiniert werden");
   const changed = statusPaths();
   const allowed = options.allChanged
@@ -545,17 +555,19 @@ function completeBranchWork({ openNext }) {
   const logPath = relative(logFile);
   if (!fs.existsSync(logFile)) fail(`Branch-Changelog fehlt: ${logPath}`);
   const content = fs.readFileSync(logFile, "utf8");
+  const subject = requireSubject(content);
   const marker = `[${head.id}-x] - In Arbeit seit `;
   if (!content.includes(marker) || !content.includes(`Zielcommit: ${targetId}\nStatus: uncommitted`)) {
     fail("Offener Branch-Changelogabschnitt passt nicht zum aktuellen Entwicklungsstand");
   }
   const escapedId = head.id.replace(/\./g, "\\.");
-  const expression = new RegExp(`\\[${escapedId}-x\\] - In Arbeit seit [^\\n]+\\nZielcommit: ${targetId.replace(/\./g, "\\.")}\\nStatus: uncommitted\\n`);
+  const expression = new RegExp(`\\[${escapedId}-x\\] - In Arbeit seit [^\\n]+\\nZielcommit: ${targetId.replace(/\./g, "\\.")}\\nStatus: uncommitted\\n(?:Kurzkommentar: [^\\n]+\\n)?`);
   const finalized = content.replace(expression, `[${targetId}] - ${today()}\nCommit: ${targetId} | ${subject}\n`);
   if (finalized === content) fail("Branch-Changelog konnte nicht finalisiert werden");
 
   const unapproved = changed.find((file) => !allowed.includes(file));
   if (unapproved) fail(`Geaenderter Pfad ist fuer den Abschluss nicht freigegeben: ${unapproved}`);
+  const verification = openNext ? assertVerification(root, changed) : null;
   const mandatory = ["Backend/package.json", "Backend/package-lock.json", logPath];
   const stagingPlan = options.allChanged
     ? `Alle ${allowed.length} geaenderten Pfade als geschlossene Abschlussmenge stagen`
@@ -630,6 +642,7 @@ function completeBranchWork({ openNext }) {
   ];
   if (openNext) {
     result.push(
+      `Pruefnachweis fuer ${verification.required.join(", ") || "reinen Workflowstand"} bestaetigt`,
       `Arbeitsversion ${targetId}-x mit Zielcommit ${nextTargetId} angelegt`,
       `Index leer; offene Dateien: Backend/package-lock.json, Backend/package.json, ${logPath}`,
     );

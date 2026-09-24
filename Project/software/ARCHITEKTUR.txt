@@ -1237,6 +1237,16 @@ Sie laeuft wegen des Arch-Linux-Hosts in der exakt zur Playwright-Version
 passenden offiziellen Linux-Containerumgebung. Browserbinaries und Container sind
 nur Testwerkzeuge und keine Laufzeitabhaengigkeit des Backends.
 
+Der Runner bietet zusaetzlich die deterministischen Teilprofile `core` und
+`lifecycle`. `core` fuehrt dieselben Kernablaeufe in den drei Engines Chromium,
+WebKit und Firefox aus. `lifecycle` begrenzt den fachlichen Umfang auf den
+Aufwach-/Reconnect-Ablauf, prueft diesen aber in allen acht Zielprofilen. `full`
+entspricht der vollstaendigen bisherigen Smokesuite. Der diffgebundene lokale
+Pruefnachweis liegt ausschliesslich unter `.git`, wird nicht versioniert und ist
+nur bei identischem HEAD, identischer Node-Version und unveraendertem Arbeitsbaum
+gueltig. Der Containerwrapper verwendet eindeutige Lauf-IDs und entfernt einen
+gestarteten Container auch bei einem kontrollierten Abbruchsignal.
+
 Neue Browser-APIs werden gegen diese Matrix geprueft und ueber Feature Detection
 statt User-Agent-Erkennung verwendet. Kritische Bedienung erhaelt bei fehlender
 Unterstuetzung einen kontrollierten Fallback oder eine verstaendliche Ablehnung.

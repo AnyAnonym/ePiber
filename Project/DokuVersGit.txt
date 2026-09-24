@@ -68,13 +68,23 @@ in einem Durchlauf ausschliesslich den Abschluss des aktuellen Arbeitsstands und
 die Vorbereitung des naechsten Arbeitsstands:
 
 1. Branch, Arbeitsbaum, Index, Diff, letzten Commit, Paketversionen, offenen
-   Branch-Changelogabschnitt und die fuer den aktuellen Auftrag erforderlichen
-   Testergebnisse pruefen. Wurde derselbe unveraenderte Diff in der laufenden
-   Session bereits vollstaendig geprueft und getestet, genuegt ein kurzer
-   Statusabgleich; die inhaltliche Vollpruefung wird nicht wiederholt. In einer
-   neuen Session oder bei einer Abweichung ist der Diff erneut zu pruefen. Das
-   Skript fuehrt selbst keine fachlichen Tests aus.
-2. Aus dem aktuellen Gesamtumfang einen knappen Commit-Kurzkommentar bestimmen.
+   Branch-Changelogabschnitt und den diffgebundenen Pruefnachweis kontrollieren.
+   Erfolgreiche Pruefprofile werden ausserhalb des Arbeitsbaums unter `.git`
+   zusammen mit HEAD, Node-Version und einem Fingerprint aller geaenderten und
+   unversionierten Dateien gespeichert. Ein unveraenderter Stand darf diesen
+   Nachweis auch in einer neuen OpenCode-Session verwenden; jede relevante
+   Dateiaenderung macht ihn automatisch ungueltig. Fehlende Profile werden mit
+
+     node scripts/verification-workflow.mjs verify --suite auto
+
+   ausgefuehrt. Die Pfadpolicy unterscheidet Dokumentation, Build,
+   Drei-Engine-Kernsmoke, fokussierten Browser-Lifecycle und die vollstaendige
+   Browsermatrix. `next-task` startet selbst keine fachlichen Tests und bricht
+   mit den konkret fehlenden Profilen ab, statt unerwartet eine breite Suite
+   auszufuehren.
+2. Im offenen Changelog steht `Kurzkommentar: <Text>` als einzeiliger
+   Commit-Kurzkommentar ohne `|`. Fuer bestehende offene Abschnitte ohne dieses
+   Feld bleibt `--subject <Kurzkommentar>` als kompatibler Fallback zulaessig.
    Unerwartete oder nicht zuordenbare Aenderungen blockieren den Schnellablauf.
 3. Den offenen `-x`-Stand auf die naechste lueckenlose Branch-Commit-ID
    finalisieren, alle aktuell geaenderten und zuvor als zusammengehoerig geprueften
@@ -88,7 +98,7 @@ die Vorbereitung des naechsten Arbeitsstands:
 
 Der Normalablauf wird mit folgendem Repository-Skript ausgefuehrt:
 
-  node scripts/version-workflow.mjs next-task --subject <Kurzkommentar> --all-changed --apply
+  node scripts/version-workflow.mjs next-task --all-changed --apply
 
 `--all-changed` ist ausschliesslich fuer `next-task` zulaessig und darf nicht mit
 `--path` kombiniert werden. Es uebernimmt nach dem Statusabgleich exakt alle
@@ -107,6 +117,13 @@ Nach Erfolg gibt das Skript Commit-ID, vollstaendigen Git-SHA, neue
 `-x`-Arbeitsversion, Zielcommit, leeren Index und die drei offenen Workflowdateien
 aus. Eine zusaetzliche mehrfache Nachpruefung derselben Werte ist nicht
 erforderlich.
+
+Der Browser-Smokerunner besitzt die Profile `core`, `lifecycle` und `full`.
+`core` prueft die Kernablaeufe in Chromium, WebKit und Firefox. `lifecycle`
+prueft ausschliesslich den Aufwach-/Reconnect-Ablauf in allen acht Zielprofilen.
+`full` bleibt die vollstaendige Matrix. Der Containerwrapper verwendet pro Lauf
+eine eindeutige Container-ID und entfernt den Container auch bei TERM, INT oder
+HUP kontrolliert.
 
 `nächste Aufgabe` ist die ausdrueckliche Freigabe fuer Finalisierung und genau
 diesen Branch-Commit. Der Auftrag autorisiert keinen Push, Merge,
