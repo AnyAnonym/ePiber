@@ -15,3 +15,16 @@ Commit: 4.12.4-paj-1-2 | Engineering- und Testplattform festgelegt
   - [Architektur] Aktuelle Vier-Bereiche-Struktur aus Entwicklerrechner, Engineering-/Testserver, Produktionsserver und unabhaengigem Off-site-Backup als erste Ausbaustufe festgelegt.
   - [Engineering] Gitea, OCI-Registry, CI/CD-Steuerung, Runner-Isolation sowie synthetische Integrations-, QA- und Testuser-Umgebungen konkretisiert.
   - [Betrieb] Moegliche spaetere Auftrennung von Management, Runner, Testplattform, Produktions-App, Produktionsdatenbank und Backup/DR samt Ausloesekriterien dokumentiert.
+
+[4.12.4-paj-1-3] - 2026-09-24
+Commit: 4.12.4-paj-1-3 | Hallenzeiten-Wunschoptimierung korrigiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.4-paj-1-2-x` gesetzt.
+  - [Hallenzeiten] Die Neuverteilung optimiert weiche Vermeidungswuensche nun global nach der Einsatzgleichheit und behaelt bei gleichwertigen Loesungen moeglichst viele Zuordnungen des urspruenglichen Vorschlags bei.
+
+  Fixed
+  - [Hallenzeiten] Vermeidbare Konflikte mit `Moeglichst vermeiden` werden nicht mehr allein aufgrund der schrittweisen Terminvergabe als unerfuellt ausgewiesen.
+
+  Tests
+  - [Backend] Regressionstest fuer einen global aufloesbaren Vermeidungswunsch bei unveraendert gleichmaessiger Einsatzverteilung ergaenzt.
