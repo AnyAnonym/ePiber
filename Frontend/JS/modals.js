@@ -1569,7 +1569,7 @@ window.openFavoriteMatchAction = async (overlay) => {
   const resultAction = overlay === "match-result";
   const requestGeneration = ++favoriteMatchPickerGeneration;
   const requestIdentity = String(getUser()?.id || "");
-  document.getElementById("favoriteMatchPickerTitle").textContent = resultAction ? "Spieleingabe" : "Termin festlegen / ändern";
+  document.getElementById("favoriteMatchPickerTitle").textContent = resultAction ? "Ergebnis eingeben" : "Termin festlegen / ändern";
   pickerResultStar.hidden = !resultAction;
   pickerAppointmentStar.hidden = resultAction;
   const status = document.getElementById("favoriteMatchPickerStatus");
@@ -1594,7 +1594,7 @@ window.openFavoriteMatchAction = async (overlay) => {
       .map((match) => ({ competition, match })));
     if (!choices.length) {
       status.textContent = resultAction
-        ? "Es gibt derzeit kein eigenes offenes Match für eine Spieleingabe."
+        ? "Es gibt derzeit kein eigenes offenes Match, für das ein Ergebnis eingegeben werden kann."
         : "Es gibt derzeit kein eigenes offenes Match für eine Terminänderung.";
       return;
     }

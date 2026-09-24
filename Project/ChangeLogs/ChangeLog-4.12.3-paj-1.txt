@@ -58,3 +58,11 @@ Commit: 4.12.3-paj-1-7 | Terminauswahl zweizeilig formatiert
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-6-x` gesetzt.
   - [Terminauswahl] Offene Matches wie in der Spieleingabe als Kacheln mit Bewerb und optionaler Runde in der ersten sowie der Paarung mit `vs.` in der zweiten Zeile dargestellt.
   - [Tests] Zweizeilige Terminkacheln samt responsiver Anordnung in die Browser-Smoke-Matrix aufgenommen.
+
+[4.12.3-paj-1-8] - 2026-09-24
+Commit: 4.12.3-paj-1-8 | Spieleingabe in Ergebnis eingeben umbenannt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-7-x` gesetzt.
+  - [Bezeichnung] Den sichtbaren GUI-Begriff `Spieleingabe` in Favoriten, Matchauswahl und Leerzustand durch `Ergebnis eingeben` ersetzt.
+  - [Tests] Neue Beschriftung in Navigation, Favoritenseite, Dialog und Browser-Smoke-Matrix abgesichert.

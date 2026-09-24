@@ -43,7 +43,7 @@ let hallTimeNames = new Map();
 let unreadMessageCount = 0;
 
 const OVERLAY_LABELS = Object.freeze({
-  "match-result": "Spieleingabe",
+  "match-result": "Ergebnis eingeben",
   "match-appointment": "Termin festlegen / ändern",
   profile: "Profil",
 });

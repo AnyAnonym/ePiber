@@ -973,7 +973,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     await favorites.locator(".mobile-nav-favorites-edit").click();
     assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
     const rows = favorites.locator(".mobile-nav-favorite");
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Ergebnis eingeben"]);
     assert.equal(await favorites.locator(".mobile-nav-drag-handle:visible").count(), 2);
     const firstBox = await favorites.locator(".mobile-nav-drag-handle").nth(0).boundingBox();
     const secondBox = await favorites.locator(".mobile-nav-drag-handle").nth(1).boundingBox();
@@ -981,11 +981,11 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     await page.mouse.down();
     await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + 2, { steps: 4 });
     await page.mouse.up();
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Matches"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Ergebnis eingeben", "Matches"]);
     assert.equal(await favorites.locator(".mobile-nav-favorites-edit").getAttribute("aria-pressed"), "true");
     await favorites.locator(".mobile-nav-drag-handle").nth(1).focus();
     await page.keyboard.press("ArrowUp");
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Ergebnis eingeben"]);
 
     assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
     await rows.nth(1).locator(".mobile-nav-favorite-link").click();
@@ -997,7 +997,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
   }
 });
 
-test("Spieleingabe und Terminauswahl formatieren Matchkarten und bestaetigen lange Matchdauer", {
+test("Ergebniseingabe und Terminauswahl formatieren Matchkarten und bestaetigen lange Matchdauer", {
   skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
@@ -1021,7 +1021,7 @@ test("Spieleingabe und Terminauswahl formatieren Matchkarten und bestaetigen lan
     await appointmentPicker.getByRole("button", { name: "Matchauswahl schließen" }).click();
 
     await page.evaluate(() => window.openFavoriteMatchAction("match-result"));
-    const picker = page.getByRole("dialog", { name: "Spieleingabe" });
+    const picker = page.getByRole("dialog", { name: "Ergebnis eingeben" });
     const choice = picker.locator(".favorite-match-picker-item").first();
     await choice.waitFor({ state: "visible" });
     assert.equal(await choice.locator(".favorite-match-picker-heading").textContent(), "Herren - 1. Gruppe");
@@ -1116,7 +1116,7 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await page.goto(`http://127.0.0.1:${server.address().port}/favorites.html?role=player&twoFavorites=1`, { waitUntil: "domcontentloaded" });
     const rows = page.locator(".favorites-page-item");
     await rows.first().waitFor({ state: "visible" });
-    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Mobile Rangliste", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Mobile Rangliste", "Ergebnis eingeben"]);
     const shortListLayout = await page.evaluate(() => {
       const main = document.querySelector(".favorites-page").getBoundingClientRect();
       const heading = document.querySelector(".favorites-page-heading").getBoundingClientRect();
@@ -1139,11 +1139,11 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await page.locator("#favoritesPageEdit").click();
     await rows.nth(1).locator(".favorites-page-drag-handle").focus();
     await page.keyboard.press("ArrowUp");
-    await page.waitForFunction(() => document.querySelector(".favorites-page-link span")?.textContent === "Spieleingabe");
-    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Spieleingabe", "Mobile Rangliste"]);
+    await page.waitForFunction(() => document.querySelector(".favorites-page-link span")?.textContent === "Ergebnis eingeben");
+    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Ergebnis eingeben", "Mobile Rangliste"]);
     await page.locator("#hamburgerBtn").click();
     await page.locator(".mobile-nav-favorites-toggle").click();
-    assert.deepEqual(await page.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Mobile Rangliste"]);
+    assert.deepEqual(await page.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Ergebnis eingeben", "Mobile Rangliste"]);
 
     const longListLayout = await page.evaluate(() => {
       const list = document.querySelector("#favoritesPageList");
