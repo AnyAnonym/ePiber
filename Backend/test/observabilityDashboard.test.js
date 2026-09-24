@@ -297,6 +297,7 @@ test("Meldungsdashboard kombiniert dynamisch ausgewaehlte geschuetzte Projektion
     assert.equal(dashboard.panels.find(({ title: value }) => value === title).type, "stat");
   }
   const details = dashboard.panels.find(({ title }) => title === "Meldungsliste");
+  assert.equal(details.fieldConfig.defaults.custom.filterable, true);
   for (const field of ["area", "contextName", "subject", "body", "detail", "result", "actorName", "personName", "participants", "statusChange", "acknowledgedAt", "deliveries"]) {
     assert.equal(details.targets[0].columns.some(({ selector }) => selector === field), true, field);
   }

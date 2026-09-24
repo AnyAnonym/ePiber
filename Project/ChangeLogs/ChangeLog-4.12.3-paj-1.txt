@@ -85,3 +85,11 @@ Commit: 4.12.3-paj-1-10 | Profilöffnungs-Timings präzisiert
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-9-x` gesetzt.
   - [Profil/Observability] Die kontrollierte Browserdiagnose `profile_open_completed` trennt nun Auth-Wartezeit, Klick-bis-Overlay, Overlay-bis-WebSocket und WebSocket-bis-Profilantwort, ohne Profil- oder Personendaten zu uebertragen.
   - [Profil] Profilaufrufe aus Navigation und Favoriten uebernehmen den unmittelbaren Interaktionszeitpunkt; Darstellung und Bedienung des Profilmodals bleiben unveraendert.
+
+[4.12.3-paj-1-11] - 2026-09-24
+Commit: 4.12.3-paj-1-11 | Spaltenfilter für Meldungsliste aktiviert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-10-x` gesetzt.
+  - [Grafana] In der Meldungsliste die eingebauten Spaltenfilter mit Wertauswahl, Checkboxen und Such- beziehungsweise Vergleichsausdruecken aktiviert.
+  - [Tests] Den aktivierten Spaltenfilter im statischen Meldungsdashboard-Vertrag abgesichert.
