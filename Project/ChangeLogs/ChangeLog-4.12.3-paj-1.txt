@@ -50,3 +50,11 @@ Commit: 4.12.3-paj-1-6 | Terminpflicht bei Spieleingabe ergänzt
   - [Spieleingabe] Die direkte Matchauswahl um eine eigene Terminzeile erweitert und Begegnungen in die dritte Zeile verschoben.
   - [Ergebnisregeln] Regulaere Erstabschluesse ohne fixierten Spieltermin in Oberflaeche und Backend gesperrt, waehrend Retirement und Walkover zulaessig bleiben.
   - [Tests] Dreizeilige Matchauswahl, neutrale Abschlussart und serverseitige Terminpflicht abgesichert.
+
+[4.12.3-paj-1-7] - 2026-09-24
+Commit: 4.12.3-paj-1-7 | Terminauswahl zweizeilig formatiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-6-x` gesetzt.
+  - [Terminauswahl] Offene Matches wie in der Spieleingabe als Kacheln mit Bewerb und optionaler Runde in der ersten sowie der Paarung mit `vs.` in der zweiten Zeile dargestellt.
+  - [Tests] Zweizeilige Terminkacheln samt responsiver Anordnung in die Browser-Smoke-Matrix aufgenommen.

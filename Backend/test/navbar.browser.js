@@ -997,7 +997,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
   }
 });
 
-test("Spieleingabe zeigt dreizeilige Auswahl und bestaetigt lange Matchdauer", {
+test("Spieleingabe und Terminauswahl formatieren Matchkarten und bestaetigen lange Matchdauer", {
   skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
@@ -1006,6 +1006,20 @@ test("Spieleingabe zeigt dreizeilige Auswahl und bestaetigt lange Matchdauer", {
   try {
     const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.openFavoriteMatchAction("match-appointment"));
+    const appointmentPicker = page.getByRole("dialog", { name: "Termin festlegen / ändern" });
+    const appointmentChoice = appointmentPicker.locator(".favorite-match-picker-item").first();
+    await appointmentChoice.waitFor({ state: "visible" });
+    assert.equal(await appointmentChoice.locator(".favorite-match-picker-heading").textContent(), "Damen Doppel Lang - Finale");
+    assert.equal(await appointmentChoice.locator(".favorite-match-picker-teams").textContent(), "Own Player vs. Test Gegner");
+    assert.equal(await appointmentChoice.locator(".favorite-match-picker-appointment").count(), 0);
+    assert.equal(await appointmentChoice.evaluate((button) => {
+      const heading = button.querySelector(".favorite-match-picker-heading").getBoundingClientRect();
+      const teams = button.querySelector(".favorite-match-picker-teams").getBoundingClientRect();
+      return teams.top >= heading.bottom;
+    }), true);
+    await appointmentPicker.getByRole("button", { name: "Matchauswahl schließen" }).click();
+
     await page.evaluate(() => window.openFavoriteMatchAction("match-result"));
     const picker = page.getByRole("dialog", { name: "Spieleingabe" });
     const choice = picker.locator(".favorite-match-picker-item").first();

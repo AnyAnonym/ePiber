@@ -1537,11 +1537,6 @@ function openMatchDateModal(match, profile, competition) {
   matchDateModal.querySelector(".match-date-calendar-day.selected:not(:disabled), .match-date-calendar-day:not(:disabled)")?.focus();
 }
 
-function favoriteMatchDescription(competition, match) {
-  const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" gegen ") || "Match";
-  return `${competition.competitionName || "Bewerb"} · ${formatProfileRound(match.round)} · ${teams}`;
-}
-
 function favoriteResultMatchDescription(competition, match) {
   const competitionName = competition.competitionName || "Bewerb";
   const round = String(match.round || "").trim() ? formatProfileRound(match.round) : "";
@@ -1549,6 +1544,16 @@ function favoriteResultMatchDescription(competition, match) {
   return {
     heading: round ? `${competitionName} - ${round}` : competitionName,
     appointment: match.matchDate ? formatCompactDate(match.matchDate) : "noch kein Spieltermin fixiert",
+    teams,
+  };
+}
+
+function favoriteAppointmentMatchDescription(competition, match) {
+  const competitionName = competition.competitionName || "Bewerb";
+  const round = String(match.round || "").trim() ? formatProfileRound(match.round) : "";
+  const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" vs. ") || "Match";
+  return {
+    heading: round ? `${competitionName} - ${round}` : competitionName,
     teams,
   };
 }
@@ -1612,7 +1617,15 @@ window.openFavoriteMatchAction = async (overlay) => {
         button.setAttribute("aria-label", `${description.heading}: ${description.appointment}: ${description.teams}`);
         button.append(heading, appointment, teams);
       } else {
-        button.textContent = favoriteMatchDescription(competition, match);
+        const description = favoriteAppointmentMatchDescription(competition, match);
+        const heading = document.createElement("span");
+        heading.className = "favorite-match-picker-heading";
+        heading.textContent = description.heading;
+        const teams = document.createElement("span");
+        teams.className = "favorite-match-picker-teams";
+        teams.textContent = description.teams;
+        button.setAttribute("aria-label", `${description.heading}: ${description.teams}`);
+        button.append(heading, teams);
       }
       button.addEventListener("click", () => {
         closeModal(favoriteMatchPickerModal);
