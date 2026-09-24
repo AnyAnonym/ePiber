@@ -1,4 +1,4 @@
-import { createEndpoint, getOperationId, releaseOperationId } from "./dataClient.js";
+import { createEndpoint, getOperationId, onConnectionState, releaseOperationId } from "./dataClient.js";
 import { formatWalkoverResult } from "./matchCompletionText.js";
 import {
   ready,
@@ -65,8 +65,26 @@ let adminRankingReturnFocus = null;
 let matchResultReturnFocus = null;
 let favoriteMatchPickerReturnFocus = null;
 let favoriteMatchPickerGeneration = 0;
+let matchActionPickerReturnFocus = null;
+let matchActionPickerGeneration = 0;
+let matchActionPickerContext = null;
 let matchResultScore = [];
 let matchResultStatusTimer = null;
+let matchResultProgressTimer = null;
+let profileConnectionState = "idle";
+let profileConnectionReadyAt = null;
+
+onConnectionState(({ connected, state }) => {
+  profileConnectionState = state;
+  profileConnectionReadyAt = connected ? performance.now() : null;
+});
+
+function profileTimingMs(startedAt, completedAt) {
+  if (!Number.isFinite(startedAt) || !Number.isFinite(completedAt)) return undefined;
+  return Math.min(600000, Math.max(0, Math.round(completedAt - startedAt)));
+}
+let matchResultRetryTimer = null;
+let confirmedLongMatchDuration = "";
 
 function errorMessage(value, fallback) {
   if (value instanceof Error && value.message) return value.message;
@@ -179,9 +197,13 @@ function closeModal(modal) {
   if (modal?.id === "matchAppointmentClearModal") matchAppointmentClearContext = null;
   if (modal?.id === "adminRankingActionModal") adminRankingActionContext = null;
   if (modal?.id === "matchResultModal") {
+    hideMatchDurationConfirmation();
+    confirmedLongMatchDuration = "";
     matchResultContext = null;
     matchResultScore = [];
     clearTimeout(matchResultStatusTimer);
+    clearTimeout(matchResultProgressTimer);
+    clearTimeout(matchResultRetryTimer);
   }
   if (modal?.id === "profileModal") {
     closeModal(matchDateModal);
@@ -220,6 +242,13 @@ function closeModal(modal) {
     modal.querySelector("#favoriteMatchPickerList")?.replaceChildren();
     const returnFocus = favoriteMatchPickerReturnFocus;
     favoriteMatchPickerReturnFocus = null;
+    if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
+  }
+  if (modal?.id === "matchActionPickerModal") {
+    matchActionPickerGeneration += 1;
+    matchActionPickerContext = null;
+    const returnFocus = matchActionPickerReturnFocus;
+    matchActionPickerReturnFocus = null;
     if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
   }
   if (modal?.id === "passwordSetupModal") document.getElementById("passwordSetupForm")?.reset();
@@ -608,11 +637,13 @@ const matchResultModal = createModal("matchResultModal", `
       <div class="match-result-field-row">
         <label for="matchResultKind">Abschlussart:</label>
         <select id="matchResultKind" name="kind">
+          <option value="">Abschlussart auswählen</option>
           <option value="regular">Regulär</option>
           <option value="walkover">WO</option>
           <option value="retirement">RET</option>
         </select>
       </div>
+      <p id="matchResultAppointmentRequired" class="match-result-appointment-required" hidden>Für ein reguläres Ergebnis muss zuerst ein Spieltermin fixiert werden.</p>
       <div id="matchResultValueFields">
         <div id="matchResultScoreEditor" class="match-result-score-editor" aria-label="Satzergebnis bearbeiten"></div>
         <div class="match-result-suggestions" aria-label="Ergebnis vom Platz übernehmen">
@@ -650,12 +681,61 @@ const matchResultModal = createModal("matchResultModal", `
     <p id="matchResultStatus" class="match-result-status" role="status" aria-live="polite" hidden></p>
     <button type="submit" id="matchResultSubmit" class="btn-login">Speichern</button>
   </form>
+  <div id="matchDurationConfirmation" class="match-duration-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="matchDurationConfirmationTitle" aria-describedby="matchDurationConfirmationText" hidden>
+    <div class="match-duration-confirmation-panel">
+      <h3 id="matchDurationConfirmationTitle">Lange Matchdauer bestätigen</h3>
+      <p id="matchDurationConfirmationText">Die eingetragene Matchdauer beträgt mehr als vier Stunden. Stimmt das wirklich?</p>
+      <div class="match-duration-confirmation-actions">
+        <button type="button" id="matchDurationConfirm" class="btn-login">Ja Passt</button>
+        <button type="button" id="matchDurationCorrect" class="btn-login">Zurück für Korrektur</button>
+      </div>
+    </div>
+  </div>
 `, { explicitDismiss: true });
 matchResultModal.classList.add("match-result-modal");
 matchResultModal.setAttribute("role", "dialog");
 matchResultModal.setAttribute("aria-modal", "true");
 matchResultModal.setAttribute("aria-labelledby", "matchResultTitle");
 matchResultModal.querySelector(".close")?.setAttribute("aria-label", "Ergebnisdialog abbrechen");
+
+function matchDurationKey(startValue, endValue) {
+  return `${String(startValue || "")}|${String(endValue || "")}`;
+}
+
+function hideMatchDurationConfirmation() {
+  const confirmation = document.getElementById("matchDurationConfirmation");
+  const form = document.getElementById("matchResultForm");
+  if (confirmation) confirmation.hidden = true;
+  if (form) form.inert = false;
+  const close = matchResultModal?.querySelector(".close");
+  if (close) close.disabled = false;
+}
+
+function showMatchDurationConfirmation() {
+  const confirmation = document.getElementById("matchDurationConfirmation");
+  const form = document.getElementById("matchResultForm");
+  if (!confirmation || !form) return;
+  form.inert = true;
+  const close = matchResultModal.querySelector(".close");
+  if (close) close.disabled = true;
+  confirmation.hidden = false;
+  document.getElementById("matchDurationConfirm")?.focus();
+}
+
+document.getElementById("matchDurationConfirm").addEventListener("click", () => {
+  const form = document.getElementById("matchResultForm");
+  confirmedLongMatchDuration = matchDurationKey(form.elements.matchStart.value, form.elements.matchEnd.value);
+  hideMatchDurationConfirmation();
+  form.requestSubmit();
+});
+
+document.getElementById("matchDurationCorrect").addEventListener("click", () => {
+  confirmedLongMatchDuration = "";
+  hideMatchDurationConfirmation();
+  const endInput = document.getElementById("matchResultEnd");
+  endInput.focus();
+  endInput.select?.();
+});
 
 const favoriteMatchPickerModal = createModal("favoriteMatchPickerModal", `
   <h2 id="favoriteMatchPickerTitle">Match auswählen</h2>
@@ -666,6 +746,19 @@ favoriteMatchPickerModal.setAttribute("role", "dialog");
 favoriteMatchPickerModal.setAttribute("aria-modal", "true");
 favoriteMatchPickerModal.setAttribute("aria-labelledby", "favoriteMatchPickerTitle");
 favoriteMatchPickerModal.querySelector(".close")?.setAttribute("aria-label", "Matchauswahl schließen");
+
+const matchActionPickerModal = createModal("matchActionPickerModal", `
+  <h2 id="matchActionPickerTitle">Matchaktion auswählen</h2>
+  <p id="matchActionPickerStatus" class="match-result-status" role="status" aria-live="polite"></p>
+  <div id="matchActionPickerActions" class="match-action-picker-actions" hidden>
+    <button type="button" id="matchActionResult" class="btn-login">Ergebnis eingeben</button>
+    <button type="button" id="matchActionAppointment" class="btn-login">Termin festlegen/ändern</button>
+  </div>
+`);
+matchActionPickerModal.setAttribute("role", "dialog");
+matchActionPickerModal.setAttribute("aria-modal", "true");
+matchActionPickerModal.setAttribute("aria-labelledby", "matchActionPickerTitle");
+matchActionPickerModal.querySelector(".close")?.setAttribute("aria-label", "Matchaktion abbrechen");
 
 function addModalFavorite(modal, titleId, target) {
   const title = modal.querySelector(`#${titleId}`);
@@ -770,20 +863,45 @@ function compactResultDate(value) {
 function endpointResultError(data, fallback) {
   const error = new Error(errorMessage(data, fallback));
   error.code = data?.error?.code || "UNEXPECTED_ERROR";
+  error.details = data?.error?.details;
   error.supportId = data?.supportId || "";
   return error;
 }
 
-function showMatchResultStatus(message, type = "error") {
+function showMatchResultStatus(message, type = "error", { autoHideMs = 3000 } = {}) {
   const status = document.getElementById("matchResultStatus");
   clearTimeout(matchResultStatusTimer);
   status.textContent = String(message || "");
   status.className = `match-result-status ${type}`;
   status.hidden = !message;
-  if (message) matchResultStatusTimer = setTimeout(() => {
+  if (message && autoHideMs > 0) matchResultStatusTimer = setTimeout(() => {
     status.hidden = true;
     status.textContent = "";
-  }, 3000);
+  }, autoHideMs);
+}
+
+function startMatchResultRetryCooldown(submit, originalLabel, retryAfterMs) {
+  clearTimeout(matchResultRetryTimer);
+  const retryAt = Date.now() + Math.max(1000, Number(retryAfterMs) || 60000);
+  const update = () => {
+    if (!matchResultContext || matchResultModal.classList.contains("hidden")) return;
+    const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+    if (seconds === 0) {
+      submit.disabled = false;
+      submit.textContent = originalLabel;
+      showMatchResultStatus("Sie können das Ergebnis jetzt erneut speichern.", "info");
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = `Erneut in ${seconds} s`;
+    showMatchResultStatus(
+      `Google Sheets ist vorübergehend ausgelastet. Dieser Versuch wurde nicht gespeichert. Neuer Versuch in ${seconds} ${seconds === 1 ? "Sekunde" : "Sekunden"}.`,
+      "error",
+      { autoHideMs: 0 },
+    );
+    matchResultRetryTimer = setTimeout(update, Math.min(1000, Math.max(1, retryAt - Date.now())));
+  };
+  update();
 }
 
 function matchResultRules() {
@@ -935,21 +1053,22 @@ function serializeMatchResultScore() {
 
 function updateMatchResultKind() {
   const kind = document.getElementById("matchResultKind").value;
+  const selected = ["regular", "walkover", "retirement"].includes(kind);
   const regular = kind === "regular";
   const valueFields = document.getElementById("matchResultValueFields");
   const losingFields = document.getElementById("matchResultLosingFields");
   const losingInput = document.getElementById("matchResultLosingSide");
-  valueFields.hidden = kind === "walkover";
-  losingFields.hidden = regular;
-  losingInput.disabled = regular;
-  losingInput.required = !regular;
+  valueFields.hidden = !selected || kind === "walkover";
+  losingFields.hidden = !selected || regular;
+  losingInput.disabled = !selected || regular;
+  losingInput.required = selected && !regular;
   const openMatch = matchResultContext?.action === "result" && matchResultContext.match?.status === "open";
   if (openMatch) {
     const startFields = document.getElementById("matchResultStartFields");
     const endFields = document.getElementById("matchResultEndFields");
     const startInput = document.getElementById("matchResultStart");
     const endInput = document.getElementById("matchResultEnd");
-    const needsTimes = kind !== "walkover";
+    const needsTimes = kind === "regular" || kind === "retirement";
     startFields.hidden = !needsTimes;
     endFields.hidden = !needsTimes;
     startInput.disabled = !needsTimes;
@@ -1001,6 +1120,8 @@ function openMatchResultModal(action, profile, competition, match) {
   endInput.readOnly = false;
   delete startInput.dataset.defaultValue;
   delete endInput.dataset.defaultValue;
+  hideMatchDurationConfirmation();
+  confirmedLongMatchDuration = "";
   showMatchResultStatus("");
   document.getElementById("matchResultCompetition").textContent = competition.competitionName;
   document.getElementById("matchResultEncounter").textContent = match.teams.map((team) => team.names.join(" / ")).join(" gegen ");
@@ -1037,7 +1158,13 @@ function openMatchResultModal(action, profile, competition, match) {
   reasonInput.required = adminAction;
   if (action === "result" || rankingRepair) {
     document.getElementById("matchResultTitle").textContent = rankingRepair ? "Mit Rangplan korrigieren" : match.status === "completed" ? "Ergebnis korrigieren" : "Ergebnis erfassen";
-    document.getElementById("matchResultKind").value = match.completionType || "regular";
+    const kindInput = document.getElementById("matchResultKind");
+    const regularOption = kindInput.querySelector('option[value="regular"]');
+    const undatedOpenMatch = action === "result" && match.status === "open" && !compactDateValue(match.matchDate);
+    regularOption.disabled = undatedOpenMatch;
+    regularOption.textContent = undatedOpenMatch ? "Regulär (Spieltermin erforderlich)" : "Regulär";
+    document.getElementById("matchResultAppointmentRequired").hidden = !undatedOpenMatch;
+    kindInput.value = undatedOpenMatch ? "" : match.completionType || "regular";
     setMatchResultScore(match.result || "");
     document.querySelector(".match-result-suggestion").hidden = action !== "result";
     setMatchResultLosingSides(match);
@@ -1045,7 +1172,7 @@ function openMatchResultModal(action, profile, competition, match) {
     if (match.status === "open") {
       const now = new Date();
       const scheduled = compactDateValue(match.matchDate);
-      const defaultStart = scheduled && scheduled <= now ? scheduled : new Date(now.getTime() - 90 * 60 * 1000);
+      const defaultStart = scheduled ? new Date(scheduled.getTime() + 15 * 60 * 1000) : new Date(now.getTime() - 90 * 60 * 1000);
       startInput.max = localDateTimeValue(now);
       startInput.value = localDateTimeValue(defaultStart);
       endInput.min = "";
@@ -1445,9 +1572,26 @@ function openMatchDateModal(match, profile, competition) {
   matchDateModal.querySelector(".match-date-calendar-day.selected:not(:disabled), .match-date-calendar-day:not(:disabled)")?.focus();
 }
 
-function favoriteMatchDescription(competition, match) {
-  const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" gegen ") || "Match";
-  return `${competition.competitionName || "Bewerb"} · ${formatProfileRound(match.round)} · ${teams}`;
+function favoriteResultMatchDescription(competition, match) {
+  const competitionName = competition.competitionName || "Bewerb";
+  const round = String(match.round || "").trim() ? formatProfileRound(match.round) : "";
+  const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" vs. ") || "Match";
+  return {
+    heading: round ? `${competitionName} - ${round}` : competitionName,
+    appointment: match.matchDate ? formatCompactDate(match.matchDate) : "noch kein Spieltermin fixiert",
+    teams,
+  };
+}
+
+function favoriteAppointmentMatchDescription(competition, match) {
+  const competitionName = competition.competitionName || "Bewerb";
+  const round = String(match.round || "").trim() ? formatProfileRound(match.round) : "";
+  const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" vs. ") || "Match";
+  return {
+    heading: round ? `${competitionName} - ${round}` : competitionName,
+    appointment: match.matchDate ? formatCompactDate(match.matchDate) : "noch kein Spieltermin fixiert",
+    teams,
+  };
 }
 
 window.openFavoriteMatchAction = async (overlay) => {
@@ -1461,7 +1605,7 @@ window.openFavoriteMatchAction = async (overlay) => {
   const resultAction = overlay === "match-result";
   const requestGeneration = ++favoriteMatchPickerGeneration;
   const requestIdentity = String(getUser()?.id || "");
-  document.getElementById("favoriteMatchPickerTitle").textContent = resultAction ? "Spieleingabe" : "Termin festlegen / ändern";
+  document.getElementById("favoriteMatchPickerTitle").textContent = resultAction ? "Ergebnis eingeben" : "Termin festlegen / ändern";
   pickerResultStar.hidden = !resultAction;
   pickerAppointmentStar.hidden = resultAction;
   const status = document.getElementById("favoriteMatchPickerStatus");
@@ -1486,7 +1630,7 @@ window.openFavoriteMatchAction = async (overlay) => {
       .map((match) => ({ competition, match })));
     if (!choices.length) {
       status.textContent = resultAction
-        ? "Es gibt derzeit kein eigenes offenes Match für eine Spieleingabe."
+        ? "Es gibt derzeit kein eigenes offenes Match, für das ein Ergebnis eingegeben werden kann."
         : "Es gibt derzeit kein eigenes offenes Match für eine Terminänderung.";
       return;
     }
@@ -1495,7 +1639,33 @@ window.openFavoriteMatchAction = async (overlay) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "favorite-match-picker-item";
-      button.textContent = favoriteMatchDescription(competition, match);
+      if (resultAction) {
+        const description = favoriteResultMatchDescription(competition, match);
+        const heading = document.createElement("span");
+        heading.className = "favorite-match-picker-heading";
+        heading.textContent = description.heading;
+        const teams = document.createElement("span");
+        teams.className = "favorite-match-picker-teams";
+        teams.textContent = description.teams;
+        const appointment = document.createElement("span");
+        appointment.className = "favorite-match-picker-appointment";
+        appointment.textContent = description.appointment;
+        button.setAttribute("aria-label", `${description.heading}: ${description.appointment}: ${description.teams}`);
+        button.append(heading, appointment, teams);
+      } else {
+        const description = favoriteAppointmentMatchDescription(competition, match);
+        const heading = document.createElement("span");
+        heading.className = "favorite-match-picker-heading";
+        heading.textContent = description.heading;
+        const appointment = document.createElement("span");
+        appointment.className = "favorite-match-picker-appointment";
+        appointment.textContent = description.appointment;
+        const teams = document.createElement("span");
+        teams.className = "favorite-match-picker-teams";
+        teams.textContent = description.teams;
+        button.setAttribute("aria-label", `${description.heading}: ${description.appointment}: ${description.teams}`);
+        button.append(heading, appointment, teams);
+      }
       button.addEventListener("click", () => {
         closeModal(favoriteMatchPickerModal);
         if (resultAction) openMatchResultModal("result", profile, competition, match);
@@ -1515,6 +1685,73 @@ window.openFavoriteMatchAction = async (overlay) => {
     if (requestGeneration === favoriteMatchPickerGeneration) hideLoadingOverlay(loadingScope);
   }
 };
+
+function findOwnMatchAction(profile, matchId) {
+  for (const competition of mergedProfileCompetitions(profile)) {
+    const match = competition.matches.find((entry) => String(entry.matchId || "") === matchId);
+    if (match) return { competition, match };
+  }
+  return null;
+}
+
+window.openMatchActionPicker = async (rawMatchId, { returnFocus } = {}) => {
+  const matchId = String(rawMatchId || "").trim();
+  if (!matchId) return;
+  await ready;
+  if (!getUser()) {
+    window.showToast("Bitte zuerst anmelden.", "error");
+    window.openLoginModal();
+    return;
+  }
+  const requestGeneration = ++matchActionPickerGeneration;
+  const requestIdentity = String(getUser()?.id || "");
+  matchActionPickerReturnFocus = returnFocus?.isConnected ? returnFocus : document.activeElement;
+  matchActionPickerContext = null;
+  const status = document.getElementById("matchActionPickerStatus");
+  const actions = document.getElementById("matchActionPickerActions");
+  status.hidden = false;
+  status.textContent = "Matchaktionen werden geladen...";
+  actions.hidden = true;
+  openModal(matchActionPickerModal);
+  matchActionPickerModal.querySelector(".close")?.focus();
+  try {
+    const response = await readMyProfile();
+    if (requestGeneration !== matchActionPickerGeneration
+      || matchActionPickerModal.classList.contains("hidden")
+      || String(getUser()?.id || "") !== requestIdentity) return;
+    if (!response.data?.success || !response.data.profile) throw new Error("Matchaktionen konnten nicht geladen werden.");
+    const profile = response.data.profile;
+    const choice = findOwnMatchAction(profile, matchId);
+    if (!choice?.match.canSetResult || !choice.match.canSetMatchAppointment || choice.match.status !== "open") {
+      closeModal(matchActionPickerModal);
+      window.showToast("Für dieses Match stehen nicht beide Aktionen zur Verfügung.", "error");
+      return;
+    }
+    matchActionPickerContext = { profile, ...choice };
+    status.hidden = true;
+    status.textContent = "";
+    actions.hidden = false;
+    document.getElementById("matchActionResult")?.focus();
+  } catch (error) {
+    if (requestGeneration !== matchActionPickerGeneration
+      || matchActionPickerModal.classList.contains("hidden")
+      || String(getUser()?.id || "") !== requestIdentity) return;
+    diagnostic.error("match_action_picker_load_failed", error);
+    status.hidden = false;
+    status.textContent = errorMessage(error, "Matchaktionen konnten nicht geladen werden.");
+  }
+};
+
+function selectMatchAction(action) {
+  const context = matchActionPickerContext;
+  if (!context) return;
+  closeModal(matchActionPickerModal);
+  if (action === "result") openMatchResultModal("result", context.profile, context.competition, context.match);
+  else openMatchDateModal(context.match, context.profile, context.competition);
+}
+
+document.getElementById("matchActionResult").addEventListener("click", () => selectMatchAction("result"));
+document.getElementById("matchActionAppointment").addEventListener("click", () => selectMatchAction("appointment"));
 
 function openMatchAppointmentClearModal(match, profile, competition) {
   const matchId = String(match?.matchId || "").trim();
@@ -2023,6 +2260,13 @@ window.openLoginModal = () => {
 };
 
 window.openProfileModal = async (options = {}) => {
+  const invokedAt = performance.now();
+  const requestedInteractionAt = Number(options.interactionStartedAt);
+  const interactionStartedAt = Number.isFinite(requestedInteractionAt)
+    && requestedInteractionAt <= invokedAt
+    && requestedInteractionAt >= invokedAt - 600000
+    ? requestedInteractionAt
+    : invokedAt;
   const requestGeneration = ++profileRequestGeneration;
   const requestedId = String(options.playerId || "").trim();
   let sessionUser = getUser();
@@ -2032,9 +2276,12 @@ window.openProfileModal = async (options = {}) => {
     sessionUser = getUser();
   }
   if (!sessionUser) return;
+  const authReadyAt = performance.now();
   const ownProfile = !requestedId || (sessionUser && requestedId === String(sessionUser.id));
-  const profileOpenStartedAt = performance.now();
   let profileOpenOutcome = "success";
+  let overlayVisibleAt = null;
+  let connectionReadyAt = profileConnectionState === "connected" ? authReadyAt : null;
+  let profileResponseAt = null;
 
   const nameElement = document.getElementById("profileName");
   const textElement = document.getElementById("profileText");
@@ -2072,12 +2319,17 @@ window.openProfileModal = async (options = {}) => {
   const loadingScope = profileModal.querySelector(".modal-content");
   showLoadingOverlay(undefined, loadingScope);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  overlayVisibleAt = performance.now();
   if (requestGeneration !== profileRequestGeneration || profileModal.classList.contains("hidden")) return;
 
   try {
+    const profileRequestStartedAt = performance.now();
+    if (profileConnectionState === "connected") connectionReadyAt ??= profileRequestStartedAt;
     const result = ownProfile
       ? await readMyProfile()
       : await readPublicProfile({ id: requestedId });
+    profileResponseAt = performance.now();
+    connectionReadyAt ??= profileConnectionReadyAt ?? profileResponseAt;
     if (requestGeneration !== profileRequestGeneration) {
       profileOpenOutcome = "cancelled";
       return;
@@ -2352,14 +2604,18 @@ window.openProfileModal = async (options = {}) => {
       hideLoadingOverlay(loadingScope);
       diagnostic.info("profile_open_completed", {
         category: ownProfile ? "private" : "public",
-        durationMs: Math.max(0, Math.round(performance.now() - profileOpenStartedAt)),
+        durationMs: profileTimingMs(interactionStartedAt, performance.now()),
+        authWaitMs: profileTimingMs(interactionStartedAt, authReadyAt),
+        clickToOverlayMs: profileTimingMs(interactionStartedAt, overlayVisibleAt),
+        overlayToConnectionMs: profileTimingMs(overlayVisibleAt, connectionReadyAt),
+        connectionToProfileMs: profileTimingMs(connectionReadyAt, profileResponseAt),
         outcome: profileOpenOutcome,
       });
     }
   }
 };
 
-window.openFavoriteOverlay = async (overlay) => {
+window.openFavoriteOverlay = async (overlay, options = {}) => {
   if (["match-result", "match-appointment"].includes(overlay)) {
     await window.openFavoriteMatchAction(overlay);
     return;
@@ -2371,7 +2627,10 @@ window.openFavoriteOverlay = async (overlay) => {
     window.openLoginModal();
     return;
   }
-  return window.openProfileModal({ initialTab: overlay === "profile-messages" ? "messages" : "system" });
+  return window.openProfileModal({
+    initialTab: overlay === "profile-messages" ? "messages" : "system",
+    interactionStartedAt: options.interactionStartedAt,
+  });
 };
 
 window.addEventListener("epiber-message-summary", (event) => {
@@ -2390,6 +2649,7 @@ subscribeAuth((user) => {
     closeModal(adminRankingActionModal);
     closeModal(matchResultModal);
     closeModal(favoriteMatchPickerModal);
+    closeModal(matchActionPickerModal);
   }
   modalAuthIdentity = identity;
   if (user) return;
@@ -2400,6 +2660,7 @@ subscribeAuth((user) => {
   closeModal(adminRankingActionModal);
   closeModal(matchResultModal);
   closeModal(favoriteMatchPickerModal);
+  closeModal(matchActionPickerModal);
   closeModal(withdrawModal);
   closeModal(profileModal);
 });
@@ -2768,6 +3029,11 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   let endpoint;
   if (context.action === "result" || context.action === "rankingRepair") {
     payload.kind = form.elements.kind.value;
+    if (!["regular", "walkover", "retirement"].includes(payload.kind)) {
+      showMatchResultStatus("Bitte wählen Sie eine Abschlussart aus.");
+      form.elements.kind.focus();
+      return;
+    }
     if (payload.kind !== "walkover") {
       try {
         payload.result = serializeMatchResultScore();
@@ -2788,11 +3054,22 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
       }
     }
     if (context.match.status === "open" && payload.kind !== "walkover") {
-      payload.matchStart = compactResultDate(form.elements.matchStart.value);
-      payload.matchEnd = compactResultDate(form.elements.matchEnd.value);
+      const startValue = form.elements.matchStart.value;
+      const endValue = form.elements.matchEnd.value;
+      payload.matchStart = compactResultDate(startValue);
+      payload.matchEnd = compactResultDate(endValue);
       if (!payload.matchStart || !payload.matchEnd) {
         showMatchResultStatus("Bitte geben Sie einen gültigen Matchstart und ein gültiges Matchende an.");
         return;
+      }
+      const durationMs = new Date(endValue).getTime() - new Date(startValue).getTime();
+      if (durationMs > 4 * 60 * 60 * 1000) {
+        const durationKey = matchDurationKey(startValue, endValue);
+        if (confirmedLongMatchDuration !== durationKey) {
+          showMatchDurationConfirmation();
+          return;
+        }
+        payload.longDurationConfirmed = true;
       }
     }
     if (context.action === "rankingRepair") {
@@ -2839,8 +3116,16 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   payload.operationId = getOperationId(operationKey);
   const submit = document.getElementById("matchResultSubmit");
   const originalLabel = submit.textContent;
+  let retryAfterMs = 0;
+  clearTimeout(matchResultProgressTimer);
+  clearTimeout(matchResultRetryTimer);
   setModalBusy(form, true);
   submit.textContent = "Wird gespeichert...";
+  showMatchResultStatus("Ergebnis und Rangliste werden gespeichert. Bitte warten …", "info", { autoHideMs: 0 });
+  matchResultProgressTimer = setTimeout(() => {
+    if (!matchResultContext || matchResultModal.classList.contains("hidden")) return;
+    showMatchResultStatus("Die Rangliste wird weiterhin aktualisiert. Der Vorgang läuft – bitte warten …", "info", { autoHideMs: 0 });
+  }, 8000);
   try {
     const response = await endpoint(payload);
     if (!response.data?.success) throw endpointResultError(response.data, "Matchänderung konnte nicht gespeichert werden.");
@@ -2851,12 +3136,20 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   } catch (error) {
     releaseOperationId(operationKey, error);
     diagnostic.error("match_result_action_failed", error);
-    showMatchResultStatus(error?.code === "RANKING_REPAIR_REQUIRED"
-      ? "Ranglistenstand muss mit einem vollständigen Rangplan administrativ repariert werden."
-      : errorMessage(error, "Matchänderung konnte nicht gespeichert werden."));
+    if (error?.code === "SHEETS_RATE_LIMITED") {
+      retryAfterMs = Math.max(1000, Number(error.details?.retryAfterMs) || 60000);
+    } else {
+      showMatchResultStatus(error?.code === "RANKING_REPAIR_REQUIRED"
+        ? "Ranglistenstand muss mit einem vollständigen Rangplan administrativ repariert werden."
+        : errorMessage(error, "Matchänderung konnte nicht gespeichert werden."));
+    }
   } finally {
+    clearTimeout(matchResultProgressTimer);
     setModalBusy(form, false);
-    if (matchResultContext) submit.textContent = originalLabel;
+    if (matchResultContext) {
+      submit.textContent = originalLabel;
+      if (retryAfterMs > 0) startMatchResultRetryCooldown(submit, originalLabel, retryAfterMs);
+    }
   }
 });
 
@@ -2956,7 +3249,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (authAction.id === "profileButton" || authAction.id === "profileButtonMobile") {
-    window.openProfileModal();
+    window.openProfileModal({ interactionStartedAt: performance.now() });
     return;
   }
   if (logoutInProgress) return;
@@ -2983,6 +3276,18 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Tab" && !matchActionPickerModal.classList.contains("hidden")) {
+    const focusable = [...matchActionPickerModal.querySelectorAll("button:not([hidden]):not(:disabled)")]
+      .filter((element) => !element.closest("[hidden]"));
+    if (!focusable.length) return;
+    const currentIndex = focusable.indexOf(document.activeElement);
+    const nextIndex = event.shiftKey
+      ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+      : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+    event.preventDefault();
+    focusable[nextIndex].focus();
+    return;
+  }
   if (event.key === "Tab" && !favoriteMatchPickerModal.classList.contains("hidden")) {
     const focusable = [...favoriteMatchPickerModal.querySelectorAll("button:not([hidden]):not(:disabled)")]
       .filter((element) => !element.closest("[hidden]"));
@@ -2997,7 +3302,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Tab" && !matchResultModal.classList.contains("hidden")) {
     const focusable = [...matchResultModal.querySelectorAll("button:not([hidden]):not(:disabled), input:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled), textarea:not([hidden]):not(:disabled)")]
-      .filter((element) => !element.closest("[hidden]"));
+      .filter((element) => !element.closest("[hidden]") && !element.closest("[inert]"));
     if (!focusable.length) return;
     const currentIndex = focusable.indexOf(document.activeElement);
     const nextIndex = event.shiftKey

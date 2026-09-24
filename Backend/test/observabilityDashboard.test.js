@@ -87,7 +87,7 @@ test("Ranglistenaktivitaeten trennen Forderungen von nicht angelegten Versuchen"
 test("Hostressourcen zeigen aktuelle Werte mit passenden Einheiten", () => {
   const dashboard = JSON.parse(fs.readFileSync(resourcesDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-resources");
-  assert.equal(dashboard.version, 6);
+  assert.equal(dashboard.version, 7);
 
   const expectedUnits = new Map([
     ["CPU-Auslastung", "percent"],
@@ -131,12 +131,13 @@ test("Grafana blendet die experimentellen Panelansichtsregler aus", () => {
   assert.match(config, /^grafana\.viewPanelPane = false$/m);
 });
 
-test("Alle Grafana-Panels und Targets verwenden eine explizite Datenquelle", () => {
+test("Alle Grafana-Dashboards sind editierbar und verwenden explizite Datenquellen", () => {
   const dashboardDir = path.join(observabilityRoot, "grafana/dashboards");
   const dashboardFiles = fs.readdirSync(dashboardDir).filter((file) => file.endsWith(".json"));
   assert.equal(dashboardFiles.length, 10);
   for (const file of dashboardFiles) {
     const dashboard = JSON.parse(fs.readFileSync(path.join(dashboardDir, file), "utf8"));
+    assert.equal(dashboard.editable, true, `${file}: Dashboard ist nicht editierbar`);
     for (const panel of dashboard.panels) {
       assert.ok(panel.datasource?.type, `${file}: Panel ${panel.id} ohne Datasource-Typ`);
       assert.ok(panel.datasource?.uid, `${file}: Panel ${panel.id} ohne Datasource-UID`);
@@ -149,6 +150,8 @@ test("Alle Grafana-Panels und Targets verwenden eine explizite Datenquelle", () 
       }
     }
   }
+  const provisioning = fs.readFileSync(path.join(observabilityRoot, "grafana/provisioning/dashboards/epiber.yml"), "utf8");
+  assert.match(provisioning, /^\s+allowUiUpdates: true$/m);
 });
 
 test("Hallenreservierungs-Dashboard kombiniert begrenzte Metriken und datensparsame Fachlogs", () => {
@@ -180,7 +183,7 @@ test("Hallenreservierungs-Dashboard kombiniert begrenzte Metriken und datenspars
 test("Personennormalisierung zeigt aktive Mitglieder nach Playerklassifikation", () => {
   const dashboard = JSON.parse(fs.readFileSync(peopleNormalizationDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-people-normalization");
-  assert.equal(dashboard.version, 3);
+  assert.equal(dashboard.version, 4);
 
   const expectedPanels = new Map([
     ["Aktive Mitglieder", null],
@@ -297,6 +300,7 @@ test("Meldungsdashboard kombiniert dynamisch ausgewaehlte geschuetzte Projektion
     assert.equal(dashboard.panels.find(({ title: value }) => value === title).type, "stat");
   }
   const details = dashboard.panels.find(({ title }) => title === "Meldungsliste");
+  assert.equal(details.fieldConfig.defaults.custom.filterable, true);
   for (const field of ["area", "contextName", "subject", "body", "detail", "result", "actorName", "personName", "participants", "statusChange", "acknowledgedAt", "deliveries"]) {
     assert.equal(details.targets[0].columns.some(({ selector }) => selector === field), true, field);
   }

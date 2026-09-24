@@ -4,7 +4,7 @@ const { requestContracts, validateEndpointRequest, validateEndpointResponse } = 
 
 test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
   assert.deepEqual(Object.keys(requestContracts).sort(), [
-    "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminClearAllHallTimeStatuses", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminDistributeHallTimeGrid", "adminHallTimeGrids", "adminMemberReconciliation", "adminPeopleNormalization", "adminSaveHallTimeGrid", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
+    "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminApplyHallTimeDistribution", "adminClearAllHallTimeStatuses", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminDistributeHallTimeGrid", "adminHallTimeGrids", "adminMemberReconciliation", "adminPeopleNormalization", "adminPreviewHallTimeDistribution", "adminSaveHallTimeConstraints", "adminSaveHallTimeGrid", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
     "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "hallTimeGrid", "hallTimeGrids", "hallTimeHistory", "matchResultSuggestion", "matches", "matches1",
     "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorList", "monitorNavigate", "monitorProvision",
     "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myHallTimeGroups", "myMessage", "myMessageSummary", "myMessages", "myProfile", "myStartPage", "navigator", "normalizePerson", "operationStatus",
@@ -35,6 +35,24 @@ test("Hallenrastervertrag begrenzt oeffentlichen Beitritt und Wartelistenkonting
   assert.equal(result.publicJoinable, true);
   assert.equal(result.maxWaitlistEntries, 2);
   assert.throws(() => validateEndpointRequest("adminSaveHallTimeGrid", { ...payload, maxWaitlistEntries: -1 }), { code: "VALIDATION_ERROR" });
+});
+
+test("Admin-Verhinderungen und Vorschau besitzen geschlossene Vertraege", () => {
+  const operationId = "00000000-0000-4000-8000-000000000043";
+  assert.deepEqual(validateEndpointRequest("adminSaveHallTimeConstraints", {
+    operationId, gridId: "hall-1", expectedRevision: 2,
+    constraints: [{ personId: "p1", slotId: "s1", kind: "unavailable" }, { personId: "p2", slotId: "s1", kind: "avoid" }],
+  }).constraints.map(({ kind }) => kind), ["unavailable", "avoid"]);
+  assert.throws(() => validateEndpointRequest("adminSaveHallTimeConstraints", {
+    operationId, gridId: "hall-1", expectedRevision: 2,
+    constraints: [{ personId: "p1", slotId: "s1", kind: "unknown" }],
+  }), { code: "VALIDATION_ERROR" });
+  assert.deepEqual(validateEndpointRequest("adminPreviewHallTimeDistribution", {
+    gridId: "hall-1", expectedRevision: 2,
+  }), { gridId: "hall-1", expectedRevision: 2 });
+  assert.equal(validateEndpointRequest("adminApplyHallTimeDistribution", {
+    operationId, gridId: "hall-1", expectedRevision: 2, previewHash: "a".repeat(64),
+  }).previewHash.length, 64);
 });
 
 test("Startseitenvertrag verwendet feste Einstiege und den Favoritenzielvertrag", () => {
@@ -139,11 +157,15 @@ test("Matchergebnisvertraege sind geschlossen und trennen Spieler- von Adminakti
   assert.deepEqual(validateEndpointRequest("matchResultSuggestion", { matchId: "m1", court: "2" }), { matchId: "m1", court: "2" });
   assert.deepEqual(validateEndpointRequest("setMatchResult", {
     operationId, matchId: "m1", kind: "retirement", result: "6-4/2-1", losingSide: 2,
-    matchStart: "260904-1000", matchEnd: "260904-1130", expectedFingerprint,
+    matchStart: "260904-1000", matchEnd: "260904-1130", longDurationConfirmed: true, expectedFingerprint,
   }), {
     operationId, matchId: "m1", kind: "retirement", result: "6-4/2-1", losingSide: 2,
-    matchStart: "260904-1000", matchEnd: "260904-1130", expectedFingerprint,
+    matchStart: "260904-1000", matchEnd: "260904-1130", longDurationConfirmed: true, expectedFingerprint,
   });
+  assert.throws(() => validateEndpointRequest("setMatchResult", {
+    operationId, matchId: "m1", kind: "regular", result: "6-4/6-4",
+    matchStart: "260904-1000", matchEnd: "260904-1500", longDurationConfirmed: "yes", expectedFingerprint,
+  }), { code: "VALIDATION_ERROR" });
   assert.deepEqual(validateEndpointRequest("adminCorrectRankingResult", {
     operationId, matchId: "m1", kind: "regular", result: "6-4/6-4",
     expectedFingerprint, reason: "Korrektur", rankPlan: [

@@ -475,7 +475,7 @@ function initMobileNavigation() {
     if (overlayLink) {
       event.preventDefault();
       closeNavigation();
-      window.openFavoriteOverlay?.(overlayLink.dataset.favoriteOverlay);
+      window.openFavoriteOverlay?.(overlayLink.dataset.favoriteOverlay, { interactionStartedAt: performance.now() });
       return;
     }
     const link = event.target.closest(".mobile-nav-content a");

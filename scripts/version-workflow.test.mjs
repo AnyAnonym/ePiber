@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const script = fileURLToPath(new URL("./version-workflow.mjs", import.meta.url));
+const verificationScript = fileURLToPath(new URL("./verification-workflow.mjs", import.meta.url));
 
 function run(command, args, cwd, expectedStatus = 0) {
   const result = spawnSync(command, args, { cwd, encoding: "utf8" });
@@ -20,6 +21,10 @@ function git(repo, ...args) {
 
 function workflow(repo, ...args) {
   return run(process.execPath, [script, ...args], repo);
+}
+
+function verify(repo, suite = "auto") {
+  return run(process.execPath, [verificationScript, "verify", "--suite", suite], repo);
 }
 
 function writeJson(file, value) {
@@ -228,12 +233,13 @@ test("next-task commits the current work and opens only the next x state", () =>
       repo,
       1,
     );
-    assert.match(failed.stderr, /trailing whitespace/);
+    assert.match(failed.stderr, /Pruefnachweis fehlt/);
     assert.equal(git(repo, "rev-parse", "HEAD"), headBeforeFailure);
     assert.equal(readVersion(repo), versionBeforeFailure);
     assert.equal(fs.readFileSync(path.join(repo, logPath), "utf8"), logBeforeFailure);
     assert.equal(git(repo, "diff", "--cached", "--name-only"), "");
     fs.rmSync(badPath);
+    verify(repo, "docs");
 
     const args = [
       "next-task",
@@ -272,6 +278,32 @@ test("next-task commits the current work and opens only the next x state", () =>
     assert.match(mixedMode.stderr, /--all-changed und --path duerfen nicht kombiniert werden/);
     const wrongCommand = run(process.execPath, [script, "branch-commit", "--all-changed"], repo, 1);
     assert.match(wrongCommand.stderr, /--all-changed ist nur fuer next-task, finish-branch oder release-commit zulaessig/);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("next-task derives its subject from the open changelog and requires an exact verification receipt", () => {
+  const { base, repo } = createRepository();
+  try {
+    workflow(repo, "branch-start", "--system", "paj", "--apply");
+    const logPath = path.join(repo, "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt");
+    fs.writeFileSync(path.join(repo, "notes.txt"), "documented\n");
+    fs.appendFileSync(logPath, "  - [Dokumentation] Nachweis dokumentiert.\n");
+    fs.writeFileSync(logPath, fs.readFileSync(logPath, "utf8").replace("Kurzkommentar: offen", "Kurzkommentar: Pruefnachweis eingefuehrt"));
+
+    const missing = run(process.execPath, [script, "next-task", "--all-changed"], repo, 1);
+    assert.match(missing.stderr, /Pruefnachweis fehlt/);
+    verify(repo, "docs");
+
+    fs.appendFileSync(path.join(repo, "notes.txt"), "changed after verification\n");
+    const stale = run(process.execPath, [script, "next-task", "--all-changed"], repo, 1);
+    assert.match(stale.stderr, /Pruefnachweis fehlt/);
+    verify(repo, "docs");
+
+    const applied = workflow(repo, "next-task", "--all-changed", "--apply");
+    assert.match(applied.stdout, /Pruefnachweis fuer docs bestaetigt/);
+    assert.equal(git(repo, "log", "-1", "--pretty=%s"), "1.2.3-paj-1-2 | Pruefnachweis eingefuehrt");
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }

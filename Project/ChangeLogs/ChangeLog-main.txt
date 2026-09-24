@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.3
+Stand: 4.12.4
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2619,3 +2619,79 @@ Quelle: 4.12.2-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.12.3` gesetzt.
+
+[4.12.4] - 2026-09-24
+Commit: 4.12.4 | Spielbetrieb, Hallenzeiten und Workflow verbessert
+Quelle: 4.12.3-paj-1
+
+  Changed
+  - [Planung] Die Architektur-, Sprach-, Import-, Orchestrierungs- und
+    OpenCode-Ablaeufe der Chat-Assistent-Arbeitsgrundlage als renderbare
+    Mermaid-Diagramme dokumentiert und den direkten PAJ-Installationsweg fuer
+    erfolgreich gepruefte Grafana-Dashboards verbindlich festgelegt.
+  - [Dashboard] Tobias Noebauer und Moritz Halva als Maenner-Doppel-
+    Vereinsmeister sowie Roland Strauss und Jakob Packy als Vizemeister
+    eingetragen und statisch abgesichert.
+  - [Ergebniseingabe] Den vereinbarten Termin plus 15 Minuten als Matchstart
+    vorgeschlagen, lange Matchdauer kontrolliert bestaetigen lassen und die
+    bisherige Sechs-Stunden-Grenze entfernt.
+  - [Matchauswahl] Bewerb, optionale Runde, Termin und Paarung in klar getrennten
+    Zeilen dargestellt sowie `Spieleingabe` sichtbar in `Ergebnis eingeben`
+    umbenannt.
+  - [Ergebnisregeln] Regulaere Erstabschluesse ohne fixierten Spieltermin in
+    Oberflaeche und Backend gesperrt; Walkover und Aufgabe bleiben zulaessig.
+  - [Ergebnisspeicherung] Metadatenpruefungen umfangreicher Rangverschiebungen in
+    konstante Batch-Reads gebuendelt, doppelte Matchreads vermieden und
+    Rate-Limit-Wartezeiten mit Countdown erklaert.
+  - [Court-Automatik] Vorgewaehlte offene Matches aktivieren ihren Platz zum
+    Termin automatisch; bestaetigte regulaere Ergebnisse, Walkover und Aufgabe
+    deaktivieren nur den weiterhin exakt zugewiesenen Platz.
+  - [Court-Automatik] Neustartfenster, Terminverschiebung, Idempotenz,
+    Revisionsschutz, Abschlusslogs und kontrollierte System-Audits fuer alle
+    automatischen Platzmutationen umgesetzt.
+  - [Navigator] Anstehenden oder erfolgten Automatikstart, abgelaufene Startzeit
+    und ergebnisbedingte Deaktivierung responsiv dargestellt.
+  - [Profil/Observability] `profile_open_completed` in Auth-Wartezeit,
+    Klick-bis-Overlay, Overlay-bis-WebSocket und WebSocket-bis-Profilantwort
+    getrennt, ohne Profil- oder Personendaten zu uebertragen.
+  - [Matches] Eigene offene und vollstaendige Matches in der zentralen Uebersicht
+    mit einer vorgeschalteten Auswahl fuer Ergebniseingabe oder Terminpflege
+    bedienbar gemacht; Ladefehler werden datensparsam diagnostiziert.
+  - [Grafana] Spaltenfilter der Meldungsliste aktiviert sowie alle zehn
+    provisionierten Dashboards fuer Administratoren editierbar gemacht und ihre
+    Versionen fuer die erneute Provisionierung erhoeht.
+  - [Grafana/Betrieb] Dokumentiert, dass in Grafana gespeicherte UI-Aenderungen
+    nicht ins Repository zurueckfliessen und durch spaetere JSON-Installationen
+    ueberschrieben werden koennen.
+  - [Scoreboard] Bestaetigte Ergebnisse des exakt zugewiesenen Matches anstelle
+    abweichender eingefrorener Receiverstaende angezeigt; Korrekturen und
+    Loeschungen werden unmittelbar aus autoritativen Matchdaten projiziert.
+  - [WebSocket/Mobil] Nach Vordergrundwechsel den Reconnect-Zaehler zurueckgesetzt,
+    den Backoff zeitweise auf zwei Sekunden begrenzt und sichtbaren Requests das
+    kontrollierte Ueberholen eines passiven Reconnect-Timers erlaubt.
+  - [Hallenzeiten] Harte Verhinderungen und weiche Vermeidungswuensche je Spieler
+    und Zukunftstermin administrierbar gemacht und gleichberechtigte
+    Neuverteilungen zuerst als revisionsgebundene Vorschau berechnet.
+  - [Hallenzeiten/Sicherheit] Unvollstaendige Vorschlaege ohne Statewrite gesperrt,
+    Vorschauuebernahmen per Hash gebunden und Verhinderungsgruende weder als
+    Freitext gespeichert noch in Logs ausgegeben.
+  - [Hallenzeiten/Druck] Die exakte, noch nicht uebernommene Neuverteilung in
+    einem neuen Tab druckbar gemacht, harte Verhinderungen rot und weiche
+    Vermeidungswuensche gelb markiert sowie eine einmalige Legende ergaenzt.
+  - [Workflow] Diffgebundene Pruefnachweise unter `.git` eingefuehrt und
+    Dokumentation, Build, Drei-Engine-Kernsmoke, fokussierten Browser-Lifecycle
+    sowie Vollmatrix als deterministische Pruefprofile abgebildet.
+  - [Workflow] Browsercontainer eindeutig benannt und bei Abbruch kontrolliert
+    entfernt; Commit-Kurzkommentare koennen aus dem offenen Changelog oder ueber
+    `--subject` bezogen werden.
+  - [Workflow] Globale Arbeitsbaum-Fingerprints durch getrennte Eingabefingerprints
+    ersetzt, sodass Branch-Changelog und reine Paketversionswechsel gueltige
+    Build- oder Browsernachweise nicht mehr entwerten.
+  - [Tests] Ergebniszeiten, Terminpflicht, Matchauswahl, Rangverschiebung,
+    Court-Automatik, Navigator, Profil-Timings, Matchaktionen, Scoreboard,
+    WebSocket-Reconnect, Hallenverteilung, Druckvorschau, Grafana-Vertraege und
+    Workflow-Fingerprintregeln erweitert automatisiert abgesichert.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.12.4` gesetzt.

@@ -33,6 +33,7 @@ const dataProvider = require("./dataProvider.js");
 const dataStore = require("./dataStore.js");
 const courtPoller = require("./courtPoller.js");
 const stateStore = require("./stateStore.js");
+const { CourtAutomation } = require("./courtAutomation.js");
 const { AuthService } = require("./authService.js");
 const { AppError, errorData } = require("./errors.js");
 const { FrontendLoggingService } = require("./frontendLoggingService.js");
@@ -209,6 +210,12 @@ function createApplication(overrides = {}) {
     token: String(MESSAGING_REPORT_TOKEN),
   };
   const sheetService = overrides.sheetService || new SheetService({ repository, messagingService });
+  const courtAutomation = overrides.courtAutomation || new CourtAutomation({
+    stateStore,
+    dataStore,
+    courtPoller,
+    auditLogRepository,
+  });
   const authService = overrides.authService || new AuthService({ repository, sheetService });
   const frontendLoggingService = overrides.frontendLoggingService || new FrontendLoggingService({
     repository,
@@ -771,6 +778,7 @@ function createApplication(overrides = {}) {
         { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
         { initial: true },
       );
+      courtAutomation.start();
       for (const court of ["1", "2"]) courtPoller.logCourtSnapshot(court, "startup");
       initialized = true;
       logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }).ready, durationMs: Date.now() - startedAt });
@@ -800,6 +808,7 @@ function createApplication(overrides = {}) {
     const drains = (async () => {
       const results = await Promise.allSettled([
         dataPoller.stop(),
+        Promise.resolve(courtAutomation.stop()),
         courtPoller.stop(),
         dataProvider.shutdown(server),
         initializePromise || Promise.resolve(),
@@ -847,6 +856,7 @@ function createApplication(overrides = {}) {
   return {
     authService,
     auditLogRepository,
+    courtAutomation,
     frontendLoggingService,
     handler,
     initialize,

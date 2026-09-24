@@ -16,7 +16,16 @@ backend_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repository_root="$(dirname "${backend_root}")"
 image="mcr.microsoft.com/playwright:v1.62.1-noble"
 lock_file="${XDG_RUNTIME_DIR:-/tmp}/epiber-playwright-smoke.lock"
-container_name="epiber-playwright-smoke-$(id -u)"
+container_name="epiber-playwright-smoke-$(id -u)-$$"
+cid_file="${XDG_RUNTIME_DIR:-/tmp}/${container_name}.cid"
+
+cleanup() {
+  if [[ -s "${cid_file}" ]]; then
+    "${runtime}" rm -f "$(cat "${cid_file}")" >/dev/null 2>&1 || true
+  fi
+  rm -f "${cid_file}"
+}
+trap cleanup EXIT INT TERM HUP
 
 exec 9>"${lock_file}"
 if ! flock -n 9; then
@@ -30,6 +39,7 @@ fi
 
 "${runtime}" run --rm --ipc=host \
   --name "${container_name}" \
+  --cidfile "${cid_file}" \
   --cpus "${PLAYWRIGHT_SMOKE_CPUS:-2}" \
   --memory "${PLAYWRIGHT_SMOKE_MEMORY:-2g}" \
   --pids-limit "${PLAYWRIGHT_SMOKE_PIDS:-512}" \
@@ -39,4 +49,4 @@ fi
   --volume "${repository_root}:/workspace:ro" \
   --workdir /workspace/Backend \
   "${image}" \
-  node scripts/run-browser-smoke.js
+  node scripts/run-browser-smoke.js "$@"

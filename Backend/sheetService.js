@@ -185,15 +185,15 @@ function appResultRuleError(error) {
   return new AppError(error.code || "MATCH_RESULT_INVALID", error.message || "Matchergebnis ist ungueltig", 409);
 }
 
-function assertMatchEnd(matchStartValue, matchEndValue, now, { allowEqual = false } = {}) {
+function assertMatchEnd(matchStartValue, matchEndValue, now, { allowEqual = false, longDurationConfirmed = true } = {}) {
   const matchStart = parseMatchDate(matchStartValue);
   const matchEnd = parseMatchDate(matchEndValue);
   if (!matchStart || !matchEnd) throw new AppError("MATCH_TIME_INVALID", "Matchstart und Matchende sind ungueltig", 409);
   if (matchEnd < matchStart || !allowEqual && matchEnd.getTime() === matchStart.getTime()) {
     throw new AppError("MATCH_END_BEFORE_START", allowEqual ? "Matchende darf nicht vor dem Matchstart liegen" : "Matchende muss nach dem Matchstart liegen", 409);
   }
-  if (matchEnd.getTime() > matchStart.getTime() + 6 * 60 * 60 * 1000) {
-    throw new AppError("MATCH_END_AFTER_LIMIT", "Matchende darf hoechstens sechs Stunden nach Matchbeginn liegen", 409);
+  if (matchEnd.getTime() > matchStart.getTime() + 4 * 60 * 60 * 1000 && !longDurationConfirmed) {
+    throw new AppError("MATCH_DURATION_CONFIRMATION_REQUIRED", "Matchdauern ueber vier Stunden muessen bestaetigt werden", 409);
   }
   if (matchEnd.getTime() > now) throw new AppError("MATCH_END_FUTURE", "Matchende darf nicht in der Zukunft liegen", 409);
   return matchEnd;
@@ -2350,6 +2350,9 @@ class SheetService {
         throw appResultRuleError(error);
       }
       if (!validated.valid) throw new AppError(validated.error, "Matchergebnis ist ungueltig", 409);
+      if (!state.closed && validated.kind === "regular" && !String(row[matchDateIndex] || "").trim()) {
+        throw new AppError("MATCH_APPOINTMENT_REQUIRED", "Fuer ein regulaeres Ergebnis muss zuerst ein Spieltermin fixiert werden", 409);
+      }
       const walkoverTime = validated.kind === "walkover"
         ? state.kind === "walkover" && state.closed
           ? state.matchEnd || String(row[matchDateIndex] || "").trim() || state.resultCapturedAt
@@ -2369,7 +2372,9 @@ class SheetService {
       const targetEnd = validated.kind === "walkover" ? "" : state.closed ? state.matchEnd : suppliedEnd;
       const targetStart = validated.kind === "walkover" ? "" : state.closed ? state.matchStart : suppliedStart;
       if (validated.kind === "walkover") targetRow[matchDateIndex] = walkoverTime;
-      else assertMatchEnd(targetStart || row[matchDateIndex], targetEnd, this.now());
+      else assertMatchEnd(targetStart || row[matchDateIndex], targetEnd, this.now(), {
+        longDurationConfirmed: state.closed || params.longDurationConfirmed === true,
+      });
       let encoded;
       try {
         encoded = encodeCompletion({
@@ -2670,60 +2675,76 @@ class SheetService {
   }
 
   async resolveResultPlanRows(plan, matches, rankings) {
-    const resolved = [];
-    for (const update of plan.updates) {
-      if (update.table === "matches1") {
-        const stable = await this.resolveStableRow("matches1", update.recordId, matches, "FORMATTED_VALUE");
-        resolved.push({ ...update, metadataId: stable.metadata.metadataId, currentRow: stable.row, sheets: stable.sheets });
-      } else if (update.inserted && update.beforeRank === null) {
-        const rankingHeader = headerOf(rankings);
-        const competitionIndex = headerIndex(rankingHeader, "bewerbid");
-        const personIndex = headerIndex(rankingHeader, "personid");
-        const existing = rankings.slice(1).find((row) => String(row[competitionIndex] || "").trim() === plan.competitionId
-          && String(row[personIndex] || "").trim() === update.personId);
-        if (existing) {
-          const [stable] = await this.resolveStableCompositeRows("rlPlatzierung", [{
-            recordId: update.recordId,
-            identity: (row, header) => String(row[headerIndex(header, "bewerbid")] || "").trim() === plan.competitionId
-              && String(row[headerIndex(header, "personid")] || "").trim() === update.personId,
-          }], rankings);
-          resolved.push({ ...update, metadataId: stable.metadata.metadataId, currentRow: stable.row, sheets: stable.sheets });
-        } else {
-          const rowAtTarget = rankings[update.rowNumber - 1] || [];
-          if (rowAtTarget.some((value) => String(value || "").trim())) {
-            throw new AppError("WRITE_CONFLICT", "Zielzeile der neuen Ranglistenmitgliedschaft ist belegt", 409);
-          }
-          const sheets = await this.getClient();
-          const maxIndex = Math.max(...update.changes.map(({ index }) => index));
-          resolved.push({ ...update, a1Range: `'${TABLE_CONFIG.rlPlatzierung.range}'!A${update.rowNumber}:${columnName(maxIndex)}${update.rowNumber}`, currentRow: rowAtTarget, sheets });
+    const resolvedByUpdate = new Map();
+    const rankingHeader = headerOf(rankings);
+    const competitionIndex = headerIndex(rankingHeader, "bewerbid");
+    const personIndex = headerIndex(rankingHeader, "personid");
+    const rankingUpdates = plan.updates.filter(({ table }) => table === "rlPlatzierung");
+    const existingRows = new Map(rankingUpdates.map((update) => [update, rankings.slice(1).find((row) => (
+      String(row[competitionIndex] || "").trim() === plan.competitionId
+      && String(row[personIndex] || "").trim() === update.personId
+    )) || null]));
+
+    for (const update of plan.updates.filter(({ table }) => table === "matches1")) {
+      const stable = await this.resolveStableRow("matches1", update.recordId, matches, "FORMATTED_VALUE");
+      resolvedByUpdate.set(update, {
+        ...update,
+        metadataId: stable.metadata.metadataId,
+        currentRow: stable.row,
+        header: stable.header,
+        sheets: stable.sheets,
+      });
+    }
+
+    const stableRankingUpdates = rankingUpdates.filter((update) => {
+      if (update.inserted && update.beforeRank === null) return Boolean(existingRows.get(update));
+      if (update.removed && update.inserted) return Boolean(existingRows.get(update));
+      return true;
+    });
+    if (stableRankingUpdates.length) {
+      const stableRows = await this.resolveStableCompositeRows("rlPlatzierung", stableRankingUpdates.map((update) => ({
+        recordId: update.recordId,
+        identity: (row, header) => String(row[headerIndex(header, "bewerbid")] || "").trim() === plan.competitionId
+          && String(row[headerIndex(header, "personid")] || "").trim() === update.personId,
+      })), rankings);
+      for (const [index, update] of stableRankingUpdates.entries()) {
+        const stable = stableRows[index];
+        let currentRow = stable.row;
+        if (update.removed && update.inserted) {
+          currentRow = await this.readMetadataRow(stable.sheets, stable.metadata.metadataId, "FORMULA") || stable.row;
+          assertRemovableInsertedRankingRow(update, currentRow, stable.header);
         }
-      } else if (update.removed && update.inserted) {
-        const rankingHeader = headerOf(rankings);
-        const existing = rankings.slice(1).find((row) => String(row[headerIndex(rankingHeader, "bewerbid")] || "").trim() === plan.competitionId
-          && String(row[headerIndex(rankingHeader, "personid")] || "").trim() === update.personId);
-        if (existing) {
-          const [stable] = await this.resolveStableCompositeRows("rlPlatzierung", [{
-            recordId: update.recordId,
-            identity: (row, header) => String(row[headerIndex(header, "bewerbid")] || "").trim() === plan.competitionId
-              && String(row[headerIndex(header, "personid")] || "").trim() === update.personId,
-          }], rankings);
-          const currentRow = await this.readMetadataRow(stable.sheets, stable.metadata.metadataId, "FORMULA");
-          assertRemovableInsertedRankingRow(update, currentRow || stable.row, stable.header);
-          resolved.push({ ...update, metadataId: stable.metadata.metadataId, currentRow: currentRow || stable.row, sheets: stable.sheets });
-        } else {
-          const sheets = await this.getClient();
-          resolved.push({ ...update, currentRow: rankings[update.rowNumber - 1] || [], sheets });
-        }
-      } else {
-        const [stable] = await this.resolveStableCompositeRows("rlPlatzierung", [{
-          recordId: update.recordId,
-          identity: (row, header) => String(row[headerIndex(header, "bewerbid")] || "").trim() === plan.competitionId
-            && String(row[headerIndex(header, "personid")] || "").trim() === update.personId,
-        }], rankings);
-        resolved.push({ ...update, metadataId: stable.metadata.metadataId, currentRow: stable.row, sheets: stable.sheets });
+        resolvedByUpdate.set(update, {
+          ...update,
+          metadataId: stable.metadata.metadataId,
+          currentRow,
+          header: stable.header,
+          sheets: stable.sheets,
+        });
       }
     }
-    return resolved;
+
+    const sheets = rankingUpdates.length ? await this.getClient() : null;
+    for (const update of rankingUpdates) {
+      if (resolvedByUpdate.has(update)) continue;
+      const currentRow = rankings[update.rowNumber - 1] || [];
+      if (update.inserted && update.beforeRank === null) {
+        if (currentRow.some((value) => String(value || "").trim())) {
+          throw new AppError("WRITE_CONFLICT", "Zielzeile der neuen Ranglistenmitgliedschaft ist belegt", 409);
+        }
+        const maxIndex = Math.max(...update.changes.map(({ index }) => index));
+        resolvedByUpdate.set(update, {
+          ...update,
+          a1Range: `'${TABLE_CONFIG.rlPlatzierung.range}'!A${update.rowNumber}:${columnName(maxIndex)}${update.rowNumber}`,
+          currentRow,
+          header: rankingHeader,
+          sheets,
+        });
+      } else {
+        resolvedByUpdate.set(update, { ...update, currentRow, header: rankingHeader, sheets });
+      }
+    }
+    return plan.updates.map((update) => resolvedByUpdate.get(update));
   }
 
   async ensureResultEvent(principal, params, plan) {
@@ -2831,8 +2852,19 @@ class SheetService {
         throw resultRecoveryError("Recovery-Plan der Ergebnisaenderung ist ungueltig", params, plan || {});
       }
       const resolved = await this.resolveResultPlanRows(plan, matches, rankings);
-      const stableMatch = await this.resolveStableRow("matches1", plan.matchGuard.recordId, matches, "FORMATTED_VALUE");
-      const matchFingerprint = matchCompletionFingerprint(stableMatch.row, stableMatch.header);
+      let stableMatch = resolved.find((entry) => entry.table === "matches1" && entry.recordId === plan.matchGuard.recordId);
+      if (!stableMatch) {
+        const stable = await this.resolveStableRow("matches1", plan.matchGuard.recordId, matches, "FORMATTED_VALUE");
+        stableMatch = {
+          table: "matches1",
+          recordId: plan.matchGuard.recordId,
+          metadataId: stable.metadata.metadataId,
+          currentRow: stable.row,
+          header: stable.header,
+          sheets: stable.sheets,
+        };
+      }
+      const matchFingerprint = matchCompletionFingerprint(stableMatch.currentRow, stableMatch.header);
       const beforeCount = resolved.filter((entry) => resultUpdateMatches(entry, entry.currentRow, "before")).length;
       const afterCount = resolved.filter((entry) => resultUpdateMatches(entry, entry.currentRow, "after")).length;
       if (afterCount === resolved.length && matchFingerprint === plan.matchGuard.afterFingerprint) {
@@ -2865,7 +2897,7 @@ class SheetService {
         }
         ({ nextMatches, nextRankings } = this.projectResultPlan(plan, matches, immediateRankings));
       }
-      const immediateMatch = await this.readMetadataRow(stableMatch.sheets, stableMatch.metadata.metadataId, "FORMATTED_VALUE", "write_precondition");
+      const immediateMatch = await this.readMetadataRow(stableMatch.sheets, stableMatch.metadataId, "FORMATTED_VALUE", "write_precondition");
       if (!immediateMatch
         || String(immediateMatch[headerIndex(stableMatch.header, "id")] || "").trim() !== plan.matchId
         || matchCompletionFingerprint(immediateMatch, stableMatch.header) !== plan.matchGuard.beforeFingerprint) {
@@ -2894,7 +2926,7 @@ class SheetService {
           if (entry.a1Range) entry.currentRow = freshRankings?.[entry.rowNumber - 1] || null;
           else entry.currentRow = await this.readMetadataRow(sheets, entry.metadataId, "FORMATTED_VALUE", "confirmation").catch(() => null);
         }
-        const confirmedMatch = await this.readMetadataRow(stableMatch.sheets, stableMatch.metadata.metadataId, "FORMATTED_VALUE", "confirmation").catch(() => null);
+        const confirmedMatch = await this.readMetadataRow(stableMatch.sheets, stableMatch.metadataId, "FORMATTED_VALUE", "confirmation").catch(() => null);
         const confirmedMatchFingerprint = confirmedMatch ? matchCompletionFingerprint(confirmedMatch, stableMatch.header) : "";
         const confirmedAfter = resolved.filter((entry) => resultUpdateMatches(entry, entry.currentRow, "after")).length;
         const confirmedBefore = resolved.filter((entry) => resultUpdateMatches(entry, entry.currentRow, "before")).length;

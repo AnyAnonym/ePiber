@@ -116,7 +116,13 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   Teilnehmern, Terminen, Fix- und Wartelistenplaetzen sowie begrenzter
   Fachhistorie. Der Service autorisiert Rasterzugriff und oeffentlichen
   Selbstbeitritt, erzwingt Fair Use und persoenliche Wartelistenlimits, rueckt
-  Wartende atomar nach und berechnet die gleichberechtigte Verteilung. Manuelle
+  Wartende atomar nach und berechnet die gleichberechtigte Verteilung. Fuer deren
+  kontrollierte Neuplanung speichert der Service ausschliesslich administrativ
+  gepflegte harte Verhinderungen und weiche Vermeidungswuensche getrennt von den
+  Buchungen. Eine zustandslose, revisionsgebundene Vorschau weist offene Plaetze,
+  Wunschkonflikte und Einsatzsummen aus. Erst ein passender Vorschau-Hash darf
+  eine vollstaendige Verteilung uebernehmen; unvollstaendige Vorschlaege bleiben
+  ohne Statewrite. Manuelle
   Fremdaenderungen und automatisches Nachruecken erzeugen kontrollierte
   persoenliche Meldungen; automatische Verteilung erzeugt keine
   personenbezogenen Meldungen. Neuverteilungen werden als kompakter Batch mit
@@ -492,8 +498,11 @@ Universelles Matchergebnis:
   Operatoren keines. Beim ersten Walkover setzt der Server `MatchDate` auf den
   aktuellen Wiener W.O.-Zeitpunkt und laesst MatchStart und MatchEnde leer. Bei
   regulaerem Abschluss
-  und Retirement liegt MatchEnde strikt nach MatchStart, maximal sechs Stunden
-  danach und nicht zukuenftig; `MatchDate` bleibt nur der vereinbarte Plantermin.
+  und Retirement liegt MatchEnde strikt nach MatchStart und nicht zukuenftig. Bei
+  mehr als vier Stunden verlangt der Server die kontrollierte Bestaetigung des
+  Ergebnisdialogs; eine feste Hoechstdauer besteht nicht. `MatchDate` bleibt nur
+  der vereinbarte Plantermin, muss fuer einen ersten regulaeren Abschluss aber
+  vorhanden sein. Retirement und Walkover bleiben ohne Plantermin moeglich.
   Der erste Abschluss setzt `ErgebnisErfasstAm` auf die Wiener Serverzeit.
   Beteiligte duerfen bis einschliesslich 60 Minuten danach korrigieren; die Frist
   wird weder aus Messaging/Audit rekonstruiert noch durch Korrekturen verlaengert,
@@ -1227,6 +1236,20 @@ Smokesuite darf bei fehlender Engine nicht als erfolgreich uebersprungen werden.
 Sie laeuft wegen des Arch-Linux-Hosts in der exakt zur Playwright-Version
 passenden offiziellen Linux-Containerumgebung. Browserbinaries und Container sind
 nur Testwerkzeuge und keine Laufzeitabhaengigkeit des Backends.
+
+Der Runner bietet zusaetzlich die deterministischen Teilprofile `core` und
+`lifecycle`. `core` fuehrt dieselben Kernablaeufe in den drei Engines Chromium,
+WebKit und Firefox aus. `lifecycle` begrenzt den fachlichen Umfang auf den
+Aufwach-/Reconnect-Ablauf, prueft diesen aber in allen acht Zielprofilen. `full`
+entspricht der vollstaendigen bisherigen Smokesuite. Der diffgebundene lokale
+Pruefnachweis liegt ausschliesslich unter `.git`, wird nicht versioniert und ist
+nur bei identischem HEAD, identischer Node-Version und unveraenderten Eingaben des
+jeweiligen Pruefprofils gueltig. Dokumentation, Build und Browserprofile besitzen
+getrennte Fingerprints. Temporaeres Branch-Changelog und reine Paketversions-
+wechsel sind keine Code- oder Browsertesteingaben; Abhaengigkeiten und
+Paket-Skripte bleiben dagegen Bestandteil der betroffenen Fingerprints. Der
+Containerwrapper verwendet eindeutige Lauf-IDs und entfernt einen gestarteten
+Container auch bei einem kontrollierten Abbruchsignal.
 
 Neue Browser-APIs werden gegen diese Matrix geprueft und ueber Feature Detection
 statt User-Agent-Erkennung verwendet. Kritische Bedienung erhaelt bei fehlender

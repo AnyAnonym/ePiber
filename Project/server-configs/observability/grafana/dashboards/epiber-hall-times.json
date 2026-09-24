@@ -1,7 +1,7 @@
 {
   "annotations": { "list": [] },
   "description": "Aktuelle Belegung, Historienfuellstand, Fachaktivitaeten, Neuverteilungen und problematische Schreibvorgaenge der Hallenreservierung.",
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "links": [],
   "panels": [
@@ -107,5 +107,5 @@
   "timezone": "browser",
   "title": "ePiber Hallenreservierung",
   "uid": "epiber-hall-times",
-  "version": 1
+  "version": 2
 }

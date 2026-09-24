@@ -1,7 +1,7 @@
 {
   "annotations": { "list": [] },
   "description": "Ausgesprochene Forderungen, nicht angelegte Forderungsversuche und technische Ausgaenge der ePiber-Rangliste.",
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "links": [],
   "panels": [
@@ -94,5 +94,5 @@
   "timezone": "browser",
   "title": "ePiber Ranglistenaktivitaeten",
   "uid": "epiber-ranking-activity",
-  "version": 1
+  "version": 2
 }

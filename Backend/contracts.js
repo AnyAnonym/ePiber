@@ -48,6 +48,7 @@ const matchCompletionFields = {
   losingSide: optional(integer("losingSide", { min: 1, max: 2 })),
   matchStart: optionalMatchStart,
   matchEnd: optionalMatchEnd,
+  longDurationConfirmed: optional((value) => booleanValue(value, "longDurationConfirmed")),
   expectedFingerprint: fingerprint,
 };
 const matchCorrectionFields = {
@@ -188,6 +189,18 @@ function hallTimeSlots(value) {
   return slots;
 }
 
+function hallTimeConstraints(value) {
+  if (!Array.isArray(value) || value.length > 125000) throw new AppError("VALIDATION_ERROR", "constraints darf maximal 125000 Einträge enthalten");
+  const constraints = value.map((entry) => objectShape(entry, {
+    personId: id("constraint.personId"),
+    slotId: id("constraint.slotId"),
+    kind: text("constraint.kind", { max: 16, pattern: /^(unavailable|avoid)$/ }),
+  }));
+  const keys = constraints.map(({ personId, slotId }) => `${slotId}:${personId}`);
+  if (new Set(keys).size !== keys.length) throw new AppError("VALIDATION_ERROR", "Pro Spieler und Termin ist nur eine Einschränkung erlaubt");
+  return constraints;
+}
+
 function fairUseConfig(value) {
   const config = objectShape(value, {
     base: integer("fairUse.base", { min: 0, max: 1000 }),
@@ -295,6 +308,22 @@ const requestContracts = {
     operationId: operation,
     gridId: id("gridId"),
     expectedRevision: integer("expectedRevision", { min: 0 }),
+  }),
+  adminSaveHallTimeConstraints: (params) => objectShape(params, {
+    operationId: operation,
+    gridId: id("gridId"),
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+    constraints: hallTimeConstraints,
+  }),
+  adminPreviewHallTimeDistribution: (params) => objectShape(params, {
+    gridId: id("gridId"),
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+  }),
+  adminApplyHallTimeDistribution: (params) => objectShape(params, {
+    operationId: operation,
+    gridId: id("gridId"),
+    expectedRevision: integer("expectedRevision", { min: 0 }),
+    previewHash: text("previewHash", { min: 64, max: 64, pattern: /^[0-9a-f]{64}$/ }),
   }),
   adminClearAllHallTimeStatuses: (params) => objectShape(params, {
     operationId: operation,

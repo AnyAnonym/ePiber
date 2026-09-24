@@ -72,10 +72,12 @@ Matches1 enthaelt offene und gespielte Matches.
                   | Termin in der Zukunft liegen. Bei Ranglisten gilt fuer den
                   | Ersttermin der Korridor von ForderungDate bis exakt 14 Tage
                   | danach; eine Aenderung muss in der Zukunft liegen. Bei einem
-                  | neuen Walkover ersetzt der Server den Plantermin atomar durch
-                  | den aktuellen Wiener W.O.-Zeitpunkt; beim administrativen
-                  | Leeren dieses Walkovers wird das ergebnisgebundene Datum
-                  | ebenfalls geleert.
+                   | neuen Walkover ersetzt der Server den Plantermin atomar durch
+                   | den aktuellen Wiener W.O.-Zeitpunkt; beim administrativen
+                   | Leeren dieses Walkovers wird das ergebnisgebundene Datum
+                   | ebenfalls geleert. Ein erster regulaerer Abschluss verlangt
+                   | einen vorhandenen Wert; Retirement und Walkover bleiben ohne
+                   | Spieltermin moeglich.
   ForderungDate   | Serverzeit Europe/Vienna im Format `YYMMDD-HHMM`.
   Dauer           | Reservierte Matchdauer.
   BewerbID        | Referenz auf Bewerb.ID.
@@ -104,9 +106,11 @@ Matches1 enthaelt offene und gespielte Matches.
                   | behalten den Wert, Clear leert ihn.
   MatchEnde       | Fachlicher Abschlusszeitpunkt `YYMMDD-HHMM`. Beim ersten
                   | regulaeren Abschluss oder Retirement zwingend strikt nach
-                  | MatchStart, maximal sechs Stunden danach und nicht in der
-                  | Zukunft. Beim Walkover bleibt das Feld leer. Beteiligte behalten
-                  | ihn bei Korrekturen unveraendert; nur Admins korrigieren ihn
+                  | MatchStart und nicht in der Zukunft; mehr als vier Stunden
+                  | erfordern eine bewusste Bestaetigung, eine feste Hoechstdauer
+                  | besteht nicht. Beim Walkover bleibt das Feld leer.
+                  | Beteiligte behalten ihn bei Korrekturen unveraendert; nur
+                  | Admins korrigieren ihn
                   | mit Grund. Historisch leer faellt fuer Abschlussregeln auf
                   | MatchDate zurueck.
   ErgebnisErfasstAm | Wiener Serverzeit `YYMMDD-HHMM` des ersten Abschlusses.
@@ -835,7 +839,12 @@ Tabelle `app_state`:
   Raster speichert ID, Name, Beschreibung, Modus `equal|fair_use`, Aktivstatus,
   oeffentliche Beitrittsfreigabe, Fixplatzkapazitaet, Wartelistenaktivierung und
   persoenliches Wartelistenlimit, Fair-Use-Parameter, strukturierte Teilnehmer,
-  chronologische Termine, Fix-/Wartelisteneintraege mit Queuezeit sowie eine auf
+  chronologische Termine, Fix-/Wartelisteneintraege mit Queuezeit sowie
+  administrative Verteilungsvorgaben `{ personId, slotId,
+  kind:"unavailable"|"avoid" }`. Harte Verhinderungen und weiche
+  Vermeidungswuensche bleiben von den eigentlichen Terminbuchungen getrennt und
+  werden beim Entfernen eines Teilnehmers oder Termins ebenfalls bereinigt. Die
+  zustandslose Verteilungsvorschau wird nicht persistiert. Der Raster besitzt eine auf
   10000 Eintraege begrenzte Fachhistorie. Historieneintraege speichern Aktion,
   Zeitpunkt, Akteur, Zielperson, Statusuebergang und bei Terminbezug einen
   unveraenderlichen Snapshot aus ID, Datum, Beginn und Ende. Neuverteilungen und

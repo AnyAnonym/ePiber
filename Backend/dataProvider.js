@@ -32,6 +32,7 @@ const { projectPeopleReconciliation } = require("./memberReconciliation.js");
 const { inspectMatchtypDisplayRules, projectScoreboardScores } = require("./scoreboardDisplay.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const logger = require("./logger.js");
+const { pendingActivation } = require("./courtAutomation.js");
 const metrics = require("./metrics.js");
 const { hasAnyRole, hasRole } = require("./personRoles.js");
 const {
@@ -60,7 +61,10 @@ const HISTORY_INTERACTION_WRITES = new Set([
   "addCompetitionHistoryComment", "editCompetitionHistoryComment", "deleteCompetitionHistoryComment",
   "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
 ]);
-const HALL_TIME_WRITES = new Set(["adminSaveHallTimeGrid", "setHallTimeBooking", "setMyHallTimeGroupMembership", "adminDistributeHallTimeGrid", "adminClearAllHallTimeStatuses"]);
+const HALL_TIME_WRITES = new Set([
+  "adminSaveHallTimeGrid", "setHallTimeBooking", "setMyHallTimeGroupMembership", "adminDistributeHallTimeGrid",
+  "adminSaveHallTimeConstraints", "adminApplyHallTimeDistribution", "adminClearAllHallTimeStatuses",
+]);
 const PUBLIC_COLUMNS = {
   bewerbe: ["id", "bezeichnung", "bewerbsartid", "geschlecht", "entrystart", "entrydeadline", "bewerbsbeginn", "bewerbsende", "sortorder"],
   bewerbsart: ["id", "bezeichnung", "entrylistavailable", "roundrobin", "rasterfunktion", "spezifikum"],
@@ -266,10 +270,21 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
         after: result.success ? { gridId: params.gridId, selected: result.selected, revision: result.revision } : null,
       };
     case "adminDistributeHallTimeGrid":
+    case "adminApplyHallTimeDistribution":
       return {
         targetType: "hall-time-grid", targetId: params.gridId,
         before: { expectedRevision: params.expectedRevision },
         after: result.success ? { revision: result.revision, replacedFutureEntries: true } : null,
+      };
+    case "adminSaveHallTimeConstraints":
+      return {
+        targetType: "hall-time-grid", targetId: params.gridId,
+        before: { expectedRevision: params.expectedRevision },
+        after: result.success ? {
+          revision: result.revision,
+          unavailableCount: (params.constraints || []).filter(({ kind }) => kind === "unavailable").length,
+          avoidCount: (params.constraints || []).filter(({ kind }) => kind === "avoid").length,
+        } : null,
       };
     case "adminClearAllHallTimeStatuses":
       return {
@@ -1096,6 +1111,7 @@ function compileNavigator(params) {
 function scoreboardScores(scoreSnapshot = courtPoller.getLastData()) {
   return projectScoreboardScores(scoreSnapshot, {
     courts: stateStore.getScoreboardCourts(),
+    matches: dataStore.get("matches1"),
   });
 }
 
@@ -1419,6 +1435,20 @@ const endpoints = {
     write: true,
     handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.distribute(context.principal, params)),
   },
+  adminSaveHallTimeConstraints: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.saveConstraints(context.principal, params)),
+  },
+  adminPreviewHallTimeDistribution: {
+    access: ["admin"],
+    handler: (params, context) => dependencies.hallTimeService.previewDistribution(context.principal, params),
+  },
+  adminApplyHallTimeDistribution: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.applyDistributionPreview(context.principal, params)),
+  },
   adminClearAllHallTimeStatuses: {
     access: ["admin"],
     write: true,
@@ -1732,7 +1762,13 @@ const endpoints = {
       }, (current) => {
         if (!request.empty) requireCurrentTables("players", "bewerbe", "matchtyp", "matches1");
         const assignment = resolveCourtAssignment(request);
-        return { ...assignment.data, aktiv: current.aktiv };
+        return {
+          ...assignment.data,
+          aktiv: current.aktiv,
+          automaticActivation: request.matchId
+            ? pendingActivation(request.matchId, assignment.data.dateTime)
+            : null,
+        };
       }, () => courtPoller.resetCourtScore(court, { reason: "assignment" }));
     },
   },
@@ -2294,6 +2330,7 @@ function init(server, options) {
         publish("scores", scoreboardScores());
       }
     }
+    if (event.table === "matches1" && event.current) publish("scores", scoreboardScores());
     const topicByTable = { matches1: "matches", players: "players", bewerbe: "bewerbe", bewerbsart: "bewerbsart", matchtyp: "matchtyp", entryList: "entryList", rlPlatzierung: "ranking", navigator: "navigator" };
     const topic = topicByTable[event.table];
     if (topic) publish(topic, event);

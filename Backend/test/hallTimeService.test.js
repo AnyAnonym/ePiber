@@ -150,6 +150,90 @@ test("Gleichberechtigte Verteilung mischt gemeinsame Gruppen bei gleicher Einsat
   context.repository.close();
 });
 
+test("Admin-Verhinderungen erzeugen zuerst nur eine Vorschau und werden kontrolliert uebernommen", () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const created = context.service.saveGrid(admin, gridRequest(0, { capacity: 2 }), names);
+  const [firstSlot, secondSlot] = created.grid.slots;
+  const constrained = context.service.saveConstraints(admin, {
+    operationId: operation(18), gridId: created.grid.id, expectedRevision: created.revision,
+    constraints: [
+      { personId: "p1", slotId: firstSlot.id, kind: "unavailable" },
+      { personId: "p2", slotId: secondSlot.id, kind: "avoid" },
+    ],
+  });
+  assert.equal(constrained.grid.constraints.length, 2);
+  assert.equal(Object.hasOwn(context.service.grid(players[0], created.grid.id).grid, "constraints"), false);
+  const previewed = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: constrained.revision });
+  assert.equal(previewed.preview.quality, "complete");
+  assert.equal(previewed.preview.openPlaceCount, 0);
+  assert.equal(previewed.preview.softConflictCount, 0);
+  assert.equal(previewed.preview.entries.some(({ slotId, personId }) => slotId === firstSlot.id && personId === "p1"), false);
+  assert.equal(context.service.adminGrids(admin).grids[0].entries.length, 0);
+  const applied = context.service.applyDistributionPreview(admin, {
+    operationId: operation(19), gridId: created.grid.id, expectedRevision: constrained.revision,
+    previewHash: previewed.preview.previewHash,
+  });
+  assert.equal(applied.grid.entries.length, 4);
+  assert.throws(() => context.service.applyDistributionPreview(admin, {
+    operationId: operation(20), gridId: created.grid.id, expectedRevision: applied.revision,
+    previewHash: "a".repeat(64),
+  }), { code: "HALL_TIME_PREVIEW_STALE" });
+  context.repository.close();
+});
+
+test("Unvollstaendige Verteilung bleibt reine Vorschau und kann nicht uebernommen werden", () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const created = context.service.saveGrid(admin, gridRequest(0, { capacity: 3, slots: [gridRequest(0).slots[0]] }), names);
+  const slotId = created.grid.slots[0].id;
+  const constrained = context.service.saveConstraints(admin, {
+    operationId: operation(21), gridId: created.grid.id, expectedRevision: created.revision,
+    constraints: [{ personId: "p1", slotId, kind: "unavailable" }],
+  });
+  const previewed = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: constrained.revision });
+  assert.equal(previewed.preview.quality, "incomplete");
+  assert.equal(previewed.preview.openPlaceCount, 1);
+  assert.throws(() => context.service.applyDistributionPreview(admin, {
+    operationId: operation(22), gridId: created.grid.id, expectedRevision: constrained.revision,
+    previewHash: previewed.preview.previewHash,
+  }), { code: "HALL_TIME_DISTRIBUTION_INCOMPLETE" });
+  assert.equal(context.service.adminGrids(admin).grids[0].entries.length, 0);
+  context.repository.close();
+});
+
+test("Unvermeidbarer weicher Wunsch bleibt vollstaendig und wird transparent ausgewiesen", () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const created = context.service.saveGrid(admin, gridRequest(0, { participantIds: ["p1"], slots: [gridRequest(0).slots[0]] }), names);
+  const slotId = created.grid.slots[0].id;
+  const constrained = context.service.saveConstraints(admin, {
+    operationId: operation(23), gridId: created.grid.id, expectedRevision: created.revision,
+    constraints: [{ personId: "p1", slotId, kind: "avoid" }],
+  });
+  const preview = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: constrained.revision }).preview;
+  assert.equal(preview.quality, "warning");
+  assert.equal(preview.openPlaceCount, 0);
+  assert.equal(preview.softConflictCount, 1);
+  assert.deepEqual(preview.softConflicts.map(({ personId, slot }) => [personId, slot.id]), [["p1", slotId]]);
+  context.repository.close();
+});
+
+test("Vorausschauende Reparatur nutzt knappe Verfuegbarkeit fuer eine moegliche Gleichverteilung", () => {
+  const context = setup();
+  const names = new Map(players.map(({ id, name }) => [id, name]));
+  const slots = Array.from({ length: 3 }, (_, index) => ({ date: `2026-01-${20 + index}`, start: "19:00", end: "21:00" }));
+  const created = context.service.saveGrid(admin, gridRequest(0, { slots }), names);
+  const constrained = context.service.saveConstraints(admin, {
+    operationId: operation(24), gridId: created.grid.id, expectedRevision: created.revision,
+    constraints: created.grid.slots.slice(1).map(({ id: slotId }) => ({ personId: "p3", slotId, kind: "unavailable" })),
+  });
+  const preview = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: constrained.revision }).preview;
+  assert.equal(preview.spread, 0);
+  assert.equal(preview.entries.some(({ slotId, personId }) => slotId === created.grid.slots[0].id && personId === "p3"), true);
+  context.repository.close();
+});
+
 test("Nicht nachgerueckte Wartelistenplaetze werden nach Terminende rot", async () => {
   const context = setup();
   const names = new Map(players.map(({ id, name }) => [id, name]));

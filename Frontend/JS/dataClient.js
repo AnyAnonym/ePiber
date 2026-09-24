@@ -12,6 +12,9 @@ const VERSION_MISMATCH_RELOAD_KEY = "epiber-app-version-reload";
 const ACTIVE_WATCHDOG_INTERVAL_MS = 5000;
 const ACTIVE_GAP_THRESHOLD_MS = 15000;
 const RESUME_DEBOUNCE_MS = 500;
+const FOREGROUND_RECOVERY_WINDOW_MS = 30000;
+const FOREGROUND_MAX_BACKOFF_MS = 2000;
+const REQUEST_RECONNECT_DEBOUNCE_MS = 2000;
 
 let socket = null;
 let socketGeneration = 0;
@@ -43,6 +46,8 @@ let appVersionCheckPromise = null;
 let pageWasHidden = document.hidden;
 let lastActiveCheckAt = Date.now();
 let lastResumeAt = 0;
+let foregroundRecoveryUntil = 0;
+let lastRequestReconnectAt = Number.NEGATIVE_INFINITY;
 function getStoredAppVersion() {
   return typeof window.APP_VERSION === "string" ? window.APP_VERSION : null;
 }
@@ -211,6 +216,8 @@ function resumeClient(phase, durationMs = 0) {
   pageWasHidden = false;
   if (now - lastResumeAt < RESUME_DEBOUNCE_MS) return;
   lastResumeAt = now;
+  foregroundRecoveryUntil = now + FOREGROUND_RECOVERY_WINDOW_MS;
+  connectAttempt = 0;
   diagnostic.info("app_resume_detected", {
     phase,
     durationMs: Math.max(0, Math.round(durationMs)),
@@ -340,7 +347,10 @@ function cleanupSocket(expectedSocket) {
 
 function scheduleReconnect() {
   if (stopped || state === "stopped" || !navigator.onLine || reconnectTimer) return;
-  const base = Math.min(MAX_BACKOFF_MS, 1000 * (2 ** Math.min(connectAttempt, 5)));
+  const maxBackoffMs = !document.hidden && Date.now() < foregroundRecoveryUntil
+    ? FOREGROUND_MAX_BACKOFF_MS
+    : MAX_BACKOFF_MS;
+  const base = Math.min(maxBackoffMs, 1000 * (2 ** Math.min(connectAttempt, 5)));
   const delay = Math.floor(base * (0.8 + Math.random() * 0.4));
   setState("backoff", { retryInMs: delay });
   reconnectTimer = setTimeout(() => {
@@ -419,6 +429,7 @@ function handleMessage(event, generation, currentSocket) {
     }
     clearVersionMismatchReloadMarker();
     welcome = message;
+    foregroundRecoveryUntil = 0;
     setState("connected");
     if (stableTimer) clearTimeout(stableTimer);
     stableTimer = setTimeout(() => {
@@ -562,6 +573,12 @@ function waitForConnection() {
   if (!navigator.onLine || state === "offline") return Promise.reject(offlineError());
   if (state === "connected" && welcome) return Promise.resolve(welcome);
   if (stopped) return Promise.reject(new Error("WebSocket-Client wurde gestoppt"));
+  const now = Date.now();
+  if (reconnectTimer && !document.hidden && now - lastRequestReconnectAt >= REQUEST_RECONNECT_DEBOUNCE_MS) {
+    lastRequestReconnectAt = now;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   connect();
   return new Promise((resolve, reject) => {
     const waiter = { resolve, reject, timer: null };

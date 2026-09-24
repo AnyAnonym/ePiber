@@ -1,7 +1,7 @@
 {
   "annotations": { "list": [] },
   "description": "Chronologischer Verlauf der Platzbelegung und akzeptierten Scoreaenderungen aus den letzten maximal 14 Tagen.",
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "links": [],
   "panels": [
@@ -68,5 +68,5 @@
   "timezone": "browser",
   "title": "ePiber Platz- und Scoreverlauf",
   "uid": "epiber-score-history",
-  "version": 1
+  "version": 2
 }

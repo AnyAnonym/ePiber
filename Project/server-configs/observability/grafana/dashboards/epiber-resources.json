@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "panels": [
     { "type": "timeseries", "title": "CPU-Auslastung", "id": 1, "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] }, "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true } }, "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "clamp(sum(rate(node_cpu_seconds_total{mode=~\"user|system|nice|irq|softirq|steal\"}[5m])) / count(node_cpu_seconds_total{mode=\"idle\"}) * 100, 0, 100)", "legendFormat": "CPU", "refId": "A" }] },
@@ -17,5 +17,5 @@
   "timezone": "browser",
   "title": "ePiber Hostressourcen",
   "uid": "epiber-resources",
-  "version": 6
+  "version": 7
 }

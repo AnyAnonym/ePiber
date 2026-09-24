@@ -151,6 +151,19 @@ main:has(#matches1-container) section {
   overflow: hidden;
 }
 
+.m1-card-actionable {
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+.m1-card-actionable:hover,
+.m1-card-actionable:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px rgba(23, 107, 74, 0.2);
+  outline: none;
+}
+
 .m1-meta {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

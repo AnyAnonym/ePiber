@@ -95,7 +95,7 @@ list.addEventListener("click", (event) => {
   const overlay = event.target.closest("[data-favorite-overlay]");
   if (!overlay) return;
   event.preventDefault();
-  window.openFavoriteOverlay?.(overlay.dataset.favoriteOverlay);
+  window.openFavoriteOverlay?.(overlay.dataset.favoriteOverlay, { interactionStartedAt: performance.now() });
 });
 
 list.addEventListener("pointerdown", (event) => {

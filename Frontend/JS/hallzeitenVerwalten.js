@@ -5,7 +5,9 @@ import { diagnostic } from "./diagnostics.js";
 const readGrids = createEndpoint("adminHallTimeGrids");
 const readPlayers = createEndpoint("memberDirectory");
 const saveGrid = createEndpoint("adminSaveHallTimeGrid");
-const distributeGrid = createEndpoint("adminDistributeHallTimeGrid");
+const saveConstraintsEndpoint = createEndpoint("adminSaveHallTimeConstraints");
+const previewDistributionEndpoint = createEndpoint("adminPreviewHallTimeDistribution");
+const applyDistributionEndpoint = createEndpoint("adminApplyHallTimeDistribution");
 const clearAllStatuses = createEndpoint("adminClearAllHallTimeStatuses");
 const byId = (id) => document.getElementById(id);
 let grids = [];
@@ -16,6 +18,9 @@ let slots = [];
 let selectedParticipantIds = new Set();
 let authorized = false;
 let busy = false;
+let constraints = new Map();
+let constraintsDirty = false;
+let currentPreview = null;
 
 function feedback(text = "", state = "") { byId("hall-time-admin-feedback").textContent = text; byId("hall-time-admin-feedback").dataset.state = state; }
 function errorText(error) { return String(error?.message || "Der Vorgang ist fehlgeschlagen.").replace(/\s*\((?:Referenz|Support-ID):[^)]*\)\s*$/iu, ""); }
@@ -66,6 +71,38 @@ function renderSlots() {
   });
 }
 
+function constraintKey(personId, slotId) { return JSON.stringify([slotId, personId]); }
+function slotLabel(slot) { return `${slot.date.split("-").reverse().join(".")} ${slot.start}`; }
+
+function renderConstraints() {
+  const field = byId("hall-time-constraints-field");
+  const grid = currentGrid();
+  const futureSlots = (grid?.slots || []).filter(({ date, end }) => new Date(`${date}T${end}:00`).getTime() > Date.now());
+  field.hidden = !grid || grid.mode !== "equal";
+  const head = byId("hall-time-constraints-head");
+  const body = byId("hall-time-constraints-body");
+  head.replaceChildren(); body.replaceChildren();
+  if (field.hidden) return;
+  const header = document.createElement("tr");
+  const personHeading = document.createElement("th"); personHeading.scope = "col"; personHeading.textContent = "Spieler"; header.appendChild(personHeading);
+  for (const slot of futureSlots) { const cell = document.createElement("th"); cell.scope = "col"; cell.textContent = slotLabel(slot); header.appendChild(cell); }
+  head.appendChild(header);
+  for (const person of grid.participants || []) {
+    const row = document.createElement("tr"); const name = document.createElement("th"); name.scope = "row"; name.textContent = person.name; row.appendChild(name);
+    for (const slot of futureSlots) {
+      const cell = document.createElement("td"); const select = document.createElement("select");
+      select.setAttribute("aria-label", `${person.name}, ${slotLabel(slot)}`);
+      for (const [value, label] of [["", "Keine Einschränkung"], ["unavailable", "Verhindert"], ["avoid", "Möglichst vermeiden"]]) {
+        const option = document.createElement("option"); option.value = value; option.textContent = label; select.appendChild(option);
+      }
+      const key = constraintKey(person.id, slot.id); select.value = constraints.get(key) || "";
+      select.addEventListener("change", () => { if (select.value) constraints.set(key, select.value); else constraints.delete(key); constraintsDirty = true; currentPreview = null; });
+      cell.appendChild(select); row.appendChild(cell);
+    }
+    body.appendChild(row);
+  }
+}
+
 function applyGrid(grid) {
   byId("hall-time-form-title").textContent = grid ? grid.name : "Neuer Raster";
   byId("hall-time-name").value = grid?.name || ""; byId("hall-time-description-input").value = grid?.description || "";
@@ -76,6 +113,7 @@ function applyGrid(grid) {
   byId("hall-time-fair-percent").value = grid?.fairUse?.percent ?? 50; byId("hall-time-fair-open").value = grid?.fairUse?.openDays ?? 2;
   slots = structuredClone(grid?.slots || []); renderSlots();
   selectedParticipantIds = new Set((grid?.participants || []).map(({ id }) => id)); byId("hall-time-player-filter").value = ""; renderPlayers();
+  constraints = new Map((grid?.constraints || []).map(({ personId, slotId, kind }) => [constraintKey(personId, slotId), kind])); constraintsDirty = false; currentPreview = null; renderConstraints();
   byId("hall-time-open").hidden = !grid?.active; if (grid) byId("hall-time-open").href = `hallzeiten.html?id=${encodeURIComponent(grid.id)}`;
   byId("hall-time-print-actions").hidden = !grid;
   if (grid) {
@@ -87,7 +125,7 @@ function applyGrid(grid) {
 }
 
 function selectGrid(id) { selectedId = id; applyGrid(currentGrid()); }
-function updateMode() { const equal = byId("hall-time-mode").value === "equal"; byId("hall-time-fair-use").disabled = equal; byId("hall-time-distribute").hidden = !equal || !selectedId; byId("hall-time-clear-all-statuses").hidden = !selectedId || !(currentGrid()?.entries?.length); }
+function updateMode() { const equal = byId("hall-time-mode").value === "equal"; byId("hall-time-fair-use").disabled = equal; byId("hall-time-distribute").hidden = !equal || !selectedId; byId("hall-time-clear-all-statuses").hidden = !selectedId || !(currentGrid()?.entries?.length); byId("hall-time-constraints-field").hidden = !equal || !selectedId; }
 function updateWaitlist() { byId("hall-time-waitlist-limit").disabled = !byId("hall-time-waitlist").checked; }
 function selectedPlayers() { return [...selectedParticipantIds]; }
 
@@ -140,10 +178,54 @@ async function submit(event) {
   finally { busy = false; }
 }
 
-async function distribute() {
-  if (!selectedId || busy) return; const key = `hall-time-distribute:${selectedId}:${revision}`; busy = true; feedback("Verteilung wird berechnet …", "loading");
-  try { await distributeGrid({ operationId: getOperationId(key), gridId: selectedId, expectedRevision: revision }); releaseOperationId(key); await load(); feedback("Zukünftige Termine wurden neu verteilt.", "success"); }
+async function saveConstraints() {
+  if (!selectedId || busy) return;
+  const key = `hall-time-constraints:${selectedId}:${revision}`; busy = true; feedback("Verhinderungen werden gespeichert …", "loading");
+  const values = [...constraints].map(([keyValue, kind]) => { const [slotId, personId] = JSON.parse(keyValue); return { personId, slotId, kind }; });
+  try { await saveConstraintsEndpoint({ operationId: getOperationId(key), gridId: selectedId, expectedRevision: revision, constraints: values }); releaseOperationId(key); await load(); feedback("Verhinderungen und Wünsche wurden gespeichert.", "success"); }
   catch (error) { releaseOperationId(key, error); feedback(errorText(error), "error"); diagnostic.error("hall_time_admin_write_failed", error); if (error.code === "REVISION_CONFLICT") await load(); }
+  finally { busy = false; }
+}
+
+function renderPreview(preview) {
+  const labels = { complete: "Vollständige und ausgeglichene Lösung", warning: "Vollständige Lösung mit Hinweisen", incomplete: "Keine vollständige Lösung" };
+  const summary = byId("hall-time-preview-summary"); summary.textContent = `${labels[preview.quality]}. ${preview.assignedCount} Zuteilungen, ${preview.openPlaceCount} offene Plätze, ${preview.softConflictCount} nicht erfüllte Wünsche, größte Einsatzabweichung ${preview.spread}.`;
+  summary.dataset.quality = preview.quality;
+  const details = byId("hall-time-preview-details"); details.replaceChildren();
+  const slotTitle = document.createElement("h3"); slotTitle.textContent = "Termine"; details.appendChild(slotTitle);
+  const slotList = document.createElement("ul");
+  const personNames = new Map(preview.personSummaries.map(({ personId, personName }) => [personId, personName]));
+  for (const value of preview.slotSummaries) { const item = document.createElement("li"); const assigned = value.assignedPersonIds.map((id) => personNames.get(id) || id).join(", ") || "niemand"; item.textContent = `${slotLabel(value.slot)}: ${assigned}; ${value.openCount} offen (${value.availableCount} verfügbar)`; slotList.appendChild(item); }
+  details.appendChild(slotList);
+  if (preview.softConflicts.length) {
+    const conflictTitle = document.createElement("h3"); conflictTitle.textContent = "Nicht erfüllte Wünsche"; details.appendChild(conflictTitle);
+    const conflictList = document.createElement("ul");
+    for (const value of preview.softConflicts) { const item = document.createElement("li"); item.textContent = `${value.personName}: ${slotLabel(value.slot)}`; conflictList.appendChild(item); }
+    details.appendChild(conflictList);
+  }
+  const personTitle = document.createElement("h3"); personTitle.textContent = "Einsätze je Spieler"; details.appendChild(personTitle);
+  const table = document.createElement("table"); table.className = "hall-time-preview-table"; table.innerHTML = "<thead><tr><th>Spieler</th><th>Bisher</th><th>Neu</th><th>Gesamt</th></tr></thead>";
+  const body = document.createElement("tbody");
+  for (const value of preview.personSummaries) { const row = document.createElement("tr"); for (const text of [value.personName, value.pastCount, value.futureCount, value.totalCount]) { const cell = document.createElement(row.children.length ? "td" : "th"); cell.textContent = text; row.appendChild(cell); } body.appendChild(row); }
+  table.appendChild(body); details.appendChild(table);
+  byId("hall-time-preview-print").href = `hallzeitenDrucken.html?id=${encodeURIComponent(selectedId)}&ansicht=all&vorschau=${encodeURIComponent(preview.previewHash)}`;
+  byId("hall-time-distribute-confirm").hidden = preview.openPlaceCount > 0;
+}
+
+async function previewDistribution() {
+  if (!selectedId || busy) return;
+  if (constraintsDirty) return feedback("Bitte die geänderten Verhinderungen zuerst speichern.", "error");
+  busy = true; feedback("Vorschau wird berechnet …", "loading");
+  try { const response = await previewDistributionEndpoint({ gridId: selectedId, expectedRevision: revision }); currentPreview = response.data.preview; renderPreview(currentPreview); openDialog(byId("hall-time-distribute-dialog")); feedback(); }
+  catch (error) { feedback(errorText(error), "error"); diagnostic.error("hall_time_admin_load_failed", error); if (error.code === "REVISION_CONFLICT") await load(); }
+  finally { busy = false; }
+}
+
+async function applyPreview() {
+  if (!selectedId || !currentPreview || currentPreview.openPlaceCount > 0 || busy) return;
+  const key = `hall-time-apply-preview:${selectedId}:${revision}:${currentPreview.previewHash}`; busy = true; feedback("Vorschau wird übernommen …", "loading");
+  try { await applyDistributionEndpoint({ operationId: getOperationId(key), gridId: selectedId, expectedRevision: revision, previewHash: currentPreview.previewHash }); releaseOperationId(key); byId("hall-time-distribute-dialog").close(); await load(); feedback("Die angezeigte Neuverteilung wurde übernommen.", "success"); }
+  catch (error) { releaseOperationId(key, error); feedback(errorText(error), "error"); diagnostic.error("hall_time_admin_write_failed", error); if (error.code === "REVISION_CONFLICT" || error.code === "HALL_TIME_PREVIEW_STALE") await load(); }
   finally { busy = false; }
 }
 
@@ -167,12 +249,9 @@ byId("hall-time-mode").addEventListener("change", updateMode);
 byId("hall-time-waitlist").addEventListener("change", updateWaitlist);
 byId("hall-time-player-filter").addEventListener("input", renderPlayers);
 byId("hall-time-slot-add").addEventListener("click", addSlotSeries);
-byId("hall-time-distribute").addEventListener("click", () => {
-  const dialog = byId("hall-time-distribute-dialog");
-  if (typeof dialog.showModal === "function") openDialog(dialog);
-  else if (window.confirm("Alle grünen und gelben Einträge zukünftiger Termine ersetzen?")) distribute();
-});
-byId("hall-time-distribute-confirm").addEventListener("click", (event) => { event.preventDefault(); byId("hall-time-distribute-dialog").close(); distribute(); });
+byId("hall-time-constraints-save").addEventListener("click", saveConstraints);
+byId("hall-time-distribute").addEventListener("click", previewDistribution);
+byId("hall-time-distribute-confirm").addEventListener("click", (event) => { event.preventDefault(); applyPreview(); });
 byId("hall-time-clear-all-statuses").addEventListener("click", () => {
   const dialog = byId("hall-time-clear-statuses-dialog");
   if (typeof dialog.showModal === "function") openDialog(dialog);

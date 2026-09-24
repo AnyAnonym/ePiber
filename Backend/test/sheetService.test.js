@@ -2713,6 +2713,35 @@ test("Neueinsteiger ohne ID-Spalte kann korrigiert und atomar entfernt werden", 
   repository.close();
 });
 
+test("Neueinsteiger-Ergebnis buendelt viele Rangverschiebungen in konstante Metadaten-Reads", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const initial = fixtures();
+  for (let rank = 3; rank <= 30; rank++) {
+    initial.Rangliste.push([`bulk-r${rank}`, "cup-1", `bulk-p${rank}`, String(rank), "", "", ""]);
+  }
+  initial.Matches1.push(["", "newcomer-bulk-win", "260904-1000", "", "cup-1", "", "p3", "", "p2", "", "", ""]);
+  const fake = fakeSheets(initial);
+  seedStore(fake.tables);
+  const service = new SheetService({ repository, messagingService, clientFactory: async () => fake.client, now: () => new Date(2026, 8, 4, 12, 0).getTime() });
+
+  await service.setMatchResult({ type: "user", id: "p3", role: "player" }, {
+    operationId: "00000000-0000-4000-8000-000000000550",
+    matchId: "newcomer-bulk-win",
+    kind: "regular",
+    result: "6-2/6-3",
+    matchStart: "260904-1000",
+    matchEnd: "260904-1100",
+    expectedFingerprint: matchCompletionFingerprint(initial.Matches1.at(-1), initial.Matches1[0]),
+  });
+
+  assert.equal(fake.calls.metadataRows, 4);
+  assert.equal(Number(fake.tables["RL-Platzierung"].find((row) => row[2] === "p3")[3]), 2);
+  assert.equal(Number(fake.tables["RL-Platzierung"].find((row) => row[2] === "bulk-p30")[3]), 31);
+  await service.stop();
+  repository.close();
+});
+
 test("Neueinsteiger-Niederlage reiht bei weniger als zehn Folgepositionen am Ende ein", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
@@ -2858,20 +2887,72 @@ test("Matchergebnis lehnt fremde Spieler, Zukunftsende und veraltete Fingerprint
   repository.close();
 });
 
-test("Walkover und Aufgabe kodieren nur den exakten Verlierermarker", async () => {
+test("Matchergebnis verlangt ueber vier Stunden eine Bestaetigung und erlaubt danach mehr als sechs Stunden", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const initial = fixtures();
+  initial.Matches1.push(
+    ["", "four-hour-result", "260904-0700", "", "cup-2", "", "p3", "", "p4", "", "", ""],
+    ["", "long-result", "260904-0400", "", "cup-2", "", "p3", "", "p4", "", "", ""],
+  );
+  const fake = fakeSheets(initial);
+  seedStore(fake.tables);
+  const service = new SheetService({ repository, messagingService, clientFactory: async () => fake.client, now: () => new Date(2026, 8, 4, 12, 0).getTime() });
+  const fourHourRow = initial.Matches1.find((row) => row[1] === "four-hour-result");
+  const fourHour = await service.setMatchResult({ type: "user", id: "p3", role: "player" }, {
+    operationId: "00000000-0000-4000-8000-000000000528",
+    matchId: "four-hour-result",
+    kind: "regular",
+    result: "6-4/6-4",
+    matchStart: "260904-0700",
+    matchEnd: "260904-1100",
+    expectedFingerprint: matchCompletionFingerprint(fourHourRow, initial.Matches1[0]),
+  });
+  assert.equal(fourHour.success, true);
+  const writesBeforeLongResult = fake.calls.valueUpdates.length;
+  const longRow = initial.Matches1.find((row) => row[1] === "long-result");
+  const params = {
+    operationId: "00000000-0000-4000-8000-000000000529",
+    matchId: "long-result",
+    kind: "regular",
+    result: "6-4/6-4",
+    matchStart: "260904-0400",
+    matchEnd: "260904-1100",
+    expectedFingerprint: matchCompletionFingerprint(longRow, initial.Matches1[0]),
+  };
+  await assert.rejects(service.setMatchResult({ type: "user", id: "p3", role: "player" }, params), { code: "MATCH_DURATION_CONFIRMATION_REQUIRED" });
+  assert.equal(fake.calls.valueUpdates.length, writesBeforeLongResult);
+  const completed = await service.setMatchResult({ type: "user", id: "p3", role: "player" }, {
+    ...params,
+    operationId: "00000000-0000-4000-8000-000000000530",
+    longDurationConfirmed: true,
+  });
+  assert.equal(completed.success, true);
+  assert.equal(fake.calls.valueUpdates.length > 0, true);
+  await service.stop();
+  repository.close();
+});
+
+test("Ohne Spieltermin bleiben Walkover und Aufgabe erlaubt, regulaere Ergebnisse aber gesperrt", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
   const initial = fixtures();
   initial.Bewerb[1][2] = "type-1";
   initial.Bewerbsart.push(["type-1", "Turnier", "", ""]);
   initial.Matches1.push(
-    ["", "result-wo", "260904-0900", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
-    ["", "result-ret", "260904-0900", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
+    ["", "result-wo", "", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
+    ["", "result-ret", "", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
+    ["", "result-regular-undated", "", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
   );
   const fake = fakeSheets(initial);
   seedStore(fake.tables);
   const service = new SheetService({ repository, messagingService, clientFactory: async () => fake.client, now: () => new Date(2026, 8, 4, 12, 0).getTime() });
   const principal = { type: "user", id: "p1", role: "player", name: "Ada Admin" };
+  await assert.rejects(service.setMatchResult(principal, {
+    operationId: "00000000-0000-4000-8000-000000000531", matchId: "result-regular-undated", kind: "regular", result: "6-4/6-4",
+    matchStart: "260904-0900", matchEnd: "260904-1030", expectedFingerprint: matchCompletionFingerprint(initial.Matches1[3], initial.Matches1[0]),
+  }), { code: "MATCH_APPOINTMENT_REQUIRED" });
+  assert.equal(fake.calls.valueUpdates.length, 0);
   await service.setMatchResult(principal, {
     operationId: "00000000-0000-4000-8000-000000000506", matchId: "result-wo", kind: "walkover", losingSide: 2,
     expectedFingerprint: matchCompletionFingerprint(initial.Matches1[1], initial.Matches1[0]),

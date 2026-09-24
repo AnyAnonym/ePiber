@@ -62,6 +62,15 @@ moeglichst wenigen Datei- und Suchzugriffen.
     zusaetzlich die festgelegten Android-, iPhone- und iPad-Profile. Neue Browser-
     APIs werden ueber Feature Detection statt User-Agent-Erkennung behandelt;
     Abweichungen und notwendige Fallbacks sind im selben Auftrag zu pruefen.
+14. Nach jeder erfolgreich geprueften Neuerstellung oder Aenderung einer
+    Grafana-Dashboard-JSON unter
+    `Project/server-configs/observability/grafana/dashboards/` wird die betroffene
+    Datei im PAJ-Testsystem ohne weitere Rueckfrage mit einem einzeiligen
+    `install -m 0644 /srv/http/ePiber/paj/Project/server-configs/observability/grafana/dashboards/<datei>.json /etc/grafana/dashboards/epiber/<datei>.json`
+    installiert und die Zieldatei anschliessend geprueft. Das Zielverzeichnis ist
+    dafuer `root:PiberDevel` und `2775`; Grafana uebernimmt die Datei automatisch.
+    Diese Freigabe gilt nicht fuer Live, Backend-Neustarts oder andere
+    Observability-Konfigurationen.
 
 ## Projekt
 
@@ -206,10 +215,16 @@ Schnellauftrag `nächste Aufgabe`:
 - Dafuer ist nur der Abschnitt `0A. SCHNELLABLAUF NAECHSTE AUFGABE` am Anfang von
   `Project/DokuVersGit.txt` zu lesen. Weitere Abschnitte werden nur bei einer dort
   genannten Abweichung gelesen.
-- Ist der unveraenderte Gesamtstand in derselben Session bereits geprueft und
-  getestet, wird nur der Status kurz abgeglichen und danach der dort definierte
-  `next-task --all-changed`-Schnellpfad verwendet. Bereits gepruefte Diffs und
-  Abschlusswerte werden nicht redundant erneut ausgelesen.
+- Besitzt der unveraenderte Gesamtstand einen gueltigen diffgebundenen
+  Pruefnachweis, wird sessionsuebergreifend nur der Status kurz abgeglichen und
+  danach der dort definierte `next-task --all-changed`-Schnellpfad verwendet.
+  Fehlt ein Nachweis, wird ausschliesslich das von der versionierten Pfadpolicy
+  verlangte Profil ueber `verification-workflow.mjs verify --suite auto`
+  ausgefuehrt; `next-task` startet keine unerwartete breite Testsuite.
+- Steht der offene Changelog-Kurzkommentar noch auf `offen`, wird nach der
+  Verifikation nicht die Datei geaendert, sondern der Kurzkommentar mit
+  `next-task --subject` uebergeben. Reine Workflow-Metadaten duerfen gueltige
+  Build- und Browsernachweise nicht entwerten.
 - Der Auftrag startet noch keine neue fachliche Umsetzung und autorisiert keinen
   Push, Merge, Netzwerkabgleich oder Main-Versionssprung.
 - Ohne den eindeutigen Auftrag `nächste Aufgabe` gelten die normalen Freigabe- und

@@ -163,6 +163,7 @@ test("sichtbar gewordene Seiten ersetzen die moeglicherweise eingefrorene Verbin
   const firstSocket = runtime.sockets[0];
   firstSocket.open();
   firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  await Promise.resolve();
 
   runtime.document.hidden = true;
   runtime.documentListeners.get("visibilitychange")();
@@ -190,6 +191,59 @@ test("sichtbar gewordene Seiten warten bei Backoff nicht auf einen eingefrorenen
 
   runtime.documentListeners.get("visibilitychange")();
   assert.equal(runtime.sockets.length, 2);
+});
+
+test("Vordergrund-Recovery begrenzt den Backoff auch nach mehreren Fehlversuchen", async (t) => {
+  const now = { value: 1000 };
+  const runtime = loadDataClient({ now });
+  t.after(() => runtime.api.disconnect());
+  let latestStatus;
+  runtime.api.onConnectionState((status) => { latestStatus = status; });
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  await Promise.resolve();
+
+  runtime.document.hidden = true;
+  runtime.documentListeners.get("visibilitychange")();
+  now.value += 60000;
+  runtime.document.hidden = false;
+  runtime.documentListeners.get("visibilitychange")();
+
+  const reconnects = [];
+  for (let attempt = 0; attempt < 5; attempt++) {
+    runtime.sockets.at(-1).close(1006, "network not ready");
+    assert.equal(latestStatus.state, "backoff");
+    assert.ok(latestStatus.retryInMs <= 2400, `Backoff war ${latestStatus.retryInMs} ms`);
+    reconnects.push(runtime.api.restartConnection());
+  }
+
+  const recoveredSocket = runtime.sockets.at(-1);
+  recoveredSocket.open();
+  recoveredSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  await Promise.all(reconnects);
+  assert.equal(runtime.api.isConnected(), true);
+});
+
+test("sichtbare Requests ueberholen einen laufenden passiven Reconnect-Backoff", async (t) => {
+  const runtime = loadDataClient();
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  await Promise.resolve();
+  firstSocket.close(1006, "network lost");
+  assert.equal(runtime.sockets.length, 1);
+
+  const request = runtime.api.request("players", {});
+  assert.equal(runtime.sockets.length, 2);
+  const replacement = runtime.sockets[1];
+  replacement.open();
+  replacement.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  await Promise.resolve();
+  const message = replacement.sent.find((entry) => entry.type === "request" && entry.endpoint === "players");
+  replacement.receive({ type: "response", v: 2, id: message.id, endpoint: "players", data: { success: true } });
+  assert.equal((await request).success, true);
 });
 
 test("Timerluecke erkennt Android-Standby auch nach einer frischen WebSocket-Nachricht", (t) => {

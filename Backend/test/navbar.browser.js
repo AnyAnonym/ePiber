@@ -119,6 +119,10 @@ export const subscribeInvalidations = (topics, callback) => {
   return () => topics.forEach((topic) => window.__invalidationCallbacks.delete(topic));
 };
 export const subscribe = () => () => {};
+export const onConnectionState = (callback) => {
+  callback({ connected: true, state: "connected" });
+  return () => {};
+};
 const rankings = [
   { competitionId: "r1", competitionName: "Herren", competitionEndAt: 1, competitionEnded: false, rank: 1, status: "active", canChallenge: true, canWithdraw: true },
   { competitionId: "r2", competitionName: "Damen Doppel Lang", competitionEndAt: 2, competitionEnded: false, rank: 2, status: "active", canChallenge: false, canWithdraw: false, openChallenge: { matchId: "match-r2", direction: "challenger", opponentName: "Test Gegner", opponentRank: 5, challengedAt: "260829-1200", matchDate: "260905-1600" } },
@@ -361,6 +365,21 @@ export function createEndpoint(name) {
     }
     if (["setMatchResult", "adminSetMatchEnd", "adminClearMatchResult", "adminCorrectRankingResult"].includes(name)) {
       window.__matchResultCalls.push({ endpoint: name, ...params });
+      const search = new URLSearchParams(window.location.search);
+      if (search.get("resultRateLimited") === "1") {
+        const error = new Error("Die Google-Sheets-Schnittstelle hat ihr Zugriffslimit erreicht.");
+        error.code = "SHEETS_RATE_LIMITED";
+        error.details = { retryAfterMs: Number(search.get("retryMs")) || 60000 };
+        throw error;
+      }
+      if (search.get("pendingResult") === "1") {
+        return new Promise((resolve) => {
+          window.__resolveMatchResult = () => {
+            delete window.__resolveMatchResult;
+            resolve({ data: { success: true, matchId: params.matchId, fingerprint: "e".repeat(64) } });
+          };
+        });
+      }
       return { data: { success: true, matchId: params.matchId, fingerprint: "e".repeat(64) } };
     }
     return { data: { success: true } };
@@ -945,6 +964,10 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     const picker = page.locator("#favoriteMatchPickerModal");
     await picker.waitFor({ state: "visible" });
     assert.equal(await picker.locator(".favorite-match-picker-item").count() > 0, true);
+    const firstMatchChoice = picker.locator(".favorite-match-picker-item").first();
+    assert.equal(await firstMatchChoice.locator(".favorite-match-picker-heading").textContent(), "Herren - 1. Gruppe");
+    assert.equal(await firstMatchChoice.locator(".favorite-match-picker-appointment").textContent(), "03.09.2026, 10:00 Uhr");
+    assert.equal(await firstMatchChoice.locator(".favorite-match-picker-teams").textContent(), "Own Player / Doubles Partner vs. Foreign Player");
     await picker.locator(".modal-favorite-star:visible").click();
     await picker.locator(".close").click();
 
@@ -954,7 +977,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     await favorites.locator(".mobile-nav-favorites-edit").click();
     assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
     const rows = favorites.locator(".mobile-nav-favorite");
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Ergebnis eingeben"]);
     assert.equal(await favorites.locator(".mobile-nav-drag-handle:visible").count(), 2);
     const firstBox = await favorites.locator(".mobile-nav-drag-handle").nth(0).boundingBox();
     const secondBox = await favorites.locator(".mobile-nav-drag-handle").nth(1).boundingBox();
@@ -962,16 +985,132 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     await page.mouse.down();
     await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + 2, { steps: 4 });
     await page.mouse.up();
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Matches"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Ergebnis eingeben", "Matches"]);
     assert.equal(await favorites.locator(".mobile-nav-favorites-edit").getAttribute("aria-pressed"), "true");
     await favorites.locator(".mobile-nav-drag-handle").nth(1).focus();
     await page.keyboard.press("ArrowUp");
-    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Matches", "Ergebnis eingeben"]);
 
     assert.equal(await favorites.locator(".mobile-nav-favorites-toggle").getAttribute("aria-expanded"), "true");
     await rows.nth(1).locator(".mobile-nav-favorite-link").click();
     await picker.waitFor({ state: "visible" });
     assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-expanded"), "false");
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Ergebniseingabe und Terminauswahl formatieren Matchkarten und bestaetigen lange Matchdauer", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => {
+      const origin = document.createElement("button");
+      origin.id = "matchActionOrigin";
+      origin.textContent = "Match öffnen";
+      document.body.appendChild(origin);
+      origin.focus();
+      window.openMatchActionPicker("match-r2", { returnFocus: origin });
+    });
+    const actionPicker = page.getByRole("dialog", { name: "Matchaktion auswählen" });
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await actionPicker.getByRole("button", { name: "Termin festlegen/ändern", exact: true }).isVisible(), true);
+    await actionPicker.getByRole("button", { name: "Matchaktion abbrechen" }).click();
+    assert.equal(await page.locator("#matchActionOrigin").evaluate((element) => document.activeElement === element), true);
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).waitFor({ state: "visible" });
+    await actionPicker.click({ position: { x: 2, y: 2 } });
+    await actionPicker.waitFor({ state: "hidden" });
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await actionPicker.waitFor({ state: "hidden" });
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Ergebnis eingeben", exact: true }).click();
+    const actionResultDialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
+    await actionResultDialog.waitFor({ state: "visible" });
+    await actionResultDialog.getByRole("button", { name: "Ergebnisdialog abbrechen" }).click();
+
+    await page.evaluate(() => window.openMatchActionPicker("match-r2", { returnFocus: document.getElementById("matchActionOrigin") }));
+    await actionPicker.getByRole("button", { name: "Termin festlegen/ändern", exact: true }).click();
+    const actionAppointmentDialog = page.getByRole("dialog", { name: "Termin abändern" });
+    await actionAppointmentDialog.waitFor({ state: "visible" });
+    await actionAppointmentDialog.getByRole("button", { name: "Terminauswahl schließen" }).click();
+
+    await page.evaluate(() => window.openFavoriteMatchAction("match-appointment"));
+    const appointmentPicker = page.getByRole("dialog", { name: "Termin festlegen / ändern" });
+    const appointmentChoice = appointmentPicker.locator(".favorite-match-picker-item").first();
+    await appointmentChoice.waitFor({ state: "visible" });
+    assert.equal(await appointmentChoice.locator(".favorite-match-picker-heading").textContent(), "Damen Doppel Lang - Finale");
+    assert.equal(await appointmentChoice.locator(".favorite-match-picker-appointment").textContent(), "05.09.2026, 16:00 Uhr");
+    assert.equal(await appointmentChoice.locator(".favorite-match-picker-teams").textContent(), "Own Player vs. Test Gegner");
+    const undatedAppointmentChoice = appointmentPicker.locator(".favorite-match-picker-item", { hasText: "noch kein Spieltermin fixiert" }).first();
+    assert.equal(await undatedAppointmentChoice.locator(".favorite-match-picker-appointment").textContent(), "noch kein Spieltermin fixiert");
+    assert.equal(await appointmentChoice.evaluate((button) => {
+      const heading = button.querySelector(".favorite-match-picker-heading").getBoundingClientRect();
+      const appointment = button.querySelector(".favorite-match-picker-appointment").getBoundingClientRect();
+      const teams = button.querySelector(".favorite-match-picker-teams").getBoundingClientRect();
+      return appointment.top >= heading.bottom && teams.top >= appointment.bottom;
+    }), true);
+    await appointmentPicker.getByRole("button", { name: "Matchauswahl schließen" }).click();
+
+    await page.evaluate(() => window.openFavoriteMatchAction("match-result"));
+    const picker = page.getByRole("dialog", { name: "Ergebnis eingeben" });
+    const choice = picker.locator(".favorite-match-picker-item").first();
+    await choice.waitFor({ state: "visible" });
+    assert.equal(await choice.locator(".favorite-match-picker-heading").textContent(), "Herren - 1. Gruppe");
+    assert.equal(await choice.locator(".favorite-match-picker-appointment").textContent(), "03.09.2026, 10:00 Uhr");
+    assert.equal(await choice.locator(".favorite-match-picker-teams").textContent(), "Own Player / Doubles Partner vs. Foreign Player");
+    const undatedChoice = picker.locator(".favorite-match-picker-item", { hasText: "noch kein Spieltermin fixiert" }).first();
+    assert.equal(await undatedChoice.locator(".favorite-match-picker-heading").textContent(), "Herren");
+    assert.equal(await undatedChoice.locator(".favorite-match-picker-appointment").textContent(), "noch kein Spieltermin fixiert");
+    assert.equal(await choice.evaluate((button) => {
+      const heading = button.querySelector(".favorite-match-picker-heading").getBoundingClientRect();
+      const appointment = button.querySelector(".favorite-match-picker-appointment").getBoundingClientRect();
+      const teams = button.querySelector(".favorite-match-picker-teams").getBoundingClientRect();
+      return appointment.top >= heading.bottom && teams.top >= appointment.bottom;
+    }), true);
+    await choice.click();
+
+    const dialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
+    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:15");
+    for (const [label, value] of [
+      ["Set 1, Own Player / Doubles Partner", "6"], ["Set 1, Foreign Player", "4"],
+      ["Set 2, Own Player / Doubles Partner", "6"], ["Set 2, Foreign Player", "4"],
+    ]) {
+      const input = dialog.getByLabel(label, { exact: true });
+      await input.fill(value);
+      await input.blur();
+    }
+    await dialog.locator("#matchResultEnd").fill("2026-09-03T16:30");
+    await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    const confirmation = dialog.getByRole("alertdialog", { name: "Lange Matchdauer bestätigen" });
+    await confirmation.waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 0);
+    await confirmation.getByRole("button", { name: "Zurück für Korrektur", exact: true }).click();
+    assert.equal(await dialog.locator("#matchResultEnd").evaluate((input) => document.activeElement === input), true);
+    await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&pendingResult=1`));
+    await confirmation.getByRole("button", { name: "Ja Passt", exact: true }).click();
+    await page.waitForFunction(() => window.__matchResultCalls.length === 1);
+    assert.equal(await dialog.locator("#matchResultSubmit").isDisabled(), true);
+    assert.match(await dialog.locator("#matchResultStatus").textContent(), /Ergebnis und Rangliste werden gespeichert/);
+    const request = await page.evaluate(() => window.__matchResultCalls[0]);
+    assert.equal(request.matchStart, "260903-1015");
+    assert.equal(request.matchEnd, "260903-1630");
+    assert.equal(request.longDurationConfirmed, true);
+    await page.evaluate(() => window.__resolveMatchResult());
+    await page.waitForFunction(() => document.getElementById("profileModal")?.getAttribute("inert") === null);
+    await page.close();
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -1020,7 +1159,7 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await page.goto(`http://127.0.0.1:${server.address().port}/favorites.html?role=player&twoFavorites=1`, { waitUntil: "domcontentloaded" });
     const rows = page.locator(".favorites-page-item");
     await rows.first().waitFor({ state: "visible" });
-    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Mobile Rangliste", "Spieleingabe"]);
+    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Mobile Rangliste", "Ergebnis eingeben"]);
     const shortListLayout = await page.evaluate(() => {
       const main = document.querySelector(".favorites-page").getBoundingClientRect();
       const heading = document.querySelector(".favorites-page-heading").getBoundingClientRect();
@@ -1043,11 +1182,11 @@ test("Persoenliche Startseite wird automatisch gespeichert und Favoritensortieru
     await page.locator("#favoritesPageEdit").click();
     await rows.nth(1).locator(".favorites-page-drag-handle").focus();
     await page.keyboard.press("ArrowUp");
-    await page.waitForFunction(() => document.querySelector(".favorites-page-link span")?.textContent === "Spieleingabe");
-    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Spieleingabe", "Mobile Rangliste"]);
+    await page.waitForFunction(() => document.querySelector(".favorites-page-link span")?.textContent === "Ergebnis eingeben");
+    assert.deepEqual(await rows.locator(".favorites-page-link > span").allTextContents(), ["Ergebnis eingeben", "Mobile Rangliste"]);
     await page.locator("#hamburgerBtn").click();
     await page.locator(".mobile-nav-favorites-toggle").click();
-    assert.deepEqual(await page.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Spieleingabe", "Mobile Rangliste"]);
+    assert.deepEqual(await page.locator(".mobile-nav-favorite-link > span").allTextContents(), ["Ergebnis eingeben", "Mobile Rangliste"]);
 
     const longListLayout = await page.evaluate(() => {
       const list = document.querySelector("#favoritesPageList");
@@ -1352,6 +1491,10 @@ test("Dashboard zeigt aktuelle Geburtstage mit Alter und oeffnet das bestehende 
     const highlightCount = await highlights.count();
     assert.match(await highlights.nth(highlightCount - 2).textContent(), /Mixed Doppel.*Elke Hahn & Alexander Hrazdera/s);
     assert.match(await highlights.nth(highlightCount - 1).textContent(), /Mixed Doppel.*Monika Strauß & Alfred Pimminger/s);
+    const mensDoublesChampion = page.locator(".highlight-list > .highlight", { hasText: "Männer Doppel · Vereinsmeister" });
+    const mensDoublesRunnerUp = page.locator(".highlight-list > .highlight", { hasText: "Männer Doppel · Vizemeister" });
+    assert.equal(await mensDoublesChampion.locator("h3").textContent(), "Tobias Nöbauer & Moritz Halva");
+    assert.equal(await mensDoublesRunnerUp.locator("h3").textContent(), "Roland Strauß & Jakob Packy");
     await page.evaluate(() => {
       window.openProfileModal = (options) => { window.__openedDashboardProfile = options; };
     });
@@ -1932,7 +2075,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(await dialog.locator("#matchResultEncounter").textContent(), "Own Player / Doubles Partner gegen Foreign Player");
     assert.equal(await dialog.locator("#matchResultTarget").evaluate((target) => getComputedStyle(target).textAlign), "center");
     assert.equal(await dialog.locator("#matchResultStart").getAttribute("required"), "");
-    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:00");
+    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:15");
     assert.equal(await dialog.locator("#matchResultEnd").getAttribute("required"), "");
     assert.deepEqual(await dialog.locator(".match-result-score-column > h3").allTextContents(), ["Set 1", "Set 2", "Set 3"]);
     assert.equal(await dialog.locator('input[name="result"]').count(), 0);
@@ -1962,7 +2105,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(await dialog.locator("#matchResultLosingSide").getAttribute("required"), "");
     await dialog.locator("#matchResultLosingSide").selectOption("2");
     await dialog.locator("#matchResultKind").selectOption("regular");
-    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:00");
+    assert.equal(await dialog.locator("#matchResultStart").inputValue(), "2026-09-03T10:15");
     assert.equal(await dialog.locator("#matchResultStart").getAttribute("readonly"), null);
     await page.keyboard.press("Shift+Tab");
     assert.equal(await page.evaluate(() => document.activeElement?.closest("#matchResultModal")?.id), "matchResultModal");
@@ -1996,13 +2139,27 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     const tieBreakBottom = dialog.getByLabel("Tie-Break in Set 1, Foreign Player", { exact: true });
     await tieBreakBottom.fill("5");
     await tieBreakBottom.blur();
-    await dialog.locator("#matchResultEnd").fill("2026-09-03T12:00");
+    await dialog.locator("#matchResultEnd").fill("2026-09-03T16:30");
     await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    const durationConfirmation = dialog.getByRole("alertdialog", { name: "Lange Matchdauer bestätigen" });
+    await durationConfirmation.waitFor({ state: "visible" });
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 0);
+    await durationConfirmation.getByRole("button", { name: "Zurück für Korrektur", exact: true }).click();
+    assert.equal(await dialog.locator("#matchResultEnd").evaluate((input) => document.activeElement === input), true);
+    await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&pendingResult=1`));
+    await durationConfirmation.getByRole("button", { name: "Ja Passt", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 1);
+    assert.equal(await dialog.locator("#matchResultSubmit").isDisabled(), true);
+    assert.match(await dialog.locator("#matchResultStatus").textContent(), /Ergebnis und Rangliste werden gespeichert/);
+    await page.evaluate(() => window.__resolveMatchResult());
+    await page.waitForFunction(() => !window.__resolveMatchResult);
+    await page.waitForFunction(() => document.getElementById("profileModal")?.getAttribute("inert") === null);
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player`));
     const initial = await page.evaluate(() => window.__matchResultCalls[0]);
     assert.deepEqual(initial, {
       endpoint: "setMatchResult", matchId: "match-open", expectedFingerprint: "a".repeat(64), kind: "regular",
-      result: "7-6(5)/6-4", matchStart: "260903-1000", matchEnd: "260903-1200",
+      result: "7-6(5)/6-4", matchStart: "260903-1015", matchEnd: "260903-1630", longDurationConfirmed: true,
       operationId: initial.operationId,
     });
     assert.match(initial.operationId, /^operation-match-result:result:match-open:/);
@@ -2013,6 +2170,19 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     await page.locator('[data-match-id="match-without-date"]').getByRole("button", { name: "Ergebnis eintragen", exact: true }).click();
     assert.deepEqual(await page.locator("#matchResultScoreEditor .match-result-score-column > h3").allTextContents(), ["Set 1", "Set 2", "Set 3", "Set 4", "Set 5"]);
     assert.equal(await page.locator("#matchResultScoreEditor .match-result-score-column").nth(4).evaluate((column) => column.classList.contains("match-tiebreak")), true);
+    assert.equal(await page.locator("#matchResultKind").inputValue(), "");
+    assert.equal(await page.locator('#matchResultKind option[value="regular"]').isDisabled(), true);
+    assert.equal(await page.locator('#matchResultKind option[value="regular"]').textContent(), "Regulär (Spieltermin erforderlich)");
+    assert.equal(await page.locator("#matchResultAppointmentRequired").isVisible(), true);
+    assert.equal(await page.locator("#matchResultValueFields").isHidden(), true);
+    assert.equal(await page.locator("#matchResultStartFields").isHidden(), true);
+    assert.equal(await page.locator("#matchResultEndFields").isHidden(), true);
+    await page.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    assert.match(await page.locator("#matchResultStatus").textContent(), /Abschlussart/);
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 1);
+    await page.locator("#matchResultKind").selectOption("retirement");
+    assert.equal(await page.locator("#matchResultStartFields").isVisible(), true);
+    assert.equal(await page.locator("#matchResultEndFields").isVisible(), true);
     const undatedStart = await page.locator("#matchResultStart").inputValue();
     const parsedUndatedStart = new Date(undatedStart).getTime();
     assert.equal(parsedUndatedStart >= beforeUndatedDialog - 91 * 60 * 1000 && parsedUndatedStart <= Date.now() - 89 * 60 * 1000, true);
@@ -2039,6 +2209,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(Object.hasOwn(corrected, "matchEnd"), false);
     assert.equal(corrected.expectedFingerprint, "b".repeat(64));
 
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&resultRateLimited=1&retryMs=1200`));
     await page.getByRole("tab", { name: "Herren", exact: true }).click();
     await page.locator('[data-match-id="match-without-date"]').getByRole("button", { name: "Ergebnis eintragen", exact: true }).click();
     const walkoverDialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
@@ -2046,7 +2217,14 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     await walkoverDialog.locator("#matchResultLosingSide").selectOption("1");
     await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 3);
-    const walkoverRequest = await page.evaluate(() => window.__matchResultCalls[2]);
+    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /Google Sheets ist vorübergehend ausgelastet/);
+    assert.match(await walkoverDialog.locator("#matchResultSubmit").textContent(), /^Erneut in [12] s$/);
+    await page.waitForFunction(() => document.getElementById("matchResultSubmit")?.textContent === "Ergebnis speichern");
+    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /jetzt erneut speichern/);
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player`));
+    await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    await page.waitForFunction(() => window.__matchResultCalls.length === 4);
+    const walkoverRequest = await page.evaluate(() => window.__matchResultCalls[3]);
     assert.equal(walkoverRequest.kind, "walkover");
     assert.equal(walkoverRequest.losingSide, 1);
     assert.equal(Object.hasOwn(walkoverRequest, "matchStart"), false);

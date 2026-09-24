@@ -40,6 +40,16 @@ globalThis.__scoreboardTest = {
     snapshot.scores.revision += 1;
     snapshot.scores.courts[0].punktehome = value;
   },
+  setFinalResult() {
+    snapshot.scores.revision += 1;
+    Object.assign(snapshot.scores.courts[0], {
+      satz1home: 6, satz1gast: 4,
+      satz2home: 7, satz2gast: 6,
+      satz3home: 10, satz3gast: 8,
+      punktehome: 0, punktegast: 0,
+      satz3matchtiebreak: true,
+    });
+  },
 };
 export const createEndpoint = () => async () => {
   snapshotCalls += 1;
@@ -169,6 +179,34 @@ test("Scoreboard holt beim Aufwachen ohne Seitenreload einen aktuellen Snapshot"
       const loader = document.getElementById("scoreboard-loader");
       return !loader || loader.classList.contains("hidden");
     }), true);
+  } finally {
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Scoreboard zeigt ein bestaetigtes Ergebnis in den vorhandenen Satzspalten", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/scoreboard-test.html`, { waitUntil: "domcontentloaded" });
+    await page.locator("#scoreboard-content.loaded").waitFor({ state: "visible" });
+    await page.evaluate(() => {
+      globalThis.__scoreboardTest.setFinalResult();
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.waitForFunction(() => document.getElementById("p1-h-s3")?.textContent === "10");
+    assert.deepEqual(await page.evaluate(() => [
+      "p1-h-s1", "p1-h-s2", "p1-h-s3", "p1-h-p",
+      "p1-g-s1", "p1-g-s2", "p1-g-s3", "p1-g-p",
+    ].map((id) => document.getElementById(id)?.textContent)), ["6", "7", "10", "0", "4", "6", "8", "0"]);
+    assert.equal(await page.locator("#p1-h-s3").evaluate((node) => node.classList.contains("match-tiebreak")), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   } finally {
     await browser?.close();
     await new Promise((resolve) => server.close(resolve));

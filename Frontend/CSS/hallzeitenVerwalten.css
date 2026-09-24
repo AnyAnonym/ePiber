@@ -22,10 +22,23 @@
 .hall-time-slot-help { margin: -.25rem 0 .5rem; color: var(--muted); font-size: .9rem; }
 .hall-time-slot-row { display: grid; grid-template-columns: 1fr 110px 110px auto; gap: .5rem; align-items: center; padding: .45rem 0; border-bottom: 1px solid #e4e9e5; }
 .hall-time-admin-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
-.hall-time-admin-form button, .hall-time-admin-list button, #hall-time-distribute-dialog button, #hall-time-clear-statuses-dialog button { padding: .6rem .8rem; border: 1px solid #7c9c84; border-radius: 8px; cursor: pointer; }
+.hall-time-constraints-scroll { max-width: 100%; overflow: auto; border: 1px solid #d7e1d9; border-radius: 8px; margin-bottom: .65rem; }
+.hall-time-constraints-table, .hall-time-preview-table { width: 100%; border-collapse: collapse; background: #fff; }
+.hall-time-constraints-table th, .hall-time-constraints-table td, .hall-time-preview-table th, .hall-time-preview-table td { padding: .45rem; border: 1px solid #d7e1d9; text-align: left; white-space: nowrap; }
+.hall-time-constraints-table thead th, .hall-time-constraints-table tbody th { position: sticky; z-index: 1; background: #eef5f0; }
+.hall-time-constraints-table thead th { top: 0; }
+.hall-time-constraints-table tbody th { left: 0; }
+.hall-time-constraints-table select { min-width: 155px; }
+.hall-time-preview-note { font-weight: 700; }
+#hall-time-preview-summary[data-quality="complete"] { color: #176b35; }
+#hall-time-preview-summary[data-quality="warning"] { color: #8a5a00; }
+#hall-time-preview-summary[data-quality="incomplete"] { color: #a52b2b; }
+#hall-time-preview-details { max-height: min(55vh, 560px); overflow: auto; text-align: left; }
+.hall-time-admin-form button, .hall-time-admin-list button, #hall-time-distribute-dialog button, #hall-time-distribute-dialog a, #hall-time-clear-statuses-dialog button { padding: .6rem .8rem; border: 1px solid #7c9c84; border-radius: 8px; cursor: pointer; }
+#hall-time-distribute-dialog a { color: #135b3f; background: #eef5f0; font-weight: 700; text-decoration: none; }
 .hall-time-admin-form button.primary, #hall-time-distribute-dialog button.primary { background: #176b35; color: #fff; }
 .hall-time-admin-form button.danger, #hall-time-clear-statuses-dialog button.danger { border-color: #9d2f2f; background: #a52b2b; color: #fff; }
-#hall-time-distribute-dialog, #hall-time-clear-statuses-dialog { box-sizing: border-box; position: fixed; inset: 0; width: 560px; max-width: calc(100% - 1rem); height: fit-content; max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); margin: auto; overflow: auto; border: 0; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.3); transform: translate(var(--hall-time-dialog-offset-x, 0), var(--hall-time-dialog-offset-y, 0)); }
+#hall-time-distribute-dialog, #hall-time-clear-statuses-dialog { box-sizing: border-box; position: fixed; inset: 0; width: 760px; max-width: calc(100% - 1rem); height: fit-content; max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); margin: auto; overflow: auto; border: 0; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.3); transform: translate(var(--hall-time-dialog-offset-x, 0), var(--hall-time-dialog-offset-y, 0)); }
 #hall-time-distribute-dialog::backdrop, #hall-time-clear-statuses-dialog::backdrop { background: rgba(0,0,0,.45); }
 #hall-time-distribute-dialog form, #hall-time-clear-statuses-dialog form { position: relative; padding-top: .6rem; text-align: center; }
 #hall-time-distribute-dialog h2, #hall-time-clear-statuses-dialog h2 { margin-top: 0; }

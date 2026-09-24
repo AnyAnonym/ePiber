@@ -1,4 +1,5 @@
 import { createEndpoint, subscribeInvalidations } from "./dataClient.js";
+import { getUser, subscribeAuth } from "./authClient.js";
 import { callWithRetry, showLoadingOverlay, hideLoadingOverlay, showErrorOverlay } from "./loadingHelper.js";
 import { signalMonitorReady, signalMonitorFailed } from "./monitorReady.js";
 
@@ -132,6 +133,20 @@ function formatSetResult(raw) {
     const sup = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"};
     return tb.split("").map((d) => sup[d] || d).join("");
   });
+}
+
+function canOpenOwnMatchActions(match) {
+  const userId = String(getUser()?.id || "").trim();
+  if (!userId || !match?.id || match.isPlayed || match.isBye) return false;
+  const completePrimaryPlayers = Boolean(match.p1.id && match.p3.id);
+  const completePartners = Boolean(match.p2.id) === Boolean(match.p4.id);
+  const participantIds = [match.p1.id, match.p2.id, match.p3.id, match.p4.id];
+  return completePrimaryPlayers && completePartners && participantIds.includes(userId);
+}
+
+function openOwnMatchActions(match, card) {
+  if (!canOpenOwnMatchActions(match) || typeof window.openMatchActionPicker !== "function") return;
+  window.openMatchActionPicker(match.id, { returnFocus: card });
 }
 
 // ── Daten laden ──
@@ -379,6 +394,19 @@ function renderMatches() {
 
     const card = document.createElement("div");
     card.className = "m1-card";
+    card.dataset.matchId = m.id;
+    if (canOpenOwnMatchActions(m)) {
+      card.classList.add("m1-card-actionable");
+      card.setAttribute("role", "button");
+      card.tabIndex = 0;
+      card.setAttribute("aria-label", `Aktionen für ${team1Name} gegen ${team2Name} öffnen`);
+      card.addEventListener("click", () => openOwnMatchActions(m, card));
+      card.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openOwnMatchActions(m, card);
+      });
+    }
 
     const meta = document.createElement("div");
     meta.className = "m1-meta";
@@ -515,6 +543,9 @@ function initControls() {
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     initControls();
+    subscribeAuth(() => {
+      if (matchesLoaded) renderMatches();
+    });
     const rendered = await loadData();
     if (rendered) signalMonitorReady();
     else signalMonitorFailed();

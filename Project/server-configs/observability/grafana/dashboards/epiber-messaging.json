@@ -1,7 +1,7 @@
 {
   "annotations": { "list": [] },
   "description": "Geschützte gemeinsame Ansicht persönlicher Meldungen sowie der Bewerbs- und Hallenraster-Historien.",
-  "editable": false,
+  "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "links": [],
@@ -78,7 +78,7 @@
     {
       "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "epiber-messaging" },
       "description": "Vertrauliche gemeinsame Meldungsprojektion. Exportierte Daten unterliegen derselben Schutzklasse wie messaging.sqlite und state.sqlite.",
-      "fieldConfig": { "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": true }, "mappings": [] }, "overrides": [] },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "filterable": true, "inspect": true }, "mappings": [] }, "overrides": [] },
       "gridPos": { "h": 16, "w": 24, "x": 0, "y": 25 }, "id": 7,
       "options": { "cellHeight": "sm", "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true, "sortBy": [{ "desc": true, "displayName": "Zeit" }] },
       "targets": [{
@@ -128,6 +128,6 @@
   "timezone": "Europe/Vienna",
   "title": "ePiber Meldungen",
   "uid": "epiber-messaging",
-  "version": 2,
+  "version": 3,
   "weekStart": "monday"
 }
