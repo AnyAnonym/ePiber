@@ -113,3 +113,13 @@ Commit: 4.12.3-paj-1-13 | Grafana-Dashboards editierbar gemacht
   - [Grafana] Dashboard-Versionen lueckenlos erhoeht, damit der bereits aktive Provider alle Ressourcen mit der neuen UI-Schreibfreigabe erneut provisioniert.
   - [Betrieb] Dokumentiert, dass gespeicherte UI-Aenderungen nicht ins Repository zurueckfliessen und bei einer spaeteren JSON-Neuinstallation ueberschrieben werden koennen.
   - [Tests] Editierbarkeit aller Dashboard-JSON-Dateien und `allowUiUpdates` im Provisioning statisch abgesichert.
+
+[4.12.3-paj-1-14] - 2026-09-24
+Commit: 4.12.3-paj-1-14 | Matchergebnis am Scoreboard anzeigen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-13-x` gesetzt.
+  - [Scoreboard] Das bestaetigte Ergebnis des exakt zugewiesenen Matches nach dem Abschluss anstelle eines abweichenden eingefrorenen Receiverstands angezeigt; Punkte werden dabei auf Null gesetzt.
+  - [Ergebnisfolgen] Korrekturen unmittelbar uebernommen und nach einer Ergebnisloeschung den weiterhin inaktiven Court auf Nullstaende gesetzt; Walkover ohne Zahlen bleibt rein numerisch bei Null.
+  - [Datenhaltung] Die Abschlussanzeige aus den autoritativen Matchdaten projiziert, sodass weder Receiver-Rohwerte noch ScoreLog veraendert werden und der Stand einen Backendneustart ueberlebt.
+  - [Tests] Regulaeren Abschluss, Tie-Break, Match-Tie-Break, Aufgabe, Walkover, Korrektur-/Loeschpfad, exakte Matchbindung, Drei-Satz-Anzeigegrenze und responsive Scoreboard-Darstellung abgesichert.

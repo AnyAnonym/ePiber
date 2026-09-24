@@ -1199,6 +1199,15 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     satztiebreak: "3-3",
     entscheidenderSatz: "MT10",
   });
+  const completedScoreboard = await adminClient.request("scoreboardSnapshot");
+  assert.deepEqual(completedScoreboard.data.scores.courts.find((court) => String(court.platz) === "1"), {
+    platz: "1",
+    satz1home: "6", satz1gast: "4",
+    satz2home: "6", satz2gast: "4",
+    satz3home: "0", satz3gast: "0",
+    punktehome: "0", punktegast: "0",
+    satz3matchtiebreak: true,
+  });
   dataStore.set("matchtyp", [["ID", "Bezeichnung", "Satztiebreak", "Entscheidender Satz"], ["1", "Normal", "6-6", "vollstaendiger Satz"], ["2", "Geaendert", "4-4", "MT7"]], { source: "test-edit" });
   const persistedAssignment = await adminClient.request("getScoreboardCourts");
   assert.deepEqual(persistedAssignment.data.courts["1"].displayRules, assignment.data.court.displayRules);

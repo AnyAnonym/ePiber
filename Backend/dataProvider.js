@@ -1097,6 +1097,7 @@ function compileNavigator(params) {
 function scoreboardScores(scoreSnapshot = courtPoller.getLastData()) {
   return projectScoreboardScores(scoreSnapshot, {
     courts: stateStore.getScoreboardCourts(),
+    matches: dataStore.get("matches1"),
   });
 }
 
@@ -2301,6 +2302,7 @@ function init(server, options) {
         publish("scores", scoreboardScores());
       }
     }
+    if (event.table === "matches1" && event.current) publish("scores", scoreboardScores());
     const topicByTable = { matches1: "matches", players: "players", bewerbe: "bewerbe", bewerbsart: "bewerbsart", matchtyp: "matchtyp", entryList: "entryList", rlPlatzierung: "ranking", navigator: "navigator" };
     const topic = topicByTable[event.table];
     if (topic) publish(topic, event);
