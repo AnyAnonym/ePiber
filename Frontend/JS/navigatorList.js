@@ -834,6 +834,18 @@ function displaySheetDate(raw) {
   return `${day}.${month}. - ${hour}:${minute}`;
 }
 
+function automaticActivationLabel(court) {
+  const automation = court?.automaticActivation;
+  if (!automation || !court?.matchId) return "Keine Startautomatik";
+  const time = String(automation.matchDate || "").match(/^\d{6}-(\d{2})(\d{2})$/);
+  const scheduled = time ? `${time[1]}:${time[2]}` : "ohne Termin";
+  if (automation.status === "pending") return `Automatischer Start: ${scheduled}`;
+  if (automation.status === "activated") return "Automatik gestartet";
+  if (automation.status === "finished") return "Nach Ergebnis deaktiviert";
+  if (automation.status === "expired") return "Startzeit überschritten";
+  return "Keine Startautomatik";
+}
+
 function displayRound(raw) {
   const match = String(raw || "").trim().toUpperCase().match(/^(R\d+|AF|VF|HF|F|G\d+)/);
   if (!match) return "";
@@ -1060,7 +1072,10 @@ async function openCourtActivationOverlay() {
     const button = buttons.get(court);
     if (!button) return;
     const active = courtData[court]?.aktiv === 1;
-    button.textContent = `Platz ${court}: ${active ? "aktiv" : "inaktiv"}`;
+    button.replaceChildren(
+      element("span", "platz-aktivierung-status", `Platz ${court}: ${active ? "aktiv" : "inaktiv"}`),
+      element("span", "platz-aktivierung-automatik", automaticActivationLabel(courtData[court])),
+    );
     button.classList.toggle("aktivierung-active", active);
     button.classList.toggle("aktivierung-inactive", !active);
   }

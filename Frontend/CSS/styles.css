@@ -5052,6 +5052,15 @@ button.bracket-player-name:focus-visible {
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, color 0.2s;
   font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.platz-aktivierung-automatik {
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .platz-aktivierung-btn.aktivierung-active {

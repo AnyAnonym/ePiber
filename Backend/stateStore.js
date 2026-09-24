@@ -19,6 +19,7 @@ const DEFAULT_COURT = Object.freeze({
   dateTime: "",
   runde: "",
   aktiv: 0,
+  automaticActivation: null,
 });
 
 function ensureReady() {

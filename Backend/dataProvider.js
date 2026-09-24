@@ -32,6 +32,7 @@ const { projectPeopleReconciliation } = require("./memberReconciliation.js");
 const { inspectMatchtypDisplayRules, projectScoreboardScores } = require("./scoreboardDisplay.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const logger = require("./logger.js");
+const { pendingActivation } = require("./courtAutomation.js");
 const metrics = require("./metrics.js");
 const { hasAnyRole, hasRole } = require("./personRoles.js");
 const {
@@ -1732,7 +1733,13 @@ const endpoints = {
       }, (current) => {
         if (!request.empty) requireCurrentTables("players", "bewerbe", "matchtyp", "matches1");
         const assignment = resolveCourtAssignment(request);
-        return { ...assignment.data, aktiv: current.aktiv };
+        return {
+          ...assignment.data,
+          aktiv: current.aktiv,
+          automaticActivation: request.matchId
+            ? pendingActivation(request.matchId, assignment.data.dateTime)
+            : null,
+        };
       }, () => courtPoller.resetCourtScore(court, { reason: "assignment" }));
     },
   },
