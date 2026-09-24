@@ -952,7 +952,7 @@ class HallTimeService {
         if (grid.mode !== "equal") throw new AppError("HALL_TIME_MODE_INVALID", "Automatische Verteilung ist nur im Modus Gleichberechtigte Aufteilung verfügbar", 409);
         const preview = distributionPreview(grid, now, request.expectedRevision);
         if (preview.previewHash !== request.previewHash) throw new AppError("HALL_TIME_PREVIEW_STALE", "Die Vorschau ist nicht mehr aktuell", 409);
-        if (preview.openPlaceCount > 0) throw new AppError("HALL_TIME_DISTRIBUTION_INCOMPLETE", "Eine unvollständige Verteilung kann nicht übernommen werden", 409);
+        if (preview.quality === "incomplete" || preview.openPlaceCount > 0) throw new AppError("HALL_TIME_DISTRIBUTION_INCOMPLETE", "Eine unvollständige Verteilung kann nicht übernommen werden", 409);
         const futureIds = new Set(grid.slots.filter((slot) => !slotExpired(slot, now)).map(({ id }) => id));
         const previousEntries = grid.entries.filter((entry) => futureIds.has(entry.slotId));
         grid.entries = [

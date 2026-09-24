@@ -6,3 +6,10 @@ Commit: 4.12.7-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.7-paj-1-1` gesetzt.
+
+[4.12.7-paj-1-2] - 2026-09-24
+Commit: 4.12.7-paj-1-2 | Hallenverteilung und mobile Rasterlegende korrigiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.7-paj-1-1-x` gesetzt.
+  - [Hallenzeiten] Vollstaendige Neuverteilungen lassen sich auch mit unvermeidbaren Wuenschen uebernehmen; die mobile Rasterlegende besitzt feste Status- und Vorgabezeilen.

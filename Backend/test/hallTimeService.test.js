@@ -221,6 +221,14 @@ test("Unvermeidbarer weicher Wunsch bleibt vollstaendig und wird transparent aus
   assert.equal(preview.openPlaceCount, 0);
   assert.equal(preview.softConflictCount, 1);
   assert.deepEqual(preview.softConflicts.map(({ personId, slot }) => [personId, slot.id]), [["p1", slotId]]);
+  const applied = context.service.applyDistributionPreview(admin, {
+    operationId: operation(24), gridId: created.grid.id, expectedRevision: constrained.revision,
+    previewHash: preview.previewHash,
+  });
+  assert.deepEqual(applied.grid.entries.map(({ personId, slotId, status }) => ({ personId, slotId, status })), [
+    { personId: "p1", slotId, status: "confirmed" },
+  ]);
+  assert.equal(context.service.history(admin, created.grid.id).entries[0].summary.softConflictCount, 1);
   context.repository.close();
 });
 
@@ -230,7 +238,7 @@ test("Vermeidbarer weicher Wunsch wird bei gleich guter Einsatzverteilung global
   const slots = Array.from({ length: 3 }, (_, index) => ({ date: `2026-01-${20 + index}`, start: "19:00", end: "21:00" }));
   const created = context.service.saveGrid(admin, gridRequest(0, { participantIds: ["p1", "p2"], slots }), names);
   const constrained = context.service.saveConstraints(admin, {
-    operationId: operation(25), gridId: created.grid.id, expectedRevision: created.revision,
+    operationId: operation(26), gridId: created.grid.id, expectedRevision: created.revision,
     constraints: [{ personId: "p2", slotId: created.grid.slots[1].id, kind: "avoid" }],
   });
   const preview = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: constrained.revision }).preview;
