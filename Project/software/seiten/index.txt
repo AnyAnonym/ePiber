@@ -151,7 +151,8 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   `Spieleingabe` und `Termin festlegen / aendern` zeigen zuerst ausschliesslich
   eigene offene Matches mit dem jeweiligen serverseitigen Aktionsrecht. Die
   Spieleingabe zeigt je Match in der ersten Zeile Bewerb und, sofern vorhanden,
-  Runde sowie in der zweiten Zeile beide Seiten mit `vs.`; `Profil`
+  Runde, in der zweiten Zeile den formatierten Spieltermin oder `noch kein
+  Spieltermin fixiert` sowie in der dritten Zeile beide Seiten mit `vs.`; `Profil`
   und `Meldungen` oeffnen die entsprechenden eigenen Profilbereiche direkt. Das
   Dashboard bleibt als fester Menueeintrag und kann zusaetzlich ueber den Stern
   neben `Der Piber gruesst` favorisiert werden. Sein Favoritenlink verwendet

@@ -72,10 +72,12 @@ Matches1 enthaelt offene und gespielte Matches.
                   | Termin in der Zukunft liegen. Bei Ranglisten gilt fuer den
                   | Ersttermin der Korridor von ForderungDate bis exakt 14 Tage
                   | danach; eine Aenderung muss in der Zukunft liegen. Bei einem
-                  | neuen Walkover ersetzt der Server den Plantermin atomar durch
-                  | den aktuellen Wiener W.O.-Zeitpunkt; beim administrativen
-                  | Leeren dieses Walkovers wird das ergebnisgebundene Datum
-                  | ebenfalls geleert.
+                   | neuen Walkover ersetzt der Server den Plantermin atomar durch
+                   | den aktuellen Wiener W.O.-Zeitpunkt; beim administrativen
+                   | Leeren dieses Walkovers wird das ergebnisgebundene Datum
+                   | ebenfalls geleert. Ein erster regulaerer Abschluss verlangt
+                   | einen vorhandenen Wert; Retirement und Walkover bleiben ohne
+                   | Spieltermin moeglich.
   ForderungDate   | Serverzeit Europe/Vienna im Format `YYMMDD-HHMM`.
   Dauer           | Reservierte Matchdauer.
   BewerbID        | Referenz auf Bewerb.ID.

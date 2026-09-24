@@ -495,7 +495,8 @@ Universelles Matchergebnis:
   und Retirement liegt MatchEnde strikt nach MatchStart und nicht zukuenftig. Bei
   mehr als vier Stunden verlangt der Server die kontrollierte Bestaetigung des
   Ergebnisdialogs; eine feste Hoechstdauer besteht nicht. `MatchDate` bleibt nur
-  der vereinbarte Plantermin.
+  der vereinbarte Plantermin, muss fuer einen ersten regulaeren Abschluss aber
+  vorhanden sein. Retirement und Walkover bleiben ohne Plantermin moeglich.
   Der erste Abschluss setzt `ErgebnisErfasstAm` auf die Wiener Serverzeit.
   Beteiligte duerfen bis einschliesslich 60 Minuten danach korrigieren; die Frist
   wird weder aus Messaging/Audit rekonstruiert noch durch Korrekturen verlaengert,

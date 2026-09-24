@@ -2933,20 +2933,26 @@ test("Matchergebnis verlangt ueber vier Stunden eine Bestaetigung und erlaubt da
   repository.close();
 });
 
-test("Walkover und Aufgabe kodieren nur den exakten Verlierermarker", async () => {
+test("Ohne Spieltermin bleiben Walkover und Aufgabe erlaubt, regulaere Ergebnisse aber gesperrt", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
   const initial = fixtures();
   initial.Bewerb[1][2] = "type-1";
   initial.Bewerbsart.push(["type-1", "Turnier", "", ""]);
   initial.Matches1.push(
-    ["", "result-wo", "260904-0900", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
-    ["", "result-ret", "260904-0900", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
+    ["", "result-wo", "", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
+    ["", "result-ret", "", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
+    ["", "result-regular-undated", "", "", "cup-1", "F", "p1", "", "p2", "", "", ""],
   );
   const fake = fakeSheets(initial);
   seedStore(fake.tables);
   const service = new SheetService({ repository, messagingService, clientFactory: async () => fake.client, now: () => new Date(2026, 8, 4, 12, 0).getTime() });
   const principal = { type: "user", id: "p1", role: "player", name: "Ada Admin" };
+  await assert.rejects(service.setMatchResult(principal, {
+    operationId: "00000000-0000-4000-8000-000000000531", matchId: "result-regular-undated", kind: "regular", result: "6-4/6-4",
+    matchStart: "260904-0900", matchEnd: "260904-1030", expectedFingerprint: matchCompletionFingerprint(initial.Matches1[3], initial.Matches1[0]),
+  }), { code: "MATCH_APPOINTMENT_REQUIRED" });
+  assert.equal(fake.calls.valueUpdates.length, 0);
   await service.setMatchResult(principal, {
     operationId: "00000000-0000-4000-8000-000000000506", matchId: "result-wo", kind: "walkover", losingSide: 2,
     expectedFingerprint: matchCompletionFingerprint(initial.Matches1[1], initial.Matches1[0]),

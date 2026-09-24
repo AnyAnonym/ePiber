@@ -160,7 +160,11 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   Ergebnisoberflaeche.
 
   Der explizit schliessbare Dialog waehlt in einer kompakten Zeile `Regulär`,
-  `WO` oder `RET`.
+  `WO` oder `RET`. Bei einem offenen Match ohne Spieltermin beginnt er mit einer
+  neutralen Auswahl, deaktiviert `Regulär` mit einem Terminhinweis und zeigt erst
+  nach bewusster Wahl die Eingabefelder fuer `WO` oder `RET`. Ein erster
+  regulaerer Abschluss verlangt einen zuvor fixierten Spieltermin; Retirement und
+  Walkover bleiben ohne Termin moeglich.
   Unter dem Titel stehen zentriert zuerst nur der Bewerbsname und in einer zweiten
   Zeile die vollstaendige Einzel- oder Doppelbegegnung.
   Regulaer verlangt das Satzresultat. Das Ergebnis wird ohne Freitextfeld in den
@@ -176,7 +180,7 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   Seite vorausgewaehlt. Retirement kann ein Teilergebnis behalten. Beim ersten
   regulaeren Abschluss oder einer Aufgabe sind Matchstart und Matchende
   erforderlich; ein vereinbarter Termin plus 15 Minuten wird als Start
-  vorgeschlagen, ohne Termin gilt die editierbare Vorgabe
+  vorgeschlagen. Fuer ein Retirement ohne Termin gilt die editierbare Vorgabe
   `aktuelle Zeit minus 90 Minuten`.
   Beschriftung und Datum-/Zeitfeld stehen fuer Start und Ende jeweils in einer
   kompakten Zeile nebeneinander. Bei W.O. werden Start und Ende weder abgefragt

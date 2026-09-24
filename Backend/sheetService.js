@@ -2350,6 +2350,9 @@ class SheetService {
         throw appResultRuleError(error);
       }
       if (!validated.valid) throw new AppError(validated.error, "Matchergebnis ist ungueltig", 409);
+      if (!state.closed && validated.kind === "regular" && !String(row[matchDateIndex] || "").trim()) {
+        throw new AppError("MATCH_APPOINTMENT_REQUIRED", "Fuer ein regulaeres Ergebnis muss zuerst ein Spieltermin fixiert werden", 409);
+      }
       const walkoverTime = validated.kind === "walkover"
         ? state.kind === "walkover" && state.closed
           ? state.matchEnd || String(row[matchDateIndex] || "").trim() || state.resultCapturedAt

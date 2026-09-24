@@ -383,7 +383,9 @@ getrennter Modus ohne personenbezogene Verteilungsmeldungen verfuegbar.
         ersten Ergebniseintrags bleibt unveraendert und begrenzt Korrekturen durch
         Beteiligte auf einschliesslich 60 Minuten. Administratoren besitzen
         begruendungspflichtige Korrektur- und Loeschmoeglichkeiten. Ein Walkover
-        besitzt keinen tatsaechlichen Spielbeginn und kein Matchende. [Bestaetigt]
+        besitzt keinen tatsaechlichen Spielbeginn und kein Matchende. Ein erster
+        regulaerer Abschluss verlangt einen zuvor fixierten Spieltermin;
+        Retirement und Walkover bleiben ohne Spieltermin zulaessig. [Bestaetigt]
 
   LF-42 Ergebnisfolgen werden bewerbsartspezifisch gemeinsam mit dem Ergebnis
         ausgefuehrt: Ranglistenpositionen werden nach den bestaetigten Regeln

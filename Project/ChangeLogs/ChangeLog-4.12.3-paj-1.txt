@@ -41,3 +41,12 @@ Commit: 4.12.3-paj-1-5 | Ergebnisspeicherung beschleunigt und Rückmeldung verbe
   - [Ergebnisspeicherung] Metadatenpruefungen fuer umfangreiche Rangverschiebungen in konstante Batch-Reads gebuendelt und eine doppelte Matchzeilenabfrage vermieden.
   - [Rueckmeldung] Den Ergebnisdialog waehrend laufender Ranglistenaktualisierung dauerhaft informieren und ein Google-Sheets-Zugriffslimit mit Countdown bis zum erneuten Versuch erklaeren.
   - [Tests] Grosse Neueinsteiger-Rangverschiebung, laufendes Speicherfeedback und Rate-Limit-Wartezeit abgesichert.
+
+[4.12.3-paj-1-6] - 2026-09-24
+Commit: 4.12.3-paj-1-6 | Terminpflicht bei Spieleingabe ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.3-paj-1-5-x` gesetzt.
+  - [Spieleingabe] Die direkte Matchauswahl um eine eigene Terminzeile erweitert und Begegnungen in die dritte Zeile verschoben.
+  - [Ergebnisregeln] Regulaere Erstabschluesse ohne fixierten Spieltermin in Oberflaeche und Backend gesperrt, waehrend Retirement und Walkover zulaessig bleiben.
+  - [Tests] Dreizeilige Matchauswahl, neutrale Abschlussart und serverseitige Terminpflicht abgesichert.

@@ -528,6 +528,12 @@ body.modal-open {
   display: block;
 }
 
+.match-result-appointment-required {
+  margin: 0;
+  color: #8a341f;
+  font-weight: 650;
+}
+
 #matchResultForm,
 #matchResultCompletionFields,
 #matchResultValueFields,
@@ -2006,6 +2012,7 @@ body.mobile-nav-open {
 }
 
 .favorite-match-picker-heading,
+.favorite-match-picker-appointment,
 .favorite-match-picker-teams {
   display: block;
 }
@@ -2014,8 +2021,13 @@ body.mobile-nav-open {
   font-weight: 700;
 }
 
+.favorite-match-picker-appointment,
 .favorite-match-picker-teams {
   margin-top: 2px;
+}
+
+.favorite-match-picker-appointment {
+  color: #475467;
 }
 
 .favorite-match-picker-item:hover,

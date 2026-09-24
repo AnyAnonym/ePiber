@@ -92,7 +92,9 @@ sind `MatchStart` und `MatchEnde` verpflichtend. `MatchStart` muss strikt vor
 `MatchEnde` liegen und das Ende darf nicht in der Zukunft liegen. Eine Spieldauer
 von mehr als vier Stunden erfordert beim Ergebniseintrag eine bewusste
 Bestaetigung; eine feste Hoechstdauer besteht nicht. Diese Pruefung ist vom
-geplanten `MatchDate` unabhaengig. [Bestaetigt]
+geplanten `MatchDate` unabhaengig. Ein erster regulaerer Abschluss setzt jedoch
+einen zuvor fixierten Spieltermin in `MatchDate` voraus; Retirement und Walkover
+bleiben auch ohne Spieltermin moeglich. [Bestaetigt]
 
 Beim erstmaligen Abschluss speichert der Server `ErgebnisErfasstAm` als aktuellen
 Wiener Zeitpunkt des Ergebniseintrags. Dieser Zeitpunkt bleibt bei jeder

@@ -962,6 +962,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
     assert.equal(await picker.locator(".favorite-match-picker-item").count() > 0, true);
     const firstMatchChoice = picker.locator(".favorite-match-picker-item").first();
     assert.equal(await firstMatchChoice.locator(".favorite-match-picker-heading").textContent(), "Herren - 1. Gruppe");
+    assert.equal(await firstMatchChoice.locator(".favorite-match-picker-appointment").textContent(), "03.09.2026, 10:00 Uhr");
     assert.equal(await firstMatchChoice.locator(".favorite-match-picker-teams").textContent(), "Own Player / Doubles Partner vs. Foreign Player");
     await picker.locator(".modal-favorite-star:visible").click();
     await picker.locator(".close").click();
@@ -996,7 +997,7 @@ test("Favoritensterne speichern Seiten und Matchaktionen und die mobile Reihenfo
   }
 });
 
-test("Spieleingabe zeigt zweizeilige Auswahl und bestaetigt lange Matchdauer", {
+test("Spieleingabe zeigt dreizeilige Auswahl und bestaetigt lange Matchdauer", {
   skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
@@ -1010,14 +1011,16 @@ test("Spieleingabe zeigt zweizeilige Auswahl und bestaetigt lange Matchdauer", {
     const choice = picker.locator(".favorite-match-picker-item").first();
     await choice.waitFor({ state: "visible" });
     assert.equal(await choice.locator(".favorite-match-picker-heading").textContent(), "Herren - 1. Gruppe");
+    assert.equal(await choice.locator(".favorite-match-picker-appointment").textContent(), "03.09.2026, 10:00 Uhr");
     assert.equal(await choice.locator(".favorite-match-picker-teams").textContent(), "Own Player / Doubles Partner vs. Foreign Player");
-    const choiceHeadings = await picker.locator(".favorite-match-picker-heading").allTextContents();
-    assert.equal(choiceHeadings.includes("Herren"), true);
-    assert.equal(choiceHeadings.includes("Herren - Match"), false);
+    const undatedChoice = picker.locator(".favorite-match-picker-item", { hasText: "noch kein Spieltermin fixiert" }).first();
+    assert.equal(await undatedChoice.locator(".favorite-match-picker-heading").textContent(), "Herren");
+    assert.equal(await undatedChoice.locator(".favorite-match-picker-appointment").textContent(), "noch kein Spieltermin fixiert");
     assert.equal(await choice.evaluate((button) => {
       const heading = button.querySelector(".favorite-match-picker-heading").getBoundingClientRect();
+      const appointment = button.querySelector(".favorite-match-picker-appointment").getBoundingClientRect();
       const teams = button.querySelector(".favorite-match-picker-teams").getBoundingClientRect();
-      return teams.top >= heading.bottom;
+      return appointment.top >= heading.bottom && teams.top >= appointment.bottom;
     }), true);
     await choice.click();
 
@@ -2110,6 +2113,19 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     await page.locator('[data-match-id="match-without-date"]').getByRole("button", { name: "Ergebnis eintragen", exact: true }).click();
     assert.deepEqual(await page.locator("#matchResultScoreEditor .match-result-score-column > h3").allTextContents(), ["Set 1", "Set 2", "Set 3", "Set 4", "Set 5"]);
     assert.equal(await page.locator("#matchResultScoreEditor .match-result-score-column").nth(4).evaluate((column) => column.classList.contains("match-tiebreak")), true);
+    assert.equal(await page.locator("#matchResultKind").inputValue(), "");
+    assert.equal(await page.locator('#matchResultKind option[value="regular"]').isDisabled(), true);
+    assert.equal(await page.locator('#matchResultKind option[value="regular"]').textContent(), "Regulär (Spieltermin erforderlich)");
+    assert.equal(await page.locator("#matchResultAppointmentRequired").isVisible(), true);
+    assert.equal(await page.locator("#matchResultValueFields").isHidden(), true);
+    assert.equal(await page.locator("#matchResultStartFields").isHidden(), true);
+    assert.equal(await page.locator("#matchResultEndFields").isHidden(), true);
+    await page.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
+    assert.match(await page.locator("#matchResultStatus").textContent(), /Abschlussart/);
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 1);
+    await page.locator("#matchResultKind").selectOption("retirement");
+    assert.equal(await page.locator("#matchResultStartFields").isVisible(), true);
+    assert.equal(await page.locator("#matchResultEndFields").isVisible(), true);
     const undatedStart = await page.locator("#matchResultStart").inputValue();
     const parsedUndatedStart = new Date(undatedStart).getTime();
     assert.equal(parsedUndatedStart >= beforeUndatedDialog - 91 * 60 * 1000 && parsedUndatedStart <= Date.now() - 89 * 60 * 1000, true);

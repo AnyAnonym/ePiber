@@ -615,11 +615,13 @@ const matchResultModal = createModal("matchResultModal", `
       <div class="match-result-field-row">
         <label for="matchResultKind">Abschlussart:</label>
         <select id="matchResultKind" name="kind">
+          <option value="">Abschlussart auswählen</option>
           <option value="regular">Regulär</option>
           <option value="walkover">WO</option>
           <option value="retirement">RET</option>
         </select>
       </div>
+      <p id="matchResultAppointmentRequired" class="match-result-appointment-required" hidden>Für ein reguläres Ergebnis muss zuerst ein Spieltermin fixiert werden.</p>
       <div id="matchResultValueFields">
         <div id="matchResultScoreEditor" class="match-result-score-editor" aria-label="Satzergebnis bearbeiten"></div>
         <div class="match-result-suggestions" aria-label="Ergebnis vom Platz übernehmen">
@@ -1016,21 +1018,22 @@ function serializeMatchResultScore() {
 
 function updateMatchResultKind() {
   const kind = document.getElementById("matchResultKind").value;
+  const selected = ["regular", "walkover", "retirement"].includes(kind);
   const regular = kind === "regular";
   const valueFields = document.getElementById("matchResultValueFields");
   const losingFields = document.getElementById("matchResultLosingFields");
   const losingInput = document.getElementById("matchResultLosingSide");
-  valueFields.hidden = kind === "walkover";
-  losingFields.hidden = regular;
-  losingInput.disabled = regular;
-  losingInput.required = !regular;
+  valueFields.hidden = !selected || kind === "walkover";
+  losingFields.hidden = !selected || regular;
+  losingInput.disabled = !selected || regular;
+  losingInput.required = selected && !regular;
   const openMatch = matchResultContext?.action === "result" && matchResultContext.match?.status === "open";
   if (openMatch) {
     const startFields = document.getElementById("matchResultStartFields");
     const endFields = document.getElementById("matchResultEndFields");
     const startInput = document.getElementById("matchResultStart");
     const endInput = document.getElementById("matchResultEnd");
-    const needsTimes = kind !== "walkover";
+    const needsTimes = kind === "regular" || kind === "retirement";
     startFields.hidden = !needsTimes;
     endFields.hidden = !needsTimes;
     startInput.disabled = !needsTimes;
@@ -1120,7 +1123,13 @@ function openMatchResultModal(action, profile, competition, match) {
   reasonInput.required = adminAction;
   if (action === "result" || rankingRepair) {
     document.getElementById("matchResultTitle").textContent = rankingRepair ? "Mit Rangplan korrigieren" : match.status === "completed" ? "Ergebnis korrigieren" : "Ergebnis erfassen";
-    document.getElementById("matchResultKind").value = match.completionType || "regular";
+    const kindInput = document.getElementById("matchResultKind");
+    const regularOption = kindInput.querySelector('option[value="regular"]');
+    const undatedOpenMatch = action === "result" && match.status === "open" && !compactDateValue(match.matchDate);
+    regularOption.disabled = undatedOpenMatch;
+    regularOption.textContent = undatedOpenMatch ? "Regulär (Spieltermin erforderlich)" : "Regulär";
+    document.getElementById("matchResultAppointmentRequired").hidden = !undatedOpenMatch;
+    kindInput.value = undatedOpenMatch ? "" : match.completionType || "regular";
     setMatchResultScore(match.result || "");
     document.querySelector(".match-result-suggestion").hidden = action !== "result";
     setMatchResultLosingSides(match);
@@ -1539,6 +1548,7 @@ function favoriteResultMatchDescription(competition, match) {
   const teams = match.teams?.map((team) => team.names?.join(" / ") || "Offen").join(" vs. ") || "Match";
   return {
     heading: round ? `${competitionName} - ${round}` : competitionName,
+    appointment: match.matchDate ? formatCompactDate(match.matchDate) : "noch kein Spieltermin fixiert",
     teams,
   };
 }
@@ -1596,8 +1606,11 @@ window.openFavoriteMatchAction = async (overlay) => {
         const teams = document.createElement("span");
         teams.className = "favorite-match-picker-teams";
         teams.textContent = description.teams;
-        button.setAttribute("aria-label", `${description.heading}: ${description.teams}`);
-        button.append(heading, teams);
+        const appointment = document.createElement("span");
+        appointment.className = "favorite-match-picker-appointment";
+        appointment.textContent = description.appointment;
+        button.setAttribute("aria-label", `${description.heading}: ${description.appointment}: ${description.teams}`);
+        button.append(heading, appointment, teams);
       } else {
         button.textContent = favoriteMatchDescription(competition, match);
       }
@@ -2873,6 +2886,11 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   let endpoint;
   if (context.action === "result" || context.action === "rankingRepair") {
     payload.kind = form.elements.kind.value;
+    if (!["regular", "walkover", "retirement"].includes(payload.kind)) {
+      showMatchResultStatus("Bitte wählen Sie eine Abschlussart aus.");
+      form.elements.kind.focus();
+      return;
+    }
     if (payload.kind !== "walkover") {
       try {
         payload.result = serializeMatchResultScore();

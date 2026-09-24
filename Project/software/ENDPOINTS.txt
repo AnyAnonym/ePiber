@@ -944,7 +944,9 @@ AUTHENTICATED (player, operator oder admin):
       und das Ende liegt nicht in der Zukunft. Bei mehr als vier Stunden muss
       `longDurationConfirmed: true` die bewusste Bestaetigung im Ergebnisdialog
       nachweisen; eine feste Hoechstdauer besteht nicht. `MatchDate` bleibt davon
-      unabhaengig der vereinbarte Termin. Beim ersten Walkover werden beide Felder
+      unabhaengig der vereinbarte Termin. Ein erster regulaerer Abschluss ohne
+      `MatchDate` wird mit `MATCH_APPOINTMENT_REQUIRED` abgelehnt; Retirement
+      bleibt ohne Spieltermin erlaubt. Beim ersten Walkover werden beide Felder
       nicht gesendet; der Server setzt
       `MatchDate` auf den aktuellen Wiener W.O.-Zeitpunkt und laesst `MatchStart`
       und `MatchEnde` leer. Beim ersten Abschluss setzt er ausserdem
