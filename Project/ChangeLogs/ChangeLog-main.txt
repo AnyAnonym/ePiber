@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.5
+Stand: 4.12.6
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2725,3 +2725,31 @@ Quelle: 4.12.4-paj-1
   Removed
   - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
     und Paket- sowie Lockfileversion auf `4.12.5` gesetzt.
+
+[4.12.6] - 2026-09-24
+Commit: 4.12.6 | Hallenraster-Summen und Historie verbessert
+Quelle: direkte Main-Ausnahme
+
+  Changed
+  - [Hallenzeiten] Die rechte Kopfzelle zeigt die Gesamtzahl aller Termine; die
+    rechte Fusszelle summiert alle bestaetigten Fixplaetze ueber Spieler und
+    Termine.
+  - [Hallenzeiten] Terminbelegungen im Tabellenfuss erscheinen bei freier
+    Kapazitaet gruen und bei vollstaendig belegtem Kontingent rot.
+  - [Hallenzeiten] Gespeicherte Verteilungseinschraenkungen erhalten in der
+    Historie einen verstaendlichen deutschen Aktionstext.
+  - [Dokumentation] Hallenzeiten-Seitendokumentation um Terminzahl,
+    Belegungsfarben und Fixplatz-Gesamtsumme erweitert.
+
+  Tests
+  - [Backend] Berichtstext fuer aktualisierte Verteilungseinschraenkungen
+    abgesichert.
+  - [Browser] Terminzahl, Fixplatz-Gesamtsumme, Kapazitaetsfarben und
+    Historientext im Hallenzeiten-Raster abgesichert; Build und vollstaendige
+    Browsermatrix erfolgreich abgeschlossen.
+  - [Browser] Subpixel-Toleranz der rechten iPad-Drawerkante an die bestehende
+    linke Kantentoleranz angeglichen.
+
+  Removed
+  - [Repository] Temporaeres Changelog der direkten Main-Ausnahme entfernt und
+    Paket- sowie Lockfileversion auf `4.12.6` gesetzt.

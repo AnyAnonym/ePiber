@@ -893,7 +893,7 @@ test("Mobiler Drawer verschiebt die App, erhaelt Scrollposition und schliesst ei
       };
     });
     assert.equal(Math.abs(layout.drawer.left - layout.viewport.width * 0.18) < 2, true);
-    assert.equal(Math.abs(layout.drawer.right - layout.viewport.width) < 1, true);
+    assert.equal(Math.abs(layout.drawer.right - layout.viewport.width) < 2, true);
     assert.equal(Math.abs(layout.drawer.height - layout.viewport.height) < 1, true);
     assert.equal(Math.abs(layout.appLeft + layout.viewport.width * 0.82) < 2, true);
     assert.equal(Math.abs(layout.headerLeft - layout.appLeft) < 1, true);

@@ -51,7 +51,8 @@ let statusClearCount = 0;
 const history = [
   { id: "h2", at: Date.now(), action: "grid_updated", actorId: "admin-1", actorName: "Anna Admin", personId: "", personName: "", slotId: "", slot: null },
   { id: "h-distribution", at: Date.now() - 1, action: "distribution_replaced", actorId: "admin-1", actorName: "Anna Admin", personId: "", personName: "", slotId: "", slot: null, summary: { assignedCount: 6, promotedCount: 2, removedCount: 4, unchangedCount: 28 } },
-  { id: "h1", at: Date.now() - 2, action: "booking_added", actorId: "p1", actorName: "Spieler Eins", personId: "p1", personName: "Eins Spieler", slotId: "slot-1", slot: grid.slots[0] },
+  { id: "h-constraints", at: Date.now() - 2, action: "distribution_constraints_updated", actorId: "admin-2", actorName: "Alfred Pimminger", personId: "", personName: "", slotId: "", slot: null },
+  { id: "h1", at: Date.now() - 3, action: "booking_added", actorId: "p1", actorName: "Spieler Eins", personId: "p1", personName: "Eins Spieler", slotId: "slot-1", slot: grid.slots[0] },
 ];
 export function createEndpoint(name) { return async (params = {}) => {
   if (name === "hallTimeGrid" && new URLSearchParams(location.search).has("failWithReference")) throw new Error("Raster konnte nicht geladen werden. (Referenz: intern-123)");
@@ -304,12 +305,18 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.ok(stableViewportHeight.pageScroll > 0);
     assert.ok(Math.abs(stableViewportHeight.after - stableViewportHeight.before) < 1, JSON.stringify(stableViewportHeight));
     assert.deepEqual(await page.locator(".hall-time-legend span").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht Dabei"]);
+    assert.equal(await page.locator("#hall-time-head .hall-time-sum").textContent(), "9");
+    assert.equal(await page.locator("#hall-time-head .hall-time-sum").getAttribute("title"), "9 Termine");
     assert.equal(await page.locator("#hall-time-history-list li").first().locator(".competition-history-entry-title").textContent(), "Anna Admin hat Einstellungen geändert");
     assert.equal(await page.locator("#hall-time-history-list li").nth(1).locator(".competition-history-entry-title").textContent(), "Anna Admin hat die zukünftige Verteilung neu erstellt (6 neu zugeteilt, 2 nachgerückt, 4 entfernt, 28 unverändert)");
-    assert.equal(await page.locator("#hall-time-history-list li").nth(2).locator(".competition-history-entry-title").textContent(), "Spieler Eins hat sich angemeldet");
+    assert.equal(await page.locator("#hall-time-history-list li").nth(2).locator(".competition-history-entry-title").textContent(), "Alfred Pimminger hat Termineinschränkungen für die Verteilung vorgenommen");
+    assert.equal(await page.locator("#hall-time-history-list li").nth(3).locator(".competition-history-entry-title").textContent(), "Spieler Eins hat sich angemeldet");
     const legendRows = await page.locator(".hall-time-legend span").evaluateAll((items) => new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size);
     assert.equal(legendRows, 1);
     assert.equal(await page.locator("#hall-time-foot td").nth(2).textContent(), "1/1 (1)");
+    assert.equal(await page.locator("#hall-time-foot .hall-time-total").textContent(), "1");
+    assert.equal(await page.locator("#hall-time-foot td").first().evaluate((element) => getComputedStyle(element).color), "rgb(23, 107, 53)");
+    assert.equal(await page.locator("#hall-time-foot td").nth(2).evaluate((element) => getComputedStyle(element).color), "rgb(165, 43, 43)");
     assert.deepEqual(await page.locator("#hall-time-body .hall-time-player").first().locator(".hall-time-person-name > span").allTextContents(), ["Aigner", "Anton"]);
     assert.equal(await page.locator("#hall-time-body .hall-time-player").first().locator(".hall-time-person-name > span").evaluateAll((lines) => lines.every((line) => getComputedStyle(line).whiteSpace === "nowrap")), true);
     const foreignButton = page.getByRole("button", { name: /Leitner Lisa.*06\.11.*anmelden/ });

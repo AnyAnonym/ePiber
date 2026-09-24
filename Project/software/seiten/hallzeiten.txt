@@ -27,8 +27,11 @@ Hallenzeiten - Reservierungsraster
   zentriert sie. `Aktuell` zeigt nur gruen/gelb eingetragene Personen des naechsten
   moeglichen Termins. Ein Terminspaltenkopf verwendet denselben Filter fuer seine
   Spalte. Ein Klick auf einen Namen zeigt nur Terminspalten mit Eintrag dieser
-  Person; die ausgewaehlte Zeile und Spalte sind blau. Rechts stehen Fixplaetze
-  und Wartelistenanzahl je Person, unten Belegung/Kapazitaet und Wartende je Termin.
+  Person; die ausgewaehlte Zeile und Spalte sind blau. Rechts zeigt der Kopf die
+  Gesamtzahl aller Termine und jede Spielerzeile ihre Fixplatz- und
+  Wartelistenanzahl ueber alle Termine. Unten stehen Belegung/Kapazitaet und
+  Wartende je Termin: freie Kapazitaet ist gruen, voll belegte Kapazitaet rot.
+  Die rechte untere Ecke summiert alle bestaetigten Fixplaetze ohne Warteliste.
 
 -- Regeln, Historie und Fehler --
   Fair Use zaehlt Fix- und Wartelistenplaetze gemeinsam und wird vor einer

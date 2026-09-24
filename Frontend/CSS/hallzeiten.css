@@ -35,6 +35,9 @@
 #hall-time-table tfoot th, #hall-time-table tfoot td { position: sticky; bottom: 0; z-index: 4; background: #f2f7f3; box-shadow: 0 -1px 0 #cbd5cd; }
 #hall-time-table tfoot .hall-time-player { z-index: 6; background: #eef4ef; }
 #hall-time-table .is-past-slot { color: #6f7771; background: #f1f3f1; }
+#hall-time-table tfoot td.has-capacity { color: #176b35; font-weight: 700; }
+#hall-time-table tfoot td.is-capacity-full { color: #a52b2b; font-weight: 700; }
+#hall-time-table tfoot .hall-time-total { font-weight: 800; }
 #hall-time-table .is-past-slot .hall-time-state { opacity: .72; filter: saturate(.55); }
 #hall-time-table tr.is-current-player th.hall-time-player { color: #214f7d; font-weight: 700; }
 #hall-time-table tr.is-current-player-row th, #hall-time-table tr.is-current-player-row td { background: #e7f1fb; }

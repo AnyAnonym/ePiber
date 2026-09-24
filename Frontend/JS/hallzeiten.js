@@ -281,7 +281,7 @@ function render() {
     select.addEventListener("click", () => selectView("selected", slot.id)); th.appendChild(select);
     head.appendChild(th);
   }
-  const sumHead = document.createElement("th"); sumHead.scope = "col"; sumHead.textContent = "Σ"; sumHead.title = "Fixplätze (Warteliste)"; sumHead.className = "hall-time-sum"; head.appendChild(sumHead);
+  const sumHead = document.createElement("th"); sumHead.scope = "col"; sumHead.textContent = String(grid.slots.length); sumHead.title = `${grid.slots.length} Termine`; sumHead.className = "hall-time-sum"; head.appendChild(sumHead);
 
   const body = byId("hall-time-body"); body.replaceChildren();
   for (const person of [...grid.participants].sort(comparePeople)) {
@@ -293,9 +293,8 @@ function render() {
     row.hidden = viewMode === "selected" && !entry(selectedSlotId, person.id);
     const name = document.createElement("th"); name.scope = "row"; name.className = "hall-time-player"; appendPersonName(name, person); name.querySelector("button").addEventListener("click", () => selectPerson(person.id)); row.appendChild(name);
     for (const slot of grid.slots) { const cell = document.createElement("td"); cell.hidden = viewMode === "person" && !entry(slot.id, selectedPersonId); cell.classList.toggle("is-past-slot", slotPast(slot)); cell.classList.toggle("is-selected-slot", slot.id === selectedSlotId); cell.appendChild(statusButton(slot, person)); row.appendChild(cell); }
-    const visibleSlotIds = new Set(grid.slots.filter((slot) => viewMode !== "person" || entry(slot.id, selectedPersonId)).map(({ id }) => id));
-    const confirmed = grid.entries.filter((value) => visibleSlotIds.has(value.slotId) && value.personId === person.id && value.status === "confirmed").length;
-    const waiting = grid.entries.filter((value) => visibleSlotIds.has(value.slotId) && value.personId === person.id && value.status === "waitlist").length;
+    const confirmed = grid.entries.filter((value) => value.personId === person.id && value.status === "confirmed").length;
+    const waiting = grid.entries.filter((value) => value.personId === person.id && value.status === "waitlist").length;
     const sum = document.createElement("td"); sum.className = "hall-time-sum"; sum.textContent = `${confirmed}${waiting ? ` (${waiting})` : ""}`; sum.title = `${confirmed} Fixplätze, ${waiting} Wartelistenplätze`; row.appendChild(sum);
     body.appendChild(row);
   }
@@ -305,9 +304,10 @@ function render() {
   for (const slot of grid.slots) {
     const confirmed = grid.entries.filter((value) => value.slotId === slot.id && value.status === "confirmed").length;
     const waiting = grid.entries.filter((value) => value.slotId === slot.id && value.status === "waitlist").length;
-    const cell = document.createElement("td"); cell.hidden = viewMode === "person" && !entry(slot.id, selectedPersonId); cell.classList.toggle("is-past-slot", slotPast(slot)); cell.classList.toggle("is-selected-slot", slot.id === selectedSlotId); cell.textContent = `${confirmed}/${grid.capacity}${waiting ? ` (${waiting})` : ""}`; cell.title = `${confirmed} von ${grid.capacity} Fixplätzen, ${waiting} auf der Warteliste`; foot.appendChild(cell);
+    const cell = document.createElement("td"); cell.hidden = viewMode === "person" && !entry(slot.id, selectedPersonId); cell.classList.toggle("is-past-slot", slotPast(slot)); cell.classList.toggle("is-selected-slot", slot.id === selectedSlotId); cell.classList.add(confirmed >= grid.capacity ? "is-capacity-full" : "has-capacity"); cell.textContent = `${confirmed}/${grid.capacity}${waiting ? ` (${waiting})` : ""}`; cell.title = `${confirmed} von ${grid.capacity} Fixplätzen, ${waiting} auf der Warteliste`; foot.appendChild(cell);
   }
-  const empty = document.createElement("td"); empty.className = "hall-time-sum"; foot.appendChild(empty);
+  const totalConfirmed = grid.entries.filter(({ status }) => status === "confirmed").length;
+  const total = document.createElement("td"); total.className = "hall-time-sum hall-time-total"; total.textContent = String(totalConfirmed); total.title = `${totalConfirmed} Fixplätze insgesamt`; foot.appendChild(total);
   if (previousScroll && scroll) {
     scroll.scrollLeft = previousScroll.left;
     scroll.scrollTop = previousScroll.top;
@@ -325,6 +325,7 @@ const HISTORY_TEXT = {
   booking_removed: "hat sich abgemeldet", waitlist_promoted: "ist von der Warteliste nachgerückt",
   waitlist_expired: "ist nach Terminende von der Warteliste entfernt worden",
   assigned_by_distribution: "wurde automatisch eingeteilt", distribution_replaced: "hat die zukünftige Verteilung neu erstellt",
+  distribution_constraints_updated: "hat Termineinschränkungen für die Verteilung vorgenommen",
   grid_created: "hat den Raster erstellt", grid_updated: "hat Einstellungen geändert", all_statuses_cleared: "hat alle Stati auf den Terminen gelöscht",
   group_joined: "ist der Gruppe beigetreten", group_left: "hat die Gruppe verlassen",
 };

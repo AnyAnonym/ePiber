@@ -20,7 +20,7 @@ const HISTORY_TEXT = Object.freeze({
   waitlist_expired: "ist nach Terminende von der Warteliste entfernt worden",
   assigned_by_distribution: "wurde automatisch eingeteilt",
   distribution_replaced: "hat die zukünftige Verteilung neu erstellt",
-  distribution_constraints_updated: "hat Verhinderungen und Wünsche aktualisiert",
+  distribution_constraints_updated: "hat Termineinschränkungen für die Verteilung vorgenommen",
   grid_created: "hat den Raster erstellt",
   grid_updated: "hat Einstellungen geändert",
   all_statuses_cleared: "hat alle Stati auf den Terminen gelöscht",
