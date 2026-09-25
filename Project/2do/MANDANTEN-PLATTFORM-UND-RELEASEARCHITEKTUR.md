@@ -1,6 +1,6 @@
 # Mandantenplattform, Vereins-Cells und Releasearchitektur
 
-Stand: 24.09.2026
+Stand: 25.09.2026
 Status: Nicht-kanonische fachliche und technische Arbeitsgrundlage; noch nicht
 implementiert, freigegeben oder als verbindliche Sollarchitektur dokumentiert
 Gegenstand: Kommerzielle ePiber-Plattform fuer mehrere Tennisvereine mit
@@ -964,8 +964,14 @@ Jede Flag-Aenderung braucht:
 ## 11. Datenbankmigration und Rollback
 
 Ein Containerrollback ist einfach; ein Datenbankrollback kann Daten verlieren
-oder unvereinbare Zustaende erzeugen. Migrationen folgen deshalb dem
-Expand/Contract-Muster:
+oder unvereinbare Zustaende erzeugen. Der regulaere ePiber-Rollback setzt deshalb
+nicht die Datenbank zurueck. Stattdessen bleiben die aktuelle und die vorherige
+unterstuetzte App-Version waehrend eines festgelegten Rollbackfensters mit
+demselben erweiterten Datenbankschema kompatibel.
+
+### 11.1 Expand/Contract-Verfahren
+
+Migrationen folgen dem Expand/Contract-Muster:
 
 1. Neue Tabellen, Spalten oder Indizes additiv einfuehren.
 2. Alte und neue App-Version gleichzeitig kompatibel halten.
@@ -973,6 +979,125 @@ Expand/Contract-Muster:
 4. Neue Lesepfade und Funktionen kontrolliert aktivieren.
 5. Alte Felder erst nach erfolgreichem Flottenrollout und Ablauf des
    Kompatibilitaetsfensters entfernen.
+
+Eine Umbenennung oder inkompatible Typaenderung erfolgt nicht unmittelbar.
+Stattdessen wird die neue Struktur zunaechst parallel angelegt, bei Bedarf
+voruebergehend doppelt beschrieben, kontrolliert befuellt und erst in einem
+spaeteren Release autoritativ. Der alte Pfad wird erst entfernt, wenn keine
+unterstuetzte App-Version ihn mehr benoetigt. Destruktive Contract-Migrationen
+liegen deshalb mindestens ein Release hinter der erstmaligen Nutzung der neuen
+Struktur.
+
+### 11.2 App-/Schema-Kompatibilitaetsvertrag
+
+Jedes Release besitzt neben Image-Digest, Git-Commit und SBOM einen
+maschinenlesbaren Datenbankvertrag. Dieser enthaelt mindestens:
+
+```text
+application_release
+image_digest
+minimum_schema
+preferred_schema
+maximum_schema
+required_migrations
+compatible_rollback_releases
+```
+
+`minimum_schema` bezeichnet den aeltesten unterstuetzten Schemastand,
+`maximum_schema` den neuesten sicher les- und beschreibbaren Stand und
+`preferred_schema` den nach vollstaendiger Migration erwarteten Stand. Der
+Release Controller prueft diesen Vertrag vor Migration und Deployment. Die App
+prueft ihn beim Start erneut und verweigert Readiness, wenn ihre Tenant-Datenbank
+ausserhalb des freigegebenen Bereichs liegt.
+
+Die Tenant-Datenbank fuehrt nicht nur eine einzelne Versionsnummer, sondern ein
+unveraenderliches Migrationsjournal, mindestens mit:
+
+```text
+migration_id
+checksum
+started_at
+completed_at
+status
+application_release
+error_code
+```
+
+Bereits erfolgreich ausgefuehrte Migrationen werden nicht nachtraeglich
+veraendert. Neue Korrekturen erhalten eine neue Migrations-ID. Abweichende
+Checksummen oder unbekannte Migrationsstaende sperren ein automatisches
+Deployment und erfordern eine kontrollierte Klaerung.
+
+### 11.3 Tenantweise Migrationsausfuehrung
+
+Migrationen werden nicht unkontrolliert durch jedes startende App-Replikat
+ausgefuehrt. Ein zentral orchestrierter, je Tenant exklusiv gesperrter
+Migrationslauf verwendet einen eigenen Startmodus desselben signierten
+OCI-Artefakts oder ein eindeutig demselben Release zugeordnetes Migrationsimage:
+
+```text
+epiber-image migrate
+epiber-image app
+epiber-image worker
+```
+
+Eine PostgreSQL-Advisory-Lock oder eine gleichwertige Lease verhindert parallele
+Migrationslaeufe fuer dieselbe Tenant-Datenbank. Migrationen und Backfills sind
+idempotent und wiederaufnehmbar; lange Datenumbauten laufen als kontrollierte
+Hintergrundjobs und nicht als unbegrenzt blockierende Startmigration.
+
+Der Ablauf je Tenant lautet:
+
+1. Tenantstatus, App-Version und vollstaendiges Migrationsjournal ermitteln.
+2. Zielrelease, Image-Digest und App-/Schema-Kompatibilitaet pruefen.
+3. Bei riskanten Aenderungen erfolgreichen Backup- und PITR-Status verlangen.
+4. Exklusive tenantbezogene Migrationssperre erwerben.
+5. Ausstehende Expand-Migrationen in definierter Reihenfolge ausfuehren.
+6. Checksummen, Referenzen, Constraints und fachliche Kontrollwerte pruefen.
+7. Zielimage fuer genau diesen Tenant starten.
+8. Readiness sowie technische und fachliche Smoke-Tests ausfuehren.
+9. Beobachtungszeit und Healthgates des Release-Rings abwarten.
+10. Erst danach den Tenant und die naechste Rolloutwelle freigeben.
+
+Unterschiedliche Tenants duerfen waehrend eines Flottenrollouts voruebergehend
+auf unterschiedlichen freigegebenen App- und Schemastaenden stehen. Der Release
+Controller fuehrt deshalb je Tenant mindestens Zielrelease, Image-Digest,
+aktuellen Schemastand, Migrationsstatus und letzten erfolgreichen
+Wiederherstellungspunkt. Scheitert eine Migration, bleibt der betroffene Tenant
+auf der bisherigen kompatiblen App-Version oder in einem kontrollierten
+Wartungsstatus; weitere Rolloutwellen stoppen.
+
+### 11.4 Rollback- und Recoveryfaelle
+
+Der Rueckweg richtet sich nach der Fehlerart:
+
+| Fehlerfall | Vorgehen |
+|---|---|
+| App-Fehler bei additiv kompatiblem Schema | Zielimage stoppen und vorheriges freigegebenes Image per Digest starten; erweitertes Schema unveraendert lassen |
+| Abgebrochene oder teilweise Migration | Tenant kontrolliert sperren und idempotente Migration fortsetzen oder vorwaerts reparieren; kein blinder Down-Lauf |
+| Fehlerhafte neue Fachdaten ohne strukturellen Schaden | Schreibpfad stoppen, Auswirkungen ueber Audit bestimmen und Daten kontrolliert korrigieren |
+| Datenkorruption oder unaufloesbarer Migrationsschaden | Tenantbezogenes PITR beziehungsweise Restore mit bewusstem Wiederherstellungspunkt und passendem App-Image durchfuehren |
+| Bereits ausgefuehrte destruktive Contract-Migration | Vorwaertsfix bevorzugen; Rueckkehr hinter die Kompatibilitaetsgrenze nur als koordinierter Restore von Datenbank und App |
+
+Ein Datenbankrestore ist kein normaler Deploymentrollback. Er kann spaetere
+produktive Writes verlieren und benoetigt deshalb Schreibstopp, festgelegten
+Wiederherstellungspunkt, Integritaets- und Fachpruefungen, Auditabschluss sowie
+gegebenenfalls Sitzungs-, Reset- und Geraeteinvalidierung. Erst danach wird das
+zum restaurierten Schema passende, bekannte Image gestartet.
+
+Automatische Down-Migrationen sind nicht der primaere Produktions-Rollbackweg.
+Sie koennen entfernte oder bereits in neuer Semantik gespeicherte Daten nicht
+zuverlaessig rekonstruieren. Sie duerfen nur fuer nachweislich verlustfreie,
+einzeln freigegebene Faelle verwendet werden. Der Normalfall bleibt:
+
+```text
+vorwaertskompatible Expand-Migration
+  -> kontrolliertes App-Deployment
+  -> bei Bedarf App-Rollback ohne DB-Rollback
+  -> Contract erst nach Ablauf des Kompatibilitaetsfensters
+```
+
+### 11.5 Verbindliche Anforderungen fuer ePiber
 
 Pflichten:
 
@@ -986,6 +1111,17 @@ Pflichten:
   Abhaengigkeit darauf.
 - Migrationen, Backfills und unklare Ausgaenge besitzen Audit, strukturierte
   Abschlusslogs und Wiederaufnahme.
+- Die aktuelle und die vorherige Stable-Version bleiben waehrend des
+  Rollbackfensters mit dem erweiterten Schema kompatibel.
+- Ein App-Rollback veraendert das Datenbankschema im Normalfall nicht.
+- Contract-Migrationen benoetigen eine ausdrueckliche Kompatibilitaets- und
+  Restorefreigabe.
+- CI prueft leere Neuinstallation, Upgrade von jedem unterstuetzten Ausgangsstand,
+  wiederholte idempotente Ausfuehrung, Abbruch und Wiederaufnahme sowie den
+  App-Rollback auf dem erweiterten Schema.
+- Audit und strukturierte Abschlusslogs enthalten nur kontrollierte Kennungen,
+  Versionen, Phasen, Ergebnisse und Fehlercodes, jedoch keine freien Fachdaten,
+  Secrets oder unnoetigen Personendaten.
 
 Google-Sheets-zu-PostgreSQL-Migrationen erfolgen tenantweise, nicht als globaler
 Big Bang. Pro Tenant werden Import, Referenzen, Pruefsummen, Shadow Reads,

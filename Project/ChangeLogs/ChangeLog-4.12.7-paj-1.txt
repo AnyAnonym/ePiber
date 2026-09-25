@@ -27,3 +27,27 @@ Commit: 4.12.7-paj-1-4 | Fair-Use-Legende auf Teilnahme-Status reduziert
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.7-paj-1-3-x` gesetzt.
   - [Hallenzeiten] Im Modus Fair Use zeigt das Reservierungsraster keine Legende fuer Verhinderungen und Vermeidungswuensche mehr.
+
+[4.12.7-paj-1-5] - 2026-09-25
+Commit: 4.12.7-paj-1-5 | Datenbankmigration und App-Rollback konkretisiert
+
+  Added
+  - [Dokumentation] Detaillierte Arbeitsgrundlage `Project/2do/DB Migaration.md` fuer die vollstaendige Migration von Google Sheets und SQLite nach PostgreSQL einschliesslich Zielmodell, Datenuebernahme, Pseudonymisierung, Retention, Versionierung, Cutover und spaeterer Tenantfaehigkeit angelegt.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.7-paj-1-4-x` gesetzt.
+  - [Architektur] App- und Tenant-Schema-Kompatibilitaet, zentraler Migrationslauf, Expand/Contract sowie Rollback- und Restorefaelle fuer PostgreSQL festgelegt.
+
+Dokumentationsuebernahme beim Main-Versionssprung
+
+  Project/software/seiten/hallzeiten.txt
+  - Festhalten, dass die Vorgabenlegende nur bei gleichberechtigter Aufteilung erscheint, auf schmalen Mobilansichten eine eigene zweite Zeile belegt und im Fair-Use-Modus entfaellt.
+
+  Project/software/seiten/hallzeitenVerwalten.txt
+  - Festhalten, dass nur Vorschlaege mit offenen Plaetzen unvollstaendig sind und vollstaendige Vorschlaege auch mit unvermeidbaren weichen Wunschkonflikten uebernommen werden duerfen.
+
+  Project/2do/MANDANTEN-PLATTFORM-UND-RELEASEARCHITEKTUR.md
+  - Den App-/Schema-Kompatibilitaetsvertrag, tenantweise zentral gesperrte Migrationslaeufe, Expand/Contract und die getrennten Rollback- und Restorefaelle als nicht-kanonische Planungsgrundlage uebernehmen.
+
+  Project/2do/DB Migaration.md
+  - Die vollstaendige PostgreSQL-Migrationsplanung mit Zielmodell, Source-to-Target-Zuordnung, Pseudonymisierung, Retention, Betrieb, Cutover und Rueckfallgrenzen als nicht-kanonische Arbeitsgrundlage uebernehmen; noch keine Aussagen in kanonische Soll-Dokumente uebertragen.
