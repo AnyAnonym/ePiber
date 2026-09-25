@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.7
+Stand: 4.12.8
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -2779,3 +2779,43 @@ Quelle: direkte Main-Ausnahme
   Removed
   - [Repository] Temporaeres Changelog der direkten Main-Ausnahme entfernt und
     Paket- sowie Lockfileversion auf `4.12.7` gesetzt.
+
+[4.12.8] - 2026-09-25
+Commit: 4.12.8 | Hallenzeiten und Datenbankplanung verbessert
+Quelle: 4.12.7-paj-1
+
+  Added
+  - [Dokumentation] Detaillierte nicht-kanonische Arbeitsgrundlage fuer die
+    vollstaendige Migration von Google Sheets und SQLite nach PostgreSQL mit
+    Zielmodell, Datenuebernahme, Pseudonymisierung, Retention, Betrieb, Cutover
+    und Rueckfallgrenzen angelegt.
+
+  Changed
+  - [Hallenzeiten] Vollstaendige Neuverteilungsvorschlaege koennen auch mit
+    unvermeidbaren weichen Wunschkonflikten kontrolliert uebernommen werden;
+    nur unvollstaendige Vorschlaege mit offenen Plaetzen bleiben gesperrt.
+  - [Hallenzeiten] Die mobile Rasterlegende haelt Teilnahme- und Vorgabestatus
+    in zwei stabilen Zeilen; im Fair-Use-Modus entfaellt die dort nicht
+    anwendbare Vorgabenlegende.
+  - [Architektur] Die Mandanten- und Releaseplanung um App-/Schema-
+    Kompatibilitaet, zentral gesperrte tenantweise Migrationslaeufe,
+    Expand/Contract sowie getrennte Rollback- und Restorefaelle ergaenzt.
+  - [Dokumentation] Hallenzeiten-Seitendokumentation auf uebernehmbare
+    Warnvorschlaege und die modusabhaengige responsive Legende aktualisiert.
+
+  Fixed
+  - [Bewerbe] Der Schliessenbutton der Bewerbshistorie zeigt seinen Akzentrahmen
+    nur noch beim sichtbaren Tastaturfokus und nicht beim Maus-Hover.
+
+  Tests
+  - [Backend] Uebernahme und Historisierung eines vollstaendigen Vorschlags mit
+    unvermeidbarem weichem Wunsch abgesichert; 452 Backendtests und 16
+    Workflowtests erfolgreich abgeschlossen.
+  - [Browser] Warnvorschau, unvollstaendige Vorschau, Fair-Use-Legende,
+    zweizeilige mobile Legende und Fokus-/Hoverrahmen in der vollstaendigen
+    Browsermatrix mit Chrome Desktop/Android, Samsung Internet, Safari auf
+    iPhone/iPad/macOS, Firefox und Edge erfolgreich geprueft.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.12.8` gesetzt.

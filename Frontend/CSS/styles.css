@@ -2418,7 +2418,10 @@ body.mobile-nav-open {
   cursor: pointer;
 }
 
-.competition-history-close:hover,
+.competition-history-close:hover {
+  color: var(--fg);
+}
+
 .competition-history-close:focus-visible {
   color: var(--fg);
   outline: 2px solid var(--accent);

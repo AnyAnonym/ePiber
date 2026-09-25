@@ -23,9 +23,10 @@ Hallenzeiten verwalten - Administration
   Verhinderung wird nie uebergangen; ein Wunsch wird erst nach der Einsatzanzahl
   optimiert. Die Neuverteilung zeigt zunaechst eine zustandslose Vorschau mit
   Zuteilungen, offenen Plaetzen, Wunschkonflikten und Einsatzsummen. Sie veraendert
-  den bestehenden Raster nicht. Unvollstaendige Vorschlaege koennen nicht
-  uebernommen werden; vollstaendige Vorschlaege benoetigen eine ausdrueckliche,
-  revisions- und hashgeschuetzte Uebernahme. Aus dem Vorschauoverlay oeffnet
+  den bestehenden Raster nicht. Vorschlaege mit offenen Plaetzen koennen nicht
+  uebernommen werden; vollstaendige Vorschlaege duerfen auch bei unvermeidbaren
+  weichen Wunschkonflikten ausdruecklich revisions- und hashgeschuetzt uebernommen
+  werden. Aus dem Vorschauoverlay oeffnet
   `Uebersicht drucken` exakt den angezeigten Vorschlag in einer neuen, markierten
   Gesamtraster-Druckansicht; ein nicht mehr passender Vorschau-Hash wird abgelehnt.
   `Alle Stati auf Termin loeschen`

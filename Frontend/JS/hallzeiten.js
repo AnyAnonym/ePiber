@@ -265,6 +265,7 @@ function render() {
   byId("hall-time-description").textContent = grid.description;
   byId("hall-time-info-open").hidden = !grid.description;
   document.querySelector(".hall-time-legend .is-waitlist").hidden = !grid.waitlistEnabled;
+  document.querySelector(".hall-time-constraints-legend").hidden = grid.mode !== "equal";
 
   const head = byId("hall-time-head");
   head.replaceChildren();

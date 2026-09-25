@@ -57,7 +57,7 @@ const history = [
 ];
 export function createEndpoint(name) { return async (params = {}) => {
   if (name === "hallTimeGrid" && new URLSearchParams(location.search).has("failWithReference")) throw new Error("Raster konnte nicht geladen werden. (Referenz: intern-123)");
-  if (name === "hallTimeGrid") { const params = new URLSearchParams(location.search); const printing = location.pathname.includes("Drucken"); return { data: { success: true, grid: structuredClone({ ...grid, slots: params.has("evenSlots") ? grid.slots.slice(0, 8) : grid.slots, waitlistEnabled: !params.has("withoutWaitlist"), currentPersonId: params.has("withoutParticipant") ? "admin-1" : grid.currentPersonId, canAdminister: printing, ...(printing ? { constraints: [{ personId: "p1", slotId: "slot-1", kind: "unavailable" }, { personId: "p2", slotId: "slot-2", kind: "avoid" }] } : {}) }) } }; }
+  if (name === "hallTimeGrid") { const params = new URLSearchParams(location.search); const printing = location.pathname.includes("Drucken"); return { data: { success: true, grid: structuredClone({ ...grid, mode: params.has("fairUse") ? "fair_use" : grid.mode, slots: params.has("evenSlots") ? grid.slots.slice(0, 8) : grid.slots, waitlistEnabled: !params.has("withoutWaitlist"), currentPersonId: params.has("withoutParticipant") ? "admin-1" : grid.currentPersonId, canAdminister: printing, ...(printing ? { constraints: [{ personId: "p1", slotId: "slot-1", kind: "unavailable" }, { personId: "p2", slotId: "slot-2", kind: "avoid" }] } : {}) }) } }; }
   if (name === "hallTimeHistory") return { data: { success: true, entries: structuredClone(history) } };
   if (name === "setHallTimeBooking") {
     if (params.slotId === "slot-3") throw new Error("Termin ist bereits voll belegt. (Referenz: intern-voll-123)");
@@ -83,7 +83,7 @@ export function createEndpoint(name) { return async (params = {}) => {
     const entries = previewSlots.flatMap((slot) => sourceConstraints.some(({ slotId, personId, kind }) => slotId === slot.id && personId === "p1" && kind === "unavailable") ? [] : [{ slotId: slot.id, personId: "p1", status: "confirmed" }]);
     const openPlaceCount = previewSlots.length - entries.length;
     const softConflictCount = entries.filter((entry) => sourceConstraints.some(({ slotId, personId, kind }) => slotId === entry.slotId && personId === entry.personId && kind === "avoid")).length;
-    return { data: { success: true, preview: { gridId: source.id, revision, quality: openPlaceCount ? "incomplete" : softConflictCount ? "warning" : "complete", entries, slotCount: previewSlots.length, assignedCount: entries.length, openPlaceCount, softConflictCount, spread: 0, previewHash: "a".repeat(64), slotSummaries: previewSlots.map((slot) => ({ slot, assignedCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, openCount: entries.some(({ slotId }) => slotId === slot.id) ? 0 : 1, availableCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, assignedPersonIds: entries.some(({ slotId }) => slotId === slot.id) ? ["p1"] : [] })), personSummaries: [{ personId: "p1", personName: "p1", pastCount: 0, futureCount: entries.length, totalCount: entries.length }], softConflicts: [] } } };
+    return { data: { success: true, preview: { gridId: source.id, revision, quality: openPlaceCount ? "incomplete" : softConflictCount ? "warning" : "complete", entries, slotCount: previewSlots.length, assignedCount: entries.length, openPlaceCount, softConflictCount, spread: 0, previewHash: "a".repeat(64), slotSummaries: previewSlots.map((slot) => ({ slot, assignedCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, openCount: entries.some(({ slotId }) => slotId === slot.id) ? 0 : 1, availableCount: entries.some(({ slotId }) => slotId === slot.id) ? 1 : 0, assignedPersonIds: entries.some(({ slotId }) => slotId === slot.id) ? ["p1"] : [] })), personSummaries: [{ personId: "p1", personName: "p1", pastCount: 0, futureCount: entries.length, totalCount: entries.length }], softConflicts: entries.filter((entry) => sourceConstraints.some(({ slotId, personId, kind }) => slotId === entry.slotId && personId === entry.personId && kind === "avoid")).map((entry) => ({ personId: entry.personId, personName: entry.personId, slot: previewSlots.find(({ id }) => id === entry.slotId) })) } } };
   }
   if (name === "adminApplyHallTimeDistribution") { distributionCount += 1; adminGrids[0].entries = adminGrids[0].slots.map((slot) => ({ slotId: slot.id, personId: "p1", status: "confirmed" })); revision += 1; return { data: { success: true, grid: structuredClone(adminGrids[0]), revision } }; }
   if (name === "adminClearAllHallTimeStatuses") { statusClearCount += 1; const deletedEntryCount = adminGrids[0]?.entries?.length || 0; adminGrids[0].entries = []; revision += 1; return { data: { success: true, grid: structuredClone(adminGrids[0]), deletedEntryCount, revision } }; }
@@ -305,7 +305,7 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     });
     assert.ok(stableViewportHeight.pageScroll > 0);
     assert.ok(Math.abs(stableViewportHeight.after - stableViewportHeight.before) < 1, JSON.stringify(stableViewportHeight));
-    assert.deepEqual(await page.locator(".hall-time-legend span").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht Dabei", "Verhindert", "Möglichst vermeiden"]);
+    assert.deepEqual(await page.locator(".hall-time-legend span").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht dabei", "Verhindert", "Möglichst vermeiden"]);
     assert.equal(await page.locator('.hall-time-legend i.constraint-unavailable').count(), 1);
     assert.equal(await page.locator('.hall-time-legend i.constraint-avoid').count(), 1);
     assert.equal(await page.locator("#hall-time-head .hall-time-sum").textContent(), "9");
@@ -316,8 +316,11 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.equal(await page.locator("#hall-time-history-list li").nth(1).locator(".competition-history-entry-title").textContent(), "Anna Admin hat die zukünftige Verteilung neu erstellt (6 neu zugeteilt, 2 nachgerückt, 4 entfernt, 28 unverändert)");
     assert.equal(await page.locator("#hall-time-history-list li").nth(2).locator(".competition-history-entry-title").textContent(), "Alfred Pimminger hat Termineinschränkungen für die Verteilung vorgenommen");
     assert.equal(await page.locator("#hall-time-history-list li").nth(3).locator(".competition-history-entry-title").textContent(), "Spieler Eins hat sich angemeldet");
-    const legendRows = await page.locator(".hall-time-legend span").evaluateAll((items) => new Set(items.map((item) => Math.round(item.getBoundingClientRect().top))).size);
-    assert.equal(legendRows, 2);
+    const legendRows = await page.locator(".hall-time-legend span").evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().top)));
+    assert.equal(new Set(legendRows).size, 2);
+    assert.equal(new Set(legendRows.slice(0, 3)).size, 1);
+    assert.equal(new Set(legendRows.slice(3)).size, 1);
+    assert.notEqual(legendRows[0], legendRows[3]);
     assert.equal(await page.locator("#hall-time-foot td").nth(2).textContent(), "1/1 (1)");
     assert.equal(await page.locator("#hall-time-foot .hall-time-total").textContent(), "1");
     assert.equal(await page.locator("#hall-time-foot td").first().evaluate((element) => getComputedStyle(element).color), "rgb(23, 107, 53)");
@@ -403,7 +406,15 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     await page.getByRole("heading", { name: "Donnerstag Doppel" }).waitFor({ timeout: 5000 });
     await page.locator(".hall-time-legend .is-waitlist").waitFor({ state: "hidden" });
     assert.equal(await page.locator(".hall-time-legend .is-waitlist").isHidden(), true);
-    assert.deepEqual(await page.locator(".hall-time-legend span:visible").allTextContents(), ["✓ Dabei", "× nicht Dabei", "Verhindert", "Möglichst vermeiden"]);
+    assert.deepEqual(await page.locator(".hall-time-legend span:visible").allTextContents(), ["✓ Dabei", "× nicht dabei", "Verhindert", "Möglichst vermeiden"]);
+    const noWaitlistLegendRows = await page.locator(".hall-time-legend span:visible").evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().top)));
+    assert.deepEqual(noWaitlistLegendRows.slice(0, 2), [noWaitlistLegendRows[0], noWaitlistLegendRows[0]]);
+    assert.deepEqual(noWaitlistLegendRows.slice(2), [noWaitlistLegendRows[2], noWaitlistLegendRows[2]]);
+    assert.notEqual(noWaitlistLegendRows[0], noWaitlistLegendRows[2]);
+    await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&fairUse=1`);
+    await page.getByRole("heading", { name: "Donnerstag Doppel" }).waitFor({ timeout: 5000 });
+    assert.equal(await page.locator(".hall-time-constraints-legend").isHidden(), true);
+    assert.deepEqual(await page.locator(".hall-time-legend span:visible").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht dabei"]);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&failWithReference=1`);
     await page.getByText("Raster konnte nicht geladen werden.", { exact: true }).waitFor({ timeout: 5000 });
     assert.equal((await page.locator("body").textContent()).includes("intern-123"), false);
@@ -411,7 +422,7 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
   } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); }
 });
 
-test("Hallenzeiten-Verwaltung speichert Verhinderungen und uebernimmt nur eine vollstaendige Vorschau", { skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH), timeout: 30000 }, async () => {
+test("Hallenzeiten-Verwaltung blockiert unvollstaendige Vorschauen und uebernimmt Warnvorschauen", { skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH), timeout: 30000 }, async () => {
   const server = await startServer(); const browser = await launchSelectedBrowser(CHROMIUM_PATH);
   try {
     const page = await newProfilePage(browser, { viewport: { width: 1024, height: 900 } });
@@ -463,10 +474,13 @@ test("Hallenzeiten-Verwaltung speichert Verhinderungen und uebernimmt nur eine v
     assert.equal(dialogLayout.textAlign, "center");
     assert.ok(dialogLayout.closeRight < 24 && dialogLayout.closeTop < 24, JSON.stringify(dialogLayout));
     await page.getByRole("button", { name: "Schließen", exact: true }).click();
-    await firstConstraint.selectOption("");
+    await firstConstraint.selectOption("avoid");
     await page.getByRole("button", { name: "Verhinderungen speichern" }).click();
     await page.getByText("Verhinderungen und Wünsche wurden gespeichert.").waitFor();
     await page.getByRole("button", { name: "Neuverteilung berechnen" }).click();
+    assert.match(await page.locator("#hall-time-preview-summary").textContent(), /Vollständige Lösung mit Hinweisen.*1 nicht erfüllte Wünsche/);
+    assert.equal(await page.getByRole("button", { name: "Vorschau übernehmen" }).isVisible(), true);
+    assert.equal(await page.locator("#hall-time-preview-details").getByText(/p1: .*30\.10\.2099/).count(), 1);
     await page.getByRole("button", { name: "Vorschau übernehmen" }).click({ timeout: 5000 });
     await page.getByText("Die angezeigte Neuverteilung wurde übernommen.").waitFor({ timeout: 5000 });
     assert.equal(await page.evaluate(() => window.__hallTimeDistributionCount()), 1);

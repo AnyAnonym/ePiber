@@ -52,6 +52,7 @@
 .hall-time-state.is-waitlist, .hall-time-legend .is-waitlist { background: #fff0b8; color: #765800; }
 .hall-time-state.is-empty, .hall-time-legend .is-empty { background: #f6d6d6; color: #8b2222; }
 .hall-time-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem; margin-top: .6rem; }
+.hall-time-legend-group { display: contents; }
 .hall-time-legend span { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .45rem; border-radius: 8px; white-space: nowrap; font-size: .85rem; }
 .hall-time-legend [hidden] { display: none; }
 .hall-time-constraint-legend i { display: inline-block; width: 1rem; height: 1rem; background: #fff; }
@@ -64,4 +65,4 @@
 .hall-time-history { margin-top: 1rem; }
 .hall-time-history ol { max-height: 360px; overflow: auto; padding-left: 1.5rem; }
 .hall-time-history li { padding: .35rem 0; }
-@media (max-width: 700px) { .hall-time-main { width: calc(100% - 1rem); padding-top: 1rem; } .hall-time-heading { padding-inline: 38px; } .hall-time-table-card { padding: .5rem; } .hall-time-table-scroll { max-height: 55vh; max-height: 55dvh; } }
+@media (max-width: 700px) { .hall-time-main { width: calc(100% - 1rem); padding-top: 1rem; } .hall-time-heading { padding-inline: 38px; } .hall-time-table-card { padding: .5rem; } .hall-time-table-scroll { max-height: 55vh; max-height: 55dvh; } .hall-time-legend-group { display: flex; flex: 0 0 100%; flex-wrap: nowrap; justify-content: center; gap: .35rem; min-width: 0; } }

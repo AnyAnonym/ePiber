@@ -209,7 +209,7 @@ function renderPreview(preview) {
   for (const value of preview.personSummaries) { const row = document.createElement("tr"); for (const text of [value.personName, value.pastCount, value.futureCount, value.totalCount]) { const cell = document.createElement(row.children.length ? "td" : "th"); cell.textContent = text; row.appendChild(cell); } body.appendChild(row); }
   table.appendChild(body); details.appendChild(table);
   byId("hall-time-preview-print").href = `hallzeitenDrucken.html?id=${encodeURIComponent(selectedId)}&ansicht=all&vorschau=${encodeURIComponent(preview.previewHash)}`;
-  byId("hall-time-distribute-confirm").hidden = preview.openPlaceCount > 0;
+  byId("hall-time-distribute-confirm").hidden = !["complete", "warning"].includes(preview.quality) || preview.openPlaceCount > 0;
 }
 
 async function previewDistribution() {
@@ -222,7 +222,7 @@ async function previewDistribution() {
 }
 
 async function applyPreview() {
-  if (!selectedId || !currentPreview || currentPreview.openPlaceCount > 0 || busy) return;
+  if (!selectedId || !currentPreview || !["complete", "warning"].includes(currentPreview.quality) || currentPreview.openPlaceCount > 0 || busy) return;
   const key = `hall-time-apply-preview:${selectedId}:${revision}:${currentPreview.previewHash}`; busy = true; feedback("Vorschau wird übernommen …", "loading");
   try { await applyDistributionEndpoint({ operationId: getOperationId(key), gridId: selectedId, expectedRevision: revision, previewHash: currentPreview.previewHash }); releaseOperationId(key); byId("hall-time-distribute-dialog").close(); await load(); feedback("Die angezeigte Neuverteilung wurde übernommen.", "success"); }
   catch (error) { releaseOperationId(key, error); feedback(errorText(error), "error"); diagnostic.error("hall_time_admin_write_failed", error); if (error.code === "REVISION_CONFLICT" || error.code === "HALL_TIME_PREVIEW_STALE") await load(); }

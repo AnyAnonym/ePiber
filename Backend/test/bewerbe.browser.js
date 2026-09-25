@@ -312,7 +312,15 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     await globalHistoryButton.click();
     const modal = page.getByRole("dialog");
     await modal.waitFor({ state: "visible" });
-    assert.equal(await page.locator("#competition-history-close").evaluate((button) => document.activeElement === button), true);
+    const historyClose = page.locator("#competition-history-close");
+    assert.equal(await historyClose.evaluate((button) => document.activeElement === button), true);
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    assert.equal(await historyClose.evaluate((button) => document.activeElement === button), true);
+    assert.equal(await historyClose.evaluate((button) => getComputedStyle(button).outlineStyle), "solid");
+    await historyClose.evaluate((button) => button.blur());
+    await historyClose.hover();
+    assert.equal(await historyClose.evaluate((button) => getComputedStyle(button).outlineStyle), "none");
     const historyFavorite = modal.locator("#competition-history-favorite .favorite-star");
     await historyFavorite.waitFor({ state: "visible" });
     await historyFavorite.click();
