@@ -57,7 +57,7 @@ const history = [
 ];
 export function createEndpoint(name) { return async (params = {}) => {
   if (name === "hallTimeGrid" && new URLSearchParams(location.search).has("failWithReference")) throw new Error("Raster konnte nicht geladen werden. (Referenz: intern-123)");
-  if (name === "hallTimeGrid") { const params = new URLSearchParams(location.search); const printing = location.pathname.includes("Drucken"); return { data: { success: true, grid: structuredClone({ ...grid, slots: params.has("evenSlots") ? grid.slots.slice(0, 8) : grid.slots, waitlistEnabled: !params.has("withoutWaitlist"), currentPersonId: params.has("withoutParticipant") ? "admin-1" : grid.currentPersonId, canAdminister: printing, ...(printing ? { constraints: [{ personId: "p1", slotId: "slot-1", kind: "unavailable" }, { personId: "p2", slotId: "slot-2", kind: "avoid" }] } : {}) }) } }; }
+  if (name === "hallTimeGrid") { const params = new URLSearchParams(location.search); const printing = location.pathname.includes("Drucken"); return { data: { success: true, grid: structuredClone({ ...grid, mode: params.has("fairUse") ? "fair_use" : grid.mode, slots: params.has("evenSlots") ? grid.slots.slice(0, 8) : grid.slots, waitlistEnabled: !params.has("withoutWaitlist"), currentPersonId: params.has("withoutParticipant") ? "admin-1" : grid.currentPersonId, canAdminister: printing, ...(printing ? { constraints: [{ personId: "p1", slotId: "slot-1", kind: "unavailable" }, { personId: "p2", slotId: "slot-2", kind: "avoid" }] } : {}) }) } }; }
   if (name === "hallTimeHistory") return { data: { success: true, entries: structuredClone(history) } };
   if (name === "setHallTimeBooking") {
     if (params.slotId === "slot-3") throw new Error("Termin ist bereits voll belegt. (Referenz: intern-voll-123)");
@@ -411,6 +411,10 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.deepEqual(noWaitlistLegendRows.slice(0, 2), [noWaitlistLegendRows[0], noWaitlistLegendRows[0]]);
     assert.deepEqual(noWaitlistLegendRows.slice(2), [noWaitlistLegendRows[2], noWaitlistLegendRows[2]]);
     assert.notEqual(noWaitlistLegendRows[0], noWaitlistLegendRows[2]);
+    await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&fairUse=1`);
+    await page.getByRole("heading", { name: "Donnerstag Doppel" }).waitFor({ timeout: 5000 });
+    assert.equal(await page.locator(".hall-time-constraints-legend").isHidden(), true);
+    assert.deepEqual(await page.locator(".hall-time-legend span:visible").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht dabei"]);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&failWithReference=1`);
     await page.getByText("Raster konnte nicht geladen werden.", { exact: true }).waitFor({ timeout: 5000 });
     assert.equal((await page.locator("body").textContent()).includes("intern-123"), false);

@@ -20,3 +20,10 @@ Commit: 4.12.7-paj-1-3 | Hoverrahmen an Historien-Schliessenbuttons entfernt
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.7-paj-1-2-x` gesetzt.
   - [Bewerbe] Historien-Schliessenbuttons zeigen den Akzentrahmen nur noch beim Tastaturfokus und nicht mehr beim Maus-Hover.
+
+[4.12.7-paj-1-4] - 2026-09-25
+Commit: 4.12.7-paj-1-4 | Fair-Use-Legende auf Teilnahme-Status reduziert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.7-paj-1-3-x` gesetzt.
+  - [Hallenzeiten] Im Modus Fair Use zeigt das Reservierungsraster keine Legende fuer Verhinderungen und Vermeidungswuensche mehr.
