@@ -876,8 +876,529 @@ Vor einer verbindlichen Architektur sind mindestens zu entscheiden:
    Agentendiagnosen.
 9. Evaluationskatalog fuer Qualitaet, Latenz, Kosten und Policytreue.
 10. Benutzererlebnis bei langen Tasks, Rueckfragen, Teilfehlern und Eskalation.
+11. Erste lokale und externe Modellkandidaten samt gemessener Capability-
+    Scorecards und Datenklassen.
+12. Verfahren fuer unmittelbare Eskalation, Shadow-Vergleich und kontrollierte
+    Aktualisierung der Routingpolicy.
+13. Aufbewahrung, Datenschutz und Auswertungsrechte fuer Benutzerbewertungen,
+    Modellvergleiche und menschliche Korrekturen.
+14. Standard-Antwortprofile, benutzerspezifische Praeferenzen und UI-Vertrag
+    fuer progressive Vertiefung.
 
-## 22. Verdichtete Leitprinzipien
+## 22. Aufgabenabhaengige Modellwahl
+
+### 22.1 Ziel
+
+Der Orchestrator entscheidet nicht nur, welche Arbeit auszufuehren ist, sondern
+auch, welches freigegebene Modell fuer jede semantische Teilaufgabe ausreichend,
+erlaubt und wirtschaftlich ist. Das allgemein leistungsstaerkste Modell ist
+nicht automatisch fuer jede Aufgabe die beste Wahl.
+
+Das Ziel ist ein faehigkeits-, daten-, kosten- und latenzbewusster Model Router,
+der insbesondere folgende Klassen kombinieren kann:
+
+- kleine On-Premises-Modelle fuer Klassifikation, Extraktion, einfaches
+  Zusammenfassen und sensibles internes Material;
+- lokale Spezialmodelle fuer Code, Embeddings, Datenschutzklassifikation,
+  Uebersetzung oder bestimmte Fachdomaenen;
+- leistungsfaehige externe Modelle fuer komplexe Planung, breite
+  Architekturfragen, schwierige Fehlersuche und anspruchsvolle Reviews;
+- menschliche Entscheidung fuer riskante, irreversible oder fachlich nicht
+  ausreichend abgesicherte Ergebnisse.
+
+### 22.2 Auswahlreihenfolge
+
+```text
+Benutzerauftrag
+  -> deterministische Vorpruefung
+  -> Aufgabentyp und Teilaufgaben bestimmen
+  -> Daten- und Risikoklasse bestimmen
+  -> harte Modellfilter anwenden
+  -> kleinstes ausreichend geeignetes Modell waehlen
+  -> Ergebnis pruefen
+  -> bei Bedarf kontrolliert eskalieren
+```
+
+Der Router fragt nicht:
+
+> Welches Modell ist allgemein das beste?
+
+Sondern:
+
+> Welches erlaubte Modell erfuellt die Anforderungen dieser konkreten
+> Teilaufgabe mit ausreichender Qualitaet und dem geringsten vertretbaren
+> Ressourcenverbrauch?
+
+### 22.3 Harte Filter
+
+Vor jeder qualitativen Rangfolge entfernt deterministische Software alle nicht
+zulaessigen Kandidaten. Geprueft werden mindestens:
+
+- Darf die Datenklasse das eigene System verlassen?
+- Ist On-Premises-Verarbeitung verpflichtend?
+- Reicht das nachgewiesene Kontextfenster?
+- Unterstuetzt das Modell Sprache und erforderliche Modalitaet?
+- Sind strukturierte Ausgaben und gegebenenfalls Tool Calling nachgewiesen?
+- Ist das Modell fuer die Risiko- und Aktionsklasse freigegeben?
+- Liegen erwartete Latenz und Kosten innerhalb des Budgets?
+- Sind Provider, Modellversion und notwendige Infrastruktur verfuegbar?
+- Darf der konkrete Benutzer beziehungsweise Mandant diesen Provider nutzen?
+
+Datenschutz, Berechtigung und Datenstandort sind keine weichen
+Optimierungsfaktoren. Ein unzulaessiges externes Modell bleibt ausgeschlossen,
+auch wenn es die hoechste erwartete Antwortqualitaet besitzt.
+
+### 22.4 Aufgabentaxonomie
+
+Der Router klassifiziert nicht nur einen gesamten Chat, sondern bei Bedarf
+einzelne semantische Teilaufgaben. Erste Kategorien sind:
+
+- Intent- und Aufgabenerkennung;
+- Dokument- und Informationsrouting;
+- strukturierte Extraktion;
+- einfache oder verlustkritische Zusammenfassung;
+- Fachfrage mit Retrieval;
+- Codeanalyse und Implementierung;
+- Architektur und Planung;
+- Review und Gegenpruefung;
+- Ergebnisinterpretation und Benutzerkommunikation;
+- Sicherheits-, Datenschutz- oder Freigabeentscheidung.
+
+Die Klassifikation kombiniert deterministische Merkmale mit einem kleinen
+lokalen Klassifikationsmodell, wenn reine Regeln nicht ausreichen. Ein
+leistungsfaehiges externes Modell soll nicht nur deshalb aufgerufen werden, um
+eine einfache bekannte Taskklasse festzustellen.
+
+### 22.5 Versioniertes Modellregister
+
+Jeder Modellkandidat besitzt eine versionierte Capability Card. Beispiel:
+
+```yaml
+models:
+  - id: local-small
+    deployment: on-premises
+    capabilities:
+      - classification
+      - extraction
+      - simple_summary
+    context_tokens: 32000
+    structured_output: true
+    tool_calling: false
+    allowed_data_classes:
+      - public
+      - internal
+      - confidential
+    latency_class: fast
+    cost_class: local
+
+  - id: cloud-reasoning
+    deployment: external
+    capabilities:
+      - complex_planning
+      - architecture
+      - code_review
+    context_tokens: 200000
+    structured_output: true
+    tool_calling: true
+    allowed_data_classes:
+      - public
+      - internal_sanitized
+    latency_class: medium
+    cost_class: high
+```
+
+Die Capability Card enthaelt keine ungeprueften Marketingaussagen. Ihre Werte
+werden aus versionierten eigenen Evaluationen abgeleitet, mindestens fuer:
+
+- deutsche Sprach- und Fachqualitaet;
+- Tasktreffer und Klassifikationsgenauigkeit;
+- Vollstaendigkeit und Halluzinationsrate;
+- Schema- und Tool-Calling-Treue;
+- effektive Kontextgrenzen;
+- Latenz und Durchsatz;
+- Kosten;
+- Verhalten bei unzureichender oder widerspruechlicher Quellenlage.
+
+Modellversion, Quantisierung, Systemprompt, Inferenzparameter und
+Deploymentprofil gehoeren zur Identitaet eines bewerteten Kandidaten. Eine neue
+Version uebernimmt nicht ungeprueft die Scorecard ihres Vorgaengers.
+
+### 22.6 Keine eindimensionale Rangfolge
+
+Eine allgemeine Folge `A < B < C < D` ist fuer das Routing zu grob. Ein nominell
+schwaecheres Modell kann fuer strukturierte Extraktion, kurze deutsche Texte,
+bestimmten Fachwortschatz oder knappe Antworten geeigneter sein als ein
+allgemein staerkeres Modell.
+
+Das Register verwendet deshalb eine aufgabenspezifische Matrix. Neben Qualitaet
+werden Latenz, Kosten, Datenschutz, Verfuegbarkeit und Antwortstil betrachtet.
+Nach den harten Filtern kann der Router einen erwarteten Nutzen abschaetzen:
+
+```text
+Nutzen = erwartete Aufgabenqualitaet
+         - Kostenfaktor
+         - Latenzfaktor
+         - Ausfallrisiko
+```
+
+Harte Policygrenzen werden niemals durch einen hohen berechneten Nutzen
+ueberstimmt.
+
+### 22.7 Aufgabenzerlegung und Datenschutz
+
+Eine Benutzeranfrage kann kontrolliert auf mehrere Modelle verteilt werden.
+Beispiel:
+
+```text
+lokales Modell
+  -> sensible Inhalte klassifizieren
+  -> erlaubte Abstraktion oder Datenminimierung erzeugen
+externes starkes Modell
+  -> anonymisierte Architekturfrage bewerten
+lokaler Orchestrator
+  -> Ergebnis mit internem Zustand verbinden und pruefen
+```
+
+Eine Zusammenfassung vor externer Verarbeitung ist selbst ein potentiell
+verlustbehafteter Verarbeitungsschritt. Kritische Fakten bleiben ueber
+kontrollierte Referenzen nachvollziehbar; sicherheitsrelevante Entscheidungen
+duerfen nicht allein auf einer ungeprueften Kurzfassung beruhen.
+
+### 22.8 Eskalationskaskade
+
+```text
+deterministische Software
+  -> kleines lokales Modell
+  -> lokales Spezialmodell
+  -> erlaubtes externes leistungsfaehiges Modell
+  -> menschliche Entscheidung
+```
+
+Eine Eskalation erfolgt nur aufgrund benannter Evidenz, beispielsweise:
+
+- niedrige klassifikationsspezifisch kalibrierte Konfidenz;
+- fehlgeschlagene Schema- oder Faktenpruefung;
+- erkannter Widerspruch;
+- nicht ausreichendes Kontextfenster;
+- negative Benutzerbewertung der aktuellen Antwort;
+- kritische Aufgabe oberhalb der Freigabestufe des Modells.
+
+Das Modell kann eine Eskalation empfehlen, entscheidet aber nicht allein ueber
+Datenweitergabe oder Providerwechsel. Der Orchestrator prueft Policy, Budget und
+Freigabe erneut.
+
+## 23. Bewertungs- und Lernkanal
+
+### 23.1 Zweck
+
+Ohne Bewertung bleibt die Modellwahl eine statische Annahme. Der
+Bewertungskanal ueberfuehrt menschliche Erfahrung und wiederkehrendes
+`Bauchgefuehl` in strukturierte, auswertbare Evidenz.
+
+Dieses Bauchgefuehl ist oft verdichtetes Erfahrungswissen, beispielsweise:
+
+- eine plausible Antwort loest die reale Aufgabe trotzdem nicht;
+- ein wichtiger Randfall fehlt;
+- die Antwort ist formal richtig, aber praktisch ungeeignet;
+- ein Modell arbeitet fuer eine Aufgabe unnoetig kompliziert;
+- Sprache, Ton oder Detailtiefe passen nicht zur Zielgruppe;
+- der geringe Qualitaetsgewinn rechtfertigt Latenz oder Kosten nicht.
+
+Das System soll dieses Urteil nicht erraten, sondern durch wiederholte
+Bewertungen, Vergleiche und Korrekturen kontrolliert erfassen.
+
+### 23.2 Drei Wirkebenen
+
+**Unmittelbare Reaktion:** Eine unzureichende Antwort kann innerhalb des
+aktuellen Tasks korrigiert oder an ein anderes erlaubtes Modell eskaliert
+werden.
+
+**Offline-Verbesserung:** Gleichartige bewertete Faelle werden spaeter
+aggregiert und zur Anpassung von Capability Scorecards und Routingregeln
+verwendet.
+
+**Evaluationskatalog:** Aussagekraeftige, datenschutzkonform aufbereitete Faelle
+werden als feste Testszenarien fuer neue Modelle, Modellversionen, Prompts und
+Routingpolicies aufgenommen.
+
+Eine negative Bewertung veraendert nicht unmittelbar und ungeprueft die
+produktive Routingpolicy.
+
+### 23.3 Bewertungsdimensionen
+
+Der Qualitaetsvertrag umfasst mindestens:
+
+- fachliche Korrektheit;
+- Vollstaendigkeit;
+- Relevanz;
+- Verstaendlichkeit;
+- angemessene Detailtiefe;
+- Einhaltung der Anweisungen;
+- korrekte Quellen- und Toolverwendung;
+- sichtbare Kennzeichnung von Unsicherheit;
+- Sicherheit und Datenschutz;
+- Latenz;
+- Kosten-Nutzen-Verhaeltnis.
+
+Die normale Benutzeroberflaeche verlangt nicht bei jeder Antwort einen langen
+Fragebogen. Ein positives oder negatives Gesamtsignal wird bei Bedarf durch
+wenige kontrollierte Gruende ergaenzt:
+
+```text
+inhaltlich falsch
+wichtige Information fehlt
+Aufgabe missverstanden
+zu oberflaechlich
+zu ausfuehrlich
+zu kompliziert
+zu viele Nebenpunkte
+direkte Antwort fehlt
+unbelegte Behauptung
+falscher Ton
+zu langsam
+```
+
+### 23.4 Menschliche Korrekturen
+
+Besonders wertvoll ist nicht nur die Bewertung, sondern die tatsaechliche
+Korrektur:
+
+- fehlenden Punkt ergaenzen;
+- falsche Entscheidung berichtigen;
+- Antwort umformulieren;
+- vorgeschlagenen Plan veraendern;
+- ein bevorzugtes Vergleichsergebnis benennen;
+- die Loesung vollstaendig verwerfen.
+
+Beispiel:
+
+```json
+{
+  "taskType": "architecture_review",
+  "selectedModel": "model-c",
+  "modelVersion": "2026-09",
+  "routingPolicyVersion": "router-4",
+  "rating": "insufficient",
+  "reasons": [
+    "missing_operational_risk",
+    "too_generic"
+  ],
+  "humanCorrection": "Recovery- und Auditpfade gemeinsam bewerten.",
+  "preferredCandidate": "model-b"
+}
+```
+
+Freie Korrekturen koennen personenbezogene oder vertrauliche Inhalte enthalten
+und unterliegen deshalb einem ausdruecklichen Datenschutz-, Zugriffs- und
+Aufbewahrungsvertrag.
+
+### 23.5 Kontrafaktisches Problem
+
+Wenn Modell C unzureichend antwortet, ist nur nachgewiesen, dass C diesen Fall
+nicht ausreichend geloest hat. Daraus folgt nicht automatisch, dass Modell B
+oder D besser gewesen waere.
+
+Eine belastbare Alternativbewertung benoetigt mindestens eines von:
+
+- ausdrueckliche menschliche Praeferenz;
+- direkten paarweisen Vergleich;
+- historische Bewertungen hinreichend aehnlicher Aufgaben;
+- kontrollierte Shadow-Ausfuehrung anderer Modelle;
+- fachlich gepruefte Referenzantwort.
+
+Paarweise Vergleiche sind fuer Menschen oft leichter als abstrakte Punktwerte:
+
+```text
+Welche Antwort ist besser?
+[Antwort B] [Antwort C] [gleichwertig] [beide unbrauchbar]
+```
+
+Shadow-Ausfuehrungen benoetigen ein eigenes Kosten-, Datenschutz- und
+Aufbewahrungsbudget. Nicht jede Benutzeranfrage darf allein zu Lernzwecken an
+mehrere externe Provider vervielfaeltigt werden.
+
+### 23.6 Kontrollierte Policyverbesserung
+
+Eine neue Routingpolicy entsteht in einem nachvollziehbaren Ablauf:
+
+```text
+Feedback unveraenderlich erfassen
+  -> vergleichbare Taskklassen gruppieren
+  -> Bias und Datenmenge pruefen
+  -> Routingaenderung vorschlagen
+  -> offline gegen Evaluationskatalog testen
+  -> fachlich und betrieblich freigeben
+  -> neue Policyversion kontrolliert aktivieren
+  -> Wirkung beobachten
+```
+
+Einzelbewertungen werden nicht unmittelbar als globale Wahrheit behandelt.
+Zu beruecksichtigen sind insbesondere:
+
+- unterschiedliche Stilpraeferenzen;
+- fehlerhafte menschliche Fachurteile;
+- ueberproportional negatives Feedback;
+- Auswahlbias, weil schwere Aufgaben haeufiger starke Modelle erreichen;
+- Modell- und Promptversionswechsel;
+- Reward Hacking durch Optimierung auf leicht messbare Nebenkriterien.
+
+Automatische Judge-Modelle koennen Schema, Quellenbezug oder Vergleichsaspekte
+bewerten. Sie ersetzen menschlich verankerte Referenzen nicht und werden selbst
+als versionierte, evaluierte Komponente behandelt.
+
+### 23.7 Feedbackdaten und Observability
+
+Zu jeder Bewertung werden kontrolliert referenziert:
+
+- Taskklasse und Risikoklasse;
+- ausgewaehltes Modell und Version;
+- Routingpolicy und Auswahlgrund;
+- Prompt-/Antwortprofilversion;
+- Datenklasse und Deploymentort;
+- Qualitaetsdimensionen und Gruende;
+- Korrektur oder Vergleich, soweit vorhanden;
+- Latenz, Tokens und Kosten;
+- unmittelbare Eskalation und deren Ergebnis.
+
+Auswertungen muessen zwischen Modellqualitaet, Retrievalqualitaet,
+Promptqualitaet, Toolfehlern und falscher Taskklassifikation unterscheiden. Eine
+schlechte Endantwort ist nicht automatisch ein Modellfehler.
+
+## 24. Answer-first und progressive Vertiefung
+
+### 24.1 Verbindlicher Standard
+
+Die Standardantwort beginnt mit der direkten Antwort und nicht mit dem gesamten
+Erklaerungsraum. Der verbindliche Priming-Grundsatz lautet:
+
+> Zuerst die direkte Antwort. Danach hoechstens die wichtigsten Gruende.
+> Details und Nebenbetrachtungen nur auf Wunsch oder wenn sie fuer Sicherheit
+> und Korrektheit zwingend sind.
+
+Bevorzugt wird:
+
+```text
+Antwort -> wichtigste Punkte -> optionale Vertiefung
+```
+
+Vermieden wird:
+
+```text
+Kontext -> alle Perspektiven -> Einschraenkungen -> Beispiele -> Fazit
+```
+
+Das Ziel ist nicht Oberflaechlichkeit, sondern gestufte Informationsdichte. Der
+Benutzer soll die Kernaussage verstehen koennen, ohne zuerst alle Nebenstraenge
+verarbeiten zu muessen.
+
+### 24.2 Standard-Antwortprofil
+
+Ohne abweichende Benutzerpraeferenz oder fachliche Notwendigkeit gilt:
+
+1. Direkte Antwort in ein bis drei Saetzen.
+2. Maximal drei bis fuenf kurze Kernpunkte.
+3. Keine Wiederholung derselben Schlussfolgerung am Ende.
+4. Keine Nebenperspektive, wenn sie die Entscheidung nicht veraendert.
+5. Details nur auf Nachfrage oder in einer optionalen Vertiefung.
+6. Begriffe und Fachsprache nur soweit fuer die Zielgruppe erforderlich.
+
+Der Orchestrator uebergibt ein explizites Profil, beispielsweise:
+
+```json
+{
+  "responseStyle": "answer_first",
+  "initialDetail": "concise",
+  "maxInitialSentences": 5,
+  "maxKeyPoints": 4,
+  "includeSideAspects": false,
+  "detailsOnRequest": true
+}
+```
+
+Das Antwortprofil ist getrennt vom ausgewaehlten Modell. Der Router lernt damit
+nicht nur, welches Modell fuer eine Taskklasse geeignet ist, sondern auch,
+welcher Umfang fuer Benutzer, Aufgabe und Situation passt.
+
+### 24.3 Strukturierter Ausgabevertrag
+
+Soweit vom Modell unterstuetzt, wird die Antwort getrennt erzeugt:
+
+```json
+{
+  "directAnswer": "...",
+  "keyPoints": ["...", "..."],
+  "optionalDetails": "...",
+  "mandatoryWarnings": []
+}
+```
+
+Die Chatoberflaeche zeigt zuerst `directAnswer` und `keyPoints`.
+`optionalDetails` wird ueber `Mehr anzeigen` oder eine Anschlussfrage sichtbar.
+Der Orchestrator kann eine bereits erzeugte Vertiefung zwischenspeichern, damit
+nicht allein fuer das Aufklappen ein weiterer Modellaufruf erforderlich wird.
+
+### 24.4 Zwingende Ausnahmen
+
+Kuerze darf keine wesentliche Gefahr verdecken. Bereits in der ersten Ebene
+erscheinen:
+
+- blockierende Unsicherheit;
+- Sicherheits- oder Datenschutzrisiko;
+- irreversible Wirkung;
+- notwendige Benutzerentscheidung;
+- entscheidende Voraussetzung;
+- Warnung, dass die direkte Antwort nur unter benannten Annahmen gilt.
+
+Auch diese Hinweise werden knapp und handlungsorientiert formuliert. Die
+vollstaendige Herleitung bleibt nachgelagert.
+
+### 24.5 Personalisierung
+
+Benutzer koennen ein bevorzugtes Antwortniveau erhalten, etwa:
+
+- `kurz`;
+- `standard`;
+- `detailliert`;
+- `technisch`;
+- `nicht-technisch`.
+
+Die aktuelle ausdrueckliche Benutzeranweisung hat Vorrang vor einer gespeicherten
+Praeferenz. Eine Task kann wegen Risiko oder Erklaerungsbedarf kontrolliert vom
+Standard abweichen; der Grund wird intern protokolliert.
+
+### 24.6 Bewertung und Qualitaetskontrolle
+
+Der Feedbackkanal unterscheidet insbesondere:
+
+- zu ausfuehrlich;
+- zu kompliziert;
+- zu viele Nebenpunkte;
+- direkte Antwort fehlt;
+- unnoetige Fachsprache;
+- gewuenschte Details fehlen;
+- wesentliche Warnung durch Kuerzung verloren.
+
+Ein reiner nachtraeglicher Summarizer darf fachliche Warnungen nicht
+unkontrolliert entfernen. Bevorzugt wird, dass das zustaendige Modell die
+Antwort von Anfang an nach dem strukturierten Vertrag erzeugt. Automatische
+Laengen- und Strukturvalidatoren pruefen Form, ersetzen aber keine fachliche
+Qualitaetsbewertung.
+
+### 24.7 Priming fuer Agenten und Teilaufgaben
+
+Auch interne Agentenergebnisse folgen dem Grundsatz `Ergebnis zuerst`, damit der
+Lead-Orchestrator nicht fuer jede Rueckgabe lange Nebenbetrachtungen verarbeiten
+muss. Ein Agent liefert in dieser Reihenfolge:
+
+1. Status und direkte Feststellung;
+2. geaenderte Artefakte oder wichtigste Evidenz;
+3. Blocker und notwendige Entscheidung;
+4. optionale technische Details.
+
+Ausnahmen sind Rohdaten- oder Evidenzartefakte, die separat gespeichert und nur
+ueber Referenzen in den Entscheidungskontext aufgenommen werden.
+
+## 25. Verdichtete Leitprinzipien
 
 1. Das Modellwissen liefert allgemeine Kompetenz; der Kontext liefert die
    konkrete Projektwahrheit.
@@ -901,3 +1422,17 @@ Vor einer verbindlichen Architektur sind mindestens zu entscheiden:
     Orchestrator oder Freigabeinhaber.
 15. Eine einzige autoritative Policyquelle verhindert widerspruechliche
     Wahrheiten zwischen Code, Dokumentation und Agentenanweisung.
+16. Der Model Router waehlt das kleinste ausreichend geeignete und erlaubte
+    Modell je semantischer Teilaufgabe.
+17. Datenschutz- und Berechtigungsfilter gelten vor jeder qualitativen
+    Modellrangfolge.
+18. Modellfaehigkeiten werden mit eigenen versionierten Evaluationen statt nur
+    anhand von Herstellerangaben bewertet.
+19. Menschliche Bewertungen, Vergleiche und Korrekturen werden als
+    strukturierte Erfahrung erfasst, aber nicht ungeprueft sofort produktiv.
+20. Eine schlechte Antwort beweist nicht ohne Vergleich, welches andere Modell
+    besser gewesen waere.
+21. Antworten beginnen mit der Kernaussage; Erklaerungen und Nebenperspektiven
+    folgen gestuft und nur soweit erforderlich.
+22. Antwortumfang ist ein eigenes routing- und benutzerspezifisches Profil und
+    nicht bloss eine Eigenschaft des Modells.

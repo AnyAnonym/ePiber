@@ -209,3 +209,12 @@ Commit: 4.12.8-paj-1-3 | LLM-Orchestrator detailliert konzipiert
 
   Added
   - [Dokumentation] Detaillierte Arbeitsgrundlage fuer Kontext- und Kompaktierungsgrenzen, `AGENTS.md`-Einsatz, zentralen LLM-Orchestrator, Policy Enforcement, Lead-LLM-Ablauf, begrenzte Agentenschleifen und latenzarme Chatverarbeitung unter `Project/2do/` angelegt.
+
+[4.12.8-paj-1-4] - 2026-09-26
+Commit: 4.12.8-paj-1-4 | Modellrouting und Antwortqualität konzipiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.8-paj-1-3-x` gesetzt.
+  - [Dokumentation] Orchestrator-Arbeitsgrundlage um aufgabenabhaengiges Routing zwischen lokalen und externen Modellen, versionierte Capability Scorecards, kontrollierte Eskalation sowie harte Daten- und Risikofilter erweitert.
+  - [Dokumentation] Menschlich verankerten Bewertungs- und Lernkanal mit Qualitaetsdimensionen, Korrekturen, paarweisen Vergleichen, Shadow-Evaluation und kontrolliert versionierter Routingpolicy beschrieben.
+  - [Dokumentation] Answer-first und progressive Vertiefung als verbindlichen Antwort-, UI-, Priming- und Feedbackvertrag festgelegt, damit Kernaussagen vor optionalen Nebenbetrachtungen erscheinen.
