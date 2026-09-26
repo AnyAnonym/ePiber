@@ -6,3 +6,197 @@ Commit: 4.12.8-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.8-paj-1-1` gesetzt.
+
+[4.12.8-paj-1-2] - 2026-09-26
+Commit: 4.12.8-paj-1-2 | PostgreSQL-Migration vollständig konzipiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.8-paj-1-1-x` gesetzt.
+  - [Dokumentation] Devel-first-Strategie fuer die PostgreSQL-Migration mit PostgreSQL-only-Abnahme, unveraendertem Legacy-Livebetrieb und spaeterem frischem Aufbau von `epiber_askoe` klargestellt.
+  - [Datenbank] Dauerhaften synthetischen Bestand fuer `epiber_devel` und eine getrennte kurzlebige reale Migrationsprobe im geschuetzten Staging als Datenstrategie festgelegt.
+  - [Datenbank] Interne UUIDs mit unveraenderlichen Legacy-/Public-IDs als verbindliche Schluesselstrategie bestaetigt, ohne bestehende externe Vertraege gleichzeitig umzustellen.
+  - [Datenbank] PostgreSQL 18 mit nativer UUIDv7-Erzeugung und `pg_stat_statements` als einzige initiale Extension festgelegt.
+  - [Datenbank] Projektspezifischen Node.js-/SQL-Migration-Runner mit Pruefsummen, Advisory Lock, eigenem Journal und getrennter DDL-Rolle festgelegt.
+  - [Datenbank] Personen, Mitgliedschaften, Konten, Credentials und Rollen strukturell getrennt, bei unveraendertem heutigem Berechtigungs- und Projektionsverhalten, als Erstmigrationsumfang festgelegt.
+  - [Datenbank] Strikte verlustfreie Zeitkonvertierung mit erhaltener Datumsgenauigkeit und blockierenden Problemcodes fuer ungueltige oder DST-mehrdeutige Legacywerte festgelegt.
+  - [Datenbank] Wirksame Ergebnis-, Ranglisten- und KO-Aenderungen als append-only Fachhistorie sowie Court-Scoreereignisse getrennt davon dauerhaft aufbewahrt; sonstiges Audit auf 12 Monate und persoenliche Meldungsdetails auf 24 Monate begrenzt.
+  - [Datenbank] Vollstaendiges verschluesseltes Legacy-Quellarchiv auf 12 Monate nach bestaetigtem Live-Cutover mit anschliessender kontrollierter Einzelbestaetigung begrenzt.
+  - [Infrastruktur] RPO/RTO fuer `epiber_devel` auf 24/8 Stunden und fuer `epiber_askoe` auf 15 Minuten/4 Stunden festgelegt.
+  - [Infrastruktur] `pgBackRest` fuer getrennte verschluesselte Devel-/Live-Backups, WAL-Archivierung und PITR ausgewaehlt; logische Exporte bleiben ergaenzend.
+  - [Infrastruktur] Unabhaengigen EU-Anbieter mit S3-Kompatibilitaet und Object Lock oder gleichwertiger Immutability als verpflichtendes Off-site-Backupziel festgelegt.
+  - [Datenbank] Browser-Sessions und Loginlimits beim Cutover verworfen, produktive Monitor-Token-Hashes dagegen nach strikter Validierung migriert.
+  - [Infrastruktur] `epiber_devel` auf allowlist-basierte Fakes und Testziele ohne produktive Credentials oder lesende Produktivzugriffe begrenzt.
+  - [Datenbank] Generischen `app_state` im PostgreSQL-Ziel ausgeschlossen und alle bekannten Statebereiche vollstaendig relationalen Domaenentabellen zugeordnet.
+  - [Dokumentation] Bestehende Eigenmeldungen fuer Persistenzparitaet im PostgreSQL-Cutover erhalten und ihre sichtbare Bereinigung in den spaeteren Notification-Auftrag verschoben.
+  - [Datenbank] Kritische Importbefunde als Blocker des gesamten Cutovers festgelegt; produktive Teilbestaende und Quarantaene-Nachimporte ausgeschlossen.
+  - [Datenbank] Exakte kanonische Legacy-/PostgreSQL-Paritaet aller bestehenden Readprojektionen mit versioniertem Ausnahmemanifest als Devel-Freigabegate festgelegt.
+  - [Dokumentation] Harte Mai-2027-Zeitmarke entfernt und die vollstaendige Migration zuerst nach Devel, unmittelbar danach nach Live und erst anschliessend weitere Anwendungsentwicklung priorisiert.
+  - [Datenbank] Fuer den ersten ASKÖ-Cutover kleine direkte `pg.Pool`-Instanzen festgelegt und PgBouncer als Gate vor dem zweiten Produktivtenant oder mehreren Replikaten verschoben.
+  - [Datenbank] Asynchrone PostgreSQL-Repositories auf parametrisiertem `pg`-SQL ohne ORM oder Query Builder als Datenzugriffsschicht festgelegt.
+  - [Datenbank] Auditstart als separate Vorabtransaktion und erfolgreichen Auditabschluss atomar mit Fachwrite, Fachfolgen, Outbox und Idempotenz festgelegt.
+  - [Datenbank] Separaten einzelnen `epiber-worker` mit eigener Rolle, kleinem Pool, persistenten Leases und wiederaufnehmbarer Job-/Outbox-Verarbeitung fuer die erste Stufe festgelegt.
+  - [Datenbank] Persistente Outbox als Wahrheit und PostgreSQL `LISTEN/NOTIFY` nur als datensparsamen verlierbaren Weckhinweis fuer die erste Realtime-Stufe festgelegt.
+  - [Datenbank] `READ COMMITTED` als Standard mit Constraints, fester Zeilensperrreihenfolge und gezieltem `SERIALIZABLE` fuer benannte Mehrzeilenplaner beschlossen.
+  - [Infrastruktur] EU-/EWR-Regionen verpflichtend fuer PostgreSQL, Migrations-Staging, Backups und persistenten Migrations-/Object-Storage festgelegt.
+  - [Infrastruktur] Getrennte minimal berechtigte PostgreSQL-Credentials ueber root-geschuetzte systemd-Credentials fuer die erste Stufe festgelegt.
+  - [Infrastruktur] Getrennte App-/Worker-Readiness mit ueberwachter Degradation und gezielter Sperre nur workerabhaengiger Funktionen beschlossen.
+  - [Dokumentation] Personelle Zweitfreigabe aus Migrations- und Plattformplanung entfernt und durch benannte Einzelverantwortung mit starken technischen Gates, getrennter Dienstidentitaet und Audit ersetzt.
+  - [Infrastruktur] Verschluesselte PostgreSQL-Volumes und separat verschluesselte Backups ohne allgemeine anwendungsseitige Feldverschluesselung festgelegt.
+  - [Infrastruktur] PostgreSQL in der ersten Stufe auf getrennte geschuetzte Unix-Sockets ohne TCP-Listener begrenzt.
+  - [Infrastruktur] Vollstaendige statische Wartungsseite ohne parallele Legacy-Fachreads oder -writes fuer den finalen Live-Cutover festgelegt.
+  - [Dokumentation] Dauerhafte Ergebnisversionshistorie im Migrationsauftrag nur persistiert; neue Admin- oder Benutzeroberflaechen ausdruecklich verschoben.
+  - [Datenbank] Getrennten Exporter und unveraenderliches verschluesseltes Quellpaket mit Manifest und Pruefsummen als alleinige Importquelle festgelegt.
+  - [Infrastruktur] Reale Probe als separate Devel-Datenbank mit isoliertem verschluesseltem Tablespace, temporaerem WAL-Ziel und verpflichtender neuer Devel-Backupbasis nach jeder Probe festgelegt.
+  - [Datenbank] Versioniertes deterministisches Node.js-Seed-CLI mit festen Testzeiten, stabilen Fixture-IDs, Szenariopaketen und Schutz gegen Produktivdatenbanken festgelegt.
+  - [Datenbank] Legacykorrekturen bevorzugt im autoritativen Quellbestand mit neuem Exportpaket und nur unvermeidbare historische Sonderfaelle ueber versionierte Overrides zugelassen.
+  - [Infrastruktur] App und erster Worker fuer Devel- und Live-Migration als getrennte systemd-Dienste beibehalten; OCI-/Podman-Cell-Umstellung verschoben.
+  - [Dokumentation] Migrations-Phase 0 mit allen getroffenen Grundentscheidungen abgeschlossen und verbleibende Schema-, Mess-, Deduplizierungs- und Runbookdetails Phase 1 zugeordnet.
+  - [Dokumentation] Separate Plattform-Phase 0 um bereits entschiedene Migrationsbetriebsziele aktualisiert; Rollen- und Reservierungsfachmodell bleiben dort bewusst offen.
+  - [Infrastruktur] Bestehenden Host fuer die erste synthetische Devel-Instanz als ausdrueckliche Uebergangsstufe vor der spaeteren Engineering-/Testserver-Trennung eingeordnet.
+  - [Datenbank] Pro Person hoechstens ein optionales lokales Benutzerkonto mit getrennten und spaeter erweiterbaren Authentifizierungs-Credentials festgelegt.
+  - [Datenbank] Heutigen Loginvertrag mit `NULL` fuer fehlende Logins, kanonischem ASCII-Kleinbuchstabenwert sowie Datenbank-Check und tenantweiter Eindeutigkeit unveraendert uebernommen.
+  - [Datenbank] Gemeinsames Legacyfeld `Aktiv` in getrennte Personen-, Mitgliedschafts- und Kontostatus aufgeloest, bei zunaechst transaktional gekoppeltem Verhalten und Sessionwiderruf.
+  - [Sicherheit] Bestehende scrypt-Passwort-Credentials unveraendert migriert und historische SHA-256-Credentials fuer ein kontrolliertes Upgrade beim ersten erfolgreichen Login markiert.
+  - [Sicherheit] Zeitlich nicht bestimmbare offene Legacy-Passwortfreigaben beim Cutover verworfen und neue Freigaben als befristete, einmalige, auditierbare Datensaetze modelliert.
+  - [Sicherheit] Gueltigkeit neuer Passwort-Erst- und Neuvergabefreigaben auf 24 Stunden begrenzt.
+  - [Datenbank] Nur explizite Rollenzuweisungen gespeichert und Admin-zu-Operator-Vererbung ueber einen geschlossenen Berechtigungskatalog abgeleitet.
+  - [Datenbank] Tennis-Mitgliedschaften aus expliziter Mitgliedsklassifikation oder Legacy-Playerfallback ohne erfundene Ein- und Austrittsdaten abgeleitet.
+  - [Datenbank] ClubDesk-IDs als dauerhaft tenantweit eindeutige, nicht umhaengbare externe Personenkennungen mit hoechstens einer aktiven Verknuepfung je Person festgelegt.
+  - [Datenbank] E-Mail und Mobilnummer als typisierte Personenkontakte sowie Postanschriften in einer getrennten strukturierten Relation modelliert.
+  - [Datenbank] Neue Personen behalten fuer den Migrationscutover dezimale Vertrags-IDs aus einer tenantbezogenen PostgreSQL-Sequence; die externe UUID-Umstellung folgt nach stabiler Live-Migration separat.
+  - [Sicherheit] Heutige Sessionlaufzeit und Zehn-Geraete-Grenze beibehalten und Gesamtwiderruf ueber eine atomar erhoehte Konto-`auth_revision` abgesichert.
+  - [Sicherheit] Heutige Login-Drosselung mit 15-Minuten-Fenster, Schwellen von fuenf je IP/Login und zwanzig je IP sowie ausschliesslich gehashten Schluesseln beibehalten.
+  - [Datenbank] Dauerhafte Ergebnis-Teilnehmersnapshots auf damalige Vertrags-ID und Anzeigenamen begrenzt; Konto-, Rollen- und Kontaktdaten ausgeschlossen.
+  - [Datenbank] Genau eine relationale Tenant-Wurzel je Tenant-Datenbank mit direktem Section- und Ops-Bezug, aber ohne redundante Tenant-ID in jeder Fachtabelle festgelegt.
+  - [Datenbank] Heutige Admin- und Operatorrollen als explizit tenantweite Zuweisungen und Spielerrechte ausschliesslich aus aktiver Section-Mitgliedschaft modelliert.
+  - [Datenbank] Mitgliedschaften als unveraenderliche Zeitraeume mit hoechstens einem offenen Abschnitt je Person und Sektion sowie historisiertem Klassenwechsel festgelegt.
+  - [Datenbank] Bestehende Geschlechtscodes 1 bis 3 ohne erfundene Neubezeichnung als streng gepruefte nullable Fachcodes fuer Personen und Bewerbsfilter uebernommen.
+  - [Datenbank] Legacy-Laendertext und heutigen vierstelligen Postleitzahlvertrag fuer den Erstcutover beibehalten; ISO-Adressnormalisierung separat verschoben.
+  - [Datenbank] Matchtypen und strukturpraegende Bewerbsarten als stabile Kataloge mit unveraenderlichen, bewerbsgebundenen Regelversionen modelliert.
+  - [Datenbank] Bewerbsgrenzen praezisionserhaltend als alternatives Datum oder eindeutigen Zeitpunkt modelliert und reine Tagesgrenzen nur in der Fachauswertung interpretiert.
+  - [Datenbank] Bewerbsfilter fuer Geschlechtscodes sowie Mindest- und Hoechstalter relational typisiert, bei unveraenderter kalenderjahrbasierter Teilnahmeberechnung.
+  - [Datenbank] Bewerbsanmeldungen als unveraenderliche Meldevorgaenge mit Abschluss bei Abmeldung und neuem Vorgang bei Wiederanmeldung modelliert.
+  - [Datenbank] Matchteilnehmer als zwei feste Seiten mit je bis zu zwei typisierten Personen-, BYE- oder offenen Bracket-Slots statt vier Pseudoreferenzspalten modelliert.
+  - [Datenbank] Jedes Match bindet seine konkrete unveraenderliche Matchformat-Version bereits bei Anlage und dokumentiert Bewerbsstandard oder Matchoverride als Herkunft.
+  - [Datenbank] Matchzustand ohne redundante Statusspalte kontrolliert aus Teilnehmerslots, aktuellem Resultat und separater Ignore-Sichtbarkeit abgeleitet.
+  - [Datenbank] Ergebnisstaende als unveraenderliche relationale Versionen modelliert; Matches zeigen auf den aktuellen Stand und Clears entfernen nur diesen Zeiger.
+  - [Datenbank] Abschlussart und validierte Gewinnerseite in jeder Ergebnisversion explizit gespeichert und als einheitliche Grundlage fuer KO, Historie und Projektionen festgelegt.
+  - [Datenbank] Forderungs-, Plan-, Spiel-, Erstaufnahme-, Walkover- und Aenderungszeiten semantisch getrennt und historische Fallbackzeiten nicht als Tatsachen persistiert.
+  - [Datenbank] KO-Fortschreibung als unveraenderlichen azyklischen Matchgraphen mit eindeutigen Zielslots und dauerhaft historisierten Ergebniswirkungen modelliert.
+  - [Datenbank] Nur ergebnisbedingte Ranglistenwirkungen dauerhaft historisiert; manuelle Rausnahmen, Rueckkehr und Korrekturen auf aktuellen Stand plus zwoelfmonatiges Betriebsaudit begrenzt.
+  - [Datenbank] Ergebnisstrings in geordnete typisierte Satzzeilen mit Tie-Break-Wert und kontrolliert unvollstaendigem Retirement-Schlusssatz aufgeloest.
+  - [Datenbank] Bestehende Resultate als je eine belegte `legacy_snapshot`-Ausgangsversion uebernommen und spekulative Rekonstruktion frueherer Korrekturen aus Logs ausgeschlossen.
+  - [Datenbank] Courts mit interner UUID und anlagenweit stabilem Courtcode modelliert; bestehende Vertragscodes 1 und 2 bleiben fuer den Cutover erhalten.
+  - [Datenbank] Court-Match-Zuweisungen als unveraenderliche Zeitraeume mit hoechstens einer offenen Zuordnung je Court und Match sowie direktem Scorebezug festgelegt.
+  - [Datenbank] Court-Live-State einschliesslich Baseline, Epoch und Revision dauerhaft persistiert und jede externe Aenderung nach normalem Neustart vor Anzeige atomar protokolliert.
+  - [Datenbank] Scorewirksame Court-Resets, Aktivitaets- und Zuweisungswechsel als dauerhafte kontrollierte Steuerereignisse getrennt von externen Scoreevents modelliert.
+  - [Datenbank] Court-Scores als acht kanonische externe Rohkomponenten gespeichert und Legacystring sowie regelabhaengige Anzeige ausschliesslich daraus projiziert.
+  - [Datenbank] Laufende Hallenzeiten-Fachhistorie weiterhin auf 10.000 vollstaendige Vorgaenge je Raster begrenzt und atomare Beibehaltung beziehungsweise Bereinigung von Batchitems festgelegt.
+  - [Datenbank] Hallenzeiten auf slotweise Revisionen fuer Einzelbuchungen, exklusiven Raster-Lock fuer Struktur und Gesamtverteilung sowie separate Projektionsrevision umgestellt.
+  - [Datenbank] Hallenzeiten-Wartelistenposition aus Queuezeit und stabiler ID abgeleitet, atomare Nachrueckung festgelegt und Verhinderungswuensche relational getrennt.
+  - [Datenbank] Messaging auf strukturierte Ereignisfakten, getrennte Personennamensnapshots und versionierte Templates umgestellt; nicht verlustfrei zerlegbare Legacytexte bleiben als Fallback erhalten.
+  - [Datenbank] Endgueltige Kommentarloeschung entfernt Inhalt, Autorensnapshot und Reaktionen, behaelt aber einen datensparsamen technischen Tombstone.
+  - [Datenbank] Idempotenzantworten 24 Stunden, minimale Sperrtombstones 12 Monate und Ergebnis-Operation-IDs dauerhaft aufbewahrt; offene Jobs und Outbox von dieser Retention ausgenommen.
+  - [Datenbank] Erfolgreiche Outbox 30 Tage und terminale Jobs 90 Tage aufbewahrt; ungeklaerte Dead Jobs bleiben bis zur Klaerung und danach 12 Monate bestehen.
+  - [Datenbank] Letzten gueltigen Monitorzielzustand beim Cutover migriert, ungueltige Ziele auf sichere Standardseite begrenzt und bestaetigte Commands 30 Tage aufbewahrt.
+  - [Datenbank] Favoriten als einzelne geordnete Zeilen mit typisierten Zielreferenzen modelliert, die bisherige 32er-Fachgrenze entfernt und Startseiten getrennt relational gespeichert.
+  - [Datenbank] Millisekundengenaues `timestamptz(3)` als Standard fuer eindeutige Zeitpunkte festgelegt, passend zu Node.js und kanonischen Legacyprojektionen.
+  - [Datenbank] Deterministische C-Kollation fuer technische Werte und explizite ICU-de-AT-Sortierung mit stabilem Tie-Breaker fuer Namensansichten festgelegt.
+  - [Datenbank] `ON DELETE RESTRICT` als Fremdschluesselstandard festgelegt und Loeschkaskaden fuer dauerhafte Fachhistorien ausgeschlossen.
+  - [Datenbank] Gesamtimport in begrenzte Domaenentransaktionen innerhalb einer gesperrten frischen Datenbank gegliedert und Freigabe an ein finales atomares Importgate gebunden.
+  - [Datenbank] Paritaetsnachweis ueber kanonische JSON-Projektionen und SHA-256 je Projektion sowie Gesamtmanifest festgelegt; Detailhashes bleiben im geschuetzten Staging.
+  - [Datenbank] App und Worker an deklarierte minimale und maximale Schemageneration gebunden und Expand-/Contract-Migrationen ueber Readiness und Runner-Gates abgesichert.
+  - [Datenbank] SQL-Migrationen unter `Backend/db/migrations/` in einer globalen sechsstelligen Sequenz und mit `Backend/scripts/db-migrate.js` als CLI festgelegt.
+  - [Sicherheit] Privilegierten PostgreSQL-Infrastruktur-Bootstrap von regulaeren Schema-Migrationen unter einer eigenen nichtprivilegierten DDL-Rolle getrennt.
+  - [Infrastruktur] Konservatives `epiber_devel`-Startprofil mit 128 MiB Shared Buffers, 30 Verbindungen, kleinen Dienstpools und 1 GiB systemd-Speicherobergrenze festgelegt.
+  - [Infrastruktur] Mindest-Backupplan mit taeglichem Devel-Differential, sechs-stuendlichem Live-Inkrement, hoechstens fuenf Minuten WAL-Verzug und regelmaessigen Restoretests festgelegt.
+  - [Infrastruktur] Scaleway `fr-par` Standard Multi-AZ als primaeres Off-site-Ziel mit verpflichtendem pgBackRest-/Object-Lock-PoC und Kostenwarnung bei 5 EUR beziehungsweise Pruefgate bei 10 EUR netto monatlich ausgewaehlt.
+  - [Sicherheit] Scaleway Object Lock zunaechst im Governance-Modus mit 35 Tagen Bindung, ohne Bypass fuer Backup-/Prune-Credentials und mit getrennter MFA-Notfallidentitaet festgelegt.
+  - [Sicherheit] Off-site-Backups ausschliesslich clientseitig mit pgBackRest verschluesselt und Scaleway SSE-KMS zugunsten eines providerunabhaengigen Offline-Recoverywegs ausgeschlossen.
+  - [Infrastruktur] Zunaechst nur einen Devel-Backupbucket vorgesehen und separaten Live-Bucket mit eigenen Credentials und Policies erst vor `epiber_askoe` verpflichtend gemacht.
+  - [Sicherheit] Unverschluesseltes Rootvolume festgestellt und `epiber_devel` auf ein separates initial 10 GB grosses, manuell entsperrtes LUKS2-Hetzner-Volume mit Kapazitaetsgate gelegt.
+  - [Infrastruktur] Lokale Socketzuordnung mit reserviertem Live-Port 5432 und Devel-Port 5433 in getrennten geschuetzten Runtimeverzeichnissen festgelegt.
+  - [Sicherheit] Nicht anmeldbare umgebungsspezifische PostgreSQL-Ownerrolle mit kontrolliertem `SET ROLE` durch den Migrator statt direktem oder Superuser-Objekteigentum festgelegt.
+  - [Datenbank] Synthetische Seeds in kleine fachliche Szenariopakete und ein verbindliches deterministisches `full-devel`-Referenzprofil fuer die gemeinsame Development-Datenbank gegliedert.
+  - [Sicherheit] Normalen Seed auf leere Testdatenbanken begrenzt und bestehenden Devel-Bestand nur ueber einen getrennten identitaets-, backup- und namensgeprueften Rebuild-Befehl ersetzbar gemacht.
+  - [Sicherheit] Festes ueber Rebuilds stabiles, aber wegen des externen Testzugangs vertraulich bereitzustellendes Passwort fuer ausschliesslich synthetische Devel-Konten festgelegt.
+  - [Sicherheit] Externen HTTPS-/WSS-Testzugang auf PAJ-Port 8081 beibehalten, waehrend PostgreSQL und Administrationsschnittstellen lokal beziehungsweise SSH-gebunden bleiben.
+  - [Dokumentation] Kanonische Serverdokumentation auf externes PAJ-Testing bei weiterhin interner Datenbank- und Administrationsgrenze praezisiert.
+  - [Sicherheit] Devel-App und Worker per systemd auf Loopback-Egress begrenzt, waehrend Caddy externes Testing bedient und Backup sowie Legacy-Exporter getrennte minimale Ausnahmen erhalten.
+  - [Datenbank] Ersten bestaetigten PostgreSQL-Live-Write als Point of no Return festgelegt; danach nur Fix-forward, kompatibler Code-Rollback oder PostgreSQL-PITR, niemals Legacy-Rueckschaltung.
+  - [Datenbank] Live-Cutover auf technischen Ops-Write-Smoke und ueberwachte erste natuerliche Fachwrites begrenzt; kuenstliche dauerhafte Live-Fachdaten ausgeschlossen.
+  - [Sicherheit] Live-Read-only-Abnahme durch separate technisch nicht schreibberechtigte DB-Rolle, zusaetzlichen App-Modus und gestoppten Worker abgesichert.
+  - [Sicherheit] PostgreSQL-`public`-Schema fuer Fachobjekte gesperrt, SQL auf explizite Schemaqualifikation und Rollen auf minimale sichere `search_path`-Werte verpflichtet.
+  - [Sicherheit] Vollstaendiges Legacy-Quellpaket in einen separaten clientseitig verschluesselten Scaleway-Compliance-Bucket mit 370 Tagen Object Lock und anschliessender kontrollierter Schluesselloeschung gelegt.
+  - [Sicherheit] Legacy-Quellpaket als manifestgebundenen komprimierten Datenstrom mit `age` fuer einen dedizierten Offline-X25519-Archivschluessel verschluesselt.
+  - [Infrastruktur] PostgreSQL 18 als Arch-Startbasis beibehalten, automatische Majorupdates gesperrt und spaeteren Arch-Hauptversionswechsel an ein separates Devel-/Backup-/Upgrade-/Restoregate gebunden.
+  - [Tests] Automatisierte Datenbanktests auf kurzlebige lokale PostgreSQL-Cluster mit Unix-Socket, echten Migrationen und minimalen Seed-Paketen statt gemeinsamer Devel-Datenbank oder SQL-Mocks festgelegt.
+  - [Sicherheit] Nach produktivem Restore alle Browser-Sessions zwingend widerrufen und Monitor-Tokens ohne extern belegten aktuellen Geraetestatus kontrolliert neu provisioniert.
+  - [Observability] PostgreSQL-Logging ab einer Sekunde sowie fuer Lockwaits, Deadlocks, Checkpoints und Fehler ohne Bindparameter oder Rowdaten festgelegt.
+  - [Datenbank] Pipe-getrenntes Personenfeld `Notification` in typisierte Email-/Whatsapp-Praeferenzen migriert, ohne externe Zustellung im Persistenzauftrag zu aktivieren.
+  - [Dokumentation] Vollstaendige Source-to-Target-Matrix fuer alle bekannten Felder der Legacy-Personenzeile mit Zielrelation und Transformationsvertrag ergaenzt.
+  - [Dokumentation] Source-to-Target-Matrizen fuer Bewerb, Bewerbsart und Matchtyp mit praezisionserhaltenden Zeiten, relationalen Teilnahmefiltern und versionierten Regelwerten ergaenzt.
+  - [Dokumentation] Vollstaendige `Matches1`-Feldmatrix ergaenzt und bekannte Randfelder als Bemerkung, validierte reservierte Dauer und wirkungslose PTN-Legacyspalte verlustfrei zugeordnet.
+  - [Dokumentation] Source-to-Target-Matrizen fuer EntryList und RL-Platzierung ergaenzt; unbekannte Gebuehrsemantik bleibt als enger Legacy-Status ohne Financewirkung erhalten.
+  - [Dokumentation] Navigator-Presets typisierten lokalen Monitorzielen zugeordnet und ungueltige Legacyziele verlustfrei, aber nicht ausfuehrbar migriert.
+  - [Datenbank] Historische Sheet- und SQLite-Scores in eine neue deterministische Court-Sequenz eingeordnet und alle urspruenglichen Sequenzen sowie Schluessel als Provenienz erhalten.
+  - [Datenbank] Devel-App mit 30 Sekunden und Worker mit 60 Sekunden Statement-Timeout sowie kurzen Lock-/Idle-Grenzen gestartet und 15 Sekunden als messgebundenes Live-App-Ziel festgelegt.
+  - [Infrastruktur] PAJ-Betriebsnamen zum PostgreSQL-only-Cutover vollstaendig auf Devel umgestellt, bei unveraenderter Origin 8081 sowie beibehaltenem Unix-User, Checkoutpfad und aktuellem Git-/Versionsnamen.
+  - [Infrastruktur] Aktive PostgreSQL-Daten auf das 10-GB-LUKS2-Hetzner-Volume und vollstaendige Devel-Backups ausschliesslich in das Scaleway-pgBackRest-Repository getrennt; nicht archiviertes WAL bleibt sicher in `pg_wal`.
+  - [Sicherheit] Synchronen WAL-Archivpush ohne verlustbehaftetes Queue-Drop-Limit festgelegt und kritische Speicherreserve an Wartungsmodus sowie Fachwritestopp gebunden.
+  - [Infrastruktur] Regelmaessige logische Devel-Exporte verworfen, Export-/Restoreweg nur synthetisch erprobt und spaeter fuer Live monatlich sowie vor Major-/Contract-Migrationen mit drei Generationen vorgesehen.
+  - [Datenbank] PostgreSQL-Cluster von Beginn an mit UTF-8, technischer C-Kollation und aktivierten Datenseiten-Pruefsummen initialisiert.
+  - [Datenbank] Bootstrap-/Migrations-CLI mit schreibfreien Status-, Plan- und Verify-Kommandos, expliziter Zielgeneration sowie sicherem transaktionalem Erstjournalvertrag konkretisiert.
+  - [Sicherheit] Globale Frontend-Loggingeinstellungen migriert, aktive personenbezogene Diagnoseziele beim Cutover dagegen verworfen und bewusste Neuaktivierung verlangt.
+  - [Datenbank] Finalen Live-Export auf vollstaendig deaktivierte Courts ohne offene Zuweisung begrenzt und bewusste Neuzuweisung/-aktivierung erst nach PostgreSQL-Freigabe verlangt.
+  - [Infrastruktur] LUKS2-Volume als gehaertetes ext4 unter `/var/lib/epiber-postgresql-devel` mit getrennten DB-/WAL-/Temp-/Spoolpfaden und systemd-Mountgate festgelegt.
+  - [Sicherheit] Bestehende Swap-Partition auf ephemere dm-crypt-Verschluesselung je Boot umgestellt, PostgreSQL-Swapnutzung initial gesperrt und Core Dumps fuer datenverarbeitende Dienste deaktiviert.
+  - [Sicherheit] Lokale Dienstdatenbankrollen auf getrennte SCRAM-Credentials ueber Unix-Socket begrenzt, mit Peer nur fuer enge Administration und ohne Trust/MD5.
+  - [Sicherheit] PostgreSQL-Devel und spaeter Live unter getrennten nicht anmeldbaren Unix-Systembenutzern mit isolierten Daten-, WAL-, Temp-, Runtime- und Socketrechten betrieben.
+  - [Infrastruktur] Aktuelle lokale PAJ-Persistenz mit rund 3,2 MiB vermessen und als Ausgangswert fuer das weiterhin verpflichtende 10-GB-Volume-/Import-Kapazitaetsgate dokumentiert.
+  - [Infrastruktur] PostgreSQL-Devel initial auf `CPUQuota=150%` sowie niedrigere CPU-/I/O-Weights als Live begrenzt und hoehere One-shot-Limits an angekuendigte Messfenster gebunden.
+  - [Dokumentation] Konkrete historische Score-Dublettenregel mangels Realdaten in die erste verschluesselte Phase-3-Staginganalyse verschoben, bei bereits fixierten Sicherheitsblockern.
+  - [Datenbank] SHA-256-Token-, Request- und Payloadhashes als exakt 32-Byte-`bytea` statt Hextext typisiert und aus Logs ausgeschlossen.
+  - [Infrastruktur] PostgreSQL-Minorupdates fuer kritische Fixes binnen sieben und regulaer binnen 30 Tagen nach vorheriger Devel-Pruefung festgelegt; automatische Paketneustarts ausgeschlossen.
+  - [Tests] Devel-Freigabe an zwei identische Vollneuaufbauten sowie Restore, PITR, Importabbruch-Recovery und null ungeklaerte Blocker/Operationen/Paritaetsabweichungen gebunden.
+  - [Dokumentation] Stabilen Live-Migrationsabschluss evidenzbasiert ohne Mindestdauer an natuerliche Kernoperationen, Metriken, WAL/Backup/PITR und fortbestehende Paritaet gebunden.
+  - [Architektur] Anwendungsumbau als ein integriertes PostgreSQL-only-Gesamtprojekt mit komplettem Schema vorab, laufenden fokussierten Tests und genau einem Devel-Gesamtcutover statt freigegebener Zwischenwellen festgelegt.
+  - [Datenbank] SQL-Migrationen mit der ersten offiziellen gemeinsamen `epiber_devel`-Baseline eingefroren; davor bereinigbarer Erstentwurf, danach ausschliesslich neue Folgemigrationen.
+  - [Datenbank] Eingefrorene Migrationskette als einzige Schemaquelle und automatisierten `pg_dump --schema-only`-Snapshot nur fuer Review und Driftpruefung festgelegt.
+  - [Dokumentation] Phase-1-Exit an vollstaendige initiale SQL-Migrationen, erfolgreichen Leeraufbau, Constraint-/Grantpruefung und gemeinsam geprueften kanonischen Schema-Snapshot gebunden.
+  - [Dokumentation] Verbleibende Phase-1-Artefakte auf Vollschema, restliche Feldmatrix, Szenariokatalog und verifizierten Schema-Snapshot begrenzt und spaetere Betriebsartefakte ihren Umsetzungsphasen zugeordnet.
+  - [Sicherheit] Google-Service-Account und aktive SQLite-Quellen nach verifiziertem Archiv und erstem PostgreSQL-Live-Write entzogen beziehungsweise aus Laufzeitpfaden entfernt.
+  - [Datenbank] Dauerhafte minimale Ereignisteilnehmer von 24-monatigen persoenlichen Inbox-, Quittierungs- und Zustellprojektionen relational getrennt.
+  - [Observability] Unmittelbare Datenbankunsicherheit von degradierten Backup-, Worker- und Kapazitaetszustaenden getrennt und bei kritischen Grenzen nur betroffene Fachwrites gesperrt.
+  - [Sicherheit] Quell-IPs fuer Login-/Sicherheitsaudit maximal 12 Monate als geschuetztes PostgreSQL-`inet` gespeichert, standardmaessig maskiert und aus Logs, Metriken sowie dauerhaften Journalen ausgeschlossen.
+  - [Sicherheit] Privilegierten persoenlichen DB-Zugriff auf normale SSH-/sudo-Protokollierung begrenzt und zusaetzlichen Adminwrapper sowie `pgaudit` fuer die erste Stufe verworfen.
+  - [Datenbank] Aus Legacy-State nur noch nicht abgelaufene eindeutig transformierbare terminale Idempotenzresultate migriert; offene, unknown oder unklare Operationen blockieren den Cutover.
+  - [Dokumentation] Vollstaendige Devel-Isolationsmatrix fuer Caddy, App, Worker, Courts, Monitore, Zustellung, Storage, Backup, Export, Staging und PostgreSQL-Monitoring ergaenzt.
+  - [Datenbank] Unveraenderliche Tenantcodes `devel-epiber` und `askoe-piberbach` mit Wien-Zeitzone, de-AT-Locale und Readinessbindung festgelegt.
+  - [Sicherheit] Widerrufene Admin-/Operatorzuweisungen samt Sicherheitsaudit auf 12 Monate begrenzt, bei sofortigem Sessionwiderruf und neuen Zeilen fuer spaetere Wiedervergabe.
+  - [Sicherheit] Ersetzte Passwort-Hashes und Salts sofort geloescht und nur geheimnisfreie Credential-Metadaten fuer 12 Monate aufbewahrt.
+  - [Datenbank] Tenantweite Admin-/Operatorzuweisungen an Personen statt optionale Konten gebunden, sodass rollenbehaftete Legacypersonen ohne Login ohne Kunstkonto erhalten bleiben.
+  - [Datenbank] Gueltige Legacy-Credentials ohne Login an ein dormantes Konto mit `login=NULL` gebunden, statt Hash zu verlieren oder kuenstlichen Login zu erzeugen.
+  - [Datenbank] Importbefunde in versionierte Blocker, ausdruecklich freizugebende Warnings und verlustfreie Infos klassifiziert; finaler Lauf verlangt null Blocker.
+  - [Datenbank] Bestehenden Zweijahres-Pivot 50 fuer Legacy-Zeitkonvertierung festgeschrieben und nur vollstaendig aufgeloeste typisierte Zielwerte gespeichert.
+  - [Datenbank] Outbox-/Workerverarbeitung als At-least-once mit stabilen Idempotenzschluesseln, Reconciliation und explizitem Unknown-Pfad statt unbeweisbarer Exactly-once-Garantie festgelegt.
+  - [Architektur] Strukturelle Invarianten in PostgreSQL-Constraints und komplexe Tennis-/Berechtigungslogik in versionierten Node-Services verankert; umfangreiche Trigger-/Procedure-Fachlogik ausgeschlossen.
+  - [Datenbank] Automatische Serialization-/Deadlockbehandlung auf drei vollstaendige Transaktionsversuche mit gleicher Operation-ID, Request-Hash und Jitter begrenzt.
+  - [Architektur] Sheet-Last-good-Fallback im PostgreSQL-only-Betrieb entfernt und nur kleine revisionsgebundene, jederzeit aus PostgreSQL rekonstruierbare Katalogcaches zugelassen.
+  - [Sicherheit] LUKS-, pgBackRest- und age-Recoveryschluessel getrennt in Passwortmanager und verschluesselter Offlinekopie unter Einzelverantwortung mit halbjaehrlichem Lesetest abgesichert.
+  - [Architektur] PostgreSQL-only App, Worker, Migration, Import und Tests auf UTC-Prozesszeit umgestellt und Wiener Ein-/Ausgabe ausschliesslich ueber zentralen DST-strikten Tenantkonverter gefuehrt.
+  - [Backend] Fehlendes natives Temporal in der Arch-Node-26-Laufzeit festgestellt und zentralen Zeitkonverter auf einen gepinnten `@js-temporal/polyfill` mit abweisender DST-Mehrdeutigkeitssemantik festgelegt.
+  - [Datenbank] Reale Stagingexporte an ein kurzes angekuendigtes Legacy-Write-Freeze mit Drain, Recoveryklaerung, SQLite-Checkpoint und bestaetigten Sheet-Fingerprints gebunden.
+  - [Datenbank] Heutige operation-abgeleitete `m-`-/`e-`-Vertrags-IDs fuer neue Matches und Meldungen im Migrationsumfang beibehalten, bei internen UUIDv7-Schluesseln.
+  - [Tests] Automatisierte Seeds auf festen Testzeitpunkt und gemeinsames `full-devel` auf expliziten manifestgebundenen `as_of`-Zeitpunkt mit realer UTC-Laufzeituhr getrennt.
+  - [Sicherheit] Reale Export-/Staging-/Importlaeufe unter eigenem `epiber-migration`-Systemuser und 0700-Stagingpfad von oeffentlichem Devel-Appbenutzer, Worker und Entwicklern isoliert.
+  - [Tests] PostgreSQL-Kernablaeufe an Drei-Engine-Coreprofil, volle Chromium-Suite und abschliessende Acht-Profil-Smokesuite einschliesslich mobiler Favoriten-/Bedienpruefung gebunden.
+  - [Datenschutz] Fruehere E-Mail-, Mobil- und Anschriftwerte nach erfolgreicher Aenderung nicht historisiert und Audit auf die befristete Aenderungstatsache ohne vollen Altwert begrenzt.
+  - [Dokumentation] Feldgenaue Source-to-Target-Matrix fuer Sessions, Monitorgeraete, Idempotenzoperationen und Loginlimits aus `state.sqlite` ergaenzt.
+  - [Datenbank] Explizite `bigint`-Revisionen fuer mutable Aggregate und getrennte monotone Projektionscursor statt `xmin` oder Zeitstempel als Konkurrenzvertrag festgelegt.
+  - [Datenbank] Retentionjobs nach Datenklasse 15-minuetig, stuendlich und taeglich in kurzen 1000er-`SKIP LOCKED`-Batches mit UTC-Zeitplan und kontrollierten Abschlusslogs festgelegt.
+  - [Sicherheit] Ein gemeinsames festes Standardpasswort fuer normale synthetische Rollen und getrennte Sonderkonten fuer Legacy-, Sperr- und Freigabe-Authpfade festgelegt.
+  - [Observability] Lokalen gehaerteten `postgres_exporter` ueber Unix-Socket und read-only Rolle in den bestehenden Prometheus-Pull integriert, ohne Alloy-Remote-Write-Umbau oder freie SQL-Labels.
+  - [Observability] Initiale Devel-Alarme fuer Erreichbarkeit, Connections, Poolwait, Locks, Volume, WAL, Backup, Restore und Importgate mit Vier-Wochen-Review festgelegt.
+  - [Infrastruktur] Erste PostgreSQL-Development-Instanz auf dem bestehenden Host sowie ein verpflichtendes Kapazitaets- und Isolationsgate vor der spaeteren Live-Instanz festgelegt.
+  - [Dokumentation] Manuellen und automatisierten OpenCode-Kontextgrenztest fuer `openai/gpt-5.6-sol` mit Messreihe bis 900.308 erfolgreichen Inputtokens, Millionenpunkt-Ablehnung, Reproduktionsartefakten, Konfigurationsfolgen und Sicherheitsrestarbeit vollstaendig unter `Project/2do/` dokumentiert.

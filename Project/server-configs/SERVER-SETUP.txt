@@ -124,6 +124,13 @@ die HTTPS-Testsysteme frei. TCP 8080, 8083 und 8084 bleibt gesperrt. DNS
 `epiber.at`, nicht einen Port; dasselbe passende Hostzertifikat muss daher an
 allen drei TLS-Listenern ohne Browserwarnung geliefert werden.
 
+Die externe PAJ-Freigabe betrifft ausschliesslich den Caddy-Testzugang auf 8081.
+PostgreSQL, Backend- und Administrationsports bleiben auf Loopback
+beziehungsweise geschuetzte Unix-Sockets begrenzt und sind nur nach
+administrativer SSH-Anmeldung lokal erreichbar. Feste synthetische
+Testcredentials werden vertraulich an berechtigte Tester weitergegeben und
+nicht in Git oder Serverdokumentation veroeffentlicht.
+
 Die expliziten Caddy-Adressen `https://epiber.at:8081` und
 `https://epiber.at:8082` garantieren auf diesen Ports keinen Redirect fuer
 Plain-HTTP-Anfragen. Die Abnahme muss negativ pruefen, dass

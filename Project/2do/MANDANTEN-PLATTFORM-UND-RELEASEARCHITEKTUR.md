@@ -94,26 +94,31 @@ Beta und Stable.
 Kundenindividuelle Software-Forks sind nicht vorgesehen. Es sollen immer nur
 wenige, zentral kontrollierte Produktversionen gleichzeitig unterstuetzt werden.
 
-### 1.5 Produkt- und Migrationsrahmen bis Mai 2027
+### 1.5 Aktuelle Migrationsprioritaet
 
-Bis zum Saisonstart im Mai 2027 bleibt ASKÖ Piberbach der reale Test- und
-Referenzverein. Fachliche Entwicklung dient in dieser Phase vorrangig der
-Produktvalidierung im Heimatverein. Parallel entsteht auf einem weiteren
-Hetzner-Cloud-Server die spaetere Plattformbasis.
+ASKÖ Piberbach bleibt der erste reale Referenzverein. Die vollstaendige
+PostgreSQL-Migration besitzt ab jetzt Vorrang vor weiterer fachlicher
+Anwendungsentwicklung. Es gibt dafuer keine harte kalendarische Zielmarke; der
+tatsaechliche Fortschritt richtet sich nach den Migrations-, Paritaets-, Backup-,
+Restore- und Betriebsgates.
 
-Die PostgreSQL-Migration ist trotz dieses Featurefokus eine bewusst vorgezogene
-Strukturmassnahme, weil die priorisierten Funktionen transaktionale Datenhaltung
-benoetigen. Die Reihenfolge lautet:
+Die verbindliche Reihenfolge lautet:
 
-1. Personen-, Mitgliedschafts-, Konto- und Rollenmodell festlegen;
-2. PostgreSQL, Migrationen, Backup und Restore bereitstellen;
-3. Personen, Authentifizierung und Sicherheitsstate migrieren;
-4. Anlagen und Plaetze modellieren;
-5. ein begrenztes Hallenreservierungs-MVP fuer ASKÖ Piberbach umsetzen;
-6. Nutzung, Buchungsspitzen, Supportaufwand und Ressourcenbedarf im Winterbetrieb
-   messen;
-7. verbleibende Sheet- und SQLite-Domaenen kontrolliert migrieren und die
-   Plattformprovisionierung bis zum Saisonstart stabilisieren.
+1. Personen-, Mitgliedschafts-, Konto- und Rollenmodell sowie das vollstaendige
+   PostgreSQL-Zielmodell festlegen;
+2. PostgreSQL, Migrationen, Import, Backup, Restore und Observability fuer
+   `epiber_devel` bereitstellen;
+3. alle Google-Sheets-, SQLite- und persistenzrelevanten Prozessdomaenen nach
+   `epiber_devel` migrieren;
+4. die PostgreSQL-only-Anwendung in Devel vollstaendig abnehmen;
+5. ohne dazwischengeschobene Featureentwicklung den Live-Cutover nach
+   `epiber_askoe` vorbereiten und nach bestandenen Gates durchfuehren;
+6. erst danach Hallenreservierung, Notifications, Personenverwaltung und weitere
+   Plattformfunktionen als getrennte Fachauftraege fortsetzen.
+
+Reine Plattform- und Infrastrukturvorbereitung darf parallel erfolgen, wenn sie
+die Migrationsreihenfolge nicht aufweicht, den laufenden Livebetrieb nicht
+gefaehrdet und keine neue fachliche Anwendungsfunktion vorzieht.
 
 Ein spielerisches Wett- oder virtuelles Waehrungssystem ist nur eine spaetere
 Produktidee und derzeit weder priorisiert noch Bestandteil dieses Zeitplans.
@@ -501,38 +506,43 @@ Pflichtmerkmale:
 - Audit von privilegierten DB-Zugriffen;
 - Health-, Kapazitaets- und Backupmonitoring.
 
-Google Sheets bleibt waehrend einer Uebergangszeit pro Verein eine kontrollierte
-Import-/Export- oder Legacyintegration. Es ist langfristig nicht die
-transaktionale Primaerdatenbank fuer Reservierungen, Stammdaten, Sessions oder
-Vertragsdaten.
+Google Sheets und die bisherigen SQLite-Dateien bleiben nur bis zum vollstaendig
+verifizierten PostgreSQL-Cutover aktive Legacyquellen. Danach werden sie weder
+gelesen noch beschrieben und ausschliesslich nach dem festgelegten
+Quellarchivvertrag aufbewahrt. Ein spaeterer fachlicher Import oder Export ist
+eine neue kontrollierte Integration und kein fortgefuehrter Legacy-Laufzeitpfad.
 
 ### 5.7 Migrationspfad fuer den bestehenden Heimatverein
 
 ASKÖ Piberbach wird als erster realer Tenant auf das neue Datenmodell migriert.
-Die Umstellung erfolgt domaenenweise, aber ohne dauerhaftes Dual-Write derselben
-Fachdaten nach Google Sheets beziehungsweise SQLite und PostgreSQL:
+Die Implementierung erfolgt intern in pruefbaren Domaenenschritten. Devel und
+spaeter Live werden jedoch jeweils nur als vollstaendige PostgreSQL-only-
+Anwendung freigegeben; es gibt keinen produktiven domaenenweisen Mischbetrieb
+und kein Dual-Write derselben Fachdaten:
 
 1. asynchrone Repositoryvertraege und kontrollierte Transaktionsgrenzen
    einfuehren;
 2. PostgreSQL-Schema, versionierte Migrationen, Connection Pooling, Readiness,
    Metriken, Backup und Restore bereitstellen;
 3. Personen, Mitgliedschaften, vereinslokale Konten, Rollen, Sessions,
-   Loginlimits und Sicherheitsstate gemeinsam migrieren;
-4. Anlagen, Plaetze und das neue Reservierungsmodell ausschliesslich in
-   PostgreSQL aufbauen;
-5. Audit und Scorehistorie migrieren;
-6. Messaging samt transaktionaler Outbox migrieren;
-7. verbleibenden Anwendungsstate, Idempotenz und Jobs aufteilen und migrieren;
-8. Bewerbe und Eintragungen migrieren;
-9. Matches und Ranglisten wegen ihrer gemeinsamen Ergebnisfolgen zusammen
+   Loginlimits und Sicherheitsstate modellieren und importieren;
+4. Audit, Scorehistorie und vollstaendigen Live-Score-State migrieren;
+5. Messaging samt transaktionaler Outbox migrieren;
+6. verbleibenden Anwendungsstate, Hallenzeiten, Idempotenz und Jobs aufteilen und
    migrieren;
-10. Google Sheets danach nur noch als kontrollierten Import-/Exportweg verwenden.
+7. Bewerbe und Eintragungen migrieren;
+8. Matches und Ranglisten wegen ihrer gemeinsamen Ergebnisfolgen zusammen
+   migrieren;
+9. den vollstaendigen PostgreSQL-only-Stand zuerst in Devel abnehmen;
+10. anschliessend den finalen Gesamtimport und Live-Cutover in einem
+    Wartungsfenster durchfuehren und die Legacyquellen aus der Laufzeit entfernen.
 
-Fuer jeden Domaenencutover sind ein geprueftes Backup, ein begrenztes
-Schreibfenster, Anzahl- und Referenzvergleiche, eine PAJ-Abnahme, Auditabschluss
-und ein dokumentierter Rueckfallplan erforderlich. Sheet-spezifische
-Zeilenpositionen und Developer Metadata werden nicht zum dauerhaften
-PostgreSQL-Datenmodell.
+Fuer jeden internen Domaenenarbeitsschritt sind Tests, Anzahl- und
+Referenzvergleiche erforderlich. Die betriebliche Freigabe erfolgt trotzdem nur
+fuer den vollstaendigen Gesamtstand mit geprueftem Backup, Wartungsfenster,
+exakter Projektionsparitaet, Auditabschluss und dokumentierter Rueckfallgrenze.
+Sheet-spezifische Zeilenpositionen und Developer Metadata werden nicht zum
+dauerhaften PostgreSQL-Datenmodell.
 
 ## 6. Fachliche Erweiterungen
 
@@ -742,6 +752,14 @@ Produktionsserver
 Unabhaengiges Backupziel
   -> verschluesselte, moeglichst unveraenderliche Off-site-Backups
 ```
+
+Fuer die priorisierte ASKÖ-PostgreSQL-Migration gilt davor eine ausdrueckliche
+Uebergangsstufe: Die erste synthetische `epiber_devel`-Instanz laeuft als
+getrennter PostgreSQL-Prozess auf dem bestehenden Host. Vor Aufbau der
+PostgreSQL-Live-Instanz erzwingt das Migrationskonzept ein Kapazitaets- und
+Isolationsgate: Hostausbau auf mindestens 8 GiB, bevorzugt 16 GiB, oder
+Verlagerung von Devel auf den Engineering-/Testserver. Diese Uebergangsstufe
+aendert nicht die spaetere Vier-Bereiche-Zielstruktur.
 
 Der Engineering-/Testserver ist kein manuell gepflegter Ersatz fuer lokale
 Entwicklerrechner. Er stellt gemeinsame, reproduzierbare Engineeringdienste und
@@ -1385,10 +1403,11 @@ umzusetzen:
 
 ## 15. Priorisierter Umsetzungsplan
 
-Die Phasen beschreiben fachliche und technische Abhaengigkeiten, aber keine rein
-serielle Projektorganisation. Insbesondere laeuft Phase 3 ab Beginn parallel zu
-den ASKÖ-bezogenen Phasen 1 und 2, ohne deren laufenden Produktivbetrieb zu
-gefaehrden.
+Die Phasen beschreiben fachliche und technische Abhaengigkeiten. Die vollstaendige
+PostgreSQL-Migration in Phase 1 besitzt Vorrang und wird zuerst in Devel, danach
+ohne dazwischengeschobene Featureentwicklung in Live abgeschlossen. Reine
+Plattform- und Infrastrukturvorbereitung aus Phase 3 darf parallel laufen, wenn
+sie den laufenden Produktivbetrieb und die Migrationsarbeit nicht gefaehrdet.
 
 ### Phase 0: Entscheidungen und Messbasis
 
@@ -1396,37 +1415,49 @@ gefaehrden.
       erste kommerzielle Stufe festlegen.
 - [x] Vereinslokale Benutzerkonten ohne globale Mitgliederidentitaet als
       Erstmodell festlegen.
-- [x] ASKÖ Piberbach bis Mai 2027 als realen Referenz- und Testverein festlegen.
+- [x] ASKÖ Piberbach als ersten realen Referenz- und Migrationstenant festlegen.
 - [x] Etwa 20 bis 50 Mandanten in drei bis vier Jahren und hoechstens etwa 100
       Mandanten als erste Kapazitaetsgrenze festlegen.
 - [x] Entwicklerrechner, Engineering-/Testserver, Produktionsserver und
       unabhaengiges Off-site-Backup als aktuelle Auspraegungsstufe festlegen;
       spaetere weitere Trennung bleibt bedarfsabhaengig.
-- [ ] Rollen, Reservierungsregeln, RPO/RTO, Retention, Datenregionen und
-      Verantwortlichkeiten verbindlich freigeben.
+- [x] RPO/RTO, migrationsbezogene Retention, EU-/EWR-Datenregion und benannte
+      Einzelverantwortung fuer die PostgreSQL-Migration festlegen.
+- [ ] Plattformrollen und Reservierungsregeln fuer die spaetere Fachentwicklung
+      verbindlich freigeben.
 - [ ] Istwerte fuer Prozessspeicher, Benutzer, WebSockets, Datenmengen,
       Buchungsspitzen, Support und Restorezeiten erfassen.
 
 **Exit:** Fachmodell fuer Personen und Hallenreservierung sowie messbare
 Betriebsziele sind freigegeben.
 
-### Phase 1: PostgreSQL- und Personenbasis fuer ASKÖ
+### Phase 1: Vollstaendige PostgreSQL-Migration fuer ASKÖ
 
 - [ ] Personen, Mitgliedschaften, vereinslokale Konten und Rollen modellieren.
 - [ ] PostgreSQL fuer Entwicklung, Test und spaetere Produktion bereitstellen.
-- [ ] Versionierte Migrationen, PgBouncer, Readiness, Metriken und Auditvertrag
-      einrichten.
+- [ ] Versionierte Migrationen, begrenzte direkte App-/Worker-Pools, Readiness,
+      Metriken und Auditvertrag einrichten; PgBouncer folgt vor dem zweiten
+      Produktivtenant oder mehreren Replikaten.
 - [ ] PostgreSQL-PITR, logischen Tenantexport und Restoretest aufbauen.
 - [ ] Asynchrone Repository- und Transaktionsvertraege einfuehren.
 - [ ] Personen, Authentifizierung, Sessions und Sicherheitsstate kontrolliert
       migrieren.
-- [ ] Google Sheets fuer diese Domaene nach dem Cutover auf kontrollierten Import
-      beziehungsweise Export begrenzen.
+- [ ] Audit, Scorelog, Messaging, Jobs und Outbox migrieren.
+- [ ] Bewerbe und Eintragungen migrieren.
+- [ ] Matches und Ranglisten gemeinsam migrieren.
+- [ ] Courts, Monitore, Hallenzeiten und verbleibenden Anwendungsstate migrieren.
+- [ ] PostgreSQL-only-Anwendung vollstaendig in `epiber_devel` abnehmen.
+- [ ] Anschliessend `epiber_askoe` frisch aufbauen, final importieren und nach
+      bestandenen Gates live schalten.
+- [ ] Google Sheets und SQLite danach aus der aktiven Laufzeit entfernen und nur
+      nach dem festgelegten Archivvertrag aufbewahren.
 
-**Exit:** ASKÖ-Personen, Mitgliedschaften, Konten und Rollen sind in PostgreSQL
-autoritative, transaktionale Daten.
+**Exit:** ASKÖ laeuft in Devel und Live vollstaendig PostgreSQL-only; Google
+Sheets und SQLite sind keine aktive Persistenzquelle mehr.
 
 ### Phase 2: Hallenreservierungs-MVP
+
+Diese Phase beginnt erst nach dem Exit der vollstaendigen PostgreSQL-Migration.
 
 - [ ] Anlagen, Plaetze, Oeffnungszeiten und Sperren modellieren.
 - [ ] Buchungsraster, Vorlauf, Kontingente und Stornofristen fachlich festlegen.
@@ -1461,11 +1492,8 @@ Berechtigung, Audit, Backup und Restore sind praktisch abgenommen.
 **Exit:** Ein sauberer Ersatzhost und ein neuer Testverein sind ohne manuelle
 Spezialkonfiguration reproduzierbar herstellbar.
 
-### Phase 4: Verbleibende Datenmigration und Cell-Faehigkeit
+### Phase 4: Cell-Faehigkeit
 
-- [ ] Audit, Scorelog, Messaging, Jobs und Outbox migrieren.
-- [ ] Bewerbe und Eintragungen migrieren.
-- [ ] Matches und Ranglisten gemeinsam migrieren.
 - [ ] Anwendung vollstaendig konfigurierbar und containerfaehig machen.
 - [ ] Persistente Daten aus App-Containern entfernen.
 - [ ] Health, Readiness, Shutdown und Ressourcenlimits standardisieren.
