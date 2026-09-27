@@ -307,7 +307,8 @@ function render() {
   }
 
   const foot = byId("hall-time-foot"); foot.replaceChildren();
-  const label = document.createElement("th"); label.scope = "row"; label.className = "hall-time-player"; label.setAttribute("aria-label", "Belegung"); foot.appendChild(label);
+  const participantCount = grid.participants.length;
+  const label = document.createElement("th"); label.scope = "row"; label.className = "hall-time-player"; label.textContent = String(participantCount); label.title = `${participantCount} teilnehmende Spieler`; label.setAttribute("aria-label", `${participantCount} teilnehmende Spieler`); foot.appendChild(label);
   for (const slot of grid.slots) {
     const confirmed = grid.entries.filter((value) => value.slotId === slot.id && value.status === "confirmed").length;
     const waiting = grid.entries.filter((value) => value.slotId === slot.id && value.status === "waitlist").length;

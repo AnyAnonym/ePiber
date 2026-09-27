@@ -218,3 +218,11 @@ Commit: 4.12.8-paj-1-4 | Modellrouting und Antwortqualität konzipiert
   - [Dokumentation] Orchestrator-Arbeitsgrundlage um aufgabenabhaengiges Routing zwischen lokalen und externen Modellen, versionierte Capability Scorecards, kontrollierte Eskalation sowie harte Daten- und Risikofilter erweitert.
   - [Dokumentation] Menschlich verankerten Bewertungs- und Lernkanal mit Qualitaetsdimensionen, Korrekturen, paarweisen Vergleichen, Shadow-Evaluation und kontrolliert versionierter Routingpolicy beschrieben.
   - [Dokumentation] Answer-first und progressive Vertiefung als verbindlichen Antwort-, UI-, Priming- und Feedbackvertrag festgelegt, damit Kernaussagen vor optionalen Nebenbetrachtungen erscheinen.
+
+[4.12.8-paj-1-5] - 2026-09-27
+Commit: 4.12.8-paj-1-5 | Teilnehmerzahl und Historienfokus verbessert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.8-paj-1-4-x` gesetzt.
+  - [Hallenzeiten] Gesamtzahl der Rasterteilnehmer dauerhaft in der linken unteren Rasterzelle sichtbar gemacht.
+  - [Bewerbe] Automatisch sowie per Maus oder Touch geoeffnete Historien ohne irrefuehrenden Fokusrahmen dargestellt, waehrend die sichtbare Tastaturfuehrung erhalten bleibt.

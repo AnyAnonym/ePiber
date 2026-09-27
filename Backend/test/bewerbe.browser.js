@@ -313,11 +313,13 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     const modal = page.getByRole("dialog");
     await modal.waitFor({ state: "visible" });
     const historyClose = page.locator("#competition-history-close");
-    assert.equal(await historyClose.evaluate((button) => document.activeElement === button), true);
+    const historyDialog = modal.locator(".competition-history-dialog");
+    assert.equal(await historyDialog.evaluate((dialog) => document.activeElement === dialog), true);
+    assert.equal(await historyDialog.evaluate((dialog) => getComputedStyle(dialog).outlineStyle), "none");
+    assert.equal(await historyClose.evaluate((button) => document.activeElement === button), false);
     await page.keyboard.press("Shift+Tab");
     await page.keyboard.press("Tab");
-    assert.equal(await historyClose.evaluate((button) => document.activeElement === button), true);
-    assert.equal(await historyClose.evaluate((button) => getComputedStyle(button).outlineStyle), "solid");
+    assert.equal(await modal.locator("#competition-history-favorite .favorite-star").evaluate((button) => document.activeElement === button), true);
     await historyClose.evaluate((button) => button.blur());
     await historyClose.hover();
     assert.equal(await historyClose.evaluate((button) => getComputedStyle(button).outlineStyle), "none");
@@ -558,7 +560,12 @@ test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich"
     const directModal = directPage.locator("#competition-history-modal");
     await directModal.waitFor({ state: "visible" });
     assert.equal(await directModal.locator("#competition-history-competition-name").innerText(), "Sommercup");
+    assert.equal(await directModal.locator(".competition-history-dialog").evaluate((dialog) => document.activeElement === dialog), true);
+    assert.equal(await directModal.locator(".competition-history-dialog").evaluate((dialog) => getComputedStyle(dialog).outlineStyle), "none");
+    assert.equal(await directModal.locator("#competition-history-close").evaluate((button) => document.activeElement === button), false);
     assert.deepEqual(await directPage.evaluate(() => window.__historyCalls), [{ bewerbId: "3" }]);
+    await directModal.locator("#competition-history-close").click();
+    assert.equal(await directPage.locator("#all-competition-history-button").evaluate((button) => document.activeElement === button), false);
     await directPage.close();
 
     const errorPage = await newProfilePage(browser);

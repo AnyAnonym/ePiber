@@ -281,7 +281,9 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.equal(ownNameStyle.color, "rgb(33, 79, 125)");
     assert.equal(ownNameStyle.boxShadow, "none");
     assert.equal(await page.locator('#hall-time-body [data-person-id="p1"] td').first().evaluate((element) => getComputedStyle(element).backgroundColor), "rgb(231, 241, 251)");
-    assert.equal(await page.locator("#hall-time-foot .hall-time-player").textContent(), "");
+    assert.equal(await page.locator("#hall-time-foot .hall-time-player").textContent(), "14");
+    assert.equal(await page.locator("#hall-time-foot .hall-time-player").getAttribute("title"), "14 teilnehmende Spieler");
+    assert.equal(await page.locator("#hall-time-foot .hall-time-player").getAttribute("aria-label"), "14 teilnehmende Spieler");
     const viewportFill = await page.evaluate(() => {
       const card = document.querySelector(".hall-time-table-card").getBoundingClientRect();
       const legend = document.querySelector(".hall-time-legend").getBoundingClientRect();
@@ -326,6 +328,7 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.equal(await page.locator("#hall-time-foot td").first().evaluate((element) => getComputedStyle(element).color), "rgb(23, 107, 53)");
     assert.equal(await page.locator("#hall-time-foot td").nth(2).evaluate((element) => getComputedStyle(element).color), "rgb(165, 43, 43)");
     await page.locator('#hall-time-body [data-person-id="p1"] .hall-time-player-select').click();
+    assert.equal(await page.locator("#hall-time-foot .hall-time-player").textContent(), "14");
     assert.equal(await page.locator("#hall-time-head .hall-time-sum").textContent(), "1");
     assert.equal(await page.locator('#hall-time-body [data-person-id="p1"] .hall-time-sum').textContent(), "1");
     assert.equal(await page.locator('#hall-time-body [data-person-id="p2"] .hall-time-sum').textContent(), "0 (1)");
@@ -413,6 +416,7 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     assert.notEqual(noWaitlistLegendRows[0], noWaitlistLegendRows[2]);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&fairUse=1`);
     await page.getByRole("heading", { name: "Donnerstag Doppel" }).waitFor({ timeout: 5000 });
+    assert.equal(await page.locator("#hall-time-foot .hall-time-player").textContent(), "14");
     assert.equal(await page.locator(".hall-time-constraints-legend").isHidden(), true);
     assert.deepEqual(await page.locator(".hall-time-legend span:visible").allTextContents(), ["✓ Dabei", "⌛ Warteliste", "× nicht dabei"]);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeiten.html?id=grid-1&failWithReference=1`);

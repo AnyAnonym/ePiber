@@ -44,6 +44,11 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   Gesamthistorie. Tooltip und zugaengliche Beschriftung nennen den jeweiligen
   Zweck; fuer anonyme Benutzer werden die Buttons nicht angeboten. Das
   Kachellayout und die normale Kartennavigation bleiben unveraendert.
+  Ein per URL angeforderter Historiendialog sowie ein mit Maus oder Touch
+  geoeffneter Dialog fokussiert seinen Dialogcontainer ohne sichtbaren Rahmen.
+  Bei Tastaturausloesung wird der Schliessen-Button sichtbar fokussiert; nur dann
+  stellt dessen Aktivierung den Fokus auf dem ausloesenden Historienbutton wieder
+  her.
   Jeder Historieneintrag besitzt unten eine kompakte Aktionszeile: links stehen
   Sprechblasensymbol und Kommentaranzahl, danach jedes verwendete Reaktions-Emoji
   genau einmal, die unmittelbar folgende Gesamtzahl und ein Smiley-Plus-Symbol.

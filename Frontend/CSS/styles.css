@@ -2364,6 +2364,10 @@ body.mobile-nav-open {
   overflow: hidden;
 }
 
+.competition-history-dialog:focus {
+  outline: none;
+}
+
 .competition-history-heading {
   position: relative;
   padding: 0 44px;
