@@ -10,6 +10,88 @@ const { setTestEnvironment } = require("./helpers.js");
 setTestEnvironment();
 const { MessagingRepository } = require("../messagingRepository.js");
 
+test("Schema 13 korrigiert nur eindeutig erkennbare historische Empfaengerergebnisse", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-messaging-perspective-"));
+  const filename = path.join(directory, "messaging.sqlite");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const logs = [];
+  let repository = new MessagingRepository(filename, { log: (...args) => logs.push(args) });
+  repository.init();
+  const add = (id, result, winnerBody, loserBody) => repository.ensureEvent({
+    id, competitionId: "cup", createdAt: 100, type: "result", source: "match", sourceId: id, actorId: "p2", result,
+  }, [
+    { userId: "p1", role: "participant", messageId: `${id}-winner`, type: "result", subject: "Match gewonnen: Cup", body: winnerBody, acknowledgedAt: 100, deliveries: [{ channel: "Inbox", status: "delivered" }] },
+    { userId: "p2", role: "participant", messageId: `${id}-loser`, type: "result", subject: "Match verloren: Cup", body: loserBody, deliveries: [{ channel: "Inbox", status: "delivered" }] },
+  ]);
+  add("regular", "6-4/6-0", "Du gewinnst das Match gegen Peter Player. Ergebnis: 4-6/0-6.", "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 4-6/0-6.");
+  add("reverse-stored", "1-6/2-6", "Du gewinnst das Match gegen Peter Player. Ergebnis: 1-6/2-6.", "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 1-6/2-6.");
+  add("retirement", "6-4/2-1 (Aufgabe)", "Du gewinnst das Match gegen Peter Player. Ergebnis: 6-4/2-1 (Aufgabe).", "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 6-4/2-1 (Aufgabe). Grund: Korrektur");
+  add("unrecognized", "6-4/6-0", "Freier Text: Ergebnis: 4-6/0-6.", "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 9-9.");
+  add("walkover", "W.O.", "Du gewinnst durch W.O. von Peter Player.", "Du verlierst durch W.O.");
+  const beforeWinner = repository.summary("p1");
+  const beforeLoser = repository.summary("p2");
+  repository.close();
+  const db = new DatabaseSync(filename);
+  db.exec("PRAGMA user_version = 12");
+  db.close();
+
+  repository = new MessagingRepository(filename, { log: (...args) => logs.push(args) });
+  repository.init();
+  assert.equal(repository.status().schemaVersion, 13);
+  assert.equal(repository.getForRecipient("p1", "regular-winner").body, "Du gewinnst das Match gegen Peter Player. Ergebnis: 6-4/6-0.");
+  assert.equal(repository.getForRecipient("p2", "regular-loser").body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 4-6/0-6.");
+  assert.equal(repository.getForRecipient("p1", "reverse-stored-winner").body, "Du gewinnst das Match gegen Peter Player. Ergebnis: 6-1/6-2.");
+  assert.equal(repository.getForRecipient("p2", "retirement-loser").body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 4-6/1-2 (Aufgabe). Grund: Korrektur");
+  assert.equal(repository.getForRecipient("p1", "retirement-winner").body, "Du gewinnst das Match gegen Peter Player. Ergebnis: 6-4/2-1 (Aufgabe).");
+  assert.equal(repository.getForRecipient("p1", "unrecognized-winner").body, "Freier Text: Ergebnis: 4-6/0-6.");
+  assert.equal(repository.getForRecipient("p2", "unrecognized-loser").body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 9-9.");
+  assert.equal(repository.getForRecipient("p1", "walkover-winner").body, "Du gewinnst durch W.O. von Peter Player.");
+  assert.equal(repository.getForRecipient("p1", "regular-winner").acknowledgedAt, 100);
+  assert.deepEqual(repository.getForRecipient("p1", "regular-winner").deliveries.map(({ status }) => status), ["delivered"]);
+  assert.deepEqual(repository.summary("p1"), { ...beforeWinner, revision: beforeWinner.revision + 1 });
+  assert.deepEqual(repository.summary("p2"), { ...beforeLoser, revision: beforeLoser.revision + 1 });
+  assert.deepEqual(logs.at(-1), ["info", "messaging_schema_migration_completed", { fromVersion: 12, toVersion: 13, correctedCount: 3, affectedUserCount: 2 }]);
+  repository.close();
+  repository = new MessagingRepository(filename, { log: (...args) => logs.push(args) });
+  repository.init();
+  assert.equal(repository.summary("p1").revision, beforeWinner.revision + 1);
+  assert.equal(logs.length, 1);
+  repository.close();
+});
+
+test("Schema-13-Migration rollt bei Schreibfehler vollstaendig zurueck und ist wiederholbar", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-messaging-rollback-"));
+  const filename = path.join(directory, "messaging.sqlite");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let repository = new MessagingRepository(filename);
+  repository.init();
+  repository.ensureEvent({ id: "event", type: "result", source: "match", sourceId: "match", actorId: "p2", result: "6-4/6-0", createdAt: 10 }, [
+    { userId: "p1", role: "participant", messageId: "win", type: "result", subject: "Match gewonnen: Cup", body: "Du gewinnst das Match gegen Peter. Ergebnis: 4-6/0-6." },
+    { userId: "p2", role: "participant", messageId: "lose", type: "result", subject: "Match verloren: Cup", body: "Du verlierst das Match gegen Ada. Ergebnis: 6-4/6-0." },
+  ]);
+  const revision = repository.summary("p1").revision;
+  repository.close();
+  const db = new DatabaseSync(filename);
+  db.exec("PRAGMA user_version = 12; CREATE TRIGGER fail_perspective BEFORE UPDATE OF body ON event_participants WHEN OLD.user_id = 'p2' BEGIN SELECT RAISE(ABORT, 'test failure'); END;");
+  db.close();
+  const logs = [];
+  repository = new MessagingRepository(filename, { log: (level, event, fields) => logs.push({ level, event, fields }) });
+  assert.throws(() => repository.init(), /test failure/);
+  assert.deepEqual(logs, [{ level: "error", event: "messaging_schema_migration_failed", fields: { fromVersion: 12, toVersion: 13, errorCode: "MIGRATION_FAILED" } }]);
+  assert.equal(repository.db.prepare("PRAGMA user_version").get().user_version, 12);
+  assert.equal(repository.getForRecipient("p1", "win").body, "Du gewinnst das Match gegen Peter. Ergebnis: 4-6/0-6.");
+  assert.equal(repository.summary("p1").revision, revision);
+  repository.close();
+  const retryDb = new DatabaseSync(filename);
+  retryDb.exec("DROP TRIGGER fail_perspective");
+  retryDb.close();
+  repository = new MessagingRepository(filename);
+  repository.init();
+  assert.equal(repository.getForRecipient("p1", "win").body, "Du gewinnst das Match gegen Peter. Ergebnis: 6-4/6-0.");
+  assert.equal(repository.summary("p1").revision, revision + 1);
+  repository.close();
+});
+
 function message(id = "msg-1", recipientId = "p2") {
   return {
     id,
@@ -138,7 +220,7 @@ test("MessagingRepository migriert v1, gruppiert nur exakte Matchquellen und rei
 
   const repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.equal(repository.status().eventCount, 2);
   const migratedEventId = repository.getForRecipient("p1", "legacy-challenger").eventId;
   assert.equal(migratedEventId, repository.getForRecipient("p2", "legacy-opponent").eventId);
@@ -280,7 +362,7 @@ test("MessagingRepository migriert Schema 8 mit bestehenden Kommentaren auf Komm
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.equal(repository.getForRecipient("p2", "before-v9").body, "Private body");
   assert.equal(repository.pageComments("event-before-v9").comments[0].body, "Bestehender Kommentar");
   assert.deepEqual(repository.commentReactionSummaries([comment.commentId], "p2").get(comment.commentId), { reactionTotal: 0, reactions: [], myReaction: null });
@@ -303,7 +385,7 @@ test("MessagingRepository migriert Schema 9 mit unveraenderten Bestandsmeldungen
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.equal(repository.getForRecipient("p2", "before-v10").body, "Private body");
   assert.equal(repository.summary("p2").unreadCount, 1);
   repository.close();
@@ -333,7 +415,7 @@ test("MessagingRepository migriert ungelesene Forderer-Eigenmeldungen auf Schema
   repository = new MessagingRepository(filename, { now: () => 500, log: (level, event, fields) => logs.push({ level, event, fields }) });
   repository.init();
 
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.equal(repository.getForRecipient("p1", "message-old-confirmation").acknowledgedAt, 123);
   assert.equal(repository.getForRecipient("p2", "message-old-challenge").acknowledgedAt, null);
   assert.deepEqual(repository.summary("p1"), { revision: 2, totalCount: 1, unreadCount: 0 });
@@ -350,6 +432,11 @@ test("MessagingRepository migriert ungelesene Forderer-Eigenmeldungen auf Schema
       level: "info",
       event: "messaging_schema_migration_completed",
       fields: { fromVersion: 11, toVersion: 12, hallTimeContextCount: 0, hallTimeSubjectCount: 0 },
+    },
+    {
+      level: "info",
+      event: "messaging_schema_migration_completed",
+      fields: { fromVersion: 12, toVersion: 13, correctedCount: 0, affectedUserCount: 0 },
     },
   ]);
   repository.close();
@@ -369,7 +456,7 @@ test("MessagingRepository migriert Schema 3 additiv auf das Ergebnisfeld", (t) =
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.equal(repository.getForRecipient("p2", "before-v4").subject, "Private subject");
   assert.equal(repository.getEvent("before-v4").result, "");
   repository.close();
@@ -431,7 +518,7 @@ test("MessagingRepository migriert Schema 4 mit Datenbestand auf den globalen Ze
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.equal(repository.getForRecipient("p2", "before-v5").subject, "Private subject");
   assert.equal(repository.db.prepare("PRAGMA index_list('competition_events')").all().some(({ name }) => name === "competition_events_created"), true);
   repository.close();
@@ -464,7 +551,7 @@ test("MessagingRepository migriert bestehende Walkover- und Aufgabe-Texte", (t) 
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.equal(repository.getForRecipient("p1", "walkover-old-message").body, "Du gewinnst durch W.O. von Peter Player.");
   assert.equal(repository.getForRecipient("p4", "walkover-old-loser-message").body, "Du verlierst durch W.O.");
   assert.equal(repository.getEvent("walkover-old").summary, "Ada Aufschlag gewinnt durch W.O. von Peter Player.");
@@ -504,7 +591,7 @@ test("MessagingRepository migriert bestehende Hallenzeiten-Kontexte und Betreffe
 
   repository = new MessagingRepository(filename);
   repository.init();
-  assert.equal(repository.status().schemaVersion, 12);
+  assert.equal(repository.status().schemaVersion, 13);
   assert.deepEqual(oldMessages.map(([id, userId]) => {
     const migrated = repository.getForRecipient(userId, `message-${id}`);
     return [migrated.contextName, migrated.subject];

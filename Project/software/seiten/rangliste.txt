@@ -88,7 +88,8 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Ende. Anonym ersetzt eine gruene Anmeldezeile das Profil. Desktop, Tablet und
   Mobilgeraete verwenden denselben Hamburger und Drawer.
   Ergebnis- und Korrekturmeldungen sprechen Gewinner und Verlierer jeweils
-  empfaengerbezogen an und nennen die gegnerische Seite. Bei W.O. lautet der
+  empfaengerbezogen an und nennen die gegnerische Seite; Satzergebnisse stehen
+  stets aus Sicht des jeweiligen Empfaengers. Bei W.O. lautet der
   Gewinnsatz `Du gewinnst durch W.O. von <Verliererseite>.`, fuer die selbst nicht
   angetretene Seite `Du verlierst durch W.O.`. Bei Aufgabe folgt `Ergebnis:
   <Spielstand> (Aufgabe).`; ohne Teilergebnis wird `Ergebnis: (Aufgabe).`

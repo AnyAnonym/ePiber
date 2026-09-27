@@ -612,7 +612,13 @@ die Verliererperspektive `Du verlierst durch W.O.`, Historienzusammenfassung und
   ersetzt die bekannten alten Betreffe anhand des Projektionstyps und der festen
   Textvorlagen durch die aktionsbezogenen Betreffe fuer Anmeldung, Abmeldung,
   Warteliste und Nachruecken. Andere Ereignisse und freie Meldungstexte bleiben
-  unveraendert; die betroffenen persoenlichen Messaging-Revisionen werden erhoeht.
+   unveraendert; die betroffenen persoenlichen Messaging-Revisionen werden erhoeht.
+   Schema 13 korrigiert bei Ergebnis- und Korrekturereignissen nur eindeutig
+   erkannte persoenliche Satzergebnisse auf Gewinner- beziehungsweise
+   Verliererperspektive. Unklare Texte und W.O. bleiben unangetastet;
+   Quittierungen, Zustellungen und Zeitpunkte bleiben bestehen. Je betroffenem
+   Empfaenger steigt die Messaging-Revision genau einmal. Der Abschluss loggt nur
+   die Anzahl der korrigierten Projektionen und betroffenen Empfaenger.
 Eine einmalige
 Legacy-Zuordnung ergaenzt bei matchgebundenen Ereignissen fehlende Bewerb-IDs aus
 `Matches1`; beliebige manuelle Sheet-Aenderungen erzeugen dagegen keine

@@ -202,7 +202,8 @@ Spielerverzeichnis - Aktive Mitglieder und Profile
   Erfolg oeffnet dasselbe Profil und denselben Bewerbsreiter neu. Bei Eintrag und
   Korrektur nennt die Historie Gewinner und Gegner neutral; private Meldungen
   sprechen jeden Teilnehmer als Gewinner oder Verlierer an und nennen Gegner und
-  Ergebnis. Bei W.O. lautet die persoenliche Gewinnmeldung `Du gewinnst durch W.O.
+  Satzergebnis stets aus Sicht des jeweiligen Empfaengers, unabhaengig davon, wer
+  es eingetragen hat. Bei W.O. lautet die persoenliche Gewinnmeldung `Du gewinnst durch W.O.
   von <Verliererseite>.`, fuer die selbst nicht angetretene Seite `Du verlierst
   durch W.O.`. Aufgabe steht hinter dem Teilergebnis in Klammern, bei leerem
   Teilergebnis als `Ergebnis: (Aufgabe)`. Profilkarten zeigen W.O. neutral als
