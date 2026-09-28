@@ -21,12 +21,16 @@ Hallenzeiten verwalten - Administration
   erfasst ausschliesslich der Administrator je Spieler und zukuenftigem Termin
   harte Verhinderungen oder den weichen Wunsch `moeglichst vermeiden`. Eine
   Verhinderung wird nie uebergangen; ein Wunsch wird erst nach der Einsatzanzahl
-  optimiert. Die Neuverteilung zeigt zunaechst eine zustandslose Vorschau mit
-  Zuteilungen, offenen Plaetzen, Wunschkonflikten und Einsatzsummen. Sie veraendert
-  den bestehenden Raster nicht. Vorschlaege mit offenen Plaetzen koennen nicht
-  uebernommen werden; vollstaendige Vorschlaege duerfen auch bei unvermeidbaren
-  weichen Wunschkonflikten ausdruecklich revisions- und hashgeschuetzt uebernommen
-  werden. Aus dem Vorschauoverlay oeffnet
+  optimiert. Ueber die gesamte chronologische Terminfolge werden pro Spieler
+  hoechstens zwei Einsaetze und hoechstens zwei Pausen hintereinander angestrebt;
+  bei vier Spielern je Termin werden identische Vierergruppen vermieden und
+  gemeinsame Spielerpaare weiterhin moeglichst gemischt. Die Neuverteilung zeigt
+  zunaechst eine zustandslose Vorschau mit Zuteilungen, offenen Plaetzen,
+  Wunschkonflikten, Einsatzsummen sowie Hinweisen auf nicht eingehaltene Serien-
+  und Vierergruppenregeln. Sie veraendert den bestehenden Raster nicht. Vorschlaege
+  mit offenen Plaetzen koennen nicht uebernommen werden; vollstaendige Vorschlaege
+  duerfen auch bei nicht vermeidbaren Regelhinweisen ausdruecklich revisions- und
+  hashgeschuetzt uebernommen werden. Aus dem Vorschauoverlay oeffnet
   `Uebersicht drucken` exakt den angezeigten Vorschlag in einer neuen, markierten
   Gesamtraster-Druckansicht; ein nicht mehr passender Vorschau-Hash wird abgelehnt.
   `Alle Stati auf Termin loeschen`

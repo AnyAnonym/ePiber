@@ -92,6 +92,8 @@ test("Gleichberechtigte Neuverteilung ersetzt Zukunft und haelt Summendifferenz 
   assert.equal(distribution.batchId, operation(9));
   assert.deepEqual(distribution.summary, {
     slotCount: 2, assignedCount: 4, promotedCount: 0, removedCount: 0, unchangedCount: 0,
+    softConflictCount: 0, spread: 1, openPlaceCount: 0,
+    consecutiveAssignmentViolationCount: 0, consecutivePauseViolationCount: 0, repeatedGroupCount: 0,
   });
   assert.equal(distribution.changes.length, 4);
   assert.equal(distribution.changes.every(({ from, to, slot }) => from === "red" && to === "confirmed" && slot.date), true);
@@ -140,13 +142,43 @@ test("Gleichberechtigte Verteilung mischt gemeinsame Gruppen bei gleicher Einsat
     }
   }
   assert.ok(Math.max(...counts) - Math.min(...counts) <= 1);
-  assert.ok(new Set(groups.map((members) => members.join(":"))).size > 2);
+  assert.equal(new Set(groups.map((members) => members.join(":"))).size, groups.length);
   assert.equal(pairCounts.size, 28);
   assert.ok(Math.max(...pairCounts.values()) - Math.min(...pairCounts.values()) <= 2, JSON.stringify({ groups, pairs: [...pairCounts] }));
   for (const { id } of group) {
     const appearances = groups.flatMap((members, index) => members.includes(id) ? [index] : []);
     assert.ok(appearances.slice(1).every((value, index) => value - appearances[index] <= 3), `${id}: ${appearances}`);
+    const sequence = groups.map((members) => members.includes(id));
+    assert.equal(sequence.slice(0, -2).every((value, index) => {
+      const window = sequence.slice(index, index + 3).filter(Boolean).length;
+      return window >= 1 && window <= 2;
+    }), true, `${id}: ${sequence}`);
   }
+  context.repository.close();
+});
+
+test("Unvermeidbare Serienverletzung wird gewarnt und kann bewusst uebernommen werden", () => {
+  const context = setup();
+  const names = new Map([[players[0].id, players[0].name]]);
+  const slots = Array.from({ length: 3 }, (_, index) => ({ date: `2026-01-${20 + index}`, start: "19:00", end: "21:00" }));
+  const created = context.service.saveGrid(admin, gridRequest(0, { participantIds: [players[0].id], slots }), names);
+  const preview = context.service.previewDistribution(admin, { gridId: created.grid.id, expectedRevision: created.revision }).preview;
+  assert.equal(preview.quality, "warning");
+  assert.equal(preview.consecutiveAssignmentViolationCount, 1);
+  assert.equal(preview.consecutivePauseViolationCount, 0);
+  assert.equal(preview.repeatedGroupCount, 0);
+  assert.deepEqual(preview.sequenceConflicts.map(({ kind, personId, slots: values }) => [kind, personId, values.length]), [
+    ["consecutive_assignments", players[0].id, 3],
+  ]);
+  const applied = context.service.applyDistributionPreview(admin, {
+    operationId: operation(27), gridId: created.grid.id, expectedRevision: created.revision, previewHash: preview.previewHash,
+  });
+  assert.equal(applied.grid.entries.length, 3);
+  const previewLog = context.logs.find(({ event }) => event === "hall_time_distribution_preview_completed");
+  assert.equal(previewLog.fields.consecutiveAssignmentViolationCount, 1);
+  assert.equal(Object.hasOwn(previewLog.fields, "personName"), false);
+  const historyLog = context.logs.find(({ event, fields }) => event === "hall_time_history_recorded" && fields.action === "distribution_replaced");
+  assert.equal(historyLog.fields.consecutiveAssignmentViolationCount, 1);
   context.repository.close();
 });
 

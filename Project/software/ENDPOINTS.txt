@@ -1102,8 +1102,11 @@ ADMIN:
 
   `adminDistributeHallTimeGrid { operationId, gridId, expectedRevision }`
       Ersetzt im Modus `equal` alle zukuenftigen Eintraege durch eine moeglichst
-      ausgeglichene Verteilung, die wiederholte Gruppen und direkte Folgeeinsaetze
-      reduziert. Gespeicherte harte Verhinderungen werden nie, weiche
+      ausgeglichene Verteilung. Sie begrenzt Einsaetze und Pausen ueber die gesamte
+      chronologische Terminfolge nach Moeglichkeit auf jeweils hoechstens zwei
+      aufeinanderfolgende Termine und vermeidet bei Viererbelegungen identische
+      Vierergruppen. Wiederholte Spielerpaare werden weiterhin reduziert.
+      Gespeicherte harte Verhinderungen werden nie, weiche
       Vermeidungswuensche nach Moeglichkeit nicht belegt. Eine unvollstaendige
       Verteilung wird abgelehnt. Der Endpoint bleibt fuer kompatible Adminclients;
       die Verwaltungsseite verwendet den sicheren Vorschauablauf. Historisiert
@@ -1124,8 +1127,12 @@ ADMIN:
       Berechnet ohne Zustandsaenderung eine deterministische Vorschau. Die Antwort
       enthaelt Qualitaet `complete|warning|incomplete`, vorgeschlagene Eintraege,
       Termin- und Personensummen, offene Plaetze, verletzte weiche Wuensche,
-      Einsatzspreizung und einen SHA-256-`previewHash`. Harte Verhinderungen werden
-      nie verletzt. Kontrollierte Betriebslogs enthalten nur Summen.
+      Einsatzspreizung, Zaehler und Admin-Details fuer mehr als zwei aufeinander-
+      folgende Einsaetze oder Pausen sowie wiederholte Vierergruppen und einen
+      SHA-256-`previewHash`. Eine vollstaendige bestmoegliche Verteilung mit nicht
+      vermeidbaren Regelhinweisen hat Qualitaet `warning` und darf bewusst
+      uebernommen werden. Harte Verhinderungen werden nie verletzt. Kontrollierte
+      Betriebslogs enthalten nur Summen und keine Namen oder freien Payloads.
 
   `adminApplyHallTimeDistribution { operationId, gridId, expectedRevision,
   previewHash }`

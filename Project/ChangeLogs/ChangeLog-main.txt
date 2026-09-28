@@ -1,7 +1,7 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.8
+Stand: 4.12.10
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
@@ -3030,3 +3030,34 @@ Quelle: 4.12.8-paj-1
 
   Removed
   - [Repository] Temporaeres Branch-Changelog des integrierten Seitenbranches entfernt und Paket- sowie Lockfileversion auf `4.12.9` gesetzt.
+
+[4.12.10] - 2026-09-28
+Commit: 4.12.10 | Hallenraster mit Serien- und Vierergruppenregeln optimiert
+Quelle: 4.12.9-paj-1
+
+  Added
+  - [Hallenzeiten] Die Neuverteilung bewertet maximal zwei aufeinanderfolgende
+    Einsaetze oder Pausen und weist nicht vermeidbare Regelverletzungen in der
+    Adminvorschau aus.
+
+  Changed
+  - [Hallenzeiten] Eine deterministische vorausschauende Optimierung vermeidet bei
+    typischen Piberdoppel-Rastern identische Vierergruppen und reduziert weiterhin
+    wiederholte Spielerpaare und Vermeidungswunschkonflikte.
+  - [Observability] Vorschau- und Verteilungslogs enthalten kontrollierte Summen zu
+    Einsatzserien, Pausenserien und wiederholten Vierergruppen ohne zusaetzliche
+    Personendaten.
+  - [Dokumentation] Endpoint- und Seitendokumentation beschreiben die neuen
+    Optimierungsregeln und das Warnverhalten vollstaendiger bestmoeglicher
+    Vorschlaege.
+
+  Tests
+  - [Backend] Seriengrenzen, eindeutige Vierergruppen, Warnungen, bewusste
+    Uebernahme und kontrollierte Diagnosefelder abgesichert; 455 Backendtests und
+    16 Workflowtests erfolgreich abgeschlossen.
+  - [Browser] Hallenraster-Verwaltung und Warnvorschau in Chromium, WebKit und
+    Firefox mit der Drei-Engine-Core-Smokesuite erfolgreich geprueft.
+
+  Removed
+  - [Repository] Temporaeres Changelog des integrierten Seitenbranches entfernt
+    und Paket- sowie Lockfileversion auf `4.12.10` gesetzt.
