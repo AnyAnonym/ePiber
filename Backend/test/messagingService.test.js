@@ -401,7 +401,8 @@ test("Ergebnisereignisse speichern Eigenmeldungen sichtbar gelesen und Fremdmeld
   assert.equal(outcome.event.summary, "Ada Aufschlag gewinnt gegen Peter Player.");
   assert.equal(outcome.participants.find(({ recipient }) => recipient === "p1").acknowledgedAt, 4000);
   assert.equal(service.messages({ id: "p1" }, { limit: 10 }).messages[0].acknowledgedAt, 4000);
-  assert.equal(service.message({ id: "p2" }, outcome.participants.find(({ recipient }) => recipient === "p2").id).message.body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 6-4/2-1 (Aufgabe). Grund: Falsche Erfassung");
+  assert.equal(service.message({ id: "p1" }, outcome.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Du gewinnst das Match gegen Peter Player. Ergebnis: 6-4/2-1 (Aufgabe). Grund: Falsche Erfassung");
+  assert.equal(service.message({ id: "p2" }, outcome.participants.find(({ recipient }) => recipient === "p2").id).message.body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 4-6/1-2 (Aufgabe). Grund: Falsche Erfassung");
   assert.equal(service.messages({ id: "p2" }, { limit: 10 }).messages[0].subject, "Match verloren: Cup");
   assert.match(outcome.event.detail, /Grund: Falsche Erfassung/);
   assert.equal(outcome.event.detail.includes("Abschlussart"), false);
@@ -424,6 +425,28 @@ test("Ergebnisereignisse speichern Eigenmeldungen sichtbar gelesen und Fremdmeld
   assert.equal(secondSideWin.event.summary, "Peter Player gewinnt gegen Ada Aufschlag.");
   assert.equal(secondSideWin.event.result, "6-1/6-2");
   assert.match(secondSideWin.event.detail, /^Ergebnis: 6-1\/6-2;/);
+  assert.equal(service.message({ id: "p2" }, secondSideWin.participants.find(({ recipient }) => recipient === "p2").id).message.body, "Du gewinnst das Match gegen Ada Aufschlag. Ergebnis: 6-1/6-2.");
+  assert.equal(service.message({ id: "p1" }, secondSideWin.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Du verlierst das Match gegen Peter Player. Ergebnis: 1-6/2-6.");
+  const loserEntered = await service.ensureMatchResultEvent({
+    operationId: "00000000-0000-4000-8000-000000000505",
+    matchId: "m-loser-entered", competitionId: "cup-1", competitionName: "Cup",
+    participantIds: ["p1", "p2"], participantNames: { p1: "Ada Aufschlag", p2: "Peter Player" },
+    teams: [["p1"], ["p2"]], winnerSide: 1, actorId: "p2", actorName: "Peter Player",
+    changeType: "result", completionType: "regular", result: "6-4/6-0",
+  });
+  assert.equal(service.message({ id: "p1" }, loserEntered.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Du gewinnst das Match gegen Peter Player. Ergebnis: 6-4/6-0.");
+  assert.equal(service.message({ id: "p2" }, loserEntered.participants.find(({ recipient }) => recipient === "p2").id).message.body, "Du verlierst das Match gegen Ada Aufschlag. Ergebnis: 4-6/0-6.");
+  const doubles = await service.ensureMatchResultEvent({
+    operationId: "00000000-0000-4000-8000-000000000506",
+    matchId: "m-doubles", competitionId: "cup-1", competitionName: "Cup",
+    participantIds: ["p1", "p2", "p3", "p4"],
+    participantNames: { p1: "Ada Aufschlag", p2: "Alfred Ass", p3: "Peter Player", p4: "Paula Passierball" },
+    teams: [["p1", "p2"], ["p3", "p4"]], winnerSide: 2,
+    actorId: "p1", actorName: "Ada Aufschlag", changeType: "result_corrected",
+    completionType: "regular", result: "6-7(5)/4-6",
+  });
+  assert.equal(service.message({ id: "p3" }, doubles.participants.find(({ recipient }) => recipient === "p3").id).message.body, "Du gewinnst das Match gegen Ada Aufschlag / Alfred Ass. Ergebnis: 7-6(5)/6-4.");
+  assert.equal(service.message({ id: "p2" }, doubles.participants.find(({ recipient }) => recipient === "p2").id).message.body, "Du verlierst das Match gegen Peter Player / Paula Passierball. Ergebnis: 6-7(5)/4-6.");
   const walkover = await service.ensureMatchResultEvent({
     operationId: "00000000-0000-4000-8000-000000000502",
     matchId: "m-walkover",
@@ -445,7 +468,7 @@ test("Ergebnisereignisse speichern Eigenmeldungen sichtbar gelesen und Fremdmeld
   assert.equal(historyEntry.summary, "Peter Player / Paula Passierball gewinnt durch W.O. von Ada Aufschlag / Alfred Ass.");
   assert.equal(historyEntry.result, "W.O.");
   assert.equal(service.message({ id: "p1" }, walkover.participants.find(({ recipient }) => recipient === "p1").id).message.body, "Du verlierst durch W.O.");
-  assert.equal(service.messages({ id: "p3" }, { limit: 10 }).messages[0].acknowledgedAt, 4000);
+  assert.equal(service.message({ id: "p3" }, walkover.participants.find(({ recipient }) => recipient === "p3").id).message.acknowledgedAt, 4000);
   assert.equal(service.message({ id: "p4" }, walkover.participants.find(({ recipient }) => recipient === "p4").id).message.body, "Du gewinnst durch W.O. von Ada Aufschlag / Alfred Ass.");
   const retirementWithoutResult = await service.ensureMatchResultEvent({
     operationId: "00000000-0000-4000-8000-000000000503",

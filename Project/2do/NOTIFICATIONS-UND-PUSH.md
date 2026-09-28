@@ -160,13 +160,17 @@ Beispiele fuer notwendige Ausnahmen:
   Personen erreichen, auch wenn eine von ihnen das vorausgehende Ergebnis
   eingetragen hat.
 
-Bei der spaeteren PostgreSQL-Migration werden bereits vorhandene persoenliche
-Eigenmeldungen entfernt. Das betrifft nur bekannte, ueberfluessliche
+Der PostgreSQL-Cutover uebernimmt bereits vorhandene persoenliche Eigenmeldungen
+innerhalb der festgelegten Messaging-Retention zunaechst unveraendert. Damit
+bleibt die Persistenzmigration ohne sichtbare Notification-Bereinigung.
+
+Erst der spaetere Notification-Auftrag entfernt bekannte, ueberfluessliche
 Eigenprojektionen wie `challenge_confirmation`, Termin-, Ergebnis- und
-Raushaenge-Bestaetigungen. Neutrale Fachereignisse, Bewerbshistorie, Kommentare
-und Reaktionen bleiben bestehen. Vor dem produktiven Lauf ist ein Dry Run mit
-Anzahlen nach Ereignistyp Pflicht; freie Texte, Namen oder Kontaktwerte duerfen
-nicht in dessen Bericht erscheinen.
+Raushaenge-Bestaetigungen und aktiviert fuer neue Ereignisse die hier
+festgelegte Unterdrueckung. Neutrale Fachereignisse, Bewerbshistorie, Kommentare
+und Reaktionen bleiben bestehen. Vor diesem produktiven Bereinigungslauf ist ein
+Dry Run mit Anzahlen nach Ereignistyp Pflicht; freie Texte, Namen oder
+Kontaktwerte duerfen nicht in dessen Bericht erscheinen.
 
 
 ## 5. Pflichtmeldungen und freiwillige Meldungen
@@ -583,8 +587,8 @@ Migrationsauftrag behandelt.
    Eigenmeldungsunterdrueckung implementieren.
 4. Bestehende Forderungs-, Termin-, Ergebnis- und Bewerbsereignisse an den
    zentralen Verteiler anbinden.
-5. Bestehende ueberfluessliche Eigenmeldungen im verifizierten Migrationslauf
-   kontrolliert bereinigen.
+5. Bestehende ueberfluessliche Eigenmeldungen in einem eigenen verifizierten
+   Notification-Bereinigungslauf kontrolliert entfernen.
 6. Profilregeln fuer freiwillige und verpflichtende Meldungen umsetzen.
 7. Persistente Erinnerungsauftraege und Scheduler ergaenzen.
 8. PWA, Service Worker, Web Push und Geraeteverwaltung umsetzen.
@@ -609,5 +613,5 @@ Migrationsauftrag behandelt.
   sie keine Pflichtmeldung sind?
 - Welche Moderations- und Datenschutzregeln gelten fuer spaetere direkte
   Mitgliedernachrichten?
-- Wie werden vorhandene, bereits quittierte Eigenmeldungen im Migrations-Dry-Run
-  genau abgegrenzt und freigegeben?
+- Wie werden vorhandene, bereits quittierte Eigenmeldungen im spaeteren
+  Notification-Bereinigungs-Dry-Run genau abgegrenzt und freigegeben?

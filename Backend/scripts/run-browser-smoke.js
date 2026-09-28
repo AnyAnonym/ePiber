@@ -54,7 +54,7 @@ for (const [profileName, profile] of selectedProfiles) {
     : "Desktop verwendet denselben Drawer";
   const testPattern = suite === "lifecycle"
     ? lifecyclePattern
-    : `^(${navigationTest}|30-Tage-Session|Erfolgreiche An- und Abmeldung|Dashboard ist trotz|Persoenliche Startseite|Profil und Meldungen sind favorisierbar|Ergebniseingabe und Terminauswahl|Spielerverzeichnis filtert|Matches zeigen WO|Bewerbshistorie|Scoreboard zeigt WO|Scoreboard zeigt ein bestaetigtes Ergebnis|Scoreboard holt beim Aufwachen|Scoreboard kehrt|Hallenzeiten-Raster|Hallenzeiten-Verwaltung|Hallenzeiten liegen|Profilmodal zeigt|Navigator zeigt den automatischen Courtstart)`;
+    : `^(${navigationTest}|30-Tage-Session|Erfolgreiche An- und Abmeldung|Dashboard ist trotz|Persoenliche Startseite|Profil und Meldungen sind favorisierbar|Ergebniseingabe und Terminauswahl|Spielerverzeichnis filtert|Matches zeigen WO|Bewerbshistorie|Scoreboard zeigt WO|Scoreboard zeigt ein bestaetigtes Ergebnis|Scoreboard holt beim Aufwachen|Scoreboard kehrt|Hallenzeiten-Raster|Hallenzeiten-Verwaltung|Hallenzeiten-Druckansichten|Hallenzeiten liegen|Profilmodal zeigt|Navigator zeigt den automatischen Courtstart)`;
   const selectedTests = suite === "lifecycle" ? ["test/scoreboardRecentMatches.browser.js"] : fullTests;
   console.log(`\nBrowser-Smoke (${suite}): ${profile.label}`);
   const result = spawnSync(process.execPath, [

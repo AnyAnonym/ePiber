@@ -779,7 +779,9 @@ Eine One-Man-Show hat ein Ausfallrisiko. Vor groesserem Vertrieb notwendig:
 - dokumentierte Betriebsablaeufe;
 - Passwort-, Secret- und Break-glass-Nachfolge;
 - externe technische Vertretung;
-- Zugriff und Rollen nach Vier-Augen-Prinzip;
+- starke persoenliche Betreiberidentitaet, getrennte technische Rollen,
+  automatisierte Sicherheitsgates und nachvollziehbare Einzelbestaetigung fuer
+  kritische Aktionen;
 - getestete Wiederherstellung ohne Gruenderzugriff;
 - klare Kundenkommunikation im Notfall.
 

@@ -5,6 +5,7 @@ const { AppError } = require("./errors.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const { hasRole, rolesFromRow } = require("./personRoles.js");
 const { reactionCatalog, reactionByKey } = require("./competitionHistoryReactionCatalog.js");
+const { reverseResultPerspective, normalizeWinnerPerspective } = require("./resultPerspective.js");
 
 const warnedInvalidNotifications = new Set();
 const RESULT_REPORT_TYPES = new Set(["result", "result_corrected", "result_cleared", "match_end_corrected"]);
@@ -66,24 +67,6 @@ function appointmentText(value) {
   if (!match) throw new AppError("MATCH_DATE_INVALID", "Spieltermin ist ungueltig", 400);
   const century = Number(match[1]) >= 50 ? "19" : "20";
   return `${match[3]}.${match[2]}.${century}${match[1]}, ${match[4]}:${match[5]} Uhr`;
-}
-
-function reverseResultPerspective(value) {
-  return String(value || "").split("/").map((set) => set.replace(/^(\d{1,2})-(\d{1,2})(\(\d{1,2}\))?$/, "$2-$1$3")).join("/");
-}
-
-function normalizeWinnerPerspective(value) {
-  const result = String(value || "");
-  const sets = result.split("/").map((set) => set.match(/^(\d{1,2})-(\d{1,2})(?:\(\d{1,2}\))?$/));
-  if (!sets.length || sets.some((set) => !set)) return result;
-  const wins = sets.reduce((count, set) => {
-    const first = Number(set[1]);
-    const second = Number(set[2]);
-    if (first > second) count[0]++;
-    if (second > first) count[1]++;
-    return count;
-  }, [0, 0]);
-  return wins[1] > wins[0] ? reverseResultPerspective(result) : result;
 }
 
 class MessagingService {
@@ -332,6 +315,10 @@ class MessagingService {
       && namedTeams.every((team) => team.length > 0);
     const participants = uniqueIds.map((userId) => {
       const recipientWon = hasOutcome && teams[winnerSide - 1].map(String).includes(userId);
+      const recipientResult = hasOutcome && !recipientWon ? reverseResultPerspective(historyResult) : historyResult;
+      const recipientDisplayResult = completionType === "retirement"
+        ? `${recipientResult ? `${recipientResult} ` : ""}(Aufgabe)`
+        : recipientResult;
       const opponentIndex = recipientWon ? 2 - winnerSide : winnerSide - 1;
       const outcomeText = hasOutcome ? `Du ${recipientWon ? "gewinnst" : "verlierst"} das Match gegen ${namedTeams[opponentIndex].join(" / ")}` : "";
       return this.activityParticipant({
@@ -346,7 +333,7 @@ class MessagingService {
           ? `Match ${recipientWon ? "gewonnen" : "verloren"}: ${competitionName}`
           : `${labels[changeType]}: ${competitionName}`,
         body: hasOutcome
-          ? `${completionType === "walkover" ? recipientWon ? `Du gewinnst durch W.O. von ${namedTeams[2 - winnerSide].join(" / ")}.` : "Du verlierst durch W.O." : `${outcomeText}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}`}${reason ? ` Grund: ${reason}` : ""}`
+          ? `${completionType === "walkover" ? recipientWon ? `Du gewinnst durch W.O. von ${namedTeams[2 - winnerSide].join(" / ")}.` : "Du verlierst durch W.O." : `${outcomeText}.${recipientDisplayResult ? ` Ergebnis: ${recipientDisplayResult}.` : ""}`}${reason ? ` Grund: ${reason}` : ""}`
           : `${actorName || actorId} hat das Matchergebnis ${changeType === "result" ? "eingetragen" : changeType === "result_cleared" ? "zurückgenommen" : "korrigiert"}.${displayResult ? ` Ergebnis: ${displayResult}.` : ""}${reason ? ` Grund: ${reason}` : ""}`,
         allowMissingPerson: true,
       });

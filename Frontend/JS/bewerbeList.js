@@ -140,7 +140,7 @@ function openRequestedHistory() {
   const globalButton = historyElement("all-competition-history-button");
   if (requested.global) {
     requestedHistoryOpened = true;
-    openCompetitionHistory(null, globalButton);
+    openCompetitionHistory(null, null);
     return;
   }
   const competition = competitionsById.get(requested.id);
@@ -148,7 +148,7 @@ function openRequestedHistory() {
     .find((entry) => entry.dataset.competitionId === requested.id);
   if (!competition || !button) return;
   requestedHistoryOpened = true;
-  openCompetitionHistory(competition, button);
+  openCompetitionHistory(competition, null);
 }
 
 function closeCompetitionHistory({ restoreFocus = true } = {}) {
@@ -949,7 +949,7 @@ async function loadCompetitionHistory({ append = false } = {}) {
   }
 }
 
-function openCompetitionHistory(competition, button) {
+function openCompetitionHistory(competition, button, { showInitialFocus = false } = {}) {
   if (!historyButtonsVisible) return;
   clearHistoryState();
   historyState.open = true;
@@ -963,7 +963,10 @@ function openCompetitionHistory(competition, button) {
   const modal = historyElement("competition-history-modal");
   modal.hidden = false;
   window.lockModalScroll?.();
-  historyElement("competition-history-close")?.focus();
+  const initialFocus = showInitialFocus
+    ? historyElement("competition-history-close")
+    : modal.querySelector(".competition-history-dialog");
+  initialFocus?.focus({ preventScroll: true });
   loadCompetitionHistory().catch(() => {});
 }
 
@@ -973,8 +976,8 @@ function initializeCompetitionHistory() {
   globalButton?.appendChild(createMaterialSymbol("history"));
   const favoriteHost = historyElement("competition-history-favorite");
   favoriteHost?.appendChild(createFavoriteButton(historyFavoriteTarget, { className: "competition-history-favorite-star" }));
-  globalButton?.addEventListener("click", () => openCompetitionHistory(null, globalButton));
-  historyElement("competition-history-close")?.addEventListener("click", () => closeCompetitionHistory());
+  globalButton?.addEventListener("click", (event) => openCompetitionHistory(null, globalButton, { showInitialFocus: event.detail === 0 }));
+  historyElement("competition-history-close")?.addEventListener("click", (event) => closeCompetitionHistory({ restoreFocus: event.detail === 0 }));
   historyElement("competition-history-more")?.addEventListener("click", () => loadCompetitionHistory({
     append: Boolean(historyState.entries.length && historyState.nextCursor),
   }));
@@ -1145,7 +1148,7 @@ function createCard(b) {
   historyButton.hidden = !historyButtonsVisible;
   historyButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    openCompetitionHistory(b, historyButton);
+    openCompetitionHistory(b, historyButton, { showInitialFocus: event.detail === 0 });
   });
   headingRow.append(heading, historyButton);
   card.appendChild(headingRow);

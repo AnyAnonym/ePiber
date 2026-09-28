@@ -31,7 +31,9 @@ Hallenzeiten - Reservierungsraster
   Anzahl sichtbarer Termine und jede Spielerzeile ihre Fixplatz- und
   Wartelistenanzahl innerhalb dieser sichtbaren Terminspalten. Unten stehen
   Belegung/Kapazitaet und Wartende je Termin: freie Kapazitaet ist gruen, voll
-  belegte Kapazitaet rot. Die rechte untere Ecke summiert alle bestaetigten
+  belegte Kapazitaet rot. Die linke untere Ecke zeigt unabhaengig von Ansicht und
+  Rastermodus die Gesamtzahl der Rasterteilnehmer. Die rechte untere Ecke summiert
+  alle bestaetigten
   Fixplaetze in den sichtbaren Terminspalten ohne Warteliste. Im Modus
   Gleichberechtigte Aufteilung erhalten harte Verhinderungen einen roten und
   weiche Vermeidungswuensche einen gelben Innenrahmen samt Legende. Alle

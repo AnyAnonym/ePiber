@@ -3,8 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 const { AppError } = require("./errors.js");
+const { validResult, reverseResultPerspective, normalizeWinnerPerspective } = require("./resultPerspective.js");
 
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 
 class MessagingRepository {
   constructor(filename, { now = Date.now, log = () => {} } = {}) {
@@ -73,11 +74,12 @@ class MessagingRepository {
       this.migrateV9();
     } else if (version === 9) {
       this.migrateV9();
-    } else if (![10, 11, SCHEMA_VERSION].includes(version)) {
+    } else if (![10, 11, 12, SCHEMA_VERSION].includes(version)) {
       throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     }
     if (Number(this.db.prepare("PRAGMA user_version").get().user_version) === 10) this.migrateV10();
     if (Number(this.db.prepare("PRAGMA user_version").get().user_version) === 11) this.migrateV11();
+    if (Number(this.db.prepare("PRAGMA user_version").get().user_version) === 12) this.migrateV12();
     if (Number(this.db.prepare("PRAGMA user_version").get().user_version) !== SCHEMA_VERSION) throw new AppError("MESSAGING_SCHEMA_UNSUPPORTED", "Nachrichtenschema kann nicht migriert werden", 503);
     if (this.filename !== ":memory:") fs.chmodSync(this.filename, 0o600);
   }
@@ -197,7 +199,7 @@ class MessagingRepository {
         revision INTEGER NOT NULL
       );
       INSERT OR IGNORE INTO competition_history_revision(singleton, revision) VALUES (1, 0);
-      PRAGMA user_version = 12;
+      PRAGMA user_version = 13;
     `);
   }
 
@@ -535,6 +537,54 @@ class MessagingRepository {
         toVersion: 12,
         hallTimeContextCount: contextCount,
         hallTimeSubjectCount: subjectCount,
+      });
+    } catch {}
+  }
+
+  migrateV12() {
+    let correctedCount = 0;
+    const affectedUsers = new Set();
+    try {
+      this.db.exec("BEGIN IMMEDIATE");
+      const events = this.db.prepare(`
+        SELECT event_id, event_type, result
+        FROM competition_events
+        WHERE event_type IN ('result', 'result_corrected') AND source = 'match'
+      `).all();
+      const participants = this.db.prepare("SELECT user_id, subject, body FROM event_participants WHERE event_id = ? AND projection_type IN ('result', 'result_corrected')");
+      const updateBody = this.db.prepare("UPDATE event_participants SET body = ? WHERE event_id = ? AND user_id = ?");
+      const revise = this.db.prepare("INSERT INTO messaging_revisions(user_id, revision) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET revision = revision + 1");
+      const messagePattern = /^(Du (gewinnst|verlierst) das Match gegen .+?\. Ergebnis: )([\d()/-]+)( \(Aufgabe\))?(\.(?: Grund: [\s\S]*)?)$/;
+      for (const event of events) {
+        const retirement = event.result.endsWith(" (Aufgabe)");
+        const storedResult = retirement ? event.result.replace(/ \(Aufgabe\)$/, "") : event.result;
+        if (!validResult(storedResult)) continue;
+        const winnerResult = retirement ? storedResult : normalizeWinnerPerspective(storedResult);
+        const loserResult = reverseResultPerspective(winnerResult);
+        if (winnerResult === loserResult) continue;
+        for (const participant of participants.all(event.event_id)) {
+          const match = participant.body.match(messagePattern);
+          if (!match || !validResult(match[3]) || Boolean(match[4]) !== retirement) continue;
+          const won = match[2] === "gewinnst";
+          if (!participant.subject.startsWith(won ? "Match gewonnen:" : "Match verloren:")) continue;
+          if (match[3] !== storedResult && match[3] !== reverseResultPerspective(storedResult)) continue;
+          const body = `${match[1]}${won ? winnerResult : loserResult}${match[4] || ""}${match[5]}`;
+          if (body === participant.body) continue;
+          updateBody.run(body, event.event_id, participant.user_id);
+          affectedUsers.add(participant.user_id);
+          correctedCount++;
+        }
+      }
+      for (const userId of affectedUsers) revise.run(userId);
+      this.db.exec("PRAGMA user_version = 13; COMMIT");
+    } catch (error) {
+      try { this.db.exec("ROLLBACK"); } catch {}
+      try { this.log("error", "messaging_schema_migration_failed", { fromVersion: 12, toVersion: 13, errorCode: "MIGRATION_FAILED" }); } catch {}
+      throw error;
+    }
+    try {
+      this.log("info", "messaging_schema_migration_completed", {
+        fromVersion: 12, toVersion: 13, correctedCount, affectedUserCount: affectedUsers.size,
       });
     } catch {}
   }

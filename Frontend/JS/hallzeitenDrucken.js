@@ -104,8 +104,9 @@ function appendConstraintLegend(container) {
   container.appendChild(legend);
 }
 
-function render(grid, { showConstraints = false } = {}) {
+function render(grid, { preview = false } = {}) {
   if (!grid.canAdminister) throw new Error("Diese Druckvorlagen sind ausschließlich für Administratoren verfügbar.");
+  const showConstraints = preview || grid.mode === "equal";
   const ownPeople = grid.participants.filter(({ id }) => id === grid.currentPersonId);
   const blank = view === "mine" && !ownPeople.length;
   const people = [...(view === "all" ? grid.participants : ownPeople.length ? ownPeople : [{ id: "", firstName: "", lastName: "", name: "" }])].sort(comparePeople);
@@ -120,8 +121,8 @@ function render(grid, { showConstraints = false } = {}) {
     section.appendChild(renderTable(grid, people, slots, layout, { blank, showConstraints }));
     pages.appendChild(section);
   }
-  if (showConstraints) appendConstraintLegend(pages.lastElementChild);
-  document.title = `${grid.name} – ${showConstraints ? "Verteilungsvorschau" : view === "all" ? "Gesamter Raster" : "Mein Raster"}`;
+  if (preview) appendConstraintLegend(pages.lastElementChild);
+  document.title = `${grid.name} – ${preview ? "Verteilungsvorschau" : view === "all" ? "Gesamter Raster" : "Mein Raster"}`;
   byId("hall-time-print-access").hidden = true;
   byId("hall-time-print-app").hidden = false;
 }
@@ -141,7 +142,7 @@ async function start() {
       const previewSlotIds = new Set(preview.slotSummaries.map(({ slot }) => slot.id));
       grid = { ...grid, entries: [...grid.entries.filter(({ slotId }) => !previewSlotIds.has(slotId)), ...preview.entries] };
     }
-    render(grid, { showConstraints: previewMode });
+    render(grid, { preview: previewMode });
   } catch (error) {
     byId("hall-time-print-message").textContent = errorText(error);
     diagnostic.error("hall_time_admin_load_failed", error);

@@ -48,6 +48,13 @@ Alle drei Browser-Systeme verwenden ausschliesslich HTTPS/WSS. Der Frontend-
 Client leitet die WebSocket-Adresse same-origin aus window.location und dem Pfad
 `/ws` ab. Es gibt keine systemspezifische SDK.js und keine SDK-Konfiguration.
 
+Die PAJ-Origin auf Port 8081 bleibt fuer Entwickler und ausgewaehlte Tester
+extern ueber HTTPS/WSS erreichbar. Diese Freigabe umfasst nur den Caddy-
+Testzugang. Backend, PostgreSQL und Administrationsschnittstellen bleiben auf
+Loopback beziehungsweise geschuetzte Unix-Sockets begrenzt und sind nur nach
+administrativer SSH-Anmeldung lokal erreichbar. Synthetische Testcredentials
+werden nicht in Git oder Dokumentation veroeffentlicht.
+
 Caddy liefert das jeweilige Frontend aus und proxyt nur diese Anwendungspfade:
   /ws, /api/*, /live, /ready, /health, /version, /status
 
