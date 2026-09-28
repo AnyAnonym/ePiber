@@ -14,6 +14,9 @@ Hallenzeiten drucken - Admin-Druckvorlagen
   wird eine leere Namensvorlage erzeugt. `all` zeigt alle Teilnehmer nach Nachname
   und Vorname sortiert. Die regulaere Ausgabe enthaelt ausschliesslich zwei
   Rasterbloecke ohne Titel, Hinweise, Legende, Summenspalte oder Belegungsfuss.
+  Auch der regulaere Admin-Ausdruck zeigt im Modus Gleichberechtigte Aufteilung
+  vorhandene Verhinderungen rot und Vermeidungswuensche gelb als Innenrahmen;
+  im Fair-Use-Modus entfallen diese Vorgabenrahmen.
   Der ausschliesslich aus dem Admin-Vorschauoverlay verlinkte `vorschau`-Modus
   berechnet die zustandslose Neuverteilung unter der aktuellen Rasterrevision
   erneut und verlangt den exakt passenden Vorschau-Hash. Er ersetzt nur fuer die

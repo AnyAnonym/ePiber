@@ -233,3 +233,36 @@ Commit: 4.12.8-paj-1-6 | Persönliche Ergebnisstände korrigiert
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.8-paj-1-5-x` gesetzt.
   - [Meldungen] Ergebnis- und Korrekturmeldungen zeigen den Spielstand empfaengerbezogen; Schema 13 berichtigt eindeutig erkennbare historische Meldungstexte transaktional und revisioniert betroffene Inboxen.
+
+[4.12.8-paj-1-7] - 2026-09-28
+Commit: 4.12.8-paj-1-7 | Hallenraster-Druck mit Vorgabenrahmen korrigiert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.8-paj-1-6-x` gesetzt.
+  - [Hallenzeiten] Rote und gelbe Vorgaben-Innenrahmen im regulaeren Admin-Ausdruck des Gleichberechtigungsmodus wieder sichtbar gemacht; Fair Use bleibt ohne Vorgabenrahmen.
+
+Dokumentationsuebernahme beim Main-Versionssprung
+
+  Project/server-configs/SERVER-DOKU.txt
+  - Die PAJ-Origin auf Port 8081 bleibt fuer Entwickler und ausgewaehlte Tester extern ueber HTTPS/WSS erreichbar; die Freigabe betrifft nur den Caddy-Testzugang. Backend, PostgreSQL und Administration bleiben auf Loopback beziehungsweise geschuetzte Unix-Sockets sowie administrative SSH-Anmeldung begrenzt. Synthetische Testcredentials duerfen nicht in Git oder Dokumentation stehen.
+
+  Project/server-configs/SERVER-SETUP.txt
+  - Externe PAJ-Freigabe allein fuer Caddy auf 8081 festhalten. PostgreSQL-, Backend- und Administrationsports bleiben intern; feste synthetische Testcredentials werden berechtigten Testern vertraulich und ausserhalb von Git und Serverdokumentation weitergegeben.
+
+  Project/software/DATENBANK.txt
+  - Messaging-Schema 13 dokumentieren: Bei Ergebnis- und Korrekturereignissen werden nur eindeutig erkannte persoenliche Satzergebnisse auf Gewinner- beziehungsweise Verliererperspektive korrigiert. Unklare Texte und W.O. bleiben unveraendert; Quittierungen, Zustellungen und Zeitpunkte bleiben erhalten. Je betroffenem Empfaenger steigt die Messaging-Revision einmal; Abschlusslogs enthalten nur korrigierte Projektions- und Empfaengeranzahlen.
+
+  Project/software/seiten/bewerbe.txt
+  - Beim automatisch per URL und per Maus oder Touch geoeffneten Historiendialog den Dialogcontainer ohne sichtbaren Rahmen fokussieren. Tastaturausloesung fokussiert den Schliessen-Button sichtbar; dessen Tastaturaktivierung stellt den Fokus auf dem ausloesenden Historienbutton wieder her. Die Bedienung anderer Historieninteraktionen bleibt erhalten.
+
+  Project/software/seiten/hallzeiten.txt
+  - Die fixierte linke untere Rasterzelle zeigt die Gesamtzahl aller Rasterteilnehmer, unabhaengig von Ansicht, Termin- und Personenfilter sowie Fair-Use- oder Gleichberechtigungsmodus. Die rechte untere Ecke bleibt die Summe der sichtbaren Fixplaetze ohne Warteliste.
+
+  Project/software/seiten/hallzeitenDrucken.txt
+  - Regulaere Admin-Drucke `mine` und `all` zeigen bei Gleichberechtigter Aufteilung vorhandene harte Verhinderungen rot und weiche Vermeidungswuensche gelb als Innenrahmen; im Fair-Use-Modus entfallen Vorgabenrahmen. Die regulaere Ausgabe behaelt zwei Rasterbloecke ohne Legende; die hashgebundene Verteilungsvorschau behaelt ihre einmalige Legende und ihre bisherige Vorschauprojektion.
+
+  Project/software/seiten/players.txt
+  - Persoenliche Ergebnis- und Korrekturmeldungen nennen Gegner und Satzergebnis immer aus Sicht des jeweiligen Empfaengers, unabhaengig vom eintragenden Akteur; Gewinner sehen die Gewinner-, Verlierer die umgedrehte Satzperspektive. Neutrale Historie und W.O.-Formulierungen bleiben davon getrennt; bei Aufgabe folgt die Kennzeichnung dem gegebenenfalls vorhandenen Teilergebnis.
+
+  Project/software/seiten/rangliste.txt
+  - Gewinner- und Verlierermeldungen bei Ergebnis und Korrektur mit gegnerischer Seite und empfaengerbezogenem Satzergebnis beschreiben; W.O.- und Aufgabe-Sondertexte sowie neutrale Bewerbshistorie bleiben entsprechend den dokumentierten Regeln erhalten.

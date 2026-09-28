@@ -509,6 +509,8 @@ test("Hallenzeiten-Druckansichten zeigen dem Admin den eigenen oder gesamten sic
     assert.equal(await page.locator(".hall-time-print-table tbody tr").count(), 2);
     assert.deepEqual(await page.locator(".hall-time-print-table").first().locator("thead th").allTextContents(), ["Name", "16.10.25\n19-21", "23.10.25\n19-21", "30.10.99\n19-21", "6.11.99\n19-21", "13.11.99\n19-21"]);
     assert.equal(await page.locator(".hall-time-print-table tbody tr").first().locator("th").textContent(), "Huber Anna");
+    assert.equal(await page.locator('[data-person-id="p1"] [data-slot-id="slot-1"]').getAttribute("class"), "is-confirmed has-constraint constraint-unavailable");
+    assert.equal(await page.locator('[data-person-id="p1"] [data-slot-id="slot-2"]').getAttribute("class"), "is-empty");
     assert.equal(await page.locator(".hall-time-print-table tfoot").count(), 0);
     assert.equal(await page.locator(".print-sum").count(), 0);
     const compactWidths = await page.locator(".hall-time-print-table").first().evaluate((table) => {
@@ -535,7 +537,16 @@ test("Hallenzeiten-Druckansichten zeigen dem Admin den eigenen oder gesamten sic
     assert.deepEqual(sharedColumnWidths[0], sharedColumnWidths[1]);
     assert.equal(await page.locator(".hall-time-print-table tbody tr").first().locator("th").textContent(), "Aigner Anton");
     assert.equal(await page.locator(".hall-time-print-legend").count(), 0);
+    assert.equal(await page.locator('[data-person-id="p1"] [data-slot-id="slot-1"]').getAttribute("class"), "is-confirmed has-constraint constraint-unavailable");
+    assert.equal(await page.locator('[data-person-id="p2"] [data-slot-id="slot-2"]').getAttribute("class"), "is-empty has-constraint constraint-avoid");
+    await page.emulateMedia({ media: "print" });
+    assert.match(await page.locator('[data-person-id="p1"] [data-slot-id="slot-1"]').evaluate((cell) => getComputedStyle(cell).boxShadow), /rgb\(198, 40, 40\).*inset/);
+    assert.match(await page.locator('[data-person-id="p2"] [data-slot-id="slot-2"]').evaluate((cell) => getComputedStyle(cell).boxShadow), /rgb\(211, 154, 0\).*inset/);
+    await page.emulateMedia({ media: "screen" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/hallzeitenDrucken.html?id=grid-1&ansicht=all&fairUse=1`);
+    await page.locator(".hall-time-print-table").first().waitFor({ timeout: 5000 });
     assert.equal(await page.locator(".has-constraint").count(), 0);
+    assert.equal(await page.locator(".hall-time-print-legend").count(), 0);
     await page.goto(`http://127.0.0.1:${server.address().port}/hallzeitenDrucken.html?id=grid-1&ansicht=all&vorschau=${"a".repeat(64)}`);
     await page.locator(".hall-time-print-legend").waitFor({ timeout: 5000 });
     assert.equal(await page.locator(".hall-time-print-legend").count(), 1);
