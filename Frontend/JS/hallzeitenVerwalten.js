@@ -189,7 +189,10 @@ async function saveConstraints() {
 
 function renderPreview(preview) {
   const labels = { complete: "Vollständige und ausgeglichene Lösung", warning: "Vollständige Lösung mit Hinweisen", incomplete: "Keine vollständige Lösung" };
-  const summary = byId("hall-time-preview-summary"); summary.textContent = `${labels[preview.quality]}. ${preview.assignedCount} Zuteilungen, ${preview.openPlaceCount} offene Plätze, ${preview.softConflictCount} nicht erfüllte Wünsche, größte Einsatzabweichung ${preview.spread}.`;
+  const assignmentSeries = preview.consecutiveAssignmentViolationCount || 0;
+  const pauseSeries = preview.consecutivePauseViolationCount || 0;
+  const repeatedGroups = preview.repeatedGroupCount || 0;
+  const summary = byId("hall-time-preview-summary"); summary.textContent = `${labels[preview.quality]}. ${preview.assignedCount} Zuteilungen, ${preview.openPlaceCount} offene Plätze, ${preview.softConflictCount} nicht erfüllte Wünsche, größte Einsatzabweichung ${preview.spread}, ${assignmentSeries} Einsatzserien über zwei Termine, ${pauseSeries} Pausenserien über zwei Termine, ${repeatedGroups} wiederholte Vierergruppen.`;
   summary.dataset.quality = preview.quality;
   const details = byId("hall-time-preview-details"); details.replaceChildren();
   const slotTitle = document.createElement("h3"); slotTitle.textContent = "Termine"; details.appendChild(slotTitle);
@@ -202,6 +205,20 @@ function renderPreview(preview) {
     const conflictList = document.createElement("ul");
     for (const value of preview.softConflicts) { const item = document.createElement("li"); item.textContent = `${value.personName}: ${slotLabel(value.slot)}`; conflictList.appendChild(item); }
     details.appendChild(conflictList);
+  }
+  if ((preview.sequenceConflicts || []).length || (preview.repeatedGroups || []).length) {
+    const ruleTitle = document.createElement("h3"); ruleTitle.textContent = "Nicht vollständig erfüllte Einteilungsregeln"; details.appendChild(ruleTitle);
+    const ruleList = document.createElement("ul");
+    for (const value of preview.sequenceConflicts || []) {
+      const item = document.createElement("li");
+      const kind = value.kind === "consecutive_assignments" ? "mehr als zwei Einsätze hintereinander" : "mehr als zwei Termine Pause";
+      item.textContent = `${value.personName}: ${kind} (${value.slots.map(slotLabel).join(" – ")})`; ruleList.appendChild(item);
+    }
+    for (const value of preview.repeatedGroups || []) {
+      const item = document.createElement("li");
+      item.textContent = `Wiederholte Vierergruppe am ${slotLabel(value.previousSlot)} und ${slotLabel(value.slot)}: ${value.personNames.join(", ")}`; ruleList.appendChild(item);
+    }
+    details.appendChild(ruleList);
   }
   const personTitle = document.createElement("h3"); personTitle.textContent = "Einsätze je Spieler"; details.appendChild(personTitle);
   const table = document.createElement("table"); table.className = "hall-time-preview-table"; table.innerHTML = "<thead><tr><th>Spieler</th><th>Bisher</th><th>Neu</th><th>Gesamt</th></tr></thead>";

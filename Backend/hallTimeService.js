@@ -5,6 +5,9 @@ const STATE_KEY = "hall-times:v1";
 const EMPTY_STATE = Object.freeze({ grids: [] });
 const HISTORY_LIMIT = 10000;
 const DEFAULT_MAX_WAITLIST_ENTRIES = 2;
+const DISTRIBUTION_BEAM_WIDTH = 50;
+const DISTRIBUTION_COMBINATION_LIMIT = 200;
+const DISTRIBUTION_PARTICIPANT_LIMIT = 12;
 const VIENNA_DATE = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
 });
@@ -154,6 +157,231 @@ function selectDistributedParticipants({ participants, capacity, counts, pairCou
     selected.push(candidates[0]);
   }
   return selected;
+}
+
+function limitedCombinationCount(total, selected, limit) {
+  const size = Math.min(selected, total - selected);
+  let result = 1;
+  for (let index = 1; index <= size; index++) {
+    result = (result * (total - size + index)) / index;
+    if (result > limit) return limit + 1;
+  }
+  return result;
+}
+
+function combinations(values, size) {
+  const result = [];
+  function visit(start, selected) {
+    if (selected.length === size) { result.push([...selected]); return; }
+    for (let index = start; index <= values.length - (size - selected.length); index++) {
+      selected.push(values[index]); visit(index + 1, selected); selected.pop();
+    }
+  }
+  visit(0, []);
+  return result;
+}
+
+function groupKey(personIds) {
+  return [...personIds].sort().join(":");
+}
+
+function optimizeDistributionSequence({ grid, futureSlots, constraints }) {
+  const participants = grid.participants;
+  if (participants.length > DISTRIBUTION_PARTICIPANT_LIMIT || grid.capacity > participants.length) return null;
+  const participantIndexes = new Map(participants.map(({ id }, index) => [id, index]));
+  const futureIds = new Set(futureSlots.map(({ id }) => id));
+  const pastSlots = [...grid.slots]
+    .filter(({ id }) => !futureIds.has(id))
+    .sort((left, right) => `${left.date}T${left.start}`.localeCompare(`${right.date}T${right.start}`));
+  const confirmedBySlot = new Map(grid.slots.map(({ id }) => [id, new Set(grid.entries
+    .filter((entry) => entry.slotId === id && entry.status === "confirmed")
+    .map(({ personId }) => personId))]));
+  const counts = Array(participants.length).fill(0);
+  const runValues = Array(participants.length).fill(-1);
+  const runLengths = Array(participants.length).fill(0);
+  const seenGroups = new Set();
+  const pairCounts = new Map();
+  for (const slot of pastSlots) {
+    const assigned = confirmedBySlot.get(slot.id) || new Set();
+    participants.forEach(({ id }, index) => {
+      const value = assigned.has(id) ? 1 : 0;
+      if (value) counts[index] += 1;
+      if (runValues[index] === value) runLengths[index] += 1;
+      else { runValues[index] = value; runLengths[index] = 1; }
+    });
+    const people = [...assigned].filter((id) => participantIndexes.has(id)).sort();
+    if (grid.capacity === 4 && people.length === grid.capacity) seenGroups.add(groupKey(people));
+    for (let left = 0; left < people.length; left++) for (let right = left + 1; right < people.length; right++) {
+      const key = pairKey(people[left], people[right]);
+      pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+    }
+  }
+  let states = [{
+    groups: [], counts, runValues, runLengths, seenGroups, pairCounts,
+    sequencePenalty: 0, repeatedGroupCount: 0, softConflictCount: 0, repeatedPairCount: 0, pairPenalty: 0, orderKey: "",
+  }];
+  const compareStates = (left, right) => {
+    const spread = (state) => Math.max(...state.counts) - Math.min(...state.counts);
+    const squares = (state) => state.counts.reduce((sum, value) => sum + (value * value), 0);
+    return left.sequencePenalty - right.sequencePenalty
+      || spread(left) - spread(right)
+      || left.repeatedGroupCount - right.repeatedGroupCount
+      || left.softConflictCount - right.softConflictCount
+      || left.repeatedPairCount - right.repeatedPairCount
+      || left.pairPenalty - right.pairPenalty
+      || squares(left) - squares(right)
+      || left.orderKey.localeCompare(right.orderKey);
+  };
+  for (const slot of futureSlots) {
+    const available = participants.map(({ id }, index) => ({ id, index }))
+      .filter(({ id }) => constraints.get(constraintKey(slot.id, id)) !== "unavailable");
+    if (available.length < grid.capacity
+      || limitedCombinationCount(available.length, grid.capacity, DISTRIBUTION_COMBINATION_LIMIT) > DISTRIBUTION_COMBINATION_LIMIT) return null;
+    const candidates = combinations(available, grid.capacity);
+    const nextStates = [];
+    for (const state of states) for (const candidate of candidates) {
+      const selected = new Set(candidate.map(({ index }) => index));
+      const personIds = candidate.map(({ id }) => id).sort();
+      const nextCounts = [...state.counts];
+      const nextRunValues = [...state.runValues];
+      const nextRunLengths = [...state.runLengths];
+      let sequencePenalty = state.sequencePenalty;
+      participants.forEach((person, index) => {
+        const value = selected.has(index) ? 1 : 0;
+        if (value) nextCounts[index] += 1;
+        if (nextRunValues[index] === value) nextRunLengths[index] += 1;
+        else { nextRunValues[index] = value; nextRunLengths[index] = 1; }
+        if (nextRunLengths[index] > 2) sequencePenalty += 1;
+      });
+      const key = groupKey(personIds);
+      const repeatedGroupCount = state.repeatedGroupCount + Number(grid.capacity === 4 && state.seenGroups.has(key));
+      const nextSeenGroups = new Set(state.seenGroups); nextSeenGroups.add(key);
+      const nextPairCounts = new Map(state.pairCounts);
+      let repeatedPairCount = state.repeatedPairCount;
+      let pairPenalty = state.pairPenalty;
+      for (let left = 0; left < personIds.length; left++) for (let right = left + 1; right < personIds.length; right++) {
+        const pair = pairKey(personIds[left], personIds[right]);
+        if ((nextPairCounts.get(pair) || 0) > 0) repeatedPairCount += 1;
+        pairPenalty += nextPairCounts.get(pair) || 0;
+        nextPairCounts.set(pair, (nextPairCounts.get(pair) || 0) + 1);
+      }
+      const softConflictCount = state.softConflictCount + personIds
+        .filter((personId) => constraints.get(constraintKey(slot.id, personId)) === "avoid").length;
+      nextStates.push({
+        groups: [...state.groups, personIds], counts: nextCounts, runValues: nextRunValues, runLengths: nextRunLengths,
+        seenGroups: nextSeenGroups, pairCounts: nextPairCounts, sequencePenalty, repeatedGroupCount,
+        softConflictCount, repeatedPairCount, pairPenalty, orderKey: `${state.orderKey}|${personIds.join(":")}`,
+      });
+    }
+    nextStates.sort(compareStates);
+    states = nextStates.slice(0, DISTRIBUTION_BEAM_WIDTH);
+  }
+  const best = states.sort(compareStates)[0];
+  if (!best) return null;
+  const entries = futureSlots.flatMap((slot, index) => best.groups[index]
+    .map((personId) => ({ slotId: slot.id, personId, status: "confirmed" })));
+  return improveDistributionSequence(grid, futureSlots, entries, constraints);
+}
+
+function distributionRuleSummary(grid, futureSlots, entries) {
+  const futureIds = new Set(futureSlots.map(({ id }) => id));
+  const allSlots = [...grid.slots].sort((left, right) => `${left.date}T${left.start}`.localeCompare(`${right.date}T${right.start}`));
+  const slotsById = new Map(allSlots.map((slot) => [slot.id, slot]));
+  const peopleById = new Map(grid.participants.map((person) => [person.id, person]));
+  const assignments = new Map(allSlots.map(({ id }) => [id, new Set()]));
+  for (const entry of grid.entries) {
+    if (entry.status === "confirmed" && !futureIds.has(entry.slotId)) assignments.get(entry.slotId)?.add(entry.personId);
+  }
+  for (const entry of entries) assignments.get(entry.slotId)?.add(entry.personId);
+  const sequenceConflicts = [];
+  for (const person of grid.participants) {
+    let lastValue = null;
+    let run = [];
+    for (const slot of allSlots) {
+      const value = assignments.get(slot.id)?.has(person.id) === true;
+      if (value === lastValue) run.push(slot);
+      else { lastValue = value; run = [slot]; }
+      if (futureIds.has(slot.id) && run.length === 3) sequenceConflicts.push({
+        kind: value ? "consecutive_assignments" : "consecutive_pauses",
+        personId: person.id, personName: historyPersonName(person), slots: run.map(historySlot),
+      });
+    }
+  }
+  const repeatedGroups = [];
+  const firstGroupSlots = new Map();
+  for (const slot of allSlots) {
+    const personIds = [...(assignments.get(slot.id) || [])].sort();
+    if (grid.capacity !== 4 || personIds.length !== grid.capacity) continue;
+    const key = groupKey(personIds);
+    if (futureIds.has(slot.id) && firstGroupSlots.has(key)) repeatedGroups.push({
+      previousSlot: historySlot(slotsById.get(firstGroupSlots.get(key))), slot: historySlot(slot),
+      personIds, personNames: personIds.map((id) => historyPersonName(peopleById.get(id), id)),
+    });
+    else if (!firstGroupSlots.has(key)) firstGroupSlots.set(key, slot.id);
+  }
+  return {
+    consecutiveAssignmentViolationCount: sequenceConflicts.filter(({ kind }) => kind === "consecutive_assignments").length,
+    consecutivePauseViolationCount: sequenceConflicts.filter(({ kind }) => kind === "consecutive_pauses").length,
+    repeatedGroupCount: repeatedGroups.length, sequenceConflicts, repeatedGroups,
+  };
+}
+
+function distributionObjective(grid, futureSlots, entries, constraints) {
+  const rules = distributionRuleSummary(grid, futureSlots, entries);
+  const futureIds = new Set(futureSlots.map(({ id }) => id));
+  const assignments = new Map(grid.slots.map(({ id }) => [id, []]));
+  for (const entry of grid.entries) if (entry.status === "confirmed" && !futureIds.has(entry.slotId)) assignments.get(entry.slotId)?.push(entry.personId);
+  for (const entry of entries) assignments.get(entry.slotId)?.push(entry.personId);
+  const pairCounts = new Map();
+  let repeatedPairCount = 0;
+  let pairPenalty = 0;
+  for (const slot of [...grid.slots].sort((left, right) => `${left.date}T${left.start}`.localeCompare(`${right.date}T${right.start}`))) {
+    const people = (assignments.get(slot.id) || []).sort();
+    for (let left = 0; left < people.length; left++) for (let right = left + 1; right < people.length; right++) {
+      const key = pairKey(people[left], people[right]);
+      const previous = pairCounts.get(key) || 0;
+      if (previous) repeatedPairCount += 1;
+      pairPenalty += previous;
+      pairCounts.set(key, previous + 1);
+    }
+  }
+  const softConflictCount = entries.filter(({ slotId, personId }) => constraints.get(constraintKey(slotId, personId)) === "avoid").length;
+  return {
+    values: [rules.consecutiveAssignmentViolationCount + rules.consecutivePauseViolationCount,
+      rules.repeatedGroupCount, softConflictCount, repeatedPairCount, pairPenalty],
+    key: entries.map(({ slotId, personId }) => `${slotId}:${personId}`).sort().join("|"),
+  };
+}
+
+function improveDistributionSequence(grid, futureSlots, entries, constraints) {
+  const compare = (left, right) => {
+    for (let index = 0; index < left.values.length; index++) if (left.values[index] !== right.values[index]) return left.values[index] - right.values[index];
+    return left.key.localeCompare(right.key);
+  };
+  let current = entries;
+  let currentScore = distributionObjective(grid, futureSlots, current, constraints);
+  for (let repair = 0; repair < 100; repair++) {
+    let best = current;
+    let bestScore = currentScore;
+    for (let leftSlot = 0; leftSlot < futureSlots.length; leftSlot++) for (let rightSlot = leftSlot + 1; rightSlot < futureSlots.length; rightSlot++) {
+      const leftEntries = current.filter(({ slotId }) => slotId === futureSlots[leftSlot].id);
+      const rightEntries = current.filter(({ slotId }) => slotId === futureSlots[rightSlot].id);
+      for (const left of leftEntries) for (const right of rightEntries) {
+        if (left.personId === right.personId
+          || rightEntries.some(({ personId }) => personId === left.personId)
+          || leftEntries.some(({ personId }) => personId === right.personId)
+          || constraints.get(constraintKey(left.slotId, right.personId)) === "unavailable"
+          || constraints.get(constraintKey(right.slotId, left.personId)) === "unavailable") continue;
+        const candidate = current.map((entry) => entry === left ? { ...entry, personId: right.personId }
+          : entry === right ? { ...entry, personId: left.personId } : entry);
+        const score = distributionObjective(grid, futureSlots, candidate, constraints);
+        if (compare(score, bestScore) < 0) { best = candidate; bestScore = score; }
+      }
+    }
+    if (best === current) break;
+    current = best; currentScore = bestScore;
+  }
+  return current;
 }
 
 function addFlowEdge(graph, from, to, capacity, cost) {
@@ -327,25 +555,29 @@ function distributionPreview(grid, now, revision) {
       availableCount: grid.participants.length - blocked.size, assignedPersonIds: selected.map(({ id }) => id),
     });
   }
-  for (let repair = 0; repair < 10000; repair++) {
-    const ordered = [...grid.participants].sort((left, right) => counts.get(left.id) - counts.get(right.id) || left.id.localeCompare(right.id));
-    let replacement = null;
-    for (const low of ordered) {
-      for (const high of [...ordered].reverse()) {
-        if (counts.get(high.id) - counts.get(low.id) <= 1) break;
-        const candidate = entries.find((entry) => entry.personId === high.id
-          && !entries.some((other) => other.slotId === entry.slotId && other.personId === low.id)
-          && constraints.get(constraintKey(entry.slotId, low.id)) !== "unavailable");
-        if (candidate) { replacement = { candidate, high, low }; break; }
+  const sequenceOptimized = optimizeDistributionSequence({ grid, futureSlots, constraints });
+  if (sequenceOptimized) entries = sequenceOptimized;
+  else {
+    for (let repair = 0; repair < 10000; repair++) {
+      const ordered = [...grid.participants].sort((left, right) => counts.get(left.id) - counts.get(right.id) || left.id.localeCompare(right.id));
+      let replacement = null;
+      for (const low of ordered) {
+        for (const high of [...ordered].reverse()) {
+          if (counts.get(high.id) - counts.get(low.id) <= 1) break;
+          const candidate = entries.find((entry) => entry.personId === high.id
+            && !entries.some((other) => other.slotId === entry.slotId && other.personId === low.id)
+            && constraints.get(constraintKey(entry.slotId, low.id)) !== "unavailable");
+          if (candidate) { replacement = { candidate, high, low }; break; }
+        }
+        if (replacement) break;
       }
-      if (replacement) break;
+      if (!replacement) break;
+      replacement.candidate.personId = replacement.low.id;
+      counts.set(replacement.high.id, counts.get(replacement.high.id) - 1);
+      counts.set(replacement.low.id, counts.get(replacement.low.id) + 1);
     }
-    if (!replacement) break;
-    replacement.candidate.personId = replacement.low.id;
-    counts.set(replacement.high.id, counts.get(replacement.high.id) - 1);
-    counts.set(replacement.low.id, counts.get(replacement.low.id) + 1);
+    entries = minimizeAvoidedAssignments({ participants: grid.participants, futureSlots, entries, pastCounts, constraints });
   }
-  entries = minimizeAvoidedAssignments({ participants: grid.participants, futureSlots, entries, pastCounts, constraints });
   for (const person of grid.participants) counts.set(person.id, (pastCounts.get(person.id) || 0) + entries.filter(({ personId }) => personId === person.id).length);
   softConflicts.length = 0;
   softConflictCount = 0;
@@ -358,6 +590,7 @@ function distributionPreview(grid, now, revision) {
   }
   for (const summary of slotSummaries) {
     summary.assignedPersonIds = entries.filter(({ slotId }) => slotId === summary.slot.id).map(({ personId }) => personId);
+    summary.openCount = Math.max(0, grid.capacity - summary.assignedPersonIds.length);
   }
   const totals = [...counts.values()];
   const spread = totals.length ? Math.max(...totals) - Math.min(...totals) : 0;
@@ -366,11 +599,14 @@ function distributionPreview(grid, now, revision) {
     personId: person.id, personName: historyPersonName(person), pastCount: pastCounts.get(person.id) || 0,
     futureCount: entries.filter(({ personId }) => personId === person.id).length, totalCount: counts.get(person.id) || 0,
   }));
-  const quality = openPlaceCount > 0 ? "incomplete" : spread > 1 || softConflictCount > 0 ? "warning" : "complete";
-  const hashPayload = { revision, gridId: grid.id, entries, slotCount: futureSlots.length, openPlaceCount, softConflictCount, spread };
+  const rules = distributionRuleSummary(grid, futureSlots, entries);
+  const quality = openPlaceCount > 0 ? "incomplete" : spread > 1 || softConflictCount > 0
+    || rules.consecutiveAssignmentViolationCount > 0 || rules.consecutivePauseViolationCount > 0 || rules.repeatedGroupCount > 0 ? "warning" : "complete";
+  const hashPayload = { revision, gridId: grid.id, entries, slotCount: futureSlots.length, openPlaceCount, softConflictCount, spread, ...rules };
   return {
     gridId: grid.id, revision, quality, entries, slotSummaries, personSummaries, softConflicts,
     slotCount: futureSlots.length, assignedCount: entries.length, openPlaceCount, softConflictCount, spread,
+    ...rules,
     previewHash: crypto.createHash("sha256").update(JSON.stringify(hashPayload)).digest("hex"),
   };
 }
@@ -451,6 +687,9 @@ class HallTimeService {
           removedCount: Number(summary.removedCount || 0),
           promotedCount: Number(summary.promotedCount || 0),
           unchangedCount: Number(summary.unchangedCount || 0),
+          consecutiveAssignmentViolationCount: Number(summary.consecutiveAssignmentViolationCount || 0),
+          consecutivePauseViolationCount: Number(summary.consecutivePauseViolationCount || 0),
+          repeatedGroupCount: Number(summary.repeatedGroupCount || 0),
         });
       }
     }
@@ -935,6 +1174,9 @@ class HallTimeService {
       gridId: grid.id, revision: snapshot.revision, result: "success", quality: preview.quality,
       assignedCount: preview.assignedCount, openPlaceCount: preview.openPlaceCount,
       softConflictCount: preview.softConflictCount, spread: preview.spread,
+      consecutiveAssignmentViolationCount: preview.consecutiveAssignmentViolationCount,
+      consecutivePauseViolationCount: preview.consecutivePauseViolationCount,
+      repeatedGroupCount: preview.repeatedGroupCount,
     });
     return { success: true, preview };
   }
@@ -977,6 +1219,9 @@ class HallTimeService {
           removedCount: changes.filter(({ from, to }) => from !== "red" && to === "red").length,
           unchangedCount: changes.filter(({ from, to }) => from === to).length,
           softConflictCount: preview.softConflictCount, spread: preview.spread, openPlaceCount: 0,
+          consecutiveAssignmentViolationCount: preview.consecutiveAssignmentViolationCount,
+          consecutivePauseViolationCount: preview.consecutivePauseViolationCount,
+          repeatedGroupCount: preview.repeatedGroupCount,
         };
         recordHistory(grid, [historyEntry({
           now, action: "distribution_replaced", actor: principal, detail: `${preview.slotCount}`,
@@ -1010,46 +1255,15 @@ class HallTimeService {
         if (!grid?.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);
         if (grid.mode !== "equal") throw new AppError("HALL_TIME_MODE_INVALID", "Automatische Verteilung ist nur im Modus Gleichberechtigte Aufteilung verfuegbar", 409);
         if (!grid.participants.length) throw new AppError("HALL_TIME_NO_PARTICIPANTS", "Dem Raster sind keine Spieler zugeordnet", 409);
+        const preview = distributionPreview(grid, now, request.expectedRevision);
+        if (preview.quality === "incomplete" || preview.openPlaceCount > 0) throw new AppError("HALL_TIME_DISTRIBUTION_INCOMPLETE", "Eine unvollständige Verteilung kann nicht übernommen werden", 409);
         const futureSlots = grid.slots.filter((slot) => !slotExpired(slot, now));
         const futureIds = new Set(futureSlots.map(({ id }) => id));
         const previousEntries = grid.entries.filter((entry) => futureIds.has(entry.slotId));
-        grid.entries = grid.entries.filter((entry) => !futureIds.has(entry.slotId));
-        const counts = new Map(grid.participants.map(({ id }) => [id, grid.entries.filter((entry) => entry.personId === id && entry.status === "confirmed").length]));
-        const pairCounts = new Map();
-        const lastSlotIndexes = new Map();
-        const allSlots = [...grid.slots].sort((left, right) => `${left.date}T${left.start}`.localeCompare(`${right.date}T${right.start}`));
-        const allSlotIndexes = new Map(allSlots.map(({ id }, index) => [id, index]));
-        for (const slot of allSlots) {
-          const people = grid.entries.filter((entry) => entry.slotId === slot.id && entry.status === "confirmed").map(({ personId }) => personId);
-          for (const personId of people) lastSlotIndexes.set(personId, allSlotIndexes.get(slot.id));
-          for (let left = 0; left < people.length; left++) {
-            for (let right = left + 1; right < people.length; right++) {
-              const key = pairKey(people[left], people[right]);
-              pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
-            }
-          }
-        }
-        futureSlots.forEach((slot) => {
-          const slotIndex = allSlotIndexes.get(slot.id);
-          const slotConstraints = new Map((grid.constraints || []).filter((entry) => entry.slotId === slot.id).map((entry) => [entry.personId, entry.kind]));
-          const blocked = new Set([...slotConstraints].filter(([, kind]) => kind === "unavailable").map(([personId]) => personId));
-          const avoided = new Set([...slotConstraints].filter(([, kind]) => kind === "avoid").map(([personId]) => personId));
-          const selected = selectDistributedParticipants({
-            participants: grid.participants, capacity: grid.capacity, counts, pairCounts, lastSlotIndexes, slotIndex, blocked, avoided,
-          });
-          if (selected.length < grid.capacity) throw new AppError("HALL_TIME_DISTRIBUTION_INCOMPLETE", "Eine unvollständige Verteilung kann nicht übernommen werden", 409);
-          for (const person of selected) {
-            grid.entries.push({ slotId: slot.id, personId: person.id, status: "confirmed", queuedAt: now });
-            counts.set(person.id, counts.get(person.id) + 1);
-            lastSlotIndexes.set(person.id, slotIndex);
-          }
-          for (let left = 0; left < selected.length; left++) {
-            for (let right = left + 1; right < selected.length; right++) {
-              const key = pairKey(selected[left].id, selected[right].id);
-              pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
-            }
-          }
-        });
+        grid.entries = [
+          ...grid.entries.filter((entry) => !futureIds.has(entry.slotId)),
+          ...preview.entries.map((entry) => ({ ...entry, queuedAt: now })),
+        ];
         const nextEntries = grid.entries.filter((entry) => futureIds.has(entry.slotId));
         const previous = new Map(previousEntries.map((entry) => [JSON.stringify([entry.slotId, entry.personId]), entry.status]));
         const next = new Map(nextEntries.map((entry) => [JSON.stringify([entry.slotId, entry.personId]), entry.status]));
@@ -1070,6 +1284,12 @@ class HallTimeService {
           promotedCount: changes.filter(({ from, to }) => from === "waitlist" && to === "confirmed").length,
           removedCount: changes.filter(({ from, to }) => from !== "red" && to === "red").length,
           unchangedCount: changes.filter(({ from, to }) => from === to).length,
+          softConflictCount: preview.softConflictCount,
+          spread: preview.spread,
+          openPlaceCount: 0,
+          consecutiveAssignmentViolationCount: preview.consecutiveAssignmentViolationCount,
+          consecutivePauseViolationCount: preview.consecutivePauseViolationCount,
+          repeatedGroupCount: preview.repeatedGroupCount,
         };
         recordHistory(grid, [historyEntry({
           now, action: "distribution_replaced", actor: principal, detail: `${futureSlots.length}`,

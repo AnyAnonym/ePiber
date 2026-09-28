@@ -6,3 +6,16 @@ Commit: 4.12.9-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.9-paj-1-1` gesetzt.
+
+[4.12.9-paj-1-2] - 2026-09-28
+Commit: 4.12.9-paj-1-2 | Hallenraster mit Serien- und Vierergruppenregeln optimiert
+
+  Added
+  - [Hallenzeiten] Die Neuverteilung bewertet maximal zwei aufeinanderfolgende Einsaetze oder Pausen und weist nicht vermeidbare Regelverletzungen in der Adminvorschau aus.
+  - [Tests] Backend- und Browserregressionen decken Seriengrenzen, eindeutige Vierergruppen, Warnungen, bewusste Uebernahme und kontrollierte Diagnosefelder ab.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.9-paj-1-1-x` gesetzt.
+  - [Hallenzeiten] Eine deterministische vorausschauende Optimierung vermeidet bei typischen Piberdoppel-Rastern identische Vierergruppen und reduziert weiterhin wiederholte Spielerpaare und Vermeidungswunschkonflikte.
+  - [Observability] Vorschau- und Verteilungslogs enthalten kontrollierte Summen zu Einsatzserien, Pausenserien und wiederholten Vierergruppen ohne zusaetzliche Personendaten.
+  - [Dokumentation] Endpoint- und Seitendokumentation beschreiben die neuen Optimierungsregeln und das Warnverhalten vollstaendiger bestmoeglicher Vorschlaege.
