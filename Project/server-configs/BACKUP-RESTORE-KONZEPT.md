@@ -98,6 +98,32 @@ Abweichung muss vor der naechsten Betriebsfreigabe geklaert werden.
 - Der Git-Checkout war sauber und besass ein GitHub-Remote. Git sichert jedoch
   keine lokalen Datenbanken, Geheimnisse oder nicht versionierte Konfiguration.
 
+### 3.4 Bewusst akzeptierte temporaere Development-Ausnahme
+
+Der gemeinsame PostgreSQL-Development-Cluster ist technisch aufgebaut, besitzt
+aber noch kein konfiguriertes pgBackRest-Repository, keine WAL-Archivierung,
+keine Off-site-Sicherung und keinen praktischen Restoretest. Abweichend vom
+Zielkonzept duerfen Gitea und eine kleine spezifische Development-Anwendung
+voruebergehend ohne jede zugesicherte Sicherung betrieben werden. Der
+verantwortliche Betreiber akzeptiert ausdruecklich den vollstaendigen Verlust
+ihres gesamten Zwischenstands bei Host-, Volume-, Bedien- oder
+Konfigurationsfehlern.
+
+Fuer diese Ausnahme gilt:
+
+- lokale Dateien, Git-Klone oder spontane Exporte werden nicht als
+  zugesichertes Backup bezeichnet;
+- reale ePiber-Migrationsdaten und produktive ePiber-Datenkopien bleiben aus dem
+  gemeinsamen Development-Cluster ausgeschlossen;
+- ein reales ePiber-Staging verwendet weiterhin einen getrennten kurzlebigen
+  PostgreSQL-Cluster ohne Anschluss an die gemeinsame Backupkette;
+- vor geschaeftskritischer Nutzung, realen ePiber-Daten oder Live bleibt der
+  vollstaendige Off-site- und Restore-Nachweis verpflichtend;
+- die Ausnahme aendert keine Live-RPO-/RTO- oder Datenschutzanforderung.
+
+Der installierte Clusterzustand und der manuelle Wiederanlauf sind in
+`Project/server-configs/postgresql/README.txt` dokumentiert.
+
 ## 4. Schutzobjekte und Schutzklassen
 
 ### 4.1 Klasse A: Kritische Systems of Record

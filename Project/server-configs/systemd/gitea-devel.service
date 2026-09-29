@@ -1,0 +1,72 @@
+[Unit]
+Description=Internal Gitea development service
+After=network-online.target postgresql-devel.service
+Wants=network-online.target
+Requires=postgresql-devel.service
+RequiresMountsFor=/var/lib/development-data
+ConditionPathIsMountPoint=/var/lib/development-data
+ConditionPathExists=/etc/gitea/app.ini
+
+[Service]
+Type=simple
+User=gitea
+Group=gitea
+WorkingDirectory=/var/lib/development-data/gitea
+Environment=USER=gitea
+Environment=HOME=/var/lib/development-data/gitea
+Environment=GITEA_WORK_DIR=/var/lib/development-data/gitea
+Environment=TMPDIR=/var/lib/development-data/gitea/tmp
+LoadCredential=database_password:/var/lib/development-data/secrets/gitea/database_password
+LoadCredential=secret_key:/var/lib/development-data/secrets/gitea/secret_key
+LoadCredential=internal_token:/var/lib/development-data/secrets/gitea/internal_token
+LoadCredential=lfs_jwt_secret:/var/lib/development-data/secrets/gitea/lfs_jwt_secret
+LoadCredential=oauth2_jwt_secret:/var/lib/development-data/secrets/gitea/oauth2_jwt_secret
+SyslogIdentifier=gitea-devel
+RuntimeDirectory=gitea-devel
+RuntimeDirectoryMode=0750
+ExecStartPre=/usr/bin/install -m 0600 /etc/gitea/app.ini /run/gitea-devel/app.ini
+ExecStartPre=/usr/bin/env GITEA__database__PASSWD__FILE=%d/database_password /usr/bin/gitea config edit-ini --config /run/gitea-devel/app.ini --in-place --apply-env
+ExecStart=/usr/bin/gitea web --config /run/gitea-devel/app.ini --work-path /var/lib/development-data/gitea
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=120
+TimeoutStopSec=90
+MemoryHigh=384M
+MemoryMax=512M
+MemorySwapMax=0
+CPUQuota=100%
+CPUWeight=50
+IOWeight=50
+TasksMax=256
+LimitNOFILE=65536
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+PrivateUsers=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/development-data/gitea
+ReadOnlyPaths=/etc/gitea
+NoNewPrivileges=true
+AmbientCapabilities=
+CapabilityBoundingSet=
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target

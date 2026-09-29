@@ -46,6 +46,10 @@ PK. Die verbindliche Freigabeabfolge steht in ROLLOUT-CHECKLIST.md.
 |   `-- .env                    Lokale, nicht versionierte Konfiguration
 `-- Project/server-configs/     Diese Dokumente sowie Caddy/systemd-Vorlagen
 
+Der gemeinsame PostgreSQL-Development-Cluster, sein verschluesseltes Volume,
+ephemer verschluesselter Swap, DBeaver-Zugriff und manueller Wiederanlauf sind
+getrennt in `Project/server-configs/postgresql/README.txt` dokumentiert.
+
 Eine `Frontend/JS/SDK.js` oder SDK-Vorlage existiert nicht mehr. `dataClient.js`
 bildet bei HTTPS aus der aktuellen Browser-Origin automatisch
 `wss://<gleicher-host[:port]>/ws`.
@@ -110,6 +114,8 @@ Loki                  | 127.0.0.1:3100            | nicht erreichbar
 Prometheus            | 127.0.0.1:9090            | nicht erreichbar
 Node Exporter         | 127.0.0.1:9100            | nicht erreichbar
 Alloy                 | 127.0.0.1:12345           | nicht erreichbar
+PostgreSQL Development| 127.0.0.1:5433            | nur ueber persoenlichen SSH-Tunnel
+Gitea Development     | 127.0.0.1:3002            | nur ueber persoenlichen SSH-Tunnel
 Grafana-Auth-Broker   | 127.0.0.1:8085            | nur ueber Caddy Forward Auth
 
 WebSockets verwenden entsprechend `wss://epiber.at/ws`,
@@ -130,6 +136,13 @@ beziehungsweise geschuetzte Unix-Sockets begrenzt und sind nur nach
 administrativer SSH-Anmeldung lokal erreichbar. Feste synthetische
 Testcredentials werden vertraulich an berechtigte Tester weitergegeben und
 nicht in Git oder Serverdokumentation veroeffentlicht.
+
+Die interne Gitea-Instanz verwendet keine Caddy-, DNS- oder Firewallfreigabe.
+Windows erreicht sie ausschliesslich ueber den in
+`Project/server-configs/gitea/README.txt` dokumentierten SSH-Forward auf den
+lokalen Port 13002. PostgreSQL und Gitea werden nach manueller LUKS-Entsperrung
+gemeinsam mit `development-services-start` gestartet und mit
+`development-services-stop` kontrolliert beendet.
 
 Die expliziten Caddy-Adressen `https://epiber.at:8081` und
 `https://epiber.at:8082` garantieren auf diesen Ports keinen Redirect fuer
