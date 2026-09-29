@@ -13,6 +13,12 @@ Verbindliche Tabellen, Constraints, Betriebsablaeufe und kanonische
 Dokumentationsaenderungen werden erst im jeweiligen freigegebenen
 Umsetzungsauftrag festgelegt.
 
+Fuer die Reihenfolge und Verbindlichkeit der Arbeitsgrundlage ist die
+Priorisierung in Abschnitt 1.5 massgeblich. Weitergehende Detailfestlegungen in
+den folgenden Abschnitten bleiben Arbeitsentwuerfe, solange sie dort nicht der
+ersten Ausbaustufe zugeordnet oder in einem spaeteren Entscheidungsblock
+ausdruecklich bestaetigt wurden.
+
 
 ## 1. Verbindliche Grundentscheidungen
 
@@ -34,8 +40,19 @@ PostgreSQL wird das einzige aktive Persistenzsystem von ePiber.
 ### 1.2 Migration vor neuen Fachfunktionen
 
 Der erste PostgreSQL-Auftrag stellt den heutigen Funktionsumfang mit
-Persistenzparitaet um. Neue Personenverwaltungs-, Finanz- oder
-Plattformfunktionen werden nicht gleichzeitig eingefuehrt.
+Persistenzparitaet um und nimmt zugleich die strukturellen Verbesserungen vor,
+die fuer eine belastbare PostgreSQL-Persistenz oder die absehbare
+Weiterentwicklung ohnehin erforderlich sind. Dazu gehoeren insbesondere
+relationale Integritaet, gemeinsame Transaktionen, die Trennung vermischter
+Identitaetsobjekte, normalisierter persistenter State sowie die notwendigen
+Audit-, Idempotenz-, Job- und Outboxgrundlagen. Neue sichtbare
+Personenverwaltungs-, Finanz- oder Plattformfunktionen werden nicht gleichzeitig
+eingefuehrt.
+
+Jede erwartbare sichtbare oder bedienrelevante Verhaltensaenderung wird vor ihrem
+Umsetzungsblock gesammelt mit Auswirkung und Empfehlung zur ausdruecklichen
+Freigabe vorgelegt. Eine interne Strukturverbesserung ist keine stillschweigende
+Freigabe fuer eine sichtbare Fachaenderung.
 
 Die Reihenfolge lautet:
 
@@ -129,6 +146,85 @@ getrennte gehaertete systemd-Dienste auf dem bestehenden Host. Die gleichzeitige
 Umstellung auf OCI-/Podman-Cells ist nicht Bestandteil der Persistenzmigration
 und folgt erst nach stabiler Live-Migration als eigener Plattformauftrag.
 
+### 1.5 Priorisierte erste Ausbaustufe
+
+Die Arbeitsgrundlage wird fuer die Umsetzung in drei Klassen verwendet.
+
+**Jetzt verbindlich und umzusetzen:**
+
+- PostgreSQL 18 als einziges aktives System of Record ohne dauerhaftes
+  Dual-Write oder Ruecksynchronisation;
+- vollstaendige Zusammenfuehrung der heutigen Sheets-, SQLite- und
+  persistenzrelevanten Prozessdaten;
+- ein gemeinsamer produktneutral benannter PostgreSQL-Development-Cluster auf
+  dem bestehenden PAJ-Host, der neben `epiber_devel` auch die Datenbanken einer
+  kleinen spezifischen Anwendung und von Gitea aufnehmen darf;
+- separates verschluesseltes und erweiterbares Development-Datenvolume mit
+  initial 10 GB fuer den gemeinsamen PostgreSQL-Cluster und den getrennt
+  berechtigten Gitea-Dateibestand;
+- vollstaendiges relationales Zielschema fuer den heutigen Funktionsumfang,
+  jedoch keine spekulativen Tabellen oder leeren Schemas fuer Finance, Push,
+  Assistant, allgemeine Reservierung oder Plattformautomatisierung;
+- zielgerichtete Normalisierung, Constraints, Transaktionen, Audit,
+  Idempotenz, Jobs und Outbox, soweit sie fuer sichere heutige Fachablaeufe oder
+  den ohnehin erforderlichen PostgreSQL-Umbau benoetigt werden;
+- versionierte global nummerierte Domaenenmigrationen, deren IDs und
+  Pruefsummen erst mit dem ersten offiziell freigegebenen gemeinsamen
+  `epiber_devel`-Aufbau eingefroren werden;
+- dauerhaft synthetischer Devel-Bestand, technische Minimal-Seeds als erster
+  Schritt und spaeter getrennt freizugebender vollstaendiger Szenariokatalog;
+- kurzlebige echte PostgreSQL-Testcluster statt SQLite- oder In-Memory-Ersatz;
+- fruehe vollstaendige Analyse eines konsistenten verschluesselten Realexports
+  in einer isolierten kurzlebigen Umgebung vor dem Schema-Freeze;
+- ein Dry Run, der alle erkennbaren Befunde sammelt, sowie null ungeklaerte
+  Blocker fuer den finalen Import;
+- getrennte Datenbankrollen von Beginn an, waehrend systemd-Dienste erst mit
+  ihrem tatsaechlichen Bedarf aktiviert werden;
+- Unix-Sockets fuer App, Worker und technische Dienste sowie ein nur auf
+  Loopback erreichbarer TCP-Zugang fuer persoenliche Administration ueber einen
+  SSH-Tunnel;
+- zweistufiger Backupaufbau als Ziel: Der technische Cluster entsteht zuerst;
+  Gitea und die kleine Development-Anwendung duerfen als ausdruecklich
+  akzeptierte temporaere Risikoausnahme ohne jede zugesicherte Sicherung starten.
+  pgBackRest, Off-site-Sicherung und praktischer Restore bleiben vor realen
+  ePiber-Daten oder geschaeftskritischer Nutzung zwingend;
+- Scaleway als bevorzugtes, erst nach erfolgreichem PoC endgueltig
+  freizugebendes EU-Off-site-Ziel;
+- betriebliche Umbenennung von PAJ zu Devel erst beim vollstaendigen
+  PostgreSQL-only-Devel-Cutover.
+
+**Vor dem jeweiligen Umsetzungsblock ausdruecklich zu entscheiden:**
+
+- jede sichtbare oder bedienrelevante Funktionsaenderung;
+- die genaue Tiefe zusaetzlicher Fachhistorien und Versionierungen, soweit sie
+  nicht fuer sichere heutige Transaktionen erforderlich ist;
+- konkrete Retentionjobs, Betriebsgrenzen und Messwerte;
+- der vollstaendige synthetische Szenariokatalog;
+- aus der geschuetzten Realanalyse folgende Transformations- und
+  Deduplizierungsregeln;
+- produktive Anbieter-, Cutover- und Point-of-no-Return-Freigaben.
+
+**Bewusst spaeter zu konkretisieren:**
+
+- Hochverfuegbarkeit, Read Replicas, mehrere App-Replikate und PgBouncer;
+- OCI-/Podman-Cells, zentrale Tenantprovisionierung und Releaseorchestrierung;
+- Finance, Push, Assistant, allgemeine Platzreservierung und weitere
+  Fachausbauten;
+- langfristige Clusterverteilung und Kapazitaetswerte ohne reale Messbasis.
+
+Die naechste Umsetzung ist in drei kontrollierte Auftraege geteilt:
+
+1. gemeinsame PostgreSQL-Development-Grundlage mit Host-Preflight,
+   verschluesseltem Volume, Instanz, Socket, Loopback-Administration,
+   anwendungsgetrennten Basisrollen, leerer technischer Verifikation sowie
+   ausdruecklich dokumentierter temporaerer Backup-Risikoausnahme fuer Gitea und
+   die kleine Development-Anwendung;
+2. vollstaendiges Persistenzinventar, geschuetzte fruehe Realanalyse,
+   Source-to-Target-Matrix und relationaler Schemaentwurf mit gesammelter
+   Freigabe;
+3. ausfuehrbare SQL-Migrationskette, Migration Runner, kurzlebige Testcluster,
+   technische Minimal-Seeds, Grantpruefung und kanonischer Schema-Snapshot.
+
 
 ## 2. Ausgangslage
 
@@ -208,13 +304,28 @@ Datenschutz- und Regionspruefung.
 ### 3.1 Erste Betriebsstufe
 
 Die erste Betriebsstufe wird bewusst in zwei Kapazitaetsschritten aufgebaut.
-Zunaechst entsteht auf dem bestehenden Host ausschliesslich die getrennte
-PostgreSQL-Development-Instanz:
+Zunaechst entsteht auf dem bestehenden Host ein produktneutral benannter
+gemeinsamer PostgreSQL-Development-Cluster:
 
 ```text
-PostgreSQL-Development-Instanz
+gemeinsamer PostgreSQL-Development-Cluster
   -> Datenbank epiber_devel
+  -> Gitea-Datenbank
+  -> Datenbank einer kleinen spezifischen Anwendung
 ```
+
+Die zusaetzlichen Datenbanken sind keine ePiber-Tenants. Jede Anwendung erhaelt
+eine eigene nicht anmeldbare Eigentuemerrolle, eigene Login-, Migrations- und
+gegebenenfalls Workerrollen sowie nur `CONNECT` auf ihre eigenen Datenbanken.
+Keine normale Anwendungsrolle darf Datenbanken oder Schemas einer anderen
+Anwendung lesen oder veraendern. Der lokale PostgreSQL-Superuser bleibt auf die
+Clusteradministration begrenzt.
+
+Der gemeinsame Prozess, sein WAL, die physische pgBackRest-Sicherung und ein
+Point-in-Time-Recovery umfassen immer den gesamten Development-Cluster. Eine
+einzelne Datenbank kann spaeter ueber kontrollierten logischen Export/Import oder
+logische Migration auf einen anderen Server verschoben werden; ein physischer
+Restore nur einer enthaltenen Datenbank wird nicht behauptet.
 
 Der Livebetrieb bleibt waehrenddessen mit seinem bisherigen Legacyrelease und
 seinen bisherigen Persistenzquellen unveraendert. Vor dem Aufbau der spaeteren
@@ -227,11 +338,13 @@ vorgesehen. Zu diesem Zeitpunkt wird anhand gemessener Last entschieden:
    `epiber_askoe` auf dem Produktionshost aufbauen.
 
 Am 25.09.2026 besitzt der bestehende Host drei CPU-Kerne, 3,7 GiB RAM, bereits
-genutzten Swap und rund 34 GiB freien Primaerspeicher. Dieser Stand ist fuer die
-erste sparsam konfigurierte Development-Instanz ausreichend, aber nicht fuer den
-dauerhaften Parallelbetrieb zweier PostgreSQL-Instanzen samt Anwendungen und
-Observability freigegeben. CPU, RAM, Swap, I/O, freier Speicher, Importspitzen,
-Backup- und Restorelast werden vor der Gateentscheidung erneut gemessen.
+genutzten Swap und rund 34 GiB freien Primaerspeicher. Dieser Stand ist fuer den
+ersten sparsam konfigurierten Development-Cluster mit den zunaechst kleinen
+Datenbanken voraussichtlich ausreichend, aber nicht fuer den dauerhaften
+Parallelbetrieb einer zusaetzlichen PostgreSQL-Live-Instanz samt Anwendungen und
+Observability freigegeben. Nachdem Gitea und die kleine Anwendung eingerichtet
+sind, werden CPU, RAM, Swap, I/O, freier Speicher, Verbindungen, Backup- und
+Restorelast erneut gemessen, bevor ePiber seinen dauerhaften Bestand aufnimmt.
 
 Werden Development und Live spaeter auf demselben Host betrieben, erhalten die
 beiden Instanzen trotzdem getrennte:
@@ -245,11 +358,12 @@ beiden Instanzen trotzdem getrennte:
 - Backupsaetze;
 - Readiness- und Monitoringzustaende.
 
-Die PostgreSQL-Prozesse laufen zusaetzlich unter getrennten nicht anmeldbaren
-Unix-Systembenutzern `postgres-devel` und spaeter `postgres-live`. Sie teilen nur
-die root-owned read-only PostgreSQL-Binaerdateien, aber keine Gruppenrechte auf
-Daten-, WAL-, Temp-, Runtime- oder Socketverzeichnisse. Ein Prozess der einen
-Instanz kann das Datenverzeichnis der anderen nicht lesen.
+Der gemeinsame Development-Cluster laeuft als `postgresql-devel.service` unter
+dem nicht anmeldbaren Unix-Systembenutzer `postgres-devel`; die spaetere
+Live-Instanz erhaelt einen getrennten Dienst und den Benutzer `postgres-live`.
+Sie teilen nur die root-owned read-only PostgreSQL-Binaerdateien, aber keine
+Gruppenrechte auf Daten-, WAL-, Temp-, Runtime- oder Socketverzeichnisse. Ein
+Prozess der einen Instanz kann das Datenverzeichnis der anderen nicht lesen.
 
 App- und Workerzugriff erfolgt ueber gezielte Socketgruppen und weiterhin
 getrennte SCRAM-Datenbankrollen. pgBackRest wird je Stanza mit den minimal
@@ -262,26 +376,34 @@ dasselbe Datenverzeichnis oder dieselbe Backupidentitaet. Der Kapazitaetsausbau
 ersetzt keine getrennten Rollen, Credentials, Ressourcenlimits und
 Wiederherstellungswege.
 
-In der ersten Stufe lauschen beide PostgreSQL-Instanzen ausschliesslich auf ihren
-getrennten, dateirechtlich geschuetzten Unix-Sockets. App, Worker, Migration
-Runner, Backup und lokale Administration erhalten nur den jeweils erforderlichen
-Socketzugriff. Persoenliche Administration erfolgt per SSH auf den Host und von
-dort lokal; ein PostgreSQL-TCP-Port wird weder auf Loopback noch extern
-freigegeben. Bei einer spaeteren Trennung von App- und Datenbankhost wird der
-private TLS-/Netzwerkvertrag als eigener Infrastrukturausbau festgelegt. Ein
-oeffentlich erreichbarer Datenbankport bleibt ausgeschlossen.
+In der ersten Stufe verwenden App, Worker, Migration Runner, Backup und Monitoring
+den dateirechtlich geschuetzten produktneutralen Development-Unix-Socket.
+Zusaetzlich lauscht der Development-Cluster fuer persoenliche Administration mit
+DBeaver nur auf Loopback. Der Zugriff erfolgt ausschliesslich durch einen zuvor
+authentifizierten SSH-Tunnel und eine persoenliche minimal berechtigte
+PostgreSQL-Rolle mit SCRAM; App- oder Workercredentials werden dafuer nicht
+verwendet. Firewall und Listener geben keinen PostgreSQL-Port auf einer externen
+Netzwerkschnittstelle frei. Bei einer spaeteren Trennung von App- und
+Datenbankhost wird der private TLS-/Netzwerkvertrag als eigener
+Infrastrukturausbau festgelegt. Ein oeffentlich erreichbarer Datenbankport bleibt
+ausgeschlossen.
 
 Fuer Live wird die interne PostgreSQL-Portnummer `5432` mit dem
-Socketverzeichnis `/run/postgresql/epiber-live` reserviert. `epiber_devel`
-verwendet `5433` und `/run/postgresql/epiber-devel`. In beiden Instanzen gilt
-`listen_addresses = ''`; die Portnummer identifiziert nur den lokalen
-Socket-Dateinamen. Das reale Migrations-Staging ist eine getrennte Datenbank der
-Development-Instanz und verwendet deren Socket.
+Socketverzeichnis `/run/postgresql/epiber-live` reserviert. Der gemeinsame
+Development-Cluster verwendet `5433` und den produktneutralen Socketpfad
+`/run/postgresql/devel`. In beiden Instanzen gilt
+`listen_addresses = 'localhost'`; HBA-Regeln erlauben den TCP-Zugang nur auf
+Loopback und nur fuer die ausdruecklich vorgesehenen persoenlichen Rollen. Die
+technischen Dienste verwenden weiterhin den Unix-Socket. Das reale
+Migrations-Staging verwendet dagegen einen eigenen kurzlebigen
+PostgreSQL-Cluster und niemals den gemeinsamen Development-Cluster.
 
 ### 3.2 Development-Bestand
 
 `epiber_devel` ist bis zum vollstaendigen Live-Cutover der einzige bestaendige
-PostgreSQL-Entwicklungs- und Abnahmebestand. Dafuer gilt keine vorab festgelegte
+ePiber-Entwicklungs- und Abnahmebestand. Der gemeinsame Cluster darf daneben die
+anwendungsgetrennten Development-Datenbanken von Gitea und der kleinen
+spezifischen Anwendung enthalten. Dafuer gilt keine vorab festgelegte
 Kalenderdauer.
 
 Migrationstests erzeugen zusaetzlich kurzlebige Datenbanken:
@@ -368,8 +490,8 @@ Index abgesichert, nicht ueber `citext`.
 
 ### 3.5 Initiales Development-Ressourcenprofil
 
-Auf dem bestehenden Host startet `epiber_devel` wegen 3,7 GiB RAM und bereits
-beobachteter Swapnutzung bewusst konservativ:
+Auf dem bestehenden Host startet der gemeinsame Development-Cluster wegen
+3,7 GiB RAM und bereits beobachteter Swapnutzung bewusst konservativ:
 
 Der Cluster wird von Beginn an mit UTF-8, technischer C-Kollation und
 PostgreSQL-Datenseiten-Pruefsummen (`initdb --data-checksums`) initialisiert.
@@ -390,10 +512,10 @@ track_io_timing = on
 ```
 
 Der PostgreSQL-systemd-Dienst erhaelt initial `MemoryHigh=768M` und
-`MemoryMax=1G`. Der App-Pool ist auf hoechstens fuenf, der Worker-Pool auf
-hoechstens zwei Verbindungen begrenzt; Migration, Backup, Monitoring und lokale
-Administration werden innerhalb des globalen Verbindungslimits getrennt
-budgetiert.
+`MemoryMax=1G`. Der ePiber-App-Pool ist auf hoechstens fuenf, der ePiber-Worker-
+Pool auf hoechstens zwei Verbindungen begrenzt. Gitea, die kleine Anwendung,
+Migration, Backup, Monitoring und lokale Administration erhalten ebenfalls
+explizite Rollen-Verbindungslimits innerhalb des globalen Verbindungslimits.
 
 PostgreSQL-Devel erhaelt auf dem Drei-Kern-Host initial `CPUQuota=150%` sowie
 niedrigere CPU-/I/O-Weights als der laufende Livebetrieb. App und Worker besitzen
@@ -403,8 +525,10 @@ hoehere Limits erhalten. Drosselzeit, I/O-Latenz und Querydauer werden gemeinsam
 gemessen.
 
 Diese Werte sind ein sicherer Start- und Messrahmen, keine ungepruefte
-Dauerkonfiguration. Import-, Backup-, Restore- und Lasttests duerfen sie ueber
-eine dokumentierte Messentscheidung anpassen. Memory-Max-Treffer,
+Dauerkonfiguration. Nach Einrichtung von Gitea und der kleinen Anwendung ist vor
+der Aufnahme des ePiber-Bestands ein erneuter Kapazitaets-Preflight Pflicht.
+Import-, Backup-, Restore- und Lasttests duerfen die Werte ueber eine
+dokumentierte Messentscheidung anpassen. Memory-Max-Treffer,
 Swapwachstum, lange Poolwartezeiten oder I/O-Druck blockieren die Freigabe und
 werden nicht durch blindes Erhoehen einzelner Limits kaschiert.
 
@@ -803,9 +927,9 @@ Person
   nullable UUID-Fremdschluessel beziehungsweise geschlossene `page_key`- und
   `overlay_key`-Werte ersetzen polymorphe IDs in einem JSON-Dokument; ein
   Constraint erlaubt je Zeile genau ein gueltiges Ziel.
-- Die heutige fachliche Grenze von 32 Favoriten wird mit dem PostgreSQL-Cutover
-  entfernt. Es gibt keine feste Anzahlgrenze je Konto; allgemeine
-  Requestgroessen-, Rate-, Validierungs- und Ressourcenlimits bleiben bestehen.
+- Die heutige fachliche Grenze von 32 Favoriten bleibt fuer die
+  Persistenzparitaet zunaechst bestehen. Ihre spaetere Aufhebung ist eine
+  sichtbare Fachaenderung und benoetigt eine eigene ausdrueckliche Freigabe.
   Positionen sind je Konto eindeutig und koennen transaktional neu geordnet
   werden. Strukturell ungueltige oder nicht aufloesbare Importziele blockieren
   den Import, statt stillschweigend entfernt zu werden.
@@ -2223,9 +2347,10 @@ gekennzeichnet.
 
 Die PAJ-/Devel-Webanwendung bleibt fuer Entwickler und ausgewaehlte Tester ueber
 den externen HTTPS-/WSS-Port 8081 erreichbar. Diese Freigabe betrifft nur Caddy
-und die kontrollierten Anwendungspfade. PostgreSQL besitzt weiterhin keinen
-TCP-Listener und ist ausschliesslich ueber geschuetzte lokale Unix-Sockets nach
-einer administrativen SSH-Anmeldung erreichbar.
+und die kontrollierten Anwendungspfade. PostgreSQL besitzt keinen extern
+erreichbaren TCP-Listener. Technische Dienste verwenden den geschuetzten lokalen
+Unix-Socket; persoenliche Administration darf ueber den ausschliesslich auf
+Loopback gebundenen Listener und einen SSH-Tunnel erfolgen.
 
 Der feste Credentialvertrag setzt ausschliesslich synthetische Daten,
 gesperrte produktive Integrationen, starke nicht veroeffentlichte
@@ -2272,13 +2397,24 @@ kontrollierter manueller Start
   -> kontrollierte Entfernung der Staging-Datenbank und entschluesselten Quellen
 ```
 
-Die Staging-Datenbank wird als separate kurzlebige Datenbank in derselben
-PostgreSQL-Development-Instanz angelegt, aber nicht zu `epiber_devel`, nicht fuer
-allgemeine Entwicklung und nicht fuer weitere Entwickler freigegeben. App- und
-Workerrollen erhalten kein `CONNECT`; Zugriffe sind zeitlich und personell
-begrenzt. Ausgaben enthalten nur kontrollierte Zaehler, Problemcodes und
-technische Quellreferenzen, keine freien Personen-, Nachrichten- oder
-Auditwerte.
+Die erste vollstaendige Realanalyse findet bereits vor dem Freeze des initialen
+Schemas statt. Sie arbeitet nicht explorativ direkt auf dem laufenden
+Live-System, sondern auf einem konsistenten, unveraenderlichen und
+pruefsummengebundenen verschluesselten Export. Dadurch koennen reale Formate,
+Wertemengen, Referenzfehler und Sonderfaelle den Source-to-Target- und
+Schemaentwurf beeinflussen, ohne den dauerhaften synthetischen Devel-Bestand mit
+Produktionsdaten zu vermischen. Vor dieser ersten Analyse muessen Export,
+Entschluesselung, Zugriffsschutz, datensparsame Berichtsausgabe und kontrollierte
+Entfernung praktisch vorbereitet sein.
+
+Die Staging-Datenbank liegt in einem eigenen kurzlebigen PostgreSQL-Cluster auf
+demselben Host. Sie gehoert weder zum gemeinsamen Development-Cluster noch zu
+`epiber_devel`, Gitea oder der kleinen Anwendung. Sie verwendet einen eigenen
+Unix-Systembenutzer, Socket, Datenpfad und kurzlebigen verschluesselten
+Storagebereich. Keine Development-App-, Worker-, Gitea- oder sonstige
+Anwendungsrolle erhaelt `CONNECT`; Zugriffe sind zeitlich und personell begrenzt.
+Ausgaben enthalten nur kontrollierte Zaehler, Problemcodes und technische
+Quellreferenzen, keine freien Personen-, Nachrichten- oder Auditwerte.
 
 Exporter, Entschluesselung, Analyse und Import laufen als kontrollierte One-shots
 unter dem eigenen nicht anmeldbaren Unix-Systembenutzer `epiber-migration`.
@@ -2292,28 +2428,16 @@ getrennten kontrolliert lesbaren Ergebnisbereich projiziert. Nach Drop,
 Containerloeschung und Schluesselvernichtung verbleibt kein Klartextquellpaket
 auf Root- oder Devel-Datenpfaden.
 
-Da physische Backups und WAL den gesamten PostgreSQL-Cluster umfassen, gilt fuer
-jede reale Probe ein verpflichtender Backup-Reset-Vertrag:
-
-1. letzten sauberen Devel-Backup-/Restorepunkt vor der Probe verifizieren;
-2. regulaere Devel-Backups kontrolliert pausieren und WAL des Stagingfensters in
-   ein getrenntes temporaeres verschluesseltes Repository leiten;
-3. Staging-Datenbank nach Moeglichkeit in einem eigenen verschluesselten
-   Tablespace mit separatem kurzlebigem Schluessel anlegen;
-4. App und Worker waehrend des realen Staginglaufs von dieser Datenbank und ihren
-   Rollen vollstaendig ausschliessen;
-5. nach Bericht und Regressionsextraktion die Datenbank droppen, temporaere
-   Quellen und WAL-Repositories entfernen und den Stagingschluessel vernichten;
-6. PostgreSQL checkpointen und den regulaeren Devel-WAL-/Backupweg wieder
-   aktivieren;
-7. eine neue vollstaendige Devel-Backupbasis erzeugen und Restore sowie
-   Backupalter erneut verifizieren.
-
-Eine durchgaengige Devel-PITR-Kette ueber das reale Stagingfenster ist bewusst
-ausgeschlossen. Backups oder WAL mit realen Stagingdaten duerfen nicht in das
-regulaere Devel-Repository gelangen. Kann diese Trennung nicht nachgewiesen
-werden, darf die reale Probe nicht in der Development-Instanz stattfinden und
-benoetigt stattdessen eine eigene kurzlebige PostgreSQL-Instanz.
+Der kurzlebige Staging-Cluster besitzt keine Verbindung zum regulaeren
+pgBackRest-Repository des gemeinsamen Development-Clusters. Seine Daten und WAL
+duerfen nicht in dessen Backupkette gelangen. Vor der Probe werden ausreichend
+Kapazitaet und die unveraenderte regulaere Development-Backupfunktion
+nachgewiesen; die Backups von Gitea, der kleinen Anwendung und `epiber_devel`
+laufen ohne Unterbrechung weiter. Nach Bericht und Regressionsextraktion werden
+Staging-Cluster, temporaere Quellen, Datenpfad und kurzlebiger Schluessel
+kontrolliert entfernt. Kann diese Trennung nicht nachgewiesen werden, darf die
+reale Probe auf diesem Host nicht stattfinden und benoetigt einen eigenen
+temporaeren Server.
 
 ### 14.3 Uebernahme erkannter Sonderfaelle
 
@@ -2322,6 +2446,14 @@ Produktivdatensatz in Devel konserviert. Stattdessen wird daraus ein minimaler,
 synthetischer Regressionstest ohne rueckfuehrbare Personen- oder Fachwerte
 erstellt. Dadurch waechst der reproduzierbare Testbestand kontrolliert mit den
 tatsaechlich beobachteten Datenformen.
+
+Dasselbe Verfahren gilt fuer spaetere Produktionsstoerungen. Der Fehler wird
+primaer aus kontrollierten Diagnoseinformationen als minimaler synthetischer
+Regressionstest nachgebaut. Reicht dies nicht aus, darf der exakt erforderliche
+reale Ausschnitt nur in einer getrennten, kurzlebigen und geschuetzten
+Analyseumgebung untersucht werden. Er wird danach entfernt und niemals zum
+dauerhaften Devel-Bestand; dauerhaft bleibt ausschliesslich der nicht
+rueckfuehrbare synthetische Testfall.
 
 ### 14.4 Zugriffsschutz und externe Wirkungen
 
@@ -2365,7 +2497,7 @@ Loopback- und negative externe Verbindungstests nachgewiesen.
 | Monitore | synthetische Testgeraete und Tokens | keine produktiven Token-Hashes in Devel |
 | E-Mail/WhatsApp/Push/Webhooks | kontrolliert `not_configured` oder lokaler Fake | keine reale Zustellung |
 | Datei-/Object-Storage der App | lokale Testziele auf Loopback/verschluesseltem Testpfad | kein produktiver Bucket |
-| pgBackRest | ausschliesslich Devel-Bucket bei Scaleway | kein Appzugriff und kein Live-Bucket-Credential |
+| pgBackRest | gemeinsamer verschluesselter Development-Cluster-Bucket bei Scaleway | kein Appzugriff und kein Live-Bucket-Credential |
 | Legacy-Exporter | kontrolliertes One-shot zu Google und lokalen SQLite-Quellen | keine Approlle; Ausgabe nur verschluesseltes Quellpaket |
 | Staging-Importer | lokales verschluesseltes Quellpaket und Staging-DB | kein externer Netzwerkzugriff oder Fachwirkung |
 | postgres_exporter | Devel-Unix-Socket, Loopback-Metriklistener | read-only Rolle, kein externer Listener |
@@ -2451,18 +2583,24 @@ gestartet werden.
 
 Der bestehende Host erfuellt diesen Nachweis fuer sein Root-Dateisystem nicht:
 `/dev/sda3` ist direkt als `ext4` eingebunden und besitzt kein sichtbares
-LUKS-/dm-crypt-Layer. Fuer `epiber_devel` wird deshalb ein separates manuell
-eingerichtetes Hetzner-Volume mit initial 10 GB vollstaendig als LUKS2-Volume
-verschluesselt. Es enthaelt ausschliesslich PostgreSQL-Daten, WAL und temporaere
-Datenbankdateien und kostet zum Entscheidungszeitpunkt rund 0,44 EUR netto pro
-Monat.
+LUKS-/dm-crypt-Layer. Fuer die Development-Daten wird deshalb ein separates
+manuell eingerichtetes Hetzner-Volume mit initial 10 GB vollstaendig als
+LUKS2-Volume verschluesselt. Es enthaelt den gemeinsamen PostgreSQL-Cluster samt
+Daten, WAL und temporaeren Datenbankdateien sowie in getrennten
+zugriffsgeschuetzten Verzeichnissen Giteas Repositories, LFS-Objekte, Anhaenge und
+sonstigen persistenten Dateibestand. Die kleine Startgroesse wird bei Bedarf vor
+einem Import oder weiterem Wachstum erweitert.
 
-Das LUKS2-Mapping heisst `epiber-devel-db` und wird als ext4 unter
-`/var/lib/epiber-postgresql-devel` mit `noatime,nodev,nosuid,noexec` eingebunden.
-PostgreSQL-Daten, WAL, Temp und pgBackRest-Status erhalten getrennte
-Unterverzeichnisse und minimale Dateirechte. Dauerhaftes Mount-`discard` wird
-nicht aktiviert; ein kontrollierter periodischer `fstrim` uebernimmt die
-Freigabe ungenutzter Bloecke.
+Das Hetzner-Volume traegt den produktneutralen Namen `development-data`. Das
+LUKS2-Mapping heisst ebenfalls `development-data` und wird als ext4 unter
+`/var/lib/development-data` mit `noatime,nodev,nosuid,noexec` eingebunden. Der
+gemeinsame PostgreSQL-Cluster liegt unter
+`/var/lib/development-data/postgresql`, Giteas persistenter Dateibestand unter
+`/var/lib/development-data/gitea`. PostgreSQL-Daten, WAL, Temp,
+pgBackRest-Status und Gitea-Dateien erhalten darunter getrennte
+Unterverzeichnisse, Eigentuemer und minimale Dateirechte. Dauerhaftes
+Mount-`discard` wird nicht aktiviert; ein kontrollierter periodischer `fstrim`
+uebernimmt die Freigabe ungenutzter Bloecke.
 
 Systemd-Abhaengigkeiten verhindern den Start von PostgreSQL, App und Worker vor
 erfolgreicher Entsperrung und Mountpruefung. Eigentum, Modus, Mapping, Mountquelle
@@ -2488,12 +2626,13 @@ Worker, Migration, Export und Backup deaktiviert. OOM-, MemoryHigh- und
 Swapgesamtmetriken bleiben alarmiert; die ephemere Verschluesselung ersetzt
 nicht die konservativen Speicherlimits.
 
-Die 10-GB-Startgroesse wird ueber freien Speicher, WAL-Wachstum, temporaere
-Importspitzen und Tablespacebedarf alarmiert und vor jedem realen Staginglauf per
-Kapazitaets-Preflight geprueft. Reicht die Reserve nicht aus, wird das Volume vor
-dem Import erweitert; ein teilweise gestarteter Import ist kein
-Kapazitaetstest. Reales Staging verwendet innerhalb des Volumes einen
-zusaetzlichen kurzlebigen verschluesselten Container mit eigenem Schluessel.
+Die 10-GB-Startgroesse wird ueber freien Speicher, Gitea-Dateiwachstum,
+WAL-Wachstum, temporaere Importspitzen und Tablespacebedarf alarmiert. Vor jeder
+neuen Datenbank, groesseren Gitea-Nutzung und realen Analyse erfolgt ein
+Kapazitaets-Preflight. Reicht die Reserve nicht aus, wird das Volume vorher
+erweitert; ein teilweise gestarteter Import ist kein Kapazitaetstest. Reales
+Staging verwendet innerhalb des Volumes einen zusaetzlichen kurzlebigen
+verschluesselten Container mit eigenem Schluessel.
 
 Am 25.09.2026 belegt die lokale PAJ-SQLite-Persistenz insgesamt rund 3,2 MiB:
 State rund 1,65 MiB, Audit 0,59 MiB, Messaging 0,39 MiB und Scorelog 0,20 MiB
@@ -2502,9 +2641,10 @@ Startreserve, umfasst aber weder Google-Sheets-Daten noch PostgreSQL-
 Grundbestand, WAL, Indizes, temporaere Importkopien oder reales Staging und
 ersetzt deshalb kein Kapazitaetsgate.
 
-Das LUKS2-Volume ist ausschliesslich aktiver PostgreSQL-Blockstorage fuer
-Datendateien, aktuelles beziehungsweise noch nicht erfolgreich archiviertes WAL,
-temporaere Datenbankdateien und die kleinen pgBackRest-Spool-Statusdateien.
+Das LUKS2-Volume ist aktiver Blockstorage fuer den gemeinsamen PostgreSQL-Cluster,
+aktuelles beziehungsweise noch nicht erfolgreich archiviertes WAL, temporaere
+Datenbankdateien, die kleinen pgBackRest-Spool-Statusdateien und den persistenten
+Gitea-Dateibestand.
 S3-Object-Storage kann wegen fehlender POSIX-, Random-I/O- und `fsync`-Semantik
 kein PostgreSQL-Datenverzeichnis ersetzen.
 
@@ -2521,11 +2661,17 @@ vom Host und Scaleway-Konto unabhaengigen Offline-Recoveryweg gehalten. Alte
 Schluessel bleiben bis zum Ablauf aller damit verschluesselten Backupzyklen
 restorefaehig; Rotation und Verlustfall werden praktisch getestet.
 
-LUKS-, pgBackRest- und `age`-Recoveryschluessel werden als getrennte Eintraege
-primaer in einem verschluesselten persoenlichen Passwortmanager und zusaetzlich
-in einer davon getrennten verschluesselten Offlinekopie gehalten. Beide Kopien
-bleiben unter der festgelegten Einzelverantwortung; dies fuehrt kein personelles
-Zweitfreigabeverfahren ein.
+Keeper ist fuer die erste Stufe die zentrale manuelle Verwaltungsquelle fuer
+LUKS-Passphrasen, PostgreSQL- und DBeaver-Credentials, systemd-Service-
+Credentials, pgBackRest-Repository-Passphrase, Scaleway-/S3-Zugangsdaten sowie
+`age`-Archiv- und Recoveryinformationen. Keeper ist keine Laufzeitabhaengigkeit:
+Dienste erhalten die benoetigten Werte kontrolliert als rootgeschuetzte
+systemd-Credentials und laufen nach Bereitstellung ohne Keeper-Zugriff.
+
+LUKS-, pgBackRest- und `age`-Recoveryschluessel werden als getrennte
+Keeper-Eintraege und zusaetzlich in einer davon getrennten verschluesselten
+Offlinekopie gehalten. Beide Kopien bleiben unter der festgelegten
+Einzelverantwortung; dies fuehrt kein personelles Zweitfreigabeverfahren ein.
 
 Mindestens halbjaehrlich wird die Lesbarkeit beider Recoverywege kontrolliert
 geprueft. Rotation aktualisiert beide Kopien und wird erst nach erfolgreichem
@@ -2538,9 +2684,8 @@ verschluesselte Volumes und Backups bilden deren Schutzschichten. Passwoerter,
 Session- und Geraetetokens bleiben unabhaengig davon ausschliesslich als sichere
 Hashes gespeichert.
 
-Fuer die erste Stufe koennen Geheimnisse ueber root- und systemd-geschuetzte
-Credentials bereitgestellt werden. Ein zentraler Secret Manager ist noch keine
-Voraussetzung.
+Die Bereitstellung und Rotation aus Keeper erfolgt in der ersten Stufe manuell.
+Eine automatisierte Secret-Manager-Anbindung ist noch keine Voraussetzung.
 
 Diese systemd-Credentials sind fuer die erste PostgreSQL-Stufe verbindlich.
 App, Worker, Migration Runner und `pgBackRest` erhalten je Umgebung getrennte,
@@ -2566,6 +2711,12 @@ Fuer persoenliche privilegierte PostgreSQL-Administration werden in der ersten
 Stufe weder ein zusaetzlicher Adminwrapper noch `pgaudit` eingefuehrt. Zugriff ist
 nur nach persoenlicher SSH-Anmeldung und lokaler Rechteerhoehung moeglich; die
 normalen SSH-/sudo-Journale bilden den dafuer festgelegten Zugriffsnachweis.
+
+Fuer DBeaver bestehen zwei bewusst getrennte persoenliche Zugaenge: eine
+standardmaessig verwendete lesende Rolle fuer Metadaten und Abfragen sowie ein
+getrennt verwahrtes erhoehtes Credential fuer ausdruecklich beabsichtigte
+administrative Arbeiten. Auch die erhoehte Verbindung ersetzt nicht den
+Migration Runner als regulaeren DDL-Weg.
 
 Bootstrap, Migration Runner, Backup, Restore und weitere kontrollierte One-shots
 behalten unabhaengig davon ihre strukturierten Start-/Abschlusslogs. Freies
@@ -3004,7 +3155,7 @@ Fuer die erste Stufe gelten folgende Zielwerte:
 
 | Datenbank | RPO | RTO |
 |---|---:|---:|
-| `epiber_devel` | 24 Stunden | 8 Stunden |
+| gemeinsamer Development-Cluster | 24 Stunden | 8 Stunden |
 | `epiber_askoe` | 15 Minuten | 4 Stunden |
 
 Devel und Live verwenden denselben grundsaetzlichen Backup-, WAL-Archiv- und
@@ -3015,17 +3166,24 @@ fachliche Aufbewahrung schuetzt vor regulaerer Loeschung; erst Backup und PITR
 begrenzen den moeglichen Datenverlust nach Ausfall oder Korruption.
 
 `pgBackRest` uebernimmt physische PostgreSQL-Backups, kontinuierliche
-WAL-Archivierung, Retention und Point-in-Time Recovery. Development und Live
+WAL-Archivierung, Retention und Point-in-Time Recovery. Das physische
+Development-Backup umfasst stets `epiber_devel`, Gitea und die kleine Anwendung
+gemeinsam; ein PITR setzt alle enthaltenen Datenbanken auf denselben
+Clusterzeitpunkt. Development und Live
 erhalten getrennte Stanzas, Repositories beziehungsweise Backupidentitaeten,
 Credentials, Aufbewahrungsregeln und Monitoringzustaende. Backupverschluesselung
 und Off-site-Kopie sind verpflichtend; Schluessel und Repository-Credentials
 liegen nicht in PostgreSQL, Git oder Anwendungslogs.
 
-Fuer `epiber_devel` gilt mindestens ein wochenliches Full- und taegliches
-Differential-Backup bei kontinuierlicher WAL-Archivierung. Das Repository behaelt
-mindestens zwei vollstaendige Backupzyklen. Ein praktischer Development-Restore
-wird mindestens vierteljaehrlich ausgefuehrt und gegen das RTO von acht Stunden
-gemessen.
+Fuer den gemeinsamen Development-Cluster gilt mindestens ein woechentliches
+Full- und taegliches Differential-Backup bei kontinuierlicher WAL-Archivierung.
+Das Repository behaelt mindestens zwei vollstaendige Backupzyklen. Ein praktischer
+Development-Restore wird mindestens vierteljaehrlich ausgefuehrt und gegen das
+RTO von acht Stunden gemessen. Dieser Backup- und Restoreweg bleibt das Ziel.
+Bis zu seiner Einrichtung duerfen ausschliesslich Gitea und die kleine
+Development-Anwendung unter ausdruecklicher Akzeptanz ihres vollstaendigen
+Verlusts betrieben werden. Reale ePiber-Daten und geschaeftskritische Nutzung
+bleiben gesperrt.
 
 Scaleway ist fuer Development das einzige vollstaendige pgBackRest-Repository.
 Weder das unverschluesselte Root-Dateisystem noch dasselbe 10-GB-Datenvolume
@@ -3090,8 +3248,10 @@ pgBackRest darf fachlich laenger aufbewahren, aber keine gesperrte Objektversion
 vorzeitig entfernen. Nach erfolgreichem Langzeit-PoC kann fuer Live ein Wechsel
 zu Compliance bewertet werden; er ist keine Voraussetzung des ersten Cutovers.
 
-In der ersten Stufe wird genau ein eigener Devel-Bucket fuer `epiber_devel`
-angelegt. Erst vor dem Aufbau von `epiber_askoe` entsteht ein zweiter separater
+In der ersten Stufe wird genau ein eigener Devel-Bucket fuer den gemeinsamen
+Development-Cluster angelegt. Er enthaelt damit verschluesselt die physische
+Backupkette aller enthaltenen Development-Datenbanken. Erst vor dem Aufbau von
+`epiber_askoe` entsteht ein zweiter separater
 Live-Bucket mit eigenen S3-Credentials, Bucket-Policies, Object-Lock-
 Einstellungen, pgBackRest-Repositoryschluessel und Restoreberechtigungen. Devel-
 und Live-Identitaeten duerfen den jeweils anderen Bucket weder schreiben noch
@@ -3106,8 +3266,18 @@ Logische `pg_dump`-Exporte bleiben als zusaetzliche portable Tenant-Exporte und
 fuer kontrollierte Migrationspruefungen vorgesehen. Sie ersetzen weder
 `pgBackRest` noch WAL-Archivierung und PITR.
 
+Gitea benoetigt zusaetzlich einen koordinierten anwendungsweiten Backup- und
+Restorevertrag fuer Datenbank beziehungsweise belegbaren Recoverypunkt,
+Repositories, LFS, Anhaenge, Konfiguration und die getrennt in Keeper verwalteten
+Secrets. Ein reiner PostgreSQL-Restore gilt nicht als vollstaendige
+Gitea-Wiederherstellung. Nichtdatenbankbasierter persistenter Zustand der kleinen
+Anwendung wird nach demselben Grundsatz vor ihrer nicht wegwerfbaren Nutzung
+inventarisiert.
+
 Fuer den reproduzierbar aus Migrationen und `full-devel`-Seeds aufbaubaren
-Development-Bestand werden keine regelmaessigen logischen Exporte aufbewahrt.
+ePiber-Development-Bestand werden keine regelmaessigen logischen Exporte
+aufbewahrt. Zusaetzliche logische Sicherungen oder Anwendungsexporte fuer Gitea
+und die kleine Anwendung folgen deren eigenem Portabilitaetsvertrag.
 Der `pg_dump`-/Restoreweg wird vor Live mindestens einmal mit synthetischem Devel
 praktisch geprueft; das erzeugte Testartefakt wird danach kontrolliert geloescht.
 Die physischen Devel-Backups bleiben fuer RPO, manuelle Teststaende und die
@@ -3354,9 +3524,9 @@ Auth, Profile/Favoriten, Bewerbe/Matches/Ergebnisse, Messaging, Courts/Scoreboar
 und Hallenzeiten laufen danach mindestens im `core`-Profil mit Chromium, WebKit
 und Firefox.
 
-Vor vollstaendiger Devel-Abnahme ist wegen des breiten Persistenzwechsels und der
-sichtbar aufgehobenen Favoritengrenze die versionierte volle Acht-Profil-
-Smokesuite aus Desktop, Android, Samsung-, iPhone- und iPad-Naeherungen Pflicht.
+Vor vollstaendiger Devel-Abnahme ist wegen des breiten Persistenzwechsels die
+versionierte volle Acht-Profil-Smokesuite aus Desktop, Android, Samsung-,
+iPhone- und iPad-Naeherungen Pflicht.
 Die vollstaendige Chromium-Browsersuite bleibt zusaetzlich erforderlich. Keine
 Engine darf als erfolgreich uebersprungen werden; unbeabsichtigte Darstellungs-
 und Bedienabweichungen blockieren die Freigabe ebenso wie Fachfehler.
@@ -3373,65 +3543,89 @@ und Bedienabweichungen blockieren die Freigabe ebenso wie Fachfehler.
       festgelegt.
 - [x] Dauerhaft synthetischer Devel-Bestand, getrennte reale Stagingprobe und
       unveraenderliches Quellpaket beschlossen.
-- [x] Erste Development-Instanz auf dem bestehenden Host und verpflichtendes
-      Kapazitaets-/Isolationsgate vor der Live-Instanz festgelegt.
+- [x] Gemeinsamer produktneutraler Development-Cluster auf dem bestehenden Host
+      und verpflichtendes Kapazitaets-/Isolationsgate vor der separaten
+      Live-Instanz festgelegt.
 - [x] PostgreSQL 18, native UUIDv7, interne UUID plus Legacy-/Public-ID und
       `pg_stat_statements` als initiale Extension festgelegt.
 - [x] Personen-, Rollen- und State-Normalisierung bei unveraendertem sichtbarem
       Fachverhalten beschlossen.
-- [x] Striktes Zeitmodell, dauerhafte Ergebnishistorie, dauerhafter getrennter
-      Court-Scoreverlauf sowie Audit-, Messaging- und Archivretention festgelegt.
+- [x] Striktes Zeitmodell, relationaler getrennter Court-Scoreverlauf sowie die
+      Grundrichtung fuer Audit, Messaging, Fachhistorien und Retention
+      festgelegt; ihre ueber das heutige sichere Verhalten hinausgehende Tiefe
+      bleibt vor dem jeweiligen Umsetzungsblock ausdruecklich zu entscheiden.
 - [x] Node.js-/SQL-Migration Runner, `pg`-Repositories, begrenzte direkte Pools,
       gemischte Transaktionsisolation und Audit-/Idempotenzvertrag festgelegt.
 - [x] Separater Einzel-Worker, persistente Jobs/Outbox und `LISTEN/NOTIFY` nur als
       Weckhinweis festgelegt.
 - [x] RPO/RTO, pgBackRest, unabhaengiges EU-Off-site-Ziel, EU-/EWR-Datenregion,
       Volume-/Backupverschluesselung und systemd-Credentials festgelegt.
-- [x] Unix-Socket-only, getrennte App-/Worker-Readiness, Einzelverantwortung mit
+- [x] Unix-Sockets fuer technische Dienste, Loopback-Administration nur ueber
+      SSH-Tunnel, getrennte App-/Worker-Readiness, Einzelverantwortung mit
       technischen Gates und systemd statt gleichzeitiger Containerisierung
       festgelegt.
 - [x] Gesamtimportblocker, exakte Projektionsparitaet, vollstaendige
       Wartungsseite, Sessionneustart und Monitor-Token-Migration festgelegt.
 
-**Exit Phase 0:** Die Grundentscheidungen fuer Detailentwurf, Infrastruktur und
-Umsetzung von `epiber_devel` sind am 25.09.2026 vollstaendig. Offene exakte
-Tabellen-, Parameter-, Mess-, Deduplizierungs- und Runbookdetails gehoeren zu
-Phase 1 und aendern die hier festgelegten Architektur- und Fachgrenzen nicht.
+**Exit Phase 0:** Die priorisierten Grundentscheidungen fuer Detailentwurf,
+Infrastruktur und Umsetzung von `epiber_devel` sind vollstaendig. Offene exakte
+Tabellen-, Parameter-, Mess-, Deduplizierungs- und Runbookdetails werden im
+jeweiligen gesammelten Entscheidungsblock vorgelegt.
 
-### Phase 1: Detailentwurf
+### Phase 1: Gemeinsame PostgreSQL-Development-Grundlage
 
-- finales relationales Schema;
+- Host-, Kapazitaets- und Storage-Preflight;
+- gemeinsames verschluesseltes und erweiterbares Development-Volume mit initial
+  10 GB;
+- produktneutraler PostgreSQL-18-Development-Cluster auf dem bestehenden Host;
+- Unix-Socket fuer technische Dienste und Loopback-Listener fuer DBeaver ueber
+  SSH-Tunnel;
+- getrennte Eigentuemer-, Login- und Migrationsrollen sowie datenbankgebundene
+  HBA-Regeln je Anwendung;
+- leerer technischer Start-, Verbindungs- und Isolationstest.
+
+Der technische Cluster ist aufgebaut und verifiziert. Gitea und die kleine
+Anwendung duerfen als bewusst akzeptierte temporaere Risikoausnahme vor dem
+Backupaufbau betrieben werden; es besteht keine Wiederherstellungszusage und ihr
+vollstaendiger Verlust ist akzeptiert. Reale ePiber-Migrationsdaten bleiben erst
+nach erfolgreichem pgBackRest-/Scaleway-PoC und praktischem Clusterrestore
+zulaessig. Nach Einrichtung der beiden kleinen Anwendungen wird der
+Kapazitaets-Preflight vor Aufnahme des ePiber-Bestands wiederholt. Jede
+privilegierte Befehlsgruppe wird vor ihrer Ausfuehrung mit exakten Befehlen,
+Auswirkung, Unterbrechung, Rueckfallweg und Verifikation zur ausdruecklichen
+Freigabe vorgelegt.
+
+### Phase 2: Persistenzinventar und Schemaentwurf
+
+- vollstaendiges Inventar aller Sheet-, SQLite- und persistenten Prozessdaten;
+- fruehe vollstaendige Realanalyse eines geschuetzten konsistenten Exports;
 - vollstaendige Source-to-Target-Matrix;
-- UUID-/Legacy-ID-Regeln;
-- Zeitkonvertierung;
-- Retentionfilter;
-- synthetische Seed- und Szenariomatrix;
-- Sicherheitsvertrag und Phase-3-Analyseplan fuer Score-Deduplizierung;
-- Integrations-Isolationsmatrix.
+- relationaler Entwurf fuer alle heutigen Persistenzdomaenen;
+- UUID-/Legacy-ID-, Zeit-, Retention- und Isolationsvertraege;
+- kontrollierte Liste aller sichtbaren Auswirkungen und noch offenen
+  Detailentscheidungen;
+- gesammelte Schemafreigabe vor ausfuehrbarem DDL.
 
-**Exit Phase 1:** Vor Beginn des breiten Repository-/Serviceumbaus liegen alle
+### Phase 3: Ausfuehrbare Datenbankbasis
+
+- global nummerierte initiale SQL-Migrationskette fuer das Vollschema;
+- Migration Runner und Schema-Kompatibilitaetspruefung;
+- kurzlebige lokale PostgreSQL-Testcluster ohne TCP-Listener;
+- technische Minimal-Seeds;
+- Rollen-, Grant-, Constraint- und Driftverifikation;
+- automatisch erzeugter kanonischer `pg_dump --schema-only`-Snapshot.
+
+**Exit Phase 3:** Vor Beginn des breiten Repository-/Serviceumbaus liegen alle
 initialen SQL-Migrationen fuer das Vollschema einschliesslich Constraints,
 Indizes, Rollen- und Kompatibilitaetsgeneration vor. Ein kurzlebiger
-PostgreSQL-Cluster wurde damit aus leerem Zustand erfolgreich aufgebaut,
-verifiziert und als kanonischer `pg_dump --schema-only`-Snapshot geprueft.
-
-Die Source-to-Target- und Seedvertraege muessen jede initiale Tabelle erreichen;
+PostgreSQL-Cluster wurde damit aus leerem Zustand erfolgreich aufgebaut und
+verifiziert. Die Source-to-Target-Vertraege erreichen jede initiale Tabelle;
 unbekannte Schemaobjekte, unqualifizierte Referenzen, unerwartete Grants und
 Drift blockieren den Exit. Bis zum ersten offiziellen gemeinsamen
-`epiber_devel`-Aufbau bleibt der Erstentwurf gemaess Freezevertrag korrigierbar;
-danach sind die angewendeten Migrationen unveraenderlich.
+`epiber_devel`-Aufbau bleibt der Erstentwurf korrigierbar; danach sind die
+angewendeten Migrationen unveraenderlich.
 
-### Phase 2: PostgreSQL-Grundlage
-
-- erste Development-Instanz; spaetere getrennte Live-Instanz erst nach dem
-  Kapazitaets-/Isolationsgate;
-- Rollen und Rechte;
-- Migration-One-shot;
-- Schema-Kompatibilitaetspruefung;
-- Backup, WAL und Restore;
-- Readiness und Metriken.
-
-### Phase 3: Importwerkzeuge
+### Phase 4: Importwerkzeuge
 
 - vollstaendiger Export;
 - unveraendertes Staging;
@@ -3443,7 +3637,7 @@ danach sind die angewendeten Migrationen unveraenderlich.
 - Importprovenienz;
 - datensparsamer Abgleichbericht.
 
-### Phase 4: Anwendungsumbau
+### Phase 5: Anwendungsumbau
 
 - vollstaendiges relationales Zielschema und alle schemauebergreifenden
   Abhaengigkeiten vor dem Anwendungsumbau festschreiben;
@@ -3454,7 +3648,7 @@ danach sind die angewendeten Migrationen unveraenderlich.
 - vollstaendige Live-Score-Persistenz;
 - Entfernung von Sheets und SQLite aus dem neuen Code.
 
-Phase 4 ist ein einziges integriertes PostgreSQL-only-Migrationsprojekt. Die
+Phase 5 ist ein einziges integriertes PostgreSQL-only-Migrationsprojekt. Die
 interne Implementierung besitzt wegen ihrer Abhaengigkeiten eine technische
 Reihenfolge, aber keine fachlich freigegebenen oder ausgerollten
 Zwischenwellen. Der laufende PAJ-Legacydienst bleibt bis zum Gesamtcutover
@@ -3474,7 +3668,7 @@ vollstaendige Gesamtstand durchlaeuft Systemregression, reale Stagingprobe,
 Browsermatrix und Betriebsabnahme und wird danach in genau einem Devel-Cutover
 auf Port 8081 freigegeben.
 
-### Phase 5: Devel-Cutover
+### Phase 6: Devel-Cutover
 
 1. Frische `epiber_devel`-Datenbank durch alle Schemamigrationen aufbauen.
 2. Versionierte synthetische Seeds laden und vollstaendig validieren.
@@ -3498,7 +3692,7 @@ Restart-/Shutdown-/Worker-Recovery, alle festgelegten Backend- und Browserprofil
 sowie null Blocker, null ungeklaerte Operationen und null unerwartete
 Projektionsabweichungen.
 
-### Phase 6: Live-Vorbereitung
+### Phase 7: Live-Vorbereitung
 
 - zwei vollstaendige reproduzierbare Devel-Neuaufbauten;
 - Shadow-Read-Vergleiche kontrollierter Projektionen;
@@ -3508,7 +3702,7 @@ Projektionsabweichungen.
   aktionsbezogene Freigabe;
 - bestaetigter Pre-Cutover-Backupstatus.
 
-### Phase 7: Live-Cutover
+### Phase 8: Live-Cutover
 
 1. Benutzer informieren, alle Courts kontrolliert deaktivieren und offene
    Zuweisungen schliessen; ein aktiver Court blockiert den Start.
@@ -3622,17 +3816,20 @@ nicht vor ihrer fachlichen oder betrieblichen Notwendigkeit implementieren.
 
 ## 26. Verbleibende Artefakte und spaetere Konkretisierung
 
-Die Architektur- und Fachentscheidungen fuer Phase 1 sind abgeschlossen. Vor
-dem in Abschnitt 23 definierten Phase-1-Exit muessen noch folgende pruefbare
-Artefakte erstellt werden:
+Die priorisierten Architektur- und Fachentscheidungen fuer die ersten drei
+Phasen sind abgeschlossen. Vor dem in Abschnitt 23 definierten Phase-3-Exit
+muessen noch folgende pruefbare Artefakte erstellt werden:
 
 1. Vollstaendige initiale SQL-Migrationskette mit allen Tabellen, Spalten,
    Constraints, Indizes, Rollen-/Grantannahmen und Beziehungen.
 2. Vervollstaendigte Source-to-Target-Feldmatrix fuer die noch nicht feldgenau
    ausformulierten SQLite-Messaging-, Audit-, Score- und `app_state`-Strukturen
    sowie das versionierte Ausnahmemanifestformat.
-3. Exakter synthetischer Szenariokatalog mit Paketabhaengigkeiten, Rollen-,
-   Alters-, Zeit-, Ergebnis-, Fehler- und Berechtigungskonstellationen.
+3. Technische Minimal-Seeds fuer Struktur-, Constraint-, Rollen- und
+   Neuaufbaupruefungen. Der vollstaendige synthetische Szenariokatalog mit
+   Paketabhaengigkeiten, Rollen-, Alters-, Zeit-, Ergebnis-, Fehler- und
+   Berechtigungskonstellationen folgt nach eigener gesammelter Freigabe vor dem
+   Anwendungsumbau.
 4. Erfolgreicher Leeraufbau in einem kurzlebigen PostgreSQL-Cluster,
    Schema-/Grantverifikation und generierter kanonischer
    `pg_dump --schema-only`-Snapshot ohne Drift.
@@ -3640,11 +3837,12 @@ Artefakte erstellt werden:
 Die bereits fachlich entschiedenen, aber erst mit ihrer Umsetzungsphase zu
 erzeugenden Betriebsartefakte bleiben davon getrennt:
 
-- Phase 2: systemd-Units, LUKS-/Swap-/Socketkonfiguration, Rollen/HBA,
-  pgBackRest-/Scaleway-PoC, postgres_exporter, Dashboards und Alarmregeln;
-- Phase 3: reale Scorequellenanalyse, Dublettenregel, Import-/Export-CLI und
+- Phase 1: systemd-Units, LUKS-/Swap-/Socketkonfiguration und Rollen/HBA;
+- vor dauerhaftem Devel-Bestand: pgBackRest-/Scaleway-PoC, praktischer Restore,
+  postgres_exporter, notwendige Dashboards und Alarmregeln;
+- Phase 2/4: reale Scorequellenanalyse, Dublettenregel, Import-/Export-CLI und
   datensparsamer Abgleichbericht;
-- Phase 5/6: gemessene Last-, Pool-, Import-, Backup- und Restorewerte sowie
+- Phase 6/7: gemessene Last-, Pool-, Import-, Backup- und Restorewerte sowie
   Devel-/Live-Runbooks;
 - nach Live: kontrollierter Loeschlauf fuer das 370-Tage-Compliance-Archiv.
 

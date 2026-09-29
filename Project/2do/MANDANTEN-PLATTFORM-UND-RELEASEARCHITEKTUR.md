@@ -761,6 +761,21 @@ Isolationsgate: Hostausbau auf mindestens 8 GiB, bevorzugt 16 GiB, oder
 Verlagerung von Devel auf den Engineering-/Testserver. Diese Uebergangsstufe
 aendert nicht die spaetere Vier-Bereiche-Zielstruktur.
 
+In der aktuellen ersten Uebergangsstufe laeuft zusaetzlich eine interne
+Gitea-Instanz auf demselben bestehenden Host. Sie ist ausschliesslich ueber einen
+persoenlichen SSH-Tunnel und Server-Loopback erreichbar, verwendet eine getrennte
+Datenbank und Rolle im gemeinsamen PostgreSQL-Development-Cluster sowie
+verschluesselten Dateispeicher. Actions, Package-/OCI-Registry, Mail, Mirrors,
+Webhooks und externe Freigaben bleiben deaktiviert. Diese kostensparende
+Zwischenloesung aendert nicht das Ziel, Gitea, Registry und CI spaeter auf dem
+Engineering-/Testserver zu betreiben.
+
+Fuer Gitea und eine weitere kleine Development-Anwendung ist bis zur spaeteren
+Off-site-Einrichtung der vollstaendige Datenverlust als temporaere
+Risikoausnahme ausdruecklich akzeptiert. Keeper sichert nur deren Secrets und ist
+kein Datenbackup. Reale ePiber-Migrationsdaten und geschaeftskritische Nutzung
+bleiben von dieser Ausnahme ausgeschlossen.
+
 Der Engineering-/Testserver ist kein manuell gepflegter Ersatz fuer lokale
 Entwicklerrechner. Er stellt gemeinsame, reproduzierbare Engineeringdienste und
 nichtproduktive Zielumgebungen bereit. Lokale Entwicklung, CI, Integration,

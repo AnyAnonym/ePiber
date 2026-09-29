@@ -6,3 +6,17 @@ Commit: 4.12.10-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.10-paj-1-1` gesetzt.
+
+[4.12.10-paj-1-2] - 2026-09-29
+Commit: 4.12.10-paj-1-2 | PostgreSQL- und Gitea-Development-Grundlage aufgebaut
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.10-paj-1-1-x` gesetzt.
+  - [Dokumentation] PostgreSQL-Migrationsarbeitsgrundlage auf die priorisierte erste Ausbaustufe, den dreistufigen Arbeitsablauf, einen gemeinsamen anwendungsgetrennten Development-Cluster, Keeper-Secretverwaltung, geschuetzte fruehe Realanalyse und DBeaver-Zugriff ueber SSH/Loopback ausgerichtet.
+  - [Server] Installierten PostgreSQL-18-Development-Cluster, LUKS-Volume, ephemer verschluesselten Swap, systemd-Hardening, manuelle Wiederanbindung und die bewusst akzeptierte temporaere Backup-Luecke versioniert dokumentiert.
+  - [Server] Interne Gitea-Development-Instanz mit PostgreSQL-Rollentrennung, SSH-Tunnelzugang, systemd-Credentials, privaten Repositories und konservativen Ressourcen-/Uploadlimits dokumentiert.
+  - [Agentenkontext] Manuellen Schnellstart und kontrollierten Stop des verschluesselten PostgreSQL-/Gitea-Development-Stacks aufgenommen.
+
+  Added
+  - [Server] Geheimnisfreie PostgreSQL-, HBA-, Ident-, systemd- und tmpfiles-Vorlagen fuer den gemeinsamen Development-Cluster aufgenommen.
+  - [Server] Geheimnisfreie Gitea-Basiskonfiguration, gehaertete systemd-Unit und manuelle Development-Start-/Stoppskripte aufgenommen.

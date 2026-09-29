@@ -114,6 +114,33 @@ Die gemeinsame Observability ist aktuell nur fuer Live und PAJ aktiv. PK bleibt
 als Anwendungsvorlage bestehen, wird aber weder gescraped noch in Alloy,
 Node Exporter, Grafana-Authentifizierung, Dashboards oder Alerts einbezogen.
 
+## Development-Dienste starten und stoppen
+
+Der gemeinsame PostgreSQL-Development-Cluster und die interne Gitea-Instanz
+liegen auf dem manuell entsperrten LUKS-Volume `development-data` und sind nicht
+fuer den automatischen Bootstart aktiviert. Der schnelle kontrollierte Start als
+root lautet:
+
+```text
+development-services-start
+```
+
+Das Skript fragt die LUKS-Passphrase interaktiv ab, mountet und prueft das Volume
+und startet danach PostgreSQL und Gitea in der richtigen Reihenfolge. Die
+Passphrase darf nie im Chat, in Git oder als Befehlsargument stehen.
+
+Kontrollierter Stop als root:
+
+```text
+development-services-stop
+```
+
+Details, Fehlerpfade und installierte Pfade stehen in
+`Project/server-configs/postgresql/README.txt` und
+`Project/server-configs/gitea/README.txt`. Die Befehle sind eine
+Betriebsschnellreferenz, aber keine allgemeine Freigabe fuer einen Agenten,
+Serverdienste ohne ausdruecklichen Userauftrag zu starten oder zu stoppen.
+
 ## Repository-Struktur
 
 ```text

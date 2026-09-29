@@ -1,0 +1,55 @@
+[Unit]
+Description=Shared PostgreSQL development cluster
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/var/lib/development-data
+ConditionPathIsMountPoint=/var/lib/development-data
+
+[Service]
+Type=notify
+User=postgres-devel
+Group=postgres-devel
+SupplementaryGroups=postgres-devel-client
+Environment=PGDATA=/var/lib/development-data/postgresql/18/data
+Environment=TMPDIR=/var/lib/development-data/postgresql/18/tmp
+SyslogIdentifier=postgresql-devel
+PIDFile=/var/lib/development-data/postgresql/18/data/postmaster.pid
+ExecStartPre=/usr/bin/postgresql-check-db-dir /var/lib/development-data/postgresql/18/data
+ExecStart=/usr/bin/postgres -D /var/lib/development-data/postgresql/18/data -c config_file=/etc/postgresql-devel/postgresql.conf
+ExecReload=/bin/kill -HUP ${MAINPID}
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStartSec=120
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=5s
+OOMScoreAdjust=-200
+MemoryHigh=768M
+MemoryMax=1G
+MemorySwapMax=0
+CPUQuota=150%
+CPUWeight=50
+IOWeight=50
+TasksMax=256
+LimitNOFILE=65536
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/development-data/postgresql /run/postgresql/devel
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectClock=true
+ProtectHostname=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

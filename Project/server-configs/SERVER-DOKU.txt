@@ -17,12 +17,21 @@ SERVER-DOKU.txt             | Dieser Verzeichnisindex
 SERVER-SETUP.txt            | Installation, Topologie, Betrieb und Diagnose
 BACKUP-RESTORE-KONZEPT.md   | Zielkonzept fuer Sicherung, Restore und Disaster
                             | Recovery; kein Nachweis bereits aktiver Backups
+postgresql/README.txt       | Installierter gemeinsamer Development-Cluster,
+                            | LUKS-/Swap-, Rollen-, DBeaver- und Betriebsvertrag
+postgresql/*.conf           | Geheimnisfreie installierbare PostgreSQL-Vorlagen
+gitea/README.txt            | Interne, nur ueber SSH-Tunnel erreichbare
+                            | Gitea-Development-Instanz und Betriebsvertrag
+gitea/app.ini               | Geheimnisfreie gehaertete Gitea-Basiskonfiguration
+bin/development-services-*  | Manueller LUKS-, PostgreSQL- und Gitea-Start/Stop
 ROLLOUT-CHECKLIST.md        | Verbindliche Abnahme und aktuelle PAJ-Live-Promotion
 Caddyfile                   | Vorlage fuer /etc/caddy/Caddyfile
 systemd/                    | Vorlagen fuer /etc/systemd/system/
   epiber-piber.service      | Live, User piber, Backend 127.0.0.1:8080
   epiber-paj.service        | PAJ, User paj, Backend 127.0.0.1:8083
   epiber-pk.service         | PK, User pk, Backend 127.0.0.1:8084
+  postgresql-devel.service  | Gemeinsamer Development-Cluster, Loopback 5433
+  gitea-devel.service       | Interne Gitea-Instanz, Loopback 3002
 journald/epiber.conf        | Persistente, groessen- und zeitbegrenzte Journalvorlage
 observability/              | Gemeinsame Grafana-/Prometheus-/Loki-/Alloy-
                             | Vorlagen, Dashboards, Alerts und Runbooks
@@ -32,6 +41,8 @@ systemd/epiber-grafana-     | Gemeinsamer Loopback-Auth-Broker fuer Adminsession
   auth.service              | aus den aktiven Realms Live und PAJ
 tmpfiles/epiber-            | Geschuetztes Laufzeitverzeichnis fuer den
   observability.conf        | Caddy-/Grafana-Unix-Socket
+tmpfiles/postgresql-        | Geschuetztes Socketverzeichnis fuer den gemeinsamen
+  devel.conf                | PostgreSQL-Development-Cluster
 
 
 ================================================================================
@@ -43,6 +54,11 @@ System | Browser-Origin            | Internes Backend | WebSocket
 Live   | https://epiber.at         | 127.0.0.1:8080    | wss://epiber.at/ws
 PAJ    | https://epiber.at:8081    | 127.0.0.1:8083    | wss://epiber.at:8081/ws
 PK     | https://epiber.at:8082    | 127.0.0.1:8084    | wss://epiber.at:8082/ws
+
+Der gemeinsame PostgreSQL-Development-Cluster lauscht zusaetzlich nur auf
+`127.0.0.1:5433` und dem gruppengeschuetzten Unix-Socket
+`/run/postgresql/devel`. DBeaver erreicht ihn ausschliesslich ueber einen
+persoenlichen SSH-Tunnel. Der Arch-Standarddienst bleibt deaktiviert.
 
 Alle drei Browser-Systeme verwenden ausschliesslich HTTPS/WSS. Der Frontend-
 Client leitet die WebSocket-Adresse same-origin aus window.location und dem Pfad
@@ -171,6 +187,20 @@ LOKALE, NICHT VERSIONIERTE BETRIEBSDATEN
     Lokale Betriebslogs beziehungsweise Zeitreihen. Loki bewahrt normale Daten
     hoechstens 14 und gezielte Frontenddiagnose 7 Tage auf; Prometheus verwendet
     30 Tage mit zusaetzlicher Groessenbegrenzung.
+
+  /var/lib/development-data/
+    Manuell entsperrtes LUKS2-Volume fuer den gemeinsamen PostgreSQL-
+    Development-Cluster, Gitea-Repositories und -Anwendungsdaten sowie
+    rootgeschuetzte Gitea-Secretquelldateien. Die Daten besitzen aktuell bewusst
+    kein zugesichertes Backup; vollstaendiger Verlust von Gitea und der kleinen
+    Development-Anwendung ist temporaer akzeptiert. Reale ePiber-Migrationsdaten
+    bleiben bis zum Restore-Nachweis ausgeschlossen.
+
+  Keeper
+    Manuelle zentrale Verwaltungsquelle fuer LUKS-, PostgreSQL-, DBeaver-, Gitea-
+    und spaetere Backupcredentials. Keeper ist kein Laufzeitdienst und kein
+    Datenbackup; Dienste erhalten nur kontrollierte root-/systemd-geschuetzte
+    Laufzeitkopien.
 
 Bekannte nicht geheime Betriebskennungen:
 

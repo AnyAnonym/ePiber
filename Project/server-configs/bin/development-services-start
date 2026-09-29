@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly DEVICE="/dev/disk/by-id/scsi-0HC_Volume_106975159"
+readonly MAPPER="development-data"
+readonly MOUNT_POINT="/var/lib/development-data"
+readonly POSTGRES_SERVICE="postgresql-devel.service"
+readonly GITEA_SERVICE="gitea-devel.service"
+
+if (( EUID != 0 )); then
+  echo "ERROR: Dieser Befehl muss als root ausgefuehrt werden." >&2
+  exit 1
+fi
+
+if [[ ! -b "$DEVICE" ]]; then
+  echo "ERROR: Development-Volume fehlt: $DEVICE" >&2
+  exit 1
+fi
+
+if ! cryptsetup status "$MAPPER" >/dev/null 2>&1; then
+  cryptsetup open "$DEVICE" "$MAPPER"
+fi
+
+readonly expected_device="$(readlink -f "$DEVICE")"
+readonly mapped_device="$(cryptsetup status "$MAPPER" | awk '$1 == "device:" { print $2 }')"
+if [[ -z "$mapped_device" || "$(readlink -f "$mapped_device")" != "$expected_device" ]]; then
+  echo "ERROR: LUKS-Mapping $MAPPER zeigt nicht auf $DEVICE." >&2
+  exit 1
+fi
+
+if ! mountpoint -q "$MOUNT_POINT"; then
+  mount "$MOUNT_POINT"
+fi
+
+if [[ "$(findmnt -n -o SOURCE --target "$MOUNT_POINT")" != "/dev/mapper/$MAPPER" ]]; then
+  echo "ERROR: Unerwartete Mountquelle fuer $MOUNT_POINT." >&2
+  exit 1
+fi
+
+if [[ "$(findmnt -n -o FSTYPE --target "$MOUNT_POINT")" != "ext4" ]]; then
+  echo "ERROR: $MOUNT_POINT verwendet nicht ext4." >&2
+  exit 1
+fi
+
+readonly mount_options=",$(findmnt -n -o OPTIONS --target "$MOUNT_POINT"),"
+for option in noatime nodev nosuid noexec; do
+  if [[ "$mount_options" != *",$option,"* ]]; then
+    echo "ERROR: Mountoption $option fehlt fuer $MOUNT_POINT." >&2
+    exit 1
+  fi
+done
+
+systemctl start "$POSTGRES_SERVICE"
+for _ in {1..30}; do
+  if runuser -u postgres-devel -- /usr/bin/pg_isready -q -h /run/postgresql/devel -p 5433 -d postgres; then
+    break
+  fi
+  sleep 1
+done
+
+if ! runuser -u postgres-devel -- /usr/bin/pg_isready -q -h /run/postgresql/devel -p 5433 -d postgres; then
+  echo "ERROR: PostgreSQL wurde nicht rechtzeitig bereit." >&2
+  exit 1
+fi
+
+systemctl start "$GITEA_SERVICE"
+for _ in {1..30}; do
+  if curl --fail --silent --output /dev/null http://127.0.0.1:3002/; then
+    break
+  fi
+  sleep 1
+done
+
+if ! curl --fail --silent --show-error --output /dev/null http://127.0.0.1:3002/; then
+  echo "ERROR: Gitea wurde nicht rechtzeitig bereit." >&2
+  exit 1
+fi
+
+systemctl is-active --quiet "$POSTGRES_SERVICE"
+systemctl is-active --quiet "$GITEA_SERVICE"
+echo "OK: Development-Volume, PostgreSQL und Gitea sind bereit."
