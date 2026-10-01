@@ -23,6 +23,7 @@ const dataPoller = require("./dataPoller.js");
 const stateStore = require("./stateStore.js");
 const courtPoller = require("./courtPoller.js");
 const { AppError, errorData } = require("./errors.js");
+const { competitionLifecycle } = require("./competitionLifecycle.js");
 const { validateEndpointRequest, validateEndpointResponse, validateFavoriteTargets, validateStartTarget } = require("./contracts.js");
 const { TokenBucketLimiter, assertAllowedOrigin, getRequestIp, parseCookies } = require("./security.js");
 const { analyzeMatchRules, matchCompletionFingerprint, parseMatchDate, parseParticipant } = require("./matchRules.js");
@@ -470,36 +471,11 @@ function profileRankings(personId, principal = null) {
   )).map(({ sortOrder, ...ranking }) => ranking);
 }
 
-function profileCompetitionEnd(raw) {
-  const value = String(raw || "").trim();
-  const match = value.match(/^(\d{2}|\d{4})(\d{2})(\d{2})(?:-(\d{2})(\d{2}))?$/);
-  if (!match) return null;
-  const [, yearValue, month, day, hour, minute] = match;
-  const year = yearValue.length === 2
-    ? (Number(yearValue) >= 50 ? 1900 + Number(yearValue) : 2000 + Number(yearValue))
-    : Number(yearValue);
-  const date = new Date(
-    year,
-    Number(month) - 1,
-    Number(day),
-    hour === undefined ? 23 : Number(hour),
-    minute === undefined ? 59 : Number(minute),
-    hour === undefined ? 59 : 0,
-  );
-  return date.getFullYear() === year
-    && date.getMonth() === Number(month) - 1
-    && date.getDate() === Number(day)
-    && date.getHours() === (hour === undefined ? 23 : Number(hour))
-    && date.getMinutes() === (minute === undefined ? 59 : Number(minute))
-    ? date
-    : null;
-}
-
 function profileCompetitionLifecycle(raw, now = new Date()) {
-  const competitionEnd = profileCompetitionEnd(raw);
+  const lifecycle = competitionLifecycle(raw, now);
   return {
-    competitionEndAt: competitionEnd ? competitionEnd.getTime() : null,
-    competitionEnded: Boolean(competitionEnd && competitionEnd < now),
+    competitionEndAt: lifecycle.competitionEndAt,
+    competitionEnded: lifecycle.competitionEnded,
   };
 }
 

@@ -179,7 +179,14 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
       return { allowed: true, code: "" };
     },
     rankingChallengeState() {
-      return { success: true, mode: "ranked", rank: 1, returnFromRank: null };
+      return {
+        success: true,
+        mode: "ranked",
+        rank: 1,
+        returnFromRank: null,
+        competitionEndAt: new Date(2049, 11, 31, 23, 59, 59).getTime(),
+        competitionEnded: false,
+      };
     },
     async refreshSheetData(_principal, { operationId }) {
       return {
@@ -974,7 +981,12 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.deepEqual((await playerClient.request("publicProfile", { id: "p3" })).data.profile.rankings, []);
   dataStore.set("matches1", matchesBeforeNewcomerProfile, { source: "test-newcomer-profile-restore" });
   assert.deepEqual((await playerClient.request("rankingChallengeState", { bewerbId: "ranking-men" })).data, {
-    success: true, mode: "ranked", rank: 1, returnFromRank: null,
+    success: true,
+    mode: "ranked",
+    rank: 1,
+    returnFromRank: null,
+    competitionEndAt: new Date(2049, 11, 31, 23, 59, 59).getTime(),
+    competitionEnded: false,
   });
   const rankingsWithReturnChallenge = structuredClone(dataStore.get("rlPlatzierung"));
   rankingsWithReturnChallenge.push(["r4", "ranking-seniors", "p2", "4", "", "", ""]);

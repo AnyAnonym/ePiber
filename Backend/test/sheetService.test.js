@@ -1950,6 +1950,72 @@ test("Profilprojektion kann Forderbarkeit mit denselben Serverregeln pruefen", a
   repository.close();
 });
 
+test("Bewerbsende sperrt neue Ranglistenforderungen erst nach der eingetragenen Grenze", async () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  const initial = fixtures();
+  initial.Bewerb[0].push("Bewerbsende");
+  initial.Bewerb[1].push("20260930");
+  initial.Bewerb[2].push("");
+  const fake = fakeSheets(initial);
+  seedStore(fake.tables);
+  const endAt = new Date(2026, 8, 30, 23, 59, 59).getTime();
+  let now = endAt;
+  const service = new SheetService({
+    repository,
+    messagingService,
+    clientFactory: async () => fake.client,
+    now: () => now,
+  });
+  const principal = { type: "user", id: "p1", name: "Ada Admin" };
+
+  assert.deepEqual(service.rankingChallengeState(principal, "cup-1"), {
+    success: true,
+    mode: "ranked",
+    rank: 2,
+    returnFromRank: null,
+    competitionEndAt: endAt,
+    competitionEnded: false,
+  });
+  assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), { allowed: true, code: "" });
+
+  now += 1;
+  assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), {
+    allowed: false,
+    code: "COMPETITION_ENDED",
+  });
+  assert.equal(service.rankingChallengeState(principal, "cup-1").competitionEnded, true);
+  const matchCount = fake.tables.Matches1.length;
+  await assert.rejects(service.addMatch(principal, {
+    operationId: "00000000-0000-4000-8000-000000000152",
+    bewerbId: "cup-1",
+    opponentId: "p2",
+  }), { code: "COMPETITION_ENDED" });
+  assert.equal(fake.tables.Matches1.length, matchCount);
+
+  const minuteCompetitions = structuredClone(dataStore.get("bewerbe"));
+  minuteCompetitions[1][minuteCompetitions[0].indexOf("Bewerbsende")] = "20260930-1200";
+  dataStore.set("bewerbe", minuteCompetitions, { source: "test-minute-end" });
+  now = new Date(2026, 8, 30, 12, 0).getTime();
+  assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), { allowed: true, code: "" });
+  now += 1;
+  assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), {
+    allowed: false,
+    code: "COMPETITION_ENDED",
+  });
+
+  const invalidCompetitions = structuredClone(minuteCompetitions);
+  invalidCompetitions[1][invalidCompetitions[0].indexOf("Bewerbsende")] = "20260231";
+  dataStore.set("bewerbe", invalidCompetitions, { source: "test-invalid-end" });
+  assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), {
+    allowed: false,
+    code: "COMPETITION_DATE_INVALID",
+  });
+
+  await service.stop();
+  repository.close();
+});
+
 test("rausgehaengte Spieler fordern ab ihrem gespeicherten Rang und dahinter", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
@@ -1979,6 +2045,7 @@ test("rausgehaengte Spieler fordern ab ihrem gespeicherten Rang und dahinter", a
   dataStore.set("matches1", [initial.Matches1[0]], { source: "test-expired" });
   assert.deepEqual(service.rankingChallengeState(principal, "cup-1"), {
     success: true, mode: "newcomer", rank: null, returnFromRank: null,
+    competitionEndAt: null, competitionEnded: false,
   });
   assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), { allowed: true, code: "" });
 
@@ -1998,6 +2065,7 @@ test("Neueinsteiger fordern jeden freien Rang ohne automatische Einreihung", asy
 
   assert.deepEqual(service.rankingChallengeState(principal, "cup-1"), {
     success: true, mode: "newcomer", rank: null, returnFromRank: null,
+    competitionEndAt: null, competitionEnded: false,
   });
   assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), { allowed: true, code: "" });
   assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p1"), { allowed: true, code: "" });
@@ -2037,11 +2105,13 @@ test("Neueinsteiger muessen Geschlecht und Alterskategorie des Bewerbs erfuellen
 
   assert.deepEqual(service.rankingChallengeState(principal, "cup-1"), {
     success: true, mode: "newcomer", rank: null, returnFromRank: null,
+    competitionEndAt: null, competitionEnded: false,
   });
   newcomer[genderIndex] = "3";
   dataStore.set("players", structuredClone(initial.Personen), { source: "test-gender" });
   assert.deepEqual(service.rankingChallengeState(principal, "cup-1"), {
     success: true, mode: "ineligible", rank: null, returnFromRank: null,
+    competitionEndAt: null, competitionEnded: false,
   });
   assert.deepEqual(service.challengeEligibility(principal, "cup-1", "p2"), { allowed: false, code: "RANKING_ENTRY_NOT_ELIGIBLE" });
 

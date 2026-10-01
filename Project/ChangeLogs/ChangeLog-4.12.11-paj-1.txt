@@ -6,3 +6,19 @@ Commit: 4.12.11-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.11-paj-1-1` gesetzt.
+
+[4.12.11-paj-1-2] - 2026-10-01
+Commit: 4.12.11-paj-1-2 | Ranglistenforderungen nach Bewerbsende gesperrt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.11-paj-1-1-x` gesetzt.
+  - [Rangliste] Neue Forderungen nach `BewerbsEnde` serverseitig fuer gereihte
+    Spieler, Neueinsteiger und Rueckkehrer gesperrt; bestehende Forderungen
+    bleiben abschliessbar.
+  - [Frontend] Beendete Ranglisten ohne Forderbar-Markierungen und
+    Forderungsaktionen sowie mit einem sichtbaren Endehinweis dargestellt und
+    beim Erreichen des Endzeitpunkts automatisch aktualisiert.
+  - [Qualitaet] Bewerbsende-Grenzen, Fail-closed-Verhalten, Profilprojektion und
+    Browserdarstellung automatisiert abgesichert.
+  - [Dokumentation] Ranglistenregel, Endpunktvertrag, Seite und Architektur um
+    die Bewerbsende-Sperre ergaenzt.

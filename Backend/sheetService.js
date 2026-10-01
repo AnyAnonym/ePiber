@@ -4,6 +4,7 @@ const { GOOGLE_REQUEST_TIMEOUT_MS, SHEET_ID, TABLE_CONFIG } = require("./config.
 const dataStore = require("./dataStore.js");
 const dataPoller = require("./dataPoller.js");
 const { AppError } = require("./errors.js");
+const { competitionLifecycle } = require("./competitionLifecycle.js");
 const { analyzeMatchRules, matchCompletionFingerprint, parseMatchDate, parseParticipant } = require("./matchRules.js");
 const {
   MatchResultRuleError,
@@ -143,6 +144,18 @@ function parseCompetitionDate(raw, endOfDay) {
     throw new AppError("COMPETITION_DATE_INVALID", "Bewerbszeitraum ist ungueltig", 503);
   }
   return date;
+}
+
+function competitionEndProjection(header, row, now) {
+  const endIndex = headerIndex(header, "bewerbsende");
+  const lifecycle = competitionLifecycle(endIndex < 0 ? "" : row[endIndex], now);
+  if (!lifecycle.valid) {
+    throw new AppError("COMPETITION_DATE_INVALID", "Bewerbsende ist ungueltig", 503);
+  }
+  return {
+    competitionEndAt: lifecycle.competitionEndAt,
+    competitionEnded: lifecycle.competitionEnded,
+  };
 }
 
 function validCompactDateTime(value) {
@@ -566,6 +579,9 @@ class SheetService {
   assertChallengeAllowed(principal, competitionId, opponentId, matches = dataStore.get("matches1")) {
     requireCurrentData("players", "bewerbe", "matches1", "rlPlatzierung");
     const context = this.rankingChallengeContext(principal, competitionId);
+    if (context.competitionEnded) {
+      throw new AppError("COMPETITION_ENDED", "Der Bewerb ist beendet; neue Forderungen sind nicht mehr moeglich", 409);
+    }
     const players = dataStore.get("players");
     const playerHeader = headerOf(players);
     const playerIdIndex = headerIndex(playerHeader, "id");
@@ -624,6 +640,7 @@ class SheetService {
     if (String(competition[headerIndex(competitionHeader, "bewerbsartid")] || "").trim() !== "2") {
       throw new AppError("RANKING_REQUIRED", "Bewerb ist keine Rangliste", 409);
     }
+    const lifecycleProjection = competitionEndProjection(competitionHeader, competition, this.now());
 
     const players = dataStore.get("players");
     const playerHeader = headerOf(players);
@@ -654,7 +671,7 @@ class SheetService {
       .sort((left, right) => left.rank - right.rank);
     const membership = competitionEntries.find((entry) => entry.id === principal.id);
     if (membership && Number.isInteger(membership.rank) && membership.rank > 0) {
-      return { mode: "ranked", rank: membership.rank, returnFromRank: null, entries };
+      return { mode: "ranked", rank: membership.rank, returnFromRank: null, entries, ...lifecycleProjection };
     }
     if (membership?.rank === 0) {
       if (!Number.isInteger(membership.previousRank) || membership.previousRank < 1) {
@@ -665,14 +682,14 @@ class SheetService {
       const expiresAt = new Date(withdrawnAt);
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
       if (new Date(this.now()) <= expiresAt) {
-        return { mode: "returning", rank: null, returnFromRank: membership.previousRank, entries };
+        return { mode: "returning", rank: null, returnFromRank: membership.previousRank, entries, ...lifecycleProjection };
       }
     } else if (membership) {
       throw new AppError("RANKING_MEMBERSHIP_REQUIRED", "Ranglistenmitgliedschaft ist ungueltig", 409);
     }
 
     this.assertNewcomerEligible({ competitionHeader, competition, playerHeader, person });
-    return { mode: "newcomer", rank: null, returnFromRank: null, entries };
+    return { mode: "newcomer", rank: null, returnFromRank: null, entries, ...lifecycleProjection };
   }
 
   assertNewcomerEligible({ competitionHeader, competition, playerHeader, person }) {
@@ -708,11 +725,18 @@ class SheetService {
 
   rankingChallengeState(principal, competitionId) {
     try {
-      const { mode, rank, returnFromRank } = this.rankingChallengeContext(principal, competitionId);
-      return { success: true, mode, rank, returnFromRank };
+      const { mode, rank, returnFromRank, competitionEndAt, competitionEnded } = this.rankingChallengeContext(principal, competitionId);
+      return { success: true, mode, rank, returnFromRank, competitionEndAt, competitionEnded };
     } catch (error) {
       if (error?.code === "RANKING_ENTRY_NOT_ELIGIBLE") {
-        return { success: true, mode: "ineligible", rank: null, returnFromRank: null };
+        const { header, row } = this.competition(competitionId);
+        return {
+          success: true,
+          mode: "ineligible",
+          rank: null,
+          returnFromRank: null,
+          ...competitionEndProjection(header, row, this.now()),
+        };
       }
       throw error;
     }
