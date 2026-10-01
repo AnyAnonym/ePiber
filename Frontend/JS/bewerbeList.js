@@ -1356,7 +1356,7 @@ async function loadBewerbe() {
     });
 
     // Sortierung pro Kategorie
-    function sortByOrder(a, b, datumField) {
+    function sortByOrder(a, b, datumField, dateDescending = false) {
       // 1. SortOrder: kleinste zuerst, Infinity (kein Wert) nach unten
       if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
       // 2. Bei gleichem SortOrder (oder beide ohne): nach Datum
@@ -1364,12 +1364,13 @@ async function loadBewerbe() {
       const db = parseSheetDate(b[datumField]);
       const ta = da ? da.getTime() : Infinity;
       const tb = db ? db.getTime() : Infinity;
-      return ta - tb;
+      if (ta === Infinity || tb === Infinity) return ta - tb;
+      return dateDescending ? tb - ta : ta - tb;
     }
 
     active.sort((a, b) => sortByOrder(a, b, "bewerbsende"));
     upcoming.sort((a, b) => sortByOrder(a, b, "bewerbsbeginn"));
-    finished.sort((a, b) => sortByOrder(a, b, "bewerbsende"));
+    finished.sort((a, b) => sortByOrder(a, b, "bewerbsende", true));
 
     container.replaceChildren();
 

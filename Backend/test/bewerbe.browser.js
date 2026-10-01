@@ -158,6 +158,15 @@ export function createEndpoint(name) {
     }
     if (name === "bewerbe") {
       window.__bewerbeCalls.push({ ...params });
+      if (new URLSearchParams(location.search).get("finishedSorting") === "1") {
+        return { data: { success: true, values: [
+          ["ID", "BewerbsartID", "Bezeichnung", "EntryStart", "EntryDeadline", "Bewerbsbeginn", "Bewerbsende", "SortOrder"],
+          ["10", "3", "Priorität 1, älter", "", "", "20220101", "20230101", "1"],
+          ["11", "3", "Priorität 2, älter", "", "", "20220101", "20240101", "2"],
+          ["12", "3", "Priorität 2, zuletzt beendet", "", "", "20220101", "20250101", "2"],
+          ["13", "3", "Ohne Priorität, zuletzt beendet", "", "", "20220101", "20260101", ""],
+        ] } };
+      }
       if (new URLSearchParams(location.search).get("slowVisibilityRefresh") === "1" && window.__bewerbeCalls.length > 1) {
         return new Promise((resolve) => setTimeout(() => resolve({ data: { success: true, values: [
           ["ID", "BewerbsartID", "Bezeichnung", "EntryStart", "EntryDeadline", "Bewerbsbeginn", "Bewerbsende", "SortOrder"],
@@ -264,6 +273,31 @@ function startServer() {
     server.listen(0, "127.0.0.1", () => resolve(server));
   });
 }
+
+test("Beendete Bewerbe bleiben nach SortOrder priorisiert und sind danach zuletzt beendet zuerst", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const address = server.address();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${address.port}/Bewerbe.html?finishedSorting=1`, { waitUntil: "domcontentloaded" });
+    await page.locator("#grid-finished .bewerb-card").first().waitFor({ state: "visible" });
+
+    assert.deepEqual(await page.locator("#grid-finished .bewerb-card h3").allTextContents(), [
+      "Priorität 1, älter",
+      "Priorität 2, zuletzt beendet",
+      "Priorität 2, älter",
+      "Ohne Priorität, zuletzt beendet",
+    ]);
+  } finally {
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
 
 test("Bewerbshistorie bleibt authentifiziert, sicher, paginiert und zugaenglich", {
   skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
