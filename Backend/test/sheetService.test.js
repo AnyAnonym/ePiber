@@ -1360,6 +1360,7 @@ test("Ranglistenforderung uebergibt die aktuellen Positionen als Meldungssnapsho
   const fake = fakeSheets(fixtures());
   seedStore(fake.tables);
   const messages = [];
+  const eventCreatedAt = Date.UTC(2026, 8, 5, 10, 34, 56, 789);
   const service = new SheetService({
     repository,
     messagingService: {
@@ -1367,6 +1368,7 @@ test("Ranglistenforderung uebergibt die aktuellen Positionen als Meldungssnapsho
       async ensureRankingWithdrawalEvent() {},
     },
     clientFactory: async () => fake.client,
+    now: () => eventCreatedAt,
   });
 
   await service.addMatch({ type: "user", id: "p1", name: "Ada Admin" }, {
@@ -1378,6 +1380,8 @@ test("Ranglistenforderung uebergibt die aktuellen Positionen als Meldungssnapsho
   assert.equal(messages.length, 1);
   assert.equal(messages[0].challengerRank, 2);
   assert.equal(messages[0].opponentRank, 1);
+  assert.equal(messages[0].createdAt, eventCreatedAt);
+  assert.equal(fake.tables.Matches1.find((row) => row.includes(messages[0].matchId))[3], "260905-1234");
   await service.stop();
   repository.close();
 });
@@ -1816,13 +1820,16 @@ test("eine nach Match-Commit fehlgeschlagene Inbox wird ohne doppelten Match rep
   const fake = fakeSheets(fixtures());
   seedStore(fake.tables);
   let messageAttempts = 0;
+  let now = Date.UTC(2026, 8, 5, 10, 34, 56, 789);
+  const eventTimes = [];
   const failingMessaging = {
-    async ensureChallengeMessages() {
+    async ensureChallengeMessages(params) {
       messageAttempts++;
+      eventTimes.push(params.createdAt);
       if (messageAttempts === 1) throw Object.assign(new Error("sqlite unavailable"), { code: "MESSAGING_WRITE_FAILED" });
     },
   };
-  const service = new SheetService({ repository, messagingService: failingMessaging, clientFactory: async () => fake.client });
+  const service = new SheetService({ repository, messagingService: failingMessaging, clientFactory: async () => fake.client, now: () => now });
   const principal = { type: "user", id: "p1", name: "Ada Admin" };
   const params = {
     operationId: "00000000-0000-4000-8000-000000000126",
@@ -1831,11 +1838,13 @@ test("eine nach Match-Commit fehlgeschlagene Inbox wird ohne doppelten Match rep
   };
 
   await assert.rejects(service.addMatch(principal, params), { code: "WRITE_OUTCOME_UNKNOWN" });
+  now += 60_000;
   const recovered = await service.addMatch(principal, params);
   assert.equal(recovered.recovered, true);
   assert.equal(recovered.repeated, true);
   assert.equal(fake.calls.valueUpdates.length, 5);
   assert.equal(messageAttempts, 2);
+  assert.deepEqual(eventTimes, [Date.UTC(2026, 8, 5, 10, 34, 56, 789), Date.UTC(2026, 8, 5, 10, 34, 56, 789)]);
 
   await service.stop();
   repository.close();

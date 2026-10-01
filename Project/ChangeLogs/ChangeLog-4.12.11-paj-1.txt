@@ -22,3 +22,15 @@ Commit: 4.12.11-paj-1-2 | Ranglistenforderungen nach Bewerbsende gesperrt
     Browserdarstellung automatisiert abgesichert.
   - [Dokumentation] Ranglistenregel, Endpunktvertrag, Seite und Architektur um
     die Bewerbsende-Sperre ergaenzt.
+
+[4.12.11-paj-1-3] - 2026-10-01
+Commit: 4.12.11-paj-1-3 | Forderungsmeldungen sekundengenau protokolliert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.11-paj-1-2-x` gesetzt.
+  - [Bewerbshistorie] Forderungsmeldungen verwenden den sekundengenauen
+    serverseitigen Vorgangszeitpunkt, waehrend das fachliche Forderungsdatum
+    weiterhin minutengenau bleibt; Wiederherstellungen behalten denselben
+    Ereigniszeitpunkt bei.
+  - [Qualitaet] Praezisen Forderungszeitpunkt und dessen Erhalt bei einer
+    wiederhergestellten Meldung automatisiert abgesichert.

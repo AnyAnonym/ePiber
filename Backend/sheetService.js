@@ -232,6 +232,15 @@ function appointmentRecoveryError(message, params, recoveryDetails) {
   return error;
 }
 
+function challengeRecoveryError(message, params, recoveryDetails) {
+  const error = new AppError("WRITE_OUTCOME_UNKNOWN", message, 503, {
+    operationId: params.operationId,
+    recordId: recoveryDetails?.recordId || "",
+  });
+  Object.defineProperty(error, "_recoveryDetails", { value: recoveryDetails, enumerable: false });
+  return error;
+}
+
 function changedCells(header, beforeRow, afterRow, names) {
   return names.flatMap((name) => {
     const index = headerIndex(header, name);
@@ -296,7 +305,7 @@ class SheetService {
     this.messagingService = messagingService;
   }
 
-  async ensureChallengeMessage(principal, params, matchId, matchRow, matchHeader) {
+  async ensureChallengeMessage(principal, params, matchId, matchRow, matchHeader, recoveryDetails = null) {
     if (!this.messagingService) throw new AppError("MESSAGING_UNAVAILABLE", "Nachrichtendienst ist nicht verfuegbar", 503);
     const matchIndexes = {
       competition: headerIndex(matchHeader, "bewerbid"),
@@ -340,6 +349,10 @@ class SheetService {
       const rank = ranking ? Number(ranking[rankingRankIndex]) : NaN;
       return Number.isInteger(rank) && rank >= 0 ? rank : null;
     };
+    const preciseCreatedAt = Number(recoveryDetails?.eventCreatedAt);
+    const eventCreatedAt = Number.isFinite(preciseCreatedAt) && preciseCreatedAt > 0
+      ? preciseCreatedAt
+      : challengedAt?.getTime() || this.now();
     try {
       await this.messagingService.ensureChallengeMessages({
         matchId,
@@ -352,7 +365,7 @@ class SheetService {
         opponentId: params.opponentId,
         opponentName,
         opponentRank: rankOf(params.opponentId),
-        createdAt: challengedAt?.getTime() || this.now(),
+        createdAt: eventCreatedAt,
       });
     } catch (error) {
       logger.log("error", "challenge_messages_persistence_failed", {
@@ -361,9 +374,11 @@ class SheetService {
         opponentId: params.opponentId,
         errorCode: error.code || "MESSAGING_WRITE_FAILED",
       });
-      throw new AppError("WRITE_OUTCOME_UNKNOWN", "Forderung ist angelegt, Nachrichten konnten nicht bestaetigt werden", 503, {
-        operationId: params.operationId,
+      throw challengeRecoveryError("Forderung ist angelegt, Nachrichten konnten nicht bestaetigt werden", params, {
+        phase: "match-create",
         recordId: matchId,
+        ...(recoveryDetails?.rowNumber ? { rowNumber: recoveryDetails.rowNumber } : {}),
+        eventCreatedAt,
       });
     }
   }
@@ -1859,7 +1874,7 @@ class SheetService {
 
   async addMatch(principal, params) {
     const payload = { bewerbId: params.bewerbId, opponentId: params.opponentId };
-    return this.runIdempotent(principal, "addMatch", params.operationId, payload, ({ recoveryOnly, checkpointUnknown }) => this.enqueue(`ranking:${params.bewerbId}`, () => this.enqueue("matches1", async () => {
+    return this.runIdempotent(principal, "addMatch", params.operationId, payload, ({ recoveryOnly, recoveryDetails, checkpointUnknown }) => this.enqueue(`ranking:${params.bewerbId}`, () => this.enqueue("matches1", async () => {
       if (params.opponentId === principal.id) throw new AppError("MATCH_SELF", "Ein Spieler kann sich nicht selbst fordern");
       this.cancelScheduledRefresh("matches1");
       const values = await this.readTable("matches1");
@@ -1870,16 +1885,17 @@ class SheetService {
       const existingRow = values.slice(1).find((row) => String(row[idIndex] || "").trim() === newId);
       if (existingRow) {
         dataStore.set("matches1", values, { source: "write" });
-        await this.ensureChallengeMessage(principal, params, newId, existingRow, header);
+        await this.ensureChallengeMessage(principal, params, newId, existingRow, header, recoveryDetails);
         return { success: true, newMatchId: newId, recovered: true };
       }
       if (recoveryOnly) {
-        throw new AppError("WRITE_OUTCOME_UNKNOWN", "Match-Erstellung ist noch nicht nachweisbar", 503, { operationId: params.operationId, recordId: newId });
+        throw challengeRecoveryError("Match-Erstellung ist noch nicht nachweisbar", params, recoveryDetails || { phase: "match-create", recordId: newId });
       }
       this.assertChallengeAllowed(principal, params.bewerbId, params.opponentId, values);
+      const eventCreatedAt = this.now();
       const newRow = rowForHeader(header, {
         id: newId,
-        forderungdate: viennaTimestamp(),
+        forderungdate: viennaTimestamp(false, new Date(eventCreatedAt)),
         bewerbid: params.bewerbId,
         spieler1id: principal.id,
         spieler3id: params.opponentId,
@@ -1887,7 +1903,8 @@ class SheetService {
       const sheets = await this.getClient();
       const rowNumber = values.length + 1;
       const fields = ["id", "forderungdate", "bewerbid", "spieler1id", "spieler3id"];
-      checkpointUnknown({ phase: "match-create", recordId: newId, rowNumber });
+      const recoveryPlan = { phase: "match-create", recordId: newId, rowNumber, eventCreatedAt };
+      checkpointUnknown(recoveryPlan);
       let writeError = null;
       try {
         await sheets.spreadsheets.values.batchUpdate({
@@ -1915,10 +1932,10 @@ class SheetService {
       }
       const confirmedRow = confirmation?.slice(1).find((row) => String(row[idIndex] || "").trim() === newId);
       if (!confirmedRow) {
-        throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang der Match-Erstellung ist unklar", 503, { operationId: params.operationId, recordId: newId, rowNumber });
+        throw challengeRecoveryError("Ausgang der Match-Erstellung ist unklar", params, recoveryPlan);
       }
       dataStore.set("matches1", confirmation, { source: "write" });
-      await this.ensureChallengeMessage(principal, params, newId, confirmedRow, headerOf(confirmation));
+      await this.ensureChallengeMessage(principal, params, newId, confirmedRow, headerOf(confirmation), recoveryPlan);
       return { success: true, newMatchId: newId, ...(writeError ? { recovered: true } : {}) };
     })));
   }
