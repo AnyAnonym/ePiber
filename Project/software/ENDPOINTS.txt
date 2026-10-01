@@ -786,7 +786,9 @@ AUTHENTICATED (player, operator oder admin):
   `rankingChallengeState { bewerbId }`
       Liefert fuer den angemeldeten Spieler den serverseitig bestimmten Modus
       `ranked|returning|newcomer|ineligible` sowie nur bei Bedarf `rank` oder
-      `returnFromRank`. Neueinsteiger ohne Ranglistenzeile und Spieler nach Ablauf
+      `returnFromRank` und immer `competitionEndAt` sowie `competitionEnded`.
+      Ein fehlendes Bewerbsende ergibt `null|false`; ein ungueltiges Ende wird als
+      fehlerhafte Regeldaten abgelehnt. Neueinsteiger ohne Ranglistenzeile und Spieler nach Ablauf
       ihrer zwoelfmonatigen Rueckkehrfrist werden anhand von Aktivstatus,
       `Bewerb.Geschlecht`, `Bewerb.Alterskategorie`, Personengeschlecht und
       Geburtsjahr geprueft. Personenwerte selbst werden nicht ausgegeben.
@@ -815,6 +817,9 @@ AUTHENTICATED (player, operator oder admin):
       Neueinsteiger ohne Ranglistenzeile sowie ein Spieler nach Ablauf der
       Rueckkehrfrist darf jeden aktiven Rang fordern. Der Write legt nur das Match
       an; Einreihung und Rangverschiebung erfolgen beim spaeteren Ergebniswrite.
+      Nach Ablauf von `BewerbsEnde` werden neue Forderungen fuer alle Modi mit
+      `COMPETITION_ENDED` abgelehnt. Ein reines Datum gilt bis Tagesende;
+      bestehende Forderungen und deren Abschluss bleiben davon unberuehrt.
 
   `setMatchAppointment { operationId, matchId, matchDate }`
       Idempotenter Terminwrite fuer `player`, `player A` und `player B`. Die

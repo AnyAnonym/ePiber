@@ -162,6 +162,13 @@ async function fetchMyState() {
     returnFromRank: Number.isInteger(Number(state.returnFromRank)) && Number(state.returnFromRank) > 0
       ? Number(state.returnFromRank)
       : null,
+    competitionEndAt: state.competitionEndAt !== null
+      && state.competitionEndAt !== undefined
+      && state.competitionEndAt !== ""
+      && Number.isFinite(Number(state.competitionEndAt))
+      ? new Date(Number(state.competitionEndAt))
+      : null,
+    competitionEnded: state.competitionEnded === true,
   };
 }
 
@@ -197,17 +204,24 @@ async function applyAllRules(container, pyramid, rankedList, warningHost = conta
     ? restrictRes.value
     : (diagnostic.warn("ranking_restrictions_load_failed", { error: restrictRes.reason }),
        { schonzeitMap: new Map(), sperrzeitMap: new Map() });
-  scheduleRestrictionExpiry([...schonzeitMap.values(), ...sperrzeitMap.values()]);
-
   const myState = myRes.status === "fulfilled"
     ? myRes.value
     : (diagnostic.warn("ranking_identity_state_load_failed", { error: myRes.reason }), null);
+  scheduleRestrictionExpiry([
+    ...schonzeitMap.values(),
+    ...sperrzeitMap.values(),
+    ...(myState?.competitionEndAt ? [myState.competitionEndAt] : []),
+  ]);
 
   const ruleDataComplete = busyRes.status === "fulfilled"
     && restrictRes.status === "fulfilled"
     && myRes.status === "fulfilled";
+  const competitionEnded = myState?.competitionEnded === true;
+  const statusMessage = !ruleDataComplete
+    ? "Forderungen sind voruebergehend deaktiviert, weil Regeldaten unvollstaendig sind."
+    : (competitionEnded ? "Bewerb beendet – es können keine neuen Forderungen erstellt werden." : "");
   let warning = document.getElementById("rankingDataWarning");
-  if (!ruleDataComplete && !warning) {
+  if (statusMessage && !warning) {
     warning = document.createElement("div");
     warning.id = "rankingDataWarning";
     warning.className = "ranking-data-warning";
@@ -216,10 +230,8 @@ async function applyAllRules(container, pyramid, rankedList, warningHost = conta
     warningHost?.insertBefore(warning, liveContainer || warningHost.firstChild);
   }
   if (warning) {
-    warning.textContent = ruleDataComplete
-      ? ""
-      : "Forderungen sind voruebergehend deaktiviert, weil Regeldaten unvollstaendig sind.";
-    warning.hidden = ruleDataComplete;
+    warning.textContent = statusMessage;
+    warning.hidden = !statusMessage;
   }
 
   diagnostic.info("ranking_rules_loaded", {
@@ -243,17 +255,17 @@ async function applyAllRules(container, pyramid, rankedList, warningHost = conta
 
   // ── Schritt 3: Forderbare IDs berechnen (Regelwerk)
   const challengeableIds = new Set();
-  if (ruleDataComplete && myState?.mode === "newcomer") {
+  if (ruleDataComplete && !competitionEnded && myState?.mode === "newcomer") {
     for (const player of rankedList) {
       if (player.playerId) challengeableIds.add(String(player.playerId).trim());
     }
-  } else if (ruleDataComplete && myState?.mode === "returning" && myState.returnFromRank) {
+  } else if (ruleDataComplete && !competitionEnded && myState?.mode === "returning" && myState.returnFromRank) {
     for (const player of rankedList) {
       if (player.rank >= myState.returnFromRank && player.playerId) {
         challengeableIds.add(String(player.playerId).trim());
       }
     }
-  } else if (ruleDataComplete && myRow !== -1 && myCol !== -1) {
+  } else if (ruleDataComplete && !competitionEnded && myRow !== -1 && myCol !== -1) {
     const me = pyramid[myRow][myCol];
 
     // Gleiche Zeile – alle links von mir

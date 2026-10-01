@@ -12,10 +12,11 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
 -- Daten und Aktualisierung --
   Reads: `rlPlatzierung`, minimale `players`-Projektion, `preMatches`, `bewerbe`,
   `readMatchRestrictions` und fuer angemeldete Benutzer
-  `rankingChallengeState`. Restriktions- und Eigenstatus muessen vollstaendig
-  sein; andernfalls werden Forderungen sichtbar deaktiviert. Invalidierungen
-  `ranking`, `matches`, `players`, `bewerbe`, Sessionaenderungen und das naechste
-  Restriktionsende serialisieren einen kompletten Refresh. Der voll deckende
+  `rankingChallengeState`. Der Eigenstatus liefert zusaetzlich das serverseitig
+  ausgewertete Bewerbsende. Restriktions-, Lebenszyklus- und Eigenstatus muessen
+  vollstaendig sein; andernfalls werden Forderungen sichtbar deaktiviert. Invalidierungen
+  `ranking`, `matches`, `players`, `bewerbe`, Sessionaenderungen und der naechste
+  Restriktions- oder Bewerbsendzeitpunkt serialisieren einen kompletten Refresh. Der voll deckende
   Spinner `Lade Daten ...` bleibt beim Erstaufbau sichtbar, bis Pyramide und alle
   Statusfarben vollstaendig vorbereitet sind. Spaetere Refreshes behalten den
   bisherigen Stand ohne Spinner bis zum atomaren Austausch sichtbar. Initialer
@@ -55,6 +56,11 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Profilreiter mit Raushaengezeit und Grund fuer angemeldete Benutzer; eine
   Position `0` wird nicht angezeigt. Das Eigenprofil liefert den gespeicherten
   letzten Rang als Startpunkt fuer eine Rueckkehrforderung.
+  Nach Bewerbsende fehlen alle Forderungsaktionen und gruenen Forderbar-
+  Markierungen; oberhalb der Pyramide steht `Bewerb beendet – es können keine
+  neuen Forderungen erstellt werden.`. Eine bereits geoeffnete Seite aktualisiert
+  sich beim Erreichen des Endzeitpunkts automatisch. Bestehende Forderungen und
+  ihre Termin- und Ergebnisaktionen bleiben erhalten.
   Forderungen senden stabile `operationId`, `bewerbId` und `opponentId`; der Server
   prueft Identitaet und Regeln. Bei Erfolg ist die Forderung sofort verbindlich
   und wird mit dem Forderer in `Spieler1ID` sowie dem Geforderten in `Spieler3ID`
@@ -153,6 +159,10 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Rueckkehrfrist sieht alle regulaer verfuegbaren Gegner gruen und kann jeden
   davon fordern. Fehlende eingeschraenkte Personendaten und unvollstaendige
   Regeldaten bleiben fail-closed.
+  Das serverseitig ausgewertete `BewerbsEnde` sperrt alle neuen Forderungen fuer
+  gereihte Spieler, Neueinsteiger und Rueckkehrer. Ein reines Datum gilt bis zum
+  Tagesende; ein fehlendes Ende bleibt offen, ein ungueltiges Ende deaktiviert
+  Forderungen als unvollstaendige Regeldaten.
   Ein Match mit dem exakt
   kleingeschriebenen Marker `[wo]` oder `[ret]` gilt auch ohne Ergebnis als
   abgeschlossen und wird nicht mehr gelb als offene Forderung angezeigt. Gewinner

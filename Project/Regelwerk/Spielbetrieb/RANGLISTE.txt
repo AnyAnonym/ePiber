@@ -47,6 +47,8 @@ Match durch ihren eigenen Walkover abgeschlossen. [Bestaetigt]
 
 Eine Forderung ist nicht zulaessig, wenn: [Bestaetigt]
 
+  - das minutengenau beziehungsweise bei einem reinen Datum bis Tagesende
+    geltende `BewerbsEnde` bereits abgelaufen ist;
   - der Forderer oder der Geforderte bereits an einer offenen Forderung beteiligt
     ist;
   - der Geforderte nach einem Sieg noch Schonzeit besitzt;
@@ -55,6 +57,11 @@ Eine Forderung ist nicht zulaessig, wenn: [Bestaetigt]
 
 Ein freiwilliger Verzicht auf eine laufende Schonzeit ist derzeit nicht Teil des
 Regelwerks. [Bestaetigt]
+
+Das Bewerbsende verhindert ausschliesslich neue Forderungen. Bereits davor
+angelegte Forderungen bleiben verbindlich und werden nach den normalen Termin-
+und Abschlussregeln zu Ende gefuehrt. Ein fehlendes Bewerbsende laesst die
+Rangliste offen. [Bestaetigt]
 
 
 4. TERMIN- UND AUSTRAGUNGSFRIST

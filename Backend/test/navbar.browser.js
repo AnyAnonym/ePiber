@@ -214,6 +214,7 @@ export function createEndpoint(name) {
     const withdrawn = new URLSearchParams(window.location.search).get("withdrawn") === "1";
     const newcomer = new URLSearchParams(window.location.search).get("newcomer") === "1";
     const ineligible = new URLSearchParams(window.location.search).get("ineligible") === "1";
+    const endedRanking = new URLSearchParams(window.location.search).get("endedRanking") === "1";
     const inactivePlayer = new URLSearchParams(window.location.search).get("inactivePlayer") === "1";
     const blockedTarget = new URLSearchParams(window.location.search).get("blockedTarget") === "1";
     const ownBusy = new URLSearchParams(window.location.search).get("ownBusy") === "1";
@@ -281,6 +282,8 @@ export function createEndpoint(name) {
       mode: ineligible ? "ineligible" : (newcomer ? "newcomer" : (withdrawn ? "returning" : "ranked")),
       rank: newcomer || withdrawn || ineligible ? null : 1,
       returnFromRank: withdrawn ? 4 : null,
+      competitionEndAt: endedRanking ? Date.now() - 1000 : Date.now() + 86400000,
+      competitionEnded: endedRanking,
     } };
     if (name === "withdrawnRankingPlayers") return { data: { success: true, competitionName: "Wintercup", players: [
       {
@@ -306,7 +309,10 @@ export function createEndpoint(name) {
         id: "p2", firstName: "Foreign", lastName: "Player",
         ...(role === "admin" ? { login: "foreign-login", passwordSetupAllowed: false } : {}),
         email: "directory@example.test", phone: "0043 699 7654321", birthDate: "", competitions, rankings: newcomer ? [{
-          competitionId: "2", competitionName: "Mobile Rangliste", rank: 2, status: "active", canChallenge: true,
+          competitionId: "2", competitionName: "Mobile Rangliste",
+          competitionEndAt: endedRanking ? Date.now() - 1000 : Date.now() + 86400000,
+          competitionEnded: endedRanking,
+          rank: 2, status: "active", canChallenge: !endedRanking,
         }] : profileRankings,
       } } };
     }
@@ -1372,6 +1378,28 @@ test("Ranglistenseite rendert trotz Favoriten-Titelzeile vollstaendig", {
     });
     assert.deepEqual(titleLayout, { gap: 4, centerOffset: 0 });
     assert.deepEqual(pageErrors, []);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Beendete Rangliste sperrt neue Forderungen sichtbar", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/ranking-test.html?role=player&id=2&newcomer=1&endedRanking=1`, { waitUntil: "domcontentloaded" });
+    await page.locator("#rankingDataWarning").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#rankingDataWarning").textContent(), "Bewerb beendet – es können keine neuen Forderungen erstellt werden.");
+    assert.equal(await page.locator("#rankingContainer .box.challengeable").count(), 0);
+    await page.locator("#rankingContainer .box").first().click();
+    await page.getByRole("tab", { name: "Archiv", exact: true }).click();
+    await page.getByRole("tab", { name: "Mobile Rangliste" }).click();
+    assert.equal(await page.getByRole("button", { name: "Fordern" }).count(), 0);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
@@ -2812,6 +2840,17 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
     await ineligiblePage.locator("#rankingContainer .box").first().waitFor({ state: "visible" });
     assert.equal(await ineligiblePage.locator("#rankingContainer .box.challengeable").count(), 0);
     await ineligiblePage.close();
+
+    const endedPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await endedPage.goto(`http://127.0.0.1:${address.port}/ranking-test.html?role=player&id=2&newcomer=1&endedRanking=1`, { waitUntil: "domcontentloaded" });
+    await endedPage.locator("#rankingDataWarning").waitFor({ state: "visible" });
+    assert.equal(await endedPage.locator("#rankingDataWarning").textContent(), "Bewerb beendet – es können keine neuen Forderungen erstellt werden.");
+    assert.equal(await endedPage.locator("#rankingContainer .box.challengeable").count(), 0);
+    await endedPage.locator("#rankingContainer .box").first().click();
+    await endedPage.getByRole("tab", { name: "Archiv", exact: true }).click();
+    await endedPage.getByRole("tab", { name: "Mobile Rangliste" }).click();
+    assert.equal(await endedPage.getByRole("button", { name: "Fordern" }).count(), 0);
+    await endedPage.close();
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

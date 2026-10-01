@@ -4,6 +4,7 @@ const { GOOGLE_REQUEST_TIMEOUT_MS, SHEET_ID, TABLE_CONFIG } = require("./config.
 const dataStore = require("./dataStore.js");
 const dataPoller = require("./dataPoller.js");
 const { AppError } = require("./errors.js");
+const { competitionLifecycle } = require("./competitionLifecycle.js");
 const { analyzeMatchRules, matchCompletionFingerprint, parseMatchDate, parseParticipant } = require("./matchRules.js");
 const {
   MatchResultRuleError,
@@ -145,6 +146,18 @@ function parseCompetitionDate(raw, endOfDay) {
   return date;
 }
 
+function competitionEndProjection(header, row, now) {
+  const endIndex = headerIndex(header, "bewerbsende");
+  const lifecycle = competitionLifecycle(endIndex < 0 ? "" : row[endIndex], now);
+  if (!lifecycle.valid) {
+    throw new AppError("COMPETITION_DATE_INVALID", "Bewerbsende ist ungueltig", 503);
+  }
+  return {
+    competitionEndAt: lifecycle.competitionEndAt,
+    competitionEnded: lifecycle.competitionEnded,
+  };
+}
+
 function validCompactDateTime(value) {
   const match = String(value || "").match(/^(\d{2})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
   if (!match || Number(match[4]) > 23 || Number(match[5]) > 59) return false;
@@ -219,6 +232,15 @@ function appointmentRecoveryError(message, params, recoveryDetails) {
   return error;
 }
 
+function challengeRecoveryError(message, params, recoveryDetails) {
+  const error = new AppError("WRITE_OUTCOME_UNKNOWN", message, 503, {
+    operationId: params.operationId,
+    recordId: recoveryDetails?.recordId || "",
+  });
+  Object.defineProperty(error, "_recoveryDetails", { value: recoveryDetails, enumerable: false });
+  return error;
+}
+
 function changedCells(header, beforeRow, afterRow, names) {
   return names.flatMap((name) => {
     const index = headerIndex(header, name);
@@ -283,7 +305,7 @@ class SheetService {
     this.messagingService = messagingService;
   }
 
-  async ensureChallengeMessage(principal, params, matchId, matchRow, matchHeader) {
+  async ensureChallengeMessage(principal, params, matchId, matchRow, matchHeader, recoveryDetails = null) {
     if (!this.messagingService) throw new AppError("MESSAGING_UNAVAILABLE", "Nachrichtendienst ist nicht verfuegbar", 503);
     const matchIndexes = {
       competition: headerIndex(matchHeader, "bewerbid"),
@@ -327,6 +349,10 @@ class SheetService {
       const rank = ranking ? Number(ranking[rankingRankIndex]) : NaN;
       return Number.isInteger(rank) && rank >= 0 ? rank : null;
     };
+    const preciseCreatedAt = Number(recoveryDetails?.eventCreatedAt);
+    const eventCreatedAt = Number.isFinite(preciseCreatedAt) && preciseCreatedAt > 0
+      ? preciseCreatedAt
+      : challengedAt?.getTime() || this.now();
     try {
       await this.messagingService.ensureChallengeMessages({
         matchId,
@@ -339,7 +365,7 @@ class SheetService {
         opponentId: params.opponentId,
         opponentName,
         opponentRank: rankOf(params.opponentId),
-        createdAt: challengedAt?.getTime() || this.now(),
+        createdAt: eventCreatedAt,
       });
     } catch (error) {
       logger.log("error", "challenge_messages_persistence_failed", {
@@ -348,9 +374,11 @@ class SheetService {
         opponentId: params.opponentId,
         errorCode: error.code || "MESSAGING_WRITE_FAILED",
       });
-      throw new AppError("WRITE_OUTCOME_UNKNOWN", "Forderung ist angelegt, Nachrichten konnten nicht bestaetigt werden", 503, {
-        operationId: params.operationId,
+      throw challengeRecoveryError("Forderung ist angelegt, Nachrichten konnten nicht bestaetigt werden", params, {
+        phase: "match-create",
         recordId: matchId,
+        ...(recoveryDetails?.rowNumber ? { rowNumber: recoveryDetails.rowNumber } : {}),
+        eventCreatedAt,
       });
     }
   }
@@ -566,6 +594,9 @@ class SheetService {
   assertChallengeAllowed(principal, competitionId, opponentId, matches = dataStore.get("matches1")) {
     requireCurrentData("players", "bewerbe", "matches1", "rlPlatzierung");
     const context = this.rankingChallengeContext(principal, competitionId);
+    if (context.competitionEnded) {
+      throw new AppError("COMPETITION_ENDED", "Der Bewerb ist beendet; neue Forderungen sind nicht mehr moeglich", 409);
+    }
     const players = dataStore.get("players");
     const playerHeader = headerOf(players);
     const playerIdIndex = headerIndex(playerHeader, "id");
@@ -624,6 +655,7 @@ class SheetService {
     if (String(competition[headerIndex(competitionHeader, "bewerbsartid")] || "").trim() !== "2") {
       throw new AppError("RANKING_REQUIRED", "Bewerb ist keine Rangliste", 409);
     }
+    const lifecycleProjection = competitionEndProjection(competitionHeader, competition, this.now());
 
     const players = dataStore.get("players");
     const playerHeader = headerOf(players);
@@ -654,7 +686,7 @@ class SheetService {
       .sort((left, right) => left.rank - right.rank);
     const membership = competitionEntries.find((entry) => entry.id === principal.id);
     if (membership && Number.isInteger(membership.rank) && membership.rank > 0) {
-      return { mode: "ranked", rank: membership.rank, returnFromRank: null, entries };
+      return { mode: "ranked", rank: membership.rank, returnFromRank: null, entries, ...lifecycleProjection };
     }
     if (membership?.rank === 0) {
       if (!Number.isInteger(membership.previousRank) || membership.previousRank < 1) {
@@ -665,14 +697,14 @@ class SheetService {
       const expiresAt = new Date(withdrawnAt);
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
       if (new Date(this.now()) <= expiresAt) {
-        return { mode: "returning", rank: null, returnFromRank: membership.previousRank, entries };
+        return { mode: "returning", rank: null, returnFromRank: membership.previousRank, entries, ...lifecycleProjection };
       }
     } else if (membership) {
       throw new AppError("RANKING_MEMBERSHIP_REQUIRED", "Ranglistenmitgliedschaft ist ungueltig", 409);
     }
 
     this.assertNewcomerEligible({ competitionHeader, competition, playerHeader, person });
-    return { mode: "newcomer", rank: null, returnFromRank: null, entries };
+    return { mode: "newcomer", rank: null, returnFromRank: null, entries, ...lifecycleProjection };
   }
 
   assertNewcomerEligible({ competitionHeader, competition, playerHeader, person }) {
@@ -708,11 +740,18 @@ class SheetService {
 
   rankingChallengeState(principal, competitionId) {
     try {
-      const { mode, rank, returnFromRank } = this.rankingChallengeContext(principal, competitionId);
-      return { success: true, mode, rank, returnFromRank };
+      const { mode, rank, returnFromRank, competitionEndAt, competitionEnded } = this.rankingChallengeContext(principal, competitionId);
+      return { success: true, mode, rank, returnFromRank, competitionEndAt, competitionEnded };
     } catch (error) {
       if (error?.code === "RANKING_ENTRY_NOT_ELIGIBLE") {
-        return { success: true, mode: "ineligible", rank: null, returnFromRank: null };
+        const { header, row } = this.competition(competitionId);
+        return {
+          success: true,
+          mode: "ineligible",
+          rank: null,
+          returnFromRank: null,
+          ...competitionEndProjection(header, row, this.now()),
+        };
       }
       throw error;
     }
@@ -1835,7 +1874,7 @@ class SheetService {
 
   async addMatch(principal, params) {
     const payload = { bewerbId: params.bewerbId, opponentId: params.opponentId };
-    return this.runIdempotent(principal, "addMatch", params.operationId, payload, ({ recoveryOnly, checkpointUnknown }) => this.enqueue(`ranking:${params.bewerbId}`, () => this.enqueue("matches1", async () => {
+    return this.runIdempotent(principal, "addMatch", params.operationId, payload, ({ recoveryOnly, recoveryDetails, checkpointUnknown }) => this.enqueue(`ranking:${params.bewerbId}`, () => this.enqueue("matches1", async () => {
       if (params.opponentId === principal.id) throw new AppError("MATCH_SELF", "Ein Spieler kann sich nicht selbst fordern");
       this.cancelScheduledRefresh("matches1");
       const values = await this.readTable("matches1");
@@ -1846,16 +1885,17 @@ class SheetService {
       const existingRow = values.slice(1).find((row) => String(row[idIndex] || "").trim() === newId);
       if (existingRow) {
         dataStore.set("matches1", values, { source: "write" });
-        await this.ensureChallengeMessage(principal, params, newId, existingRow, header);
+        await this.ensureChallengeMessage(principal, params, newId, existingRow, header, recoveryDetails);
         return { success: true, newMatchId: newId, recovered: true };
       }
       if (recoveryOnly) {
-        throw new AppError("WRITE_OUTCOME_UNKNOWN", "Match-Erstellung ist noch nicht nachweisbar", 503, { operationId: params.operationId, recordId: newId });
+        throw challengeRecoveryError("Match-Erstellung ist noch nicht nachweisbar", params, recoveryDetails || { phase: "match-create", recordId: newId });
       }
       this.assertChallengeAllowed(principal, params.bewerbId, params.opponentId, values);
+      const eventCreatedAt = this.now();
       const newRow = rowForHeader(header, {
         id: newId,
-        forderungdate: viennaTimestamp(),
+        forderungdate: viennaTimestamp(false, new Date(eventCreatedAt)),
         bewerbid: params.bewerbId,
         spieler1id: principal.id,
         spieler3id: params.opponentId,
@@ -1863,7 +1903,8 @@ class SheetService {
       const sheets = await this.getClient();
       const rowNumber = values.length + 1;
       const fields = ["id", "forderungdate", "bewerbid", "spieler1id", "spieler3id"];
-      checkpointUnknown({ phase: "match-create", recordId: newId, rowNumber });
+      const recoveryPlan = { phase: "match-create", recordId: newId, rowNumber, eventCreatedAt };
+      checkpointUnknown(recoveryPlan);
       let writeError = null;
       try {
         await sheets.spreadsheets.values.batchUpdate({
@@ -1891,10 +1932,10 @@ class SheetService {
       }
       const confirmedRow = confirmation?.slice(1).find((row) => String(row[idIndex] || "").trim() === newId);
       if (!confirmedRow) {
-        throw new AppError("WRITE_OUTCOME_UNKNOWN", "Ausgang der Match-Erstellung ist unklar", 503, { operationId: params.operationId, recordId: newId, rowNumber });
+        throw challengeRecoveryError("Ausgang der Match-Erstellung ist unklar", params, recoveryPlan);
       }
       dataStore.set("matches1", confirmation, { source: "write" });
-      await this.ensureChallengeMessage(principal, params, newId, confirmedRow, headerOf(confirmation));
+      await this.ensureChallengeMessage(principal, params, newId, confirmedRow, headerOf(confirmation), recoveryPlan);
       return { success: true, newMatchId: newId, ...(writeError ? { recovered: true } : {}) };
     })));
   }

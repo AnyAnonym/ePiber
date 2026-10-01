@@ -439,7 +439,11 @@ Terminabsage:
   beschraenkt.
 
 Ranglistenforderung:
-  Nach dem frischen `Matches1`-Read bestimmt der Server die Zeile unmittelbar
+  Die gemeinsame Forderbarkeitsauswertung projiziert und prueft das
+  `BewerbsEnde`; nach dessen Ablauf liefert sie keine Aktion und der Write lehnt
+  mit `COMPETITION_ENDED` ab. Ein fehlendes Ende bleibt offen, ein ungueltiges
+  Ende sperrt fail-closed. Bereits bestehende Forderungen werden weiterhin
+  terminiert und abgeschlossen. Nach dem frischen `Matches1`-Read bestimmt der Server die Zeile unmittelbar
   nach dem letzten vorhandenen Datensatz und schreibt `ID`, `ForderungDate`, `BewerbID`, `Spieler1ID` und
   `Spieler3ID` als positionsgenauen A1-Batch. Er verwendet bewusst kein
   `values.append`, weil unsichtbare Formeln oder Vorbelegungen Google sonst zu
