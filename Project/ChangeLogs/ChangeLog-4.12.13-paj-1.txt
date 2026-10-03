@@ -6,3 +6,10 @@ Commit: 4.12.13-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.13-paj-1-1` gesetzt.
+
+[4.12.13-paj-1-2] - 2026-10-03
+Commit: 4.12.13-paj-1-2 | PostgreSQL-Backup-Gate neu eingeordnet
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.13-paj-1-1-x` gesetzt.
+  - [Dokumentation] PostgreSQL-Backup, Restore und PITR als Gate nach synthetischem Anwendungsumbau, aber vor Realanalyse, dauerhaftem Devel-Bestand und Gesamt-Abnahme eingeordnet.
