@@ -57,10 +57,10 @@ Ranglisten-Pyramide - Interaktive Forderungsrangliste
   Position `0` wird nicht angezeigt. Das Eigenprofil liefert den gespeicherten
   letzten Rang als Startpunkt fuer eine Rueckkehrforderung.
   Nach Bewerbsende fehlen alle Forderungsaktionen und gruenen Forderbar-
-  Markierungen; oberhalb der Pyramide steht `Bewerb beendet – es können keine
-  neuen Forderungen erstellt werden.`. Eine bereits geoeffnete Seite aktualisiert
-  sich beim Erreichen des Endzeitpunkts automatisch. Bestehende Forderungen und
-  ihre Termin- und Ergebnisaktionen bleiben erhalten.
+  Markierungen; die Ranglistenansicht zeigt dafuer keinen zusaetzlichen
+  Statushinweis. Eine bereits geoeffnete Seite aktualisiert sich beim Erreichen
+  des Endzeitpunkts automatisch. Bestehende Forderungen und ihre Termin- und
+  Ergebnisaktionen bleiben erhalten.
   Forderungen senden stabile `operationId`, `bewerbId` und `opponentId`; der Server
   prueft Identitaet und Regeln. Bei Erfolg ist die Forderung sofort verbindlich
   und wird mit dem Forderer in `Spieler1ID` sowie dem Geforderten in `Spieler3ID`

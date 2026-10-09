@@ -69,7 +69,7 @@ die Vorbereitung des naechsten Arbeitsstands:
 
 1. Branch, Arbeitsbaum, Index, Diff, letzten Commit, Paketversionen, offenen
    Branch-Changelogabschnitt und den diffgebundenen Pruefnachweis kontrollieren.
-   Erfolgreiche Pruefprofile werden ausserhalb des Arbeitsbaums unter `.git`
+   Erfolgreiche Pruefsuiten und einzelne Browserprofile werden ausserhalb des Arbeitsbaums unter `.git`
    zusammen mit HEAD, Node-Version und einem profilspezifischen Fingerprint der
    testrelevanten Eingaben gespeichert. Ein unveraenderter fachlicher Stand darf
    diesen Nachweis auch in einer neuen OpenCode-Session verwenden. Aenderungen an
@@ -82,9 +82,12 @@ die Vorbereitung des naechsten Arbeitsstands:
 
    ausgefuehrt. Die Pfadpolicy unterscheidet Dokumentation, Build,
    Drei-Engine-Kernsmoke, fokussierten Browser-Lifecycle und die vollstaendige
-   Browsermatrix. `next-task` startet selbst keine fachlichen Tests und bricht
-   mit den konkret fehlenden Profilen ab, statt unerwartet eine breite Suite
-   auszufuehren.
+   Browsermatrix. Jeder Browserlauf verwendet einen frischen Container; ein
+   fehlgeschlagenes Profil entwertet bei unveraendertem Fingerprint keine bereits
+   erfolgreichen Profile. Ein erneuter `verify --suite auto` fuehrt nur die
+   konkret fehlenden Profile aus. `next-task` startet selbst keine fachlichen
+   Tests und bricht mit den konkret fehlenden Profilen ab, statt unerwartet eine
+   breite Suite auszufuehren.
 2. Im offenen Changelog kann `Kurzkommentar: <Text>` als einzeiliger
    Commit-Kurzkommentar ohne `|` stehen. Ist das Feld beim Abschluss noch `offen`
    oder fehlt es, wird die Datei nach der Verifikation nicht allein deswegen
@@ -126,9 +129,11 @@ erforderlich.
 Der Browser-Smokerunner besitzt die Profile `core`, `lifecycle` und `full`.
 `core` prueft die Kernablaeufe in Chromium, WebKit und Firefox. `lifecycle`
 prueft ausschliesslich den Aufwach-/Reconnect-Ablauf in allen acht Zielprofilen.
-`full` bleibt die vollstaendige Matrix. Der Containerwrapper verwendet pro Lauf
-eine eindeutige Container-ID und entfernt den Container auch bei TERM, INT oder
-HUP kontrolliert.
+`full` bleibt die vollstaendige Matrix. Jedes Zielprofil laeuft isoliert in einem
+frischen Container mit eindeutiger ID; der Wrapper entfernt jeden Container auch
+bei TERM, INT oder HUP kontrolliert. Der diffgebundene Nachweis wird unmittelbar
+nach jedem erfolgreichen Profil geschrieben, sodass eine Wiederholung nur bei
+den fehlenden Profilen fortsetzt.
 
 `nächste Aufgabe` ist die ausdrueckliche Freigabe fuer Finalisierung und genau
 diesen Branch-Commit. Der Auftrag autorisiert keinen Push, Merge,

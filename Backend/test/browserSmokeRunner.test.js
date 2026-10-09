@@ -30,8 +30,12 @@ test("Browser-Smokerunner trennt Kern-, Lifecycle- und Vollmatrix", () => {
 
 test("Containerwrapper verwendet eindeutige IDs und raeumt bei Abbruch auf", () => {
   const wrapper = fs.readFileSync(path.join(backendRoot, "scripts/run-browser-smoke-container.sh"), "utf8");
+  assert.match(wrapper, /if \[\[ "\$\{has_profile\}" == "false" \]\]/);
+  assert.match(wrapper, /"\$0" "\$@" --profile "\$\{profile\}"/);
   assert.match(wrapper, /container_name="epiber-playwright-smoke-\$\(id -u\)-\$\$"/);
   assert.match(wrapper, /--cidfile "\$\{cid_file\}"/);
+  assert.match(wrapper, /PLAYWRIGHT_SMOKE_MEMORY:-3g/);
+  assert.match(wrapper, /PLAYWRIGHT_SMOKE_PIDS:-1024/);
   assert.match(wrapper, /trap cleanup EXIT INT TERM HUP/);
   assert.match(wrapper, /rm -f "\$\(cat "\$\{cid_file\}"\)"/);
 });

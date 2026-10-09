@@ -34,6 +34,12 @@
           <p id="hall-time-message-text" class="hall-time-message-text" role="alert"></p>
         </form>
       </dialog>
+      <dialog id="hall-time-booking-confirmation-dialog" class="hall-time-info-dialog hall-time-confirmation-dialog" aria-label="Statusänderung bestätigen" aria-describedby="hall-time-confirmation-text">
+        <form method="dialog">
+          <p id="hall-time-confirmation-text" class="hall-time-message-text"></p>
+          <div class="hall-time-confirmation-actions"><button id="hall-time-confirmation-no" class="hall-time-confirmation-cancel" type="button">Nein</button><button id="hall-time-confirmation-yes" type="button">Ja</button></div>
+        </form>
+      </dialog>
       <p id="hall-time-feedback" class="hall-time-feedback" role="status" aria-live="polite"></p>
       <section class="hall-time-table-card" aria-label="Hallenzeiten-Raster">
         <div class="hall-time-table-scroll">

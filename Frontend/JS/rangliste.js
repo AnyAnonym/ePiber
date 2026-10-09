@@ -219,7 +219,7 @@ async function applyAllRules(container, pyramid, rankedList, warningHost = conta
   const competitionEnded = myState?.competitionEnded === true;
   const statusMessage = !ruleDataComplete
     ? "Forderungen sind voruebergehend deaktiviert, weil Regeldaten unvollstaendig sind."
-    : (competitionEnded ? "Bewerb beendet – es können keine neuen Forderungen erstellt werden." : "");
+    : "";
   let warning = document.getElementById("rankingDataWarning");
   if (statusMessage && !warning) {
     warning = document.createElement("div");

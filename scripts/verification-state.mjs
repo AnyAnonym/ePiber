@@ -3,10 +3,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const RECEIPT_VERSION = 2;
+const RECEIPT_VERSION = 3;
 const SECRET_PATH_RE = /(^|\/)(\.env(?:\.[^/]*)?|[^/]*service[-_.]?account[^/]*\.json|[^/]*private[^/]*key[^/]*|id_(?:rsa|dsa|ecdsa|ed25519)|[^/]*\.(?:pem|key|p12|pfx))$/i;
 const WORKFLOW_METADATA = new Set(["Backend/package.json", "Backend/package-lock.json"]);
 const SUITE_ORDER = ["docs", "build", "browser-core", "browser-lifecycle", "browser-full"];
+const ALL_BROWSER_PROFILES = [
+  "chrome-windows",
+  "chrome-android",
+  "samsung-internet-android",
+  "safari-iphone",
+  "safari-ipad",
+  "safari-macos",
+  "firefox-windows",
+  "edge-windows",
+];
+const CORE_BROWSER_PROFILES = ["chrome-windows", "safari-macos", "firefox-windows"];
 
 function run(command, args, { cwd, allowFailure = false, stdio = "pipe" } = {}) {
   const result = spawnSync(command, args, {
@@ -180,10 +191,16 @@ export function readReceipt(root) {
   if (!fs.existsSync(file)) return null;
   try {
     const receipt = JSON.parse(fs.readFileSync(file, "utf8"));
-    return receipt.version === RECEIPT_VERSION ? receipt : null;
+    return [2, RECEIPT_VERSION].includes(receipt.version) ? receipt : null;
   } catch {
     return null;
   }
+}
+
+export function browserProfilesForSuite(suite) {
+  if (suite === "browser-core") return [...CORE_BROWSER_PROFILES];
+  if (["browser-lifecycle", "browser-full"].includes(suite)) return [...ALL_BROWSER_PROFILES];
+  throw new Error(`Kein Browser-Pruefprofil: ${suite}`);
 }
 
 function suiteSatisfied(required, completed) {
@@ -213,7 +230,11 @@ export function verificationStatus(root, paths = changedPaths(root)) {
       .map(([suite]) => suite)
     : []);
   const missing = required.filter((suite) => !suiteSatisfied(suite, completed));
-  return { fingerprint, required, completed: [...completed].sort(), missing, receiptMatches: contextMatches && missing.length === 0 };
+  const missingBrowserProfiles = {};
+  for (const suite of missing.filter((value) => value.startsWith("browser-"))) {
+    missingBrowserProfiles[suite] = browserProfileStatus(root, suite).missing;
+  }
+  return { fingerprint, required, completed: [...completed].sort(), missing, missingBrowserProfiles, receiptMatches: contextMatches && missing.length === 0 };
 }
 
 export function assertVerification(root, paths = changedPaths(root)) {
@@ -251,7 +272,60 @@ function writeReceipt(root, fingerprint, suite, command, durationMs, success) {
   fs.renameSync(temporary, file);
 }
 
-export function runSuite(root, suite) {
+export function browserProfileStatus(root, suite, fingerprint = suiteFingerprint(root, suite)) {
+  const required = browserProfilesForSuite(suite);
+  const receipt = readReceipt(root);
+  const contextMatches = Boolean(
+    receipt
+    && receipt.headSha === git(root, ["rev-parse", "HEAD"]).stdout.trim()
+    && receipt.branch === currentBranch(root)
+    && receipt.node === process.version,
+  );
+  const suiteReceipt = contextMatches ? receipt.suites?.[suite] : null;
+  if (suiteReceipt?.success === true && suiteReceipt.fingerprint === fingerprint && !suiteReceipt.profiles) {
+    return { required, completed: [...required], missing: [] };
+  }
+  const completed = required.filter((profile) => {
+    const value = suiteReceipt?.profiles?.[profile];
+    return value?.success === true && value.fingerprint === fingerprint;
+  });
+  return { required, completed, missing: required.filter((profile) => !completed.includes(profile)) };
+}
+
+export function writeBrowserProfileReceipt(root, suite, profile, fingerprint, command, durationMs, success) {
+  const required = browserProfilesForSuite(suite);
+  if (!required.includes(profile)) throw new Error(`Browserprofil ${profile} gehoert nicht zu ${suite}`);
+  const headSha = git(root, ["rev-parse", "HEAD"]).stdout.trim();
+  const current = readReceipt(root);
+  const branch = currentBranch(root);
+  const suites = current?.headSha === headSha
+    && current?.branch === branch
+    && current?.node === process.version
+    ? { ...current.suites }
+    : {};
+  const previousSuite = suites[suite]?.fingerprint === fingerprint ? suites[suite] : null;
+  const profiles = { ...(previousSuite?.profiles || {}) };
+  profiles[profile] = { success, fingerprint, command, durationMs, finishedAt: new Date().toISOString() };
+  const suiteSuccess = required.every((name) => profiles[name]?.success === true && profiles[name]?.fingerprint === fingerprint);
+  suites[suite] = {
+    success: suiteSuccess,
+    fingerprint,
+    command: `bash scripts/run-browser-smoke-container.sh --suite ${suite.replace("browser-", "")} --profile <profile>`,
+    durationMs: Object.values(profiles)
+      .filter((value) => value?.success === true && value.fingerprint === fingerprint)
+      .reduce((sum, value) => sum + Number(value.durationMs || 0), 0),
+    finishedAt: new Date().toISOString(),
+    profiles,
+  };
+  const receipt = { version: RECEIPT_VERSION, headSha, branch, node: process.version, suites };
+  const file = receiptPath(root);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(temporary, file);
+}
+
+export function runSuite(root, suite, { force = false } = {}) {
   if (!SUITE_ORDER.includes(suite)) throw new Error(`Unbekanntes Pruefprofil: ${suite}`);
   const before = suiteFingerprint(root, suite);
   const startedAt = Date.now();
@@ -260,7 +334,7 @@ export function runSuite(root, suite) {
     : suite === "build"
       ? "git diff --check && npm run build"
       : `bash scripts/run-browser-smoke-container.sh --suite ${suite.replace("browser-", "")}`;
-  writeReceipt(root, before, suite, command, 0, false);
+  if (!suite.startsWith("browser-")) writeReceipt(root, before, suite, command, 0, false);
   if (suite === "docs") {
     git(root, ["diff", "--check"], { stdio: "inherit" });
   } else if (suite === "build") {
@@ -268,14 +342,29 @@ export function runSuite(root, suite) {
     run("npm", ["run", "build"], { cwd: path.join(root, "Backend"), stdio: "inherit" });
   } else {
     const browserSuite = suite.replace("browser-", "");
-    run("bash", ["scripts/run-browser-smoke-container.sh", "--suite", browserSuite], {
-      cwd: path.join(root, "Backend"),
-      stdio: "inherit",
-    });
+    const profileStatus = browserProfileStatus(root, suite, before);
+    const profiles = force ? profileStatus.required : profileStatus.missing;
+    for (const profile of profiles) {
+      const profileCommand = `bash scripts/run-browser-smoke-container.sh --suite ${browserSuite} --profile ${profile}`;
+      const profileStartedAt = Date.now();
+      try {
+        run("bash", ["scripts/run-browser-smoke-container.sh", "--suite", browserSuite, "--profile", profile], {
+          cwd: path.join(root, "Backend"),
+          stdio: "inherit",
+        });
+        writeBrowserProfileReceipt(root, suite, profile, before, profileCommand, Date.now() - profileStartedAt, true);
+      } catch (error) {
+        writeBrowserProfileReceipt(root, suite, profile, before, profileCommand, Date.now() - profileStartedAt, false);
+        throw error;
+      }
+    }
   }
   const after = suiteFingerprint(root, suite);
   if (after !== before) throw new Error(`Arbeitsstand hat sich waehrend des Pruefprofils ${suite} geaendert`);
-  writeReceipt(root, after, suite, command, Date.now() - startedAt, true);
+  if (!suite.startsWith("browser-")) writeReceipt(root, after, suite, command, Date.now() - startedAt, true);
+  else if (browserProfileStatus(root, suite, after).missing.length) {
+    throw new Error(`Browserprofile fehlen nach ${suite}: ${browserProfileStatus(root, suite, after).missing.join(", ")}`);
+  }
 }
 
 export function verifyRequired(root, requestedSuite = "auto") {
@@ -284,7 +373,7 @@ export function verifyRequired(root, requestedSuite = "auto") {
   for (const suite of requested) {
     const status = verificationStatus(root, paths);
     if (!status.missing.includes(suite) && requestedSuite === "auto") continue;
-    runSuite(root, suite);
+    runSuite(root, suite, { force: requestedSuite !== "auto" });
   }
   return assertVerification(root, paths);
 }
