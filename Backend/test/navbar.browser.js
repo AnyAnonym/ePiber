@@ -1384,7 +1384,7 @@ test("Ranglistenseite rendert trotz Favoriten-Titelzeile vollstaendig", {
   }
 });
 
-test("Beendete Rangliste sperrt neue Forderungen sichtbar", {
+test("Beendete Rangliste sperrt neue Forderungen ohne zusaetzlichen Statushinweis", {
   skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
@@ -1393,8 +1393,8 @@ test("Beendete Rangliste sperrt neue Forderungen sichtbar", {
   try {
     const page = await newProfilePage(browser);
     await page.goto(`http://127.0.0.1:${server.address().port}/ranking-test.html?role=player&id=2&newcomer=1&endedRanking=1`, { waitUntil: "domcontentloaded" });
-    await page.locator("#rankingDataWarning").waitFor({ state: "visible" });
-    assert.equal(await page.locator("#rankingDataWarning").textContent(), "Bewerb beendet – es können keine neuen Forderungen erstellt werden.");
+    await page.locator("#rankingContainer .box").first().waitFor({ state: "visible" });
+    assert.equal(await page.locator("#rankingDataWarning").count(), 0);
     assert.equal(await page.locator("#rankingContainer .box.challengeable").count(), 0);
     await page.locator("#rankingContainer .box").first().click();
     await page.getByRole("tab", { name: "Archiv", exact: true }).click();
@@ -2843,8 +2843,8 @@ test("Mobiles Ranglistenprofil bleibt nach horizontalem Scrollen im sichtbaren V
 
     const endedPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await endedPage.goto(`http://127.0.0.1:${address.port}/ranking-test.html?role=player&id=2&newcomer=1&endedRanking=1`, { waitUntil: "domcontentloaded" });
-    await endedPage.locator("#rankingDataWarning").waitFor({ state: "visible" });
-    assert.equal(await endedPage.locator("#rankingDataWarning").textContent(), "Bewerb beendet – es können keine neuen Forderungen erstellt werden.");
+    await endedPage.locator("#rankingContainer .box").first().waitFor({ state: "visible" });
+    assert.equal(await endedPage.locator("#rankingDataWarning").count(), 0);
     assert.equal(await endedPage.locator("#rankingContainer .box.challengeable").count(), 0);
     await endedPage.locator("#rankingContainer .box").first().click();
     await endedPage.getByRole("tab", { name: "Archiv", exact: true }).click();
