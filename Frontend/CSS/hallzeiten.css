@@ -16,7 +16,8 @@
 .hall-time-info-dialog .hall-time-description, .hall-time-info-dialog .hall-time-message-text { margin: 0; white-space: pre-wrap; line-height: 1.35; overflow-wrap: anywhere; text-align: center; }
 .hall-time-info-dialog .hall-time-info-close { position: absolute; top: -.8rem; right: -.7rem; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; color: #26352a; background: transparent; font: 400 1.8rem/30px sans-serif; cursor: pointer; }
 .hall-time-info-dialog .hall-time-info-close:hover, .hall-time-info-dialog .hall-time-info-close:focus-visible { background: #edf2ee; }
-.hall-time-confirmation-dialog h2 { margin: 0 0 .75rem; text-align: center; }
+.hall-time-confirmation-dialog form { padding-top: 0; }
+.hall-time-confirmation-dialog .hall-time-message-text { font-size: 1.12rem; font-weight: 600; }
 .hall-time-confirmation-actions { display: flex; justify-content: center; gap: .65rem; margin-top: 1rem; }
 .hall-time-confirmation-actions button { min-width: 88px; padding: .55rem .85rem; border: 1px solid #7c9c84; border-radius: 8px; background: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .hall-time-confirmation-actions #hall-time-confirmation-yes { border-color: #176b4a; color: #fff; background: #176b4a; }

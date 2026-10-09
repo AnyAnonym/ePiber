@@ -332,7 +332,10 @@ test("Hallenzeiten-Raster zeigt kompakte Summen, sichere Regeln und rueckt die W
     const ownStatusButton = page.locator('#hall-time-body [data-person-id="p1"] [data-slot-id="slot-1"] .hall-time-state');
     await ownStatusButton.click({ timeout: 5000 });
     await page.locator("#hall-time-booking-confirmation-dialog[open]").waitFor({ timeout: 5000 });
+    assert.equal(await page.locator("#hall-time-booking-confirmation-dialog h1, #hall-time-booking-confirmation-dialog h2").count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Statusänderung abbrechen" }).count(), 0);
     assert.equal(await page.locator("#hall-time-confirmation-text").textContent(), "Willst du am Freitag, 30.10.2099, 19:00–21:00 deinen Status wirklich von „Dabei“ auf „Nicht dabei“ setzen?");
+    assert.ok(await page.locator("#hall-time-confirmation-text").evaluate((element) => parseFloat(getComputedStyle(element).fontSize) > 16));
     assert.equal(await page.evaluate(() => window.__lastHallTimeBooking()), null);
     assert.equal(await page.locator("#hall-time-confirmation-no").evaluate((button) => document.activeElement === button), true);
     const confirmationLayout = await page.locator("#hall-time-booking-confirmation-dialog").evaluate((dialog) => {

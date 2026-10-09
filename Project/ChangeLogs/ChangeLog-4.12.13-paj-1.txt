@@ -35,3 +35,12 @@ Commit: 4.12.13-paj-1-4 | Hallenzeiten-Statuswechsel abgesichert und Browserprue
   - [Workflow] Browsernachweise profilscharf fortsetzbar gemacht, damit erfolgreiche Zielprofile nach einem Einzelfehler nicht erneut laufen.
   - [Workflow] Jedes Browserprofil in einen frischen Container mit belastbareren Ressourcenlimits und sicherem Runtime-Verzeichnis verlegt.
   - [Regelwerk] Profilisolierung und ausschliessliche Wiederholung fehlender Browserprofile verbindlich dokumentiert.
+
+[4.12.13-paj-1-5] - 2026-10-09
+Commit: 4.12.13-paj-1-5 | Statusdialog auf Ja und Nein reduziert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.13-paj-1-4-x` gesetzt.
+  - [Hallenzeiten] Bestaetigungsdialog auf groesseren Meldungstext sowie die Entscheidungen Ja und Nein reduziert.
+  - [Tests] Kompakten Hallenzeiten-Dialog ohne sichtbare Ueberschrift und Schliess-X abgesichert.
+  - [Dokumentation] Sichtbare Bedienelemente des Statusdialogs praezisiert.
