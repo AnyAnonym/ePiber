@@ -62,6 +62,11 @@ moeglichst wenigen Datei- und Suchzugriffen.
     zusaetzlich die festgelegten Android-, iPhone- und iPad-Profile. Neue Browser-
     APIs werden ueber Feature Detection statt User-Agent-Erkennung behandelt;
     Abweichungen und notwendige Fallbacks sind im selben Auftrag zu pruefen.
+    Browserprofile laufen jeweils in einem frischen Container. Erfolgreiche
+    Profile werden diffgebunden einzeln nachgewiesen; nach einem Profilfehler
+    werden bei unveraendertem Fingerprint nur fehlende Profile wiederholt und
+    niemals bereits erfolgreiche Profile allein fuer einen Gesamtnachweis erneut
+    ausgefuehrt.
 14. Nach jeder erfolgreich geprueften Neuerstellung oder Aenderung einer
     Grafana-Dashboard-JSON unter
     `Project/server-configs/observability/grafana/dashboards/` wird die betroffene

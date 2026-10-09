@@ -17,6 +17,8 @@ let routedTouchScroll = null;
 let viewMode = "all";
 let selectedSlotId = null;
 let selectedPersonId = null;
+let pendingBookingConfirmation = null;
+let confirmationReturnFocus = null;
 
 const byId = (id) => document.getElementById(id);
 const errorText = (error) => String(error?.message || "Der Vorgang ist fehlgeschlagen.").replace(/\s*\((?:Referenz|Support-ID):[^)]*\)\s*$/iu, "");
@@ -31,6 +33,22 @@ function dateLabel(slot) {
 
 function entry(slotId, personId) {
   return grid.entries.find((value) => value.slotId === slotId && value.personId === personId) || null;
+}
+
+function personDisplayName(person) {
+  return [person.firstName, person.lastName].map((value) => String(value || "").trim()).filter(Boolean).join(" ")
+    || String(person.name || person.id || "").trim();
+}
+
+function bookingStatusLabel(value) {
+  if (value?.status === "confirmed") return "Dabei";
+  if (value?.status === "waitlist") return value.waitlistPosition ? `Warteliste (Platz ${value.waitlistPosition})` : "Warteliste";
+  return "Nicht dabei";
+}
+
+function expectedSelectedStatus(slot) {
+  const confirmed = grid.entries.filter((value) => value.slotId === slot.id && value.status === "confirmed").length;
+  return confirmed >= grid.capacity && grid.waitlistEnabled ? "Warteliste" : "Dabei";
 }
 
 function constraint(slotId, personId) {
@@ -153,6 +171,56 @@ function showMessage(text) {
   openDialog(byId("hall-time-message-dialog"));
 }
 
+function closeBookingConfirmation({ restoreFocus = true } = {}) {
+  const dialog = byId("hall-time-booking-confirmation-dialog");
+  pendingBookingConfirmation = null;
+  if (dialog.open && typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
+  if (restoreFocus && confirmationReturnFocus?.isConnected) confirmationReturnFocus.focus();
+  confirmationReturnFocus = null;
+}
+
+function requestBookingConfirmation(slot, person) {
+  if (busy) return;
+  const currentEntry = entry(slot.id, person.id);
+  const selected = !currentEntry;
+  const fromStatus = bookingStatusLabel(currentEntry);
+  const toStatus = selected ? expectedSelectedStatus(slot) : "Nicht dabei";
+  const ownEntry = person.id === grid.currentPersonId;
+  pendingBookingConfirmation = {
+    gridRevision: grid.revision,
+    slotId: slot.id,
+    personId: person.id,
+    selected,
+    currentStatus: currentEntry?.status || "empty",
+    fromStatus,
+    toStatus,
+  };
+  confirmationReturnFocus = document.activeElement;
+  byId("hall-time-confirmation-text").textContent = ownEntry
+    ? `Willst du am ${dateLabel(slot).full} deinen Status wirklich von „${fromStatus}“ auf „${toStatus}“ setzen?`
+    : `Willst du wirklich für ${personDisplayName(person)} am ${dateLabel(slot).full} den Status von „${fromStatus}“ auf „${toStatus}“ setzen?`;
+  openDialog(byId("hall-time-booking-confirmation-dialog"));
+  requestAnimationFrame(() => byId("hall-time-confirmation-no").focus());
+}
+
+function confirmBookingChange() {
+  const confirmation = pendingBookingConfirmation;
+  if (!confirmation || busy) return;
+  const slot = grid?.slots.find(({ id }) => id === confirmation.slotId);
+  const person = grid?.participants.find(({ id }) => id === confirmation.personId);
+  const currentStatus = slot && person ? entry(slot.id, person.id)?.status || "empty" : "missing";
+  const currentTarget = confirmation.selected && slot ? expectedSelectedStatus(slot) : "Nicht dabei";
+  const stale = !slot || !person || grid.revision !== confirmation.gridRevision
+    || currentStatus !== confirmation.currentStatus || currentTarget !== confirmation.toStatus;
+  closeBookingConfirmation({ restoreFocus: false });
+  if (stale) {
+    showMessage("Der Raster hat sich inzwischen geändert. Bitte wähle den Status erneut aus.");
+    return;
+  }
+  toggle(slot, person, confirmation.selected);
+}
+
 function sizeTableToViewport() {
   cancelAnimationFrame(tableSizeFrame);
   tableSizeFrame = requestAnimationFrame(() => {
@@ -253,7 +321,7 @@ function statusButton(slot, person) {
   button.disabled = busy || !editable;
   button.title = value?.status === "confirmed" ? "Fixplatz – abmelden" : value?.status === "waitlist" ? `Wartelistenplatz ${value.waitlistPosition} – abmelden` : editable ? "Für diesen Termin anmelden" : "Nicht eingetragen";
   button.setAttribute("aria-label", `${person.name}, ${dateLabel(slot).full}: ${button.title}`);
-  if (editable) button.addEventListener("click", () => toggle(slot, person, !value));
+  if (editable) button.addEventListener("click", () => requestBookingConfirmation(slot, person));
   return button;
 }
 
@@ -422,6 +490,14 @@ for (const dialog of [byId("hall-time-info-dialog"), byId("hall-time-message-dia
     if (typeof dialog.close !== "function") dialog.removeAttribute("open");
   });
 }
+for (const button of document.querySelectorAll(".hall-time-confirmation-cancel")) {
+  button.addEventListener("click", () => closeBookingConfirmation());
+}
+byId("hall-time-confirmation-yes").addEventListener("click", confirmBookingChange);
+byId("hall-time-booking-confirmation-dialog").addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeBookingConfirmation();
+});
 
 subscribeAuth((user, authState) => {
   authorized = authState.status === "authenticated" && Boolean(user);

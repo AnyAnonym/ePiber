@@ -22,3 +22,16 @@ Commit: 4.12.13-paj-1-3 | Statushinweis bei beendeten Ranglisten entfernt
   - [Rangliste] Den zusaetzlichen Statushinweis fuer beendete Bewerbe entfernt; die Sperre neuer Forderungen bleibt unveraendert bestehen.
   - [Tests] Browserpruefung fuer beendete Ranglisten auf fehlenden Statushinweis und weiterhin gesperrte Forderungen angepasst.
   - [Dokumentation] Ranglistenbeschreibung an die Anzeige beendeter Bewerbe ohne eigenen Statushinweis angepasst.
+
+[4.12.13-paj-1-4] - 2026-10-09
+Commit: 4.12.13-paj-1-4 | Hallenzeiten-Statuswechsel abgesichert und Browserpruefung fortsetzbar
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.13-paj-1-3-x` gesetzt.
+  - [Hallenzeiten] Statuswechsel fuer eigene und fremde Eintraege mit einer termin- und statusbezogenen Bestaetigung abgesichert.
+  - [Hallenzeiten] Veraltete Bestaetigungen nach zwischenzeitlichen Rasteraenderungen schreiben nicht mehr.
+  - [Tests] Hallenzeiten-Browserablauf um Abbruch, Bestaetigung und Wartelistenstatus erweitert.
+  - [Dokumentation] Bedienregel fuer bestaetigungspflichtige Hallenzeiten-Statuswechsel ergaenzt.
+  - [Workflow] Browsernachweise profilscharf fortsetzbar gemacht, damit erfolgreiche Zielprofile nach einem Einzelfehler nicht erneut laufen.
+  - [Workflow] Jedes Browserprofil in einen frischen Container mit belastbareren Ressourcenlimits und sicherem Runtime-Verzeichnis verlegt.
+  - [Regelwerk] Profilisolierung und ausschliessliche Wiederholung fehlender Browserprofile verbindlich dokumentiert.

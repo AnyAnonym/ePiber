@@ -42,6 +42,9 @@ try {
     process.stdout.write(`Erforderlich: ${status.required.join(", ") || "keine"}\n`);
     process.stdout.write(`Nachgewiesen: ${status.completed.join(", ") || "keine"}\n`);
     process.stdout.write(`Status: ${status.missing.length ? `fehlt (${status.missing.join(", ")})` : "vollstaendig"}\n`);
+    for (const [browserSuite, profiles] of Object.entries(status.missingBrowserProfiles || {})) {
+      process.stdout.write(`Fehlende Browserprofile ${browserSuite}: ${profiles.join(", ") || "keine"}\n`);
+    }
   }
 } catch (error) {
   process.stderr.write(`FEHLER: ${error.message}\n`);

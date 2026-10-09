@@ -5,6 +5,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
+  browserProfileStatus,
+  browserProfilesForSuite,
   changedPaths,
   readReceipt,
   receiptPath,
@@ -12,6 +14,7 @@ import {
   runSuite,
   suiteFingerprint,
   verificationStatus,
+  writeBrowserProfileReceipt,
   worktreeFingerprint,
 } from "./verification-state.mjs";
 
@@ -122,6 +125,34 @@ test("browser fingerprint changes only for browser-relevant inputs", () => {
     assert.equal(suiteFingerprint(root, "browser-full"), initial);
     fs.writeFileSync(path.join(root, "Frontend/styles.css"), "body { color: red; }\n");
     assert.notEqual(suiteFingerprint(root, "browser-full"), initial);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("browser receipts preserve successful profiles and retry only missing profiles", () => {
+  const root = fixture();
+  try {
+    fs.writeFileSync(path.join(root, "Frontend/styles.css"), "body { color: teal; }\n");
+    const suite = "browser-full";
+    const fingerprint = suiteFingerprint(root, suite);
+    const profiles = browserProfilesForSuite(suite);
+    for (const profile of profiles.slice(0, -1)) {
+      writeBrowserProfileReceipt(root, suite, profile, fingerprint, `test ${profile}`, 10, true);
+    }
+    const partial = browserProfileStatus(root, suite);
+    assert.deepEqual(partial.completed, profiles.slice(0, -1));
+    assert.deepEqual(partial.missing, profiles.slice(-1));
+    assert.deepEqual(verificationStatus(root).missing, ["build", suite]);
+    assert.deepEqual(verificationStatus(root).missingBrowserProfiles[suite], profiles.slice(-1));
+
+    const last = profiles.at(-1);
+    writeBrowserProfileReceipt(root, suite, last, fingerprint, `test ${last}`, 10, false);
+    assert.deepEqual(browserProfileStatus(root, suite).missing, [last]);
+    writeBrowserProfileReceipt(root, suite, last, fingerprint, `test ${last}`, 10, true);
+    assert.deepEqual(verificationStatus(root).missing, ["build"]);
+    assert.equal(readReceipt(root).version, 3);
+    assert.equal(readReceipt(root).suites[suite].success, true);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

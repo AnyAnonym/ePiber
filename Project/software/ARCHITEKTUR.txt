@@ -1252,8 +1252,12 @@ jeweiligen Pruefprofils gueltig. Dokumentation, Build und Browserprofile besitze
 getrennte Fingerprints. Temporaeres Branch-Changelog und reine Paketversions-
 wechsel sind keine Code- oder Browsertesteingaben; Abhaengigkeiten und
 Paket-Skripte bleiben dagegen Bestandteil der betroffenen Fingerprints. Der
-Containerwrapper verwendet eindeutige Lauf-IDs und entfernt einen gestarteten
-Container auch bei einem kontrollierten Abbruchsignal.
+Containerwrapper startet jedes Zielprofil in einem frischen Container, verwendet
+eindeutige Lauf-IDs und entfernt einen gestarteten Container auch bei einem
+kontrollierten Abbruchsignal. Der diffgebundene Nachweis speichert erfolgreiche
+Browserprofile einzeln. Scheitert ein Profil, bleiben die Nachweise der bereits
+erfolgreichen Profile bei identischem Fingerprint gueltig; der naechste
+automatische Verifikationslauf wiederholt nur die fehlenden Profile.
 
 Neue Browser-APIs werden gegen diese Matrix geprueft und ueber Feature Detection
 statt User-Agent-Erkennung verwendet. Kritische Bedienung erhaelt bei fehlender

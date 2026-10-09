@@ -18,6 +18,11 @@ Hallenzeiten - Reservierungsraster
 -- Raster und Bedienung --
   Rot bedeutet nicht eingetragen, Gruen Fixplatz, Gelb Warteliste samt Position.
   Jede zugeordnete Person darf zukuenftige Eintraege aller Teilnehmer aendern.
+  Jeder Wechsel zwischen diesen Stati verlangt vor dem Write eine Bestaetigung,
+  die Termin, bisherigen und erwarteten neuen Status nennt. Bei Aenderungen fuer
+  andere Teilnehmer nennt sie zusaetzlich deren Namen. Nein, Schliessen oder
+  Escape verwirft den Vorgang; inzwischen veraltete Bestaetigungen schreiben
+  nicht und verlangen eine erneute Auswahl.
   Fremde An- und Abmeldungen erzeugen fuer die betroffene Person eine ungelesene,
   quittierungspflichtige Inboxmeldung. Wird ein Fixplatz frei, rueckt Position 1
   atomar nach und wird ebenfalls benachrichtigt. Vergangene Termine sind nur fuer
