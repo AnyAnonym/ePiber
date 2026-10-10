@@ -1,12 +1,14 @@
 {
   "name": "epiber-backend",
-  "version": "4.12.14-paj-1-1",
+  "version": "4.12.14-paj-1-2",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + Google Sheets)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node scripts/check.js",
     "check:runtime-version": "node scripts/check-runtime-version.js",
+    "db:migrate": "node scripts/db-migrate.js",
+    "db:seed": "node scripts/db-seed.js",
     "test": "node --test test/*.test.js",
     "test:browser": "npm run test:browser:smoke && npm run test:browser:chromium",
     "test:browser:smoke": "bash scripts/run-browser-smoke-container.sh",
@@ -28,10 +30,12 @@
     "emoji-picker-element": "1.29.1",
     "emoji-picker-element-data": "1.8.0",
     "googleapis": "^171.4.0",
+    "pg": "8.16.3",
     "ws": "^8.18.0"
   },
   "overrides": {
-    "gaxios": "7.3.0"
+    "gaxios": "7.3.0",
+    "qs": "6.16.0"
   },
   "devDependencies": {
     "playwright": "1.62.1"

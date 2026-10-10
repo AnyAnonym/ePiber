@@ -1,6 +1,6 @@
 # PostgreSQL-Datenbankmigration
 
-Stand: 03.10.2026
+Stand: 10.10.2026
 Status: Nicht-kanonische fachliche und technische Arbeitsgrundlage; noch nicht
 implementiert, freigegeben oder als verbindliche Sollarchitektur dokumentiert
 Gegenstand: Vollstaendige Abloesung von Google Sheets, vier SQLite-Datenbanken
@@ -172,10 +172,11 @@ Die Arbeitsgrundlage wird fuer die Umsetzung in drei Klassen verwendet.
   Pruefsummen erst mit dem ersten offiziell freigegebenen gemeinsamen
   `epiber_devel`-Aufbau eingefroren werden;
 - dauerhaft synthetischer Devel-Bestand, technische Minimal-Seeds als erster
-  Schritt und spaeter getrennt freizugebender vollstaendiger Szenariokatalog;
+  Schritt und der am 10.10.2026 freigegebene vollstaendige Szenariokatalog;
 - kurzlebige echte PostgreSQL-Testcluster statt SQLite- oder In-Memory-Ersatz;
-- vollstaendige Analyse eines konsistenten verschluesselten Realexports nach dem
-  Backup-/Restore-Gate, aber weiterhin vor dem ersten offiziellen
+- vollstaendige Analyse eines konsistenten verschluesselten Realexports im
+  getrennten kurzlebigen Staging nach dem synthetischen Anwendungsumbau, aber
+  weiterhin vor dem Backup-/Restore-Gate, dem ersten offiziellen
   `epiber_devel`-Aufbau und damit vor dem Schema-Freeze;
 - ein Dry Run, der alle erkennbaren Befunde sammelt, sowie null ungeklaerte
   Blocker fuer den finalen Import;
@@ -205,6 +206,30 @@ Die Arbeitsgrundlage wird fuer die Umsetzung in drei Klassen verwendet.
   Deduplizierungsregeln;
 - produktive Anbieter-, Cutover- und Point-of-no-Return-Freigaben.
 
+Fuer die jetzt beginnende Schema- und Anwendungsumsetzung ist am 10.10.2026
+gesammelt entschieden:
+
+- bestehende HTTP-, WebSocket-, Seiten- und Bedienvertraege bleiben strikt
+  verhaltensgleich; nur die bereits dokumentierten einmaligen Cutoverfolgen sind
+  akzeptiert;
+- ueber Ergebnis-, Ranking-, Hallenzeiten-, Court-/Score- und notwendige
+  Provenienzhistorien hinaus entstehen keine zusaetzlichen Historien. Weitere
+  historisierende Datenpfade beziehungsweise erweitertes fachliches Logging sind
+  ein eigener Auftrag nach stabiler PostgreSQL-Livemigration;
+- die in Abschnitt 12 festgelegten Retentionwerte und Batchgrenzen gelten fuer
+  die erste Umsetzung;
+- der vollstaendige synthetische Szenariokatalog umfasst Rollen-, Konto-, Zeit-,
+  Bewerbs-, Ergebnis-, Ranking-, Messaging-, Hallenzeiten-, Court-,
+  Idempotenz-, Audit-, Job-, Outbox-, Fehler- und Berechtigungskonstellationen;
+- der Umsetzungsablauf stoppt nur an harten Gates wie einem Vertragswiderspruch,
+  unerwarteter sichtbarer Aenderung, Real-/Geheimniszugriff, privilegierter oder
+  destruktiver Serveraktion sowie einem nicht sicher entscheidbaren Datenschutz-,
+  Datenverlust-, Transformations- oder Dublettenbefund.
+
+Verpflichtende strukturierte Betriebslogs, Auditvertraege und Observability sind
+keine aufgeschobene Zusatzhistorie und bleiben Bestandteil jedes
+Umsetzungsblocks.
+
 **Bewusst spaeter zu konkretisieren:**
 
 - Hochverfuegbarkeit, Read Replicas, mehrere App-Replikate und PgBouncer;
@@ -232,18 +257,22 @@ Schema-, Importwerkzeug- und Anwendungsentwicklung bereits davor erfolgen:
 4. Importwerkzeuge und PostgreSQL-only-Anwendungsumbau mit fokussierten
    automatisierten Tests ausschliesslich gegen kurzlebige synthetische
    PostgreSQL-Cluster;
-5. pgBackRest, kontinuierliche WAL-Archivierung, verschluesseltes Off-site-
+5. geschuetzte Realanalyse und reale Migrationsprobe ausschliesslich in einem
+   getrennten kurzlebigen Cluster auf verschluesseltem temporaerem Storage;
+6. pgBackRest, kontinuierliche WAL-Archivierung, verschluesseltes Off-site-
    Repository, Monitoring sowie praktischer Vollrestore und Point-in-Time-
    Recovery-Nachweis;
-6. erst nach erfolgreichem Backup-/Restore-Gate die geschuetzte Realanalyse,
-   reale Migrationsprobe, dauerhafte Befuellung von `epiber_devel` und
-   vollstaendige Devel-Funktions- und Betriebsabnahme.
+7. erst nach erfolgreichem Backup-/Restore-Gate die dauerhafte Befuellung von
+   `epiber_devel` und vollstaendige Devel-Funktions- und Betriebsabnahme.
 
 Der spaetere Backupaufbau darf die Schema- und Anwendungsentwicklung nicht
-blockieren, ist aber ein hartes Gate vor jedem Einbringen realer ePiber-Daten,
-vor einem nicht jederzeit reproduzierbaren ePiber-Bestand und vor der
-vollstaendigen Devel-Abnahme. Ein Verschieben hinter diese Grenzen oder bis nach
-dem Live-Cutover ist ausgeschlossen.
+blockieren. Auch die geschuetzte Realanalyse darf davor stattfinden, wenn ihr
+kurzlebiger Cluster vom gemeinsamen Development-Cluster isoliert bleibt, keine
+externen Fachwirkungen ausloest und nach kontrollierter Regressionsextraktion
+vollstaendig entfernt wird. Das Backup-/Restore-Gate bleibt zwingend vor jedem
+dauerhaften realen ePiber-Bestand, vor der Befuellung von `epiber_devel` und vor
+der vollstaendigen Devel-Abnahme. Ein Verschieben hinter diese Grenzen oder bis
+nach dem Live-Cutover ist ausgeschlossen.
 
 
 ## 2. Ausgangslage
@@ -2423,10 +2452,11 @@ Live-System, sondern auf einem konsistenten, unveraenderlichen und
 pruefsummengebundenen verschluesselten Export. Dadurch koennen reale Formate,
 Wertemengen, Referenzfehler und Sonderfaelle den Source-to-Target- und
 Schemaentwurf beeinflussen, ohne den dauerhaften synthetischen Devel-Bestand mit
-Produktionsdaten zu vermischen. Sie erfolgt erst nach dem in Phase 5A
-festgelegten Backup-/Restore-Gate. Vor dieser ersten Analyse muessen ausserdem
-Export, Entschluesselung, Zugriffsschutz, datensparsame Berichtsausgabe und
-kontrollierte Entfernung praktisch vorbereitet sein.
+Produktionsdaten zu vermischen. Sie erfolgt nach dem synthetischen
+Anwendungsumbau in der isolierten Phase 5A und vor dem Backup-/Restore-Gate fuer
+den dauerhaften Development-Cluster. Vor dieser ersten Analyse muessen Export,
+Entschluesselung, Zugriffsschutz, datensparsame Berichtsausgabe und kontrollierte
+Entfernung praktisch vorbereitet sein.
 
 Die Staging-Datenbank liegt in einem eigenen kurzlebigen PostgreSQL-Cluster auf
 demselben Host. Sie gehoert weder zum gemeinsamen Development-Cluster noch zu
@@ -3182,8 +3212,10 @@ Fuer die erste Stufe gelten folgende Zielwerte:
 Der Backupaufbau wird bewusst erst nach dem mit synthetischen Daten entwickelten
 Schema-, Importwerkzeug- und PostgreSQL-only-Anwendungsstand ausgefuehrt. Diese
 Reihenfolge ist zulaessig, weil alle vorherigen ePiber-Testbestaende kurzlebig,
-reproduzierbar und ohne fachlichen Verlust verwerfbar bleiben. Vor der
-geschuetzten Realanalyse, jedem realen ePiber-Import, einem dauerhaften
+reproduzierbar und ohne fachlichen Verlust verwerfbar bleiben. Die geschuetzte
+Realanalyse darf davor in ihrem getrennten kurzlebigen Cluster erfolgen und wird
+nicht in die regulaere Backupkette aufgenommen. Vor jedem dauerhaften realen
+ePiber-Import in den gemeinsamen Cluster, einem dauerhaft befuellten
 `epiber_devel`-Bestand und der vollstaendigen Devel-Abnahme ist der praktische
 Backup-, Restore- und PITR-Nachweis dagegen zwingend. Er darf weder hinter die
 Gesamt-Abnahme noch hinter einen Live-Cutover verschoben werden.
@@ -3639,11 +3671,12 @@ Freigabe vorgelegt.
   Schemaerstentwurfs vor ausfuehrbarem DDL.
 
 Die vollstaendige Analyse eines geschuetzten konsistenten Realexports bleibt
-verpflichtend, wird aber erst nach dem Backup-/Restore-Gate unmittelbar vor der
-realen Migrationsprobe ausgefuehrt. Ihre Befunde duerfen den bis dahin noch nicht
-fuer `epiber_devel` eingefrorenen Schemaerstentwurf und die Importregeln
-korrigieren. Kein reales Quellpaket wird vorher in den Development-Cluster oder
-ein anderes ungesichertes persistentes Ziel eingebracht.
+verpflichtend und wird in Phase 5A nach dem synthetischen Anwendungsumbau, aber
+vor dem Backup-/Restore-Gate fuer den dauerhaften Development-Bestand
+ausgefuehrt. Ihre Befunde duerfen den bis dahin noch nicht fuer `epiber_devel`
+eingefrorenen Schemaerstentwurf und die Importregeln korrigieren. Kein reales
+Quellpaket wird in den gemeinsamen Development-Cluster oder ein anderes
+ungesichertes persistentes Ziel eingebracht.
 
 ### Phase 3: Ausfuehrbare Datenbankbasis
 
@@ -3674,9 +3707,9 @@ angewendeten Migrationen unveraenderlich.
 - datensparsamer Abgleichbericht.
 
 Die getrennte reale Stagingprobe, die reale Strukturanalyse beider historischen
-Scorequellen und die endgueltige versionierte Dublettenregel folgen erst nach
-Phase 5A. Erkannte Sonderfaelle werden danach als synthetische Regressionen in
-die Importwerkzeuge uebernommen.
+Scorequellen und die endgueltige versionierte Dublettenregel folgen in Phase 5A.
+Erkannte Sonderfaelle werden danach als synthetische Regressionen in die
+Importwerkzeuge uebernommen.
 
 ### Phase 5: Anwendungsumbau
 
@@ -3717,9 +3750,27 @@ ausschliesslich synthetischen Seeds erfolgen. Das ist Entwicklungsfeedback,
 keine Devel-Abnahme und keine Freigabe fuer reale Daten oder einen dauerhaften
 ePiber-Bestand.
 
-### Phase 5A: Backup-/Restore-Gate vor Realbestand und Gesamt-Abnahme
+### Phase 5A: Geschuetzte Realanalyse im kurzlebigen Staging
 
-Nach dem integrierten Anwendungsumbau, aber vor jeder realen Migrationsprobe und
+Nach dem integrierten synthetischen Anwendungsumbau wird ein konsistentes
+verschluesseltes Realquellpaket ausschliesslich im getrennten kurzlebigen
+Staging-Cluster analysiert. Diese Phase umfasst:
+
+- vollstaendige Struktur- und Wertebereichsanalyse;
+- reale Erprobung von Transformation und Validierung;
+- Ableitung der Score-Dublettenregel;
+- datensparsamen Abgleichbericht;
+- Uebernahme erkannter Sonderfaelle als minimale synthetische Regressionen;
+- kontrollierten Drop des Clusters sowie Entfernung entschluesselter Quellen und
+  Vernichtung seines kurzlebigen Schluessels.
+
+Der Staging-Cluster besitzt keine Verbindung zum gemeinsamen Development-
+Cluster, zu dessen pgBackRest-Repository oder zu produktiven Integrationen. Er
+erzeugt keinen dauerhaften ePiber-Bestand und keine externe Fachwirkung.
+
+### Phase 5B: Backup-/Restore-Gate vor dauerhaftem Realbestand und Gesamt-Abnahme
+
+Nach der geschuetzten Realanalyse, aber vor einem dauerhaften realen Import und
 vor der vollstaendigen Devel-Abnahme werden eingerichtet und praktisch
 nachgewiesen:
 
@@ -3732,13 +3783,13 @@ nachgewiesen:
 
 Das Gate prueft bewusst auch Konfiguration, Rechte, Neustart, WAL-Verarbeitung
 und die Reproduzierbarkeit der bis dahin entwickelten Migrationen. Ein Fehler
-blockiert Realanalyse, Realimport, dauerhaften `epiber_devel`-Bestand und
+blockiert dauerhaften Realimport, dauerhaften `epiber_devel`-Bestand und
 Gesamt-Abnahme, erzwingt aber keinen Rueckbau der bereits synthetisch geprueften
-Anwendungsentwicklung.
+Anwendungsentwicklung oder der kontrolliert beendeten Realanalyse.
 
 ### Phase 6: Devel-Cutover
 
-1. Erfolgreiches Phase-5A-Backup-/Restore-Gate bestaetigen.
+1. Erfolgreiches Phase-5B-Backup-/Restore-Gate bestaetigen.
 2. Frische `epiber_devel`-Datenbank durch alle Schemamigrationen aufbauen.
 3. Versionierte synthetische Seeds laden und vollstaendig validieren.
 4. Einen konsistenten realen Export getrennt in das geschuetzte, kurzlebige
@@ -3907,12 +3958,13 @@ Die bereits fachlich entschiedenen, aber erst mit ihrer Umsetzungsphase zu
 erzeugenden Betriebsartefakte bleiben davon getrennt:
 
 - Phase 1: systemd-Units, LUKS-/Swap-/Socketkonfiguration und Rollen/HBA;
-- Phase 5A nach synthetischem Anwendungsumbau, jedoch vor Realanalyse,
-  Realimport, dauerhaftem Devel-Bestand und Gesamt-Abnahme:
+- Phase 5A nach synthetischem Anwendungsumbau: isolierte Realanalyse,
+  Score-Dublettenregel und datensparsamer Abgleichbericht;
+- Phase 5B nach Realanalyse, jedoch vor dauerhaftem Realimport, dauerhaftem
+  Devel-Bestand und Gesamt-Abnahme:
   pgBackRest-/Scaleway-PoC, praktischer Restore, PITR, postgres_exporter,
   notwendige Dashboards und Alarmregeln;
-- Phase 2/4: reale Scorequellenanalyse, Dublettenregel, Import-/Export-CLI und
-  datensparsamer Abgleichbericht;
+- Phase 2/4: Import-/Export-CLI und synthetische Transformationspruefungen;
 - Phase 6/7: gemessene Last-, Pool-, Import-, Backup- und Restorewerte sowie
   Devel-/Live-Runbooks;
 - nach Live: kontrollierter Loeschlauf fuer das 370-Tage-Compliance-Archiv.

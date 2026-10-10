@@ -6,3 +6,19 @@ Commit: 4.12.14-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.14-paj-1-1` gesetzt.
+
+[4.12.14-paj-1-2] - 2026-10-10
+Commit: 4.12.14-paj-1-2 | PostgreSQL-Migrationsbasis begonnen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.14-paj-1-1-x` gesetzt.
+  - [Datenbank] Versionierte PostgreSQL-Migrationskette mit sicherem Bootstrap, Pruefsummenbindung und explizitem Migration Runner begonnen.
+  - [Datenbank] Relationales Identity-Schema fuer Personen, Kontakte, Anschriften, Mitgliedschaften, Konten, Credentials, Rollen, Sessions und Loginlimits angelegt.
+  - [Datenbank] Spielbetriebsschema fuer versionierte Bewerbs- und Matchformate, Meldungen, typisierte Matchseiten, unveraenderliche Ergebnisse, KO-Fortschreibung und Ranglistenwirkungen angelegt.
+  - [Datenbank] Venue-Schema fuer Anlagen, Courts, persistente Live-Scores, Monitore, Navigation sowie normalisierte Hallenzeiten mit Slotrevisionen und Historie angelegt.
+  - [Datenbank] Messaging sowie technische Idempotenz-, Job-, Outbox- und Auditpersistenz mit getrennten Retentions- und Recoveryzustaenden angelegt.
+  - [Datenbank] Wiederholbar geprueften technischen Minimal-Seed fuer den synthetischen Development-Tenant und die Tennis-Sektion aufgenommen.
+  - [Dokumentation] Freigegebene Paritaets-, Historien-, Retention-, Szenario- und Autonomieentscheidungen sowie die isolierte Realanalyse vor dem Backup-Gate in den Migrationsfahrplan uebernommen.
+  - [Sicherheit] Datenbankzugang fuer Werkzeuge auf Unix-Socket, SCRAM-Credentialdateien und kontrollierte strukturierte Abschlusslogs vorbereitet.
+  - [Sicherheit] Transitive `qs`-Abhaengigkeit auf die gegen die gemeldeten Denial-of-Service-Schwachstellen korrigierte Version gebunden.
+  - [Tests] Nummerierung, Pruefsummen, Driftabweichungen, Wiederanlauf und CLI-Vertrag sowie der reale Leeraufbau in einem kurzlebigen PostgreSQL-18-Cluster automatisiert geprueft.
