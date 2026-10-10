@@ -1,12 +1,26 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.15
+Stand: 4.12.16
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[4.12.16] - 2026-10-10
+Commit: 4.12.16 | Spielunterbrechung und Fortsetzung konzipiert
+Quelle: 4.12.15-paj-1
+
+  Added
+  - [Dokumentation] Nicht-kanonisches Sollkonzept fuer Spielunterbrechung, vollstaendige Zwischenstandsicherung einschliesslich Aufschlaeger und spaetere Fortsetzung ueber das favoritenfaehige Overlay `Fortsetzbare Spiele` angelegt.
+  - [Dokumentation] Terminunabhaengigkeit, Berechtigungen fuer Beteiligte und Administratoren, kontrollierten Scoreboard-Wiederherstellungsablauf sowie offene Daten-, Rollen- und Integrationsentscheidungen fuer die spaetere Umsetzung festgehalten.
+
+  Tests
+  - [Dokumentation] Dokumentationsprofil und Diffpruefung erfolgreich.
+
+  Removed
+  - [Repository] Temporaeres Branch-Changelog des integrierten Seitenbranches entfernt und Paket- sowie Lockfileversion auf `4.12.16` gesetzt.
 
 [4.12.15] - 2026-10-10
 Commit: 4.12.15 | PostgreSQL-Migrationsgrundlage vorbereitet
