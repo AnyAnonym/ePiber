@@ -1,12 +1,85 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.14
+Stand: 4.12.15
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[4.12.15] - 2026-10-10
+Commit: 4.12.15 | PostgreSQL-Migrationsgrundlage vorbereitet
+Quelle: 4.12.14-paj-1
+
+  Added
+  - [Datenbank] Global nummerierte PostgreSQL-Initialmigrationen fuer `core`,
+    `identity`, `play`, `venue`, `messaging` und `ops` aufgenommen.
+  - [Datenbank] Migration Runner, kanonischen `pg_dump --schema-only`-Snapshot,
+    Schema-Driftpruefung und kurzlebige PostgreSQL-18-Testcluster aufgenommen.
+  - [Datenbank] Idempotenten Rollenbootstrap fuer getrennte Owner-, Migrator-,
+    App-, Worker-, Monitoring-, Backup- und Refreshrollen bereitgestellt.
+  - [Datenbank] Technischen Minimal-Seed und schemaweiten synthetischen
+    `full-devel`-Referenzbestand mit versioniertem Erwartungsvertrag aufgenommen.
+  - [Datenmigration] Manifestgebundenes Quellpaketformat mit geschlossener
+    Dateiliste, Groessen, SHA-256-Pruefsummen, Pfadschutz und Symlinkablehnung
+    eingefuehrt.
+  - [Datenmigration] Read-only-Inspektoren und geschlossene Source-to-Target-
+    Vertraege fuer alle acht Sheet-CSV- sowie vier SQLite-Quellen aufgenommen.
+  - [Datenmigration] CLI-Kommandos `inspect`, `dry-run`, `apply` und `validate`
+    fuer den kontrollierten PostgreSQL-Gesamtimport bereitgestellt.
+
+  Changed
+  - [Datenbank] Relationales Identity-Schema fuer Personen, Kontakte,
+    Anschriften, Mitgliedschaften, Konten, Credentials, Rollen, Sessions und
+    Loginlimits vorbereitet.
+  - [Datenbank] Spielbetrieb fuer versionierte Bewerbs-/Matchformate, Meldungen,
+    typisierte Teilnehmer, unveraenderliche Ergebnisse, KO-Fortschreibung und
+    Ranglistenwirkungen relational modelliert.
+  - [Datenbank] Venue-Schema fuer Anlagen, Courts, persistente Live-Scores,
+    Monitore, Navigation sowie normalisierte Hallenzeiten mit Revisionen und
+    Historie vorbereitet.
+  - [Datenbank] Messaging, Idempotenz, Jobs, Outbox und Audit mit getrennten
+    Retentions-, Recovery- und Sicherheitskontexten vorbereitet.
+  - [Datenmigration] Sheet- und SQLite-Quellen deterministisch in typisierte
+    Zwischenobjekte transformiert; unbekannte Strukturen, Referenzen,
+    Operationen und Dubletten blockieren den Import.
+  - [Datenmigration] Gesamtimport atomar mit vollstaendigem Rollback,
+    Importprovenienz, Quell-/Zielzaehlern, Transformations- und kanonischer
+    Zielpruefsumme sowie idempotenter Wiederholung umgesetzt.
+  - [Datenmigration] Warnungsfreigaben geschlossen und pruefsummengebunden an
+    Exportlauf und Quellmanifest in die Importprovenienz aufgenommen.
+  - [Sicherheit] Datenbankwerkzeuge auf Unix-Sockets, restriktive
+    Credentialdateien und minimale Grants begrenzt; Hashfelder schemaweit als
+    exakt 32 Byte modelliert.
+  - [Datenschutz] Audit-IP und versuchte Login-/Kontaktwerte ohne App-Leserecht
+    getrennt sowie Importlogs und Berichte auf kontrollierte Felder begrenzt.
+  - [Sicherheit] Transitive `qs`-Abhaengigkeit auf die gegen die gemeldeten
+    Denial-of-Service-Schwachstellen korrigierte Version gebunden.
+  - [Zeitverarbeitung] Gepinnten Temporal-Polyfill fuer eindeutige Wiener
+    Legacyzeitpunkte und die Ablehnung von DST-Luecken/-Mehrdeutigkeiten
+    aufgenommen.
+  - [Datenbank] Synthetische fachliche Zeitpunkte vom verpflichtenden `as_of`
+    abgeleitet und Seedtransaktionen an versionierte Soll-Zaehler gebunden.
+  - [Observability] Strukturierte datensparsame Start- und Abschlusslogs fuer
+    Importerfolg, Ablehnung, Fehler und unklaren Commit-Ausgang umgesetzt.
+  - [Dokumentation] PostgreSQL-Zielmodell, Importwerkzeuge und Stoppunkt vor der
+    Laufzeitumstellung in Architektur- und Datenbankdokumentation festgehalten.
+  - [Dokumentation] Backup, Restore und PITR als letzten technischen
+    Freigabeblock nach Anwendungsumbau, synthetischer Gesamtintegration,
+    Browser-/Betriebstests und geschuetzter Realanalyse eingeordnet.
+
+  Tests
+  - [Backend] 478 Backendtests und 17 Workflowtests erfolgreich.
+  - [Datenbank] Leeraufbau, Migrationen, Grants, Constraints, Drift, Seeds,
+    Import-Rollback, Wiederholung, Fremdschluessel, Sequenzen, Retention und
+    nachtraegliche Zieldrift gegen kurzlebige PostgreSQL-18-Cluster geprueft.
+  - [Datenbank] Zwei vollstaendige `full-devel`-Neuaufbauten mit identischem
+    `as_of` erzeugen dieselbe kanonische Projektionspruefsumme.
+
+  Removed
+  - [Repository] Temporaeres Branch-Changelog des integrierten Seitenbranches
+    entfernt und Paket- sowie Lockfileversion auf `4.12.15` gesetzt.
 
 [4.12.14] - 2026-10-09
 Commit: 4.12.14 | Hallenzeiten-Statuswechsel abgesichert

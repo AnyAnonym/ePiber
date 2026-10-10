@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://epiber.at/contracts/postgresql-import-exceptions-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifestVersion", "exportRunId", "sourceManifestSha256", "approvedBy", "approvedAt", "rules"],
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "exportRunId": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$" },
+    "sourceManifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "approvedBy": { "type": "string", "pattern": "^[A-Za-z0-9_.:@-]{1,128}$" },
+    "approvedAt": { "type": "string", "format": "date-time" },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "source", "projection", "handling", "reasonCode", "validation"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+          "source": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$" },
+          "projection": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$" },
+          "handling": { "enum": ["discard", "archive_only", "transform"] },
+          "reasonCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+          "validation": { "type": "string", "pattern": "^[a-z][a-z0-9_.:-]{2,127}$" }
+        }
+      }
+    }
+  }
+}

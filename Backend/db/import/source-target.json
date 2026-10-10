@@ -1,0 +1,252 @@
+{
+  "version": 1,
+  "unknownFieldPolicy": "block",
+  "sources": {
+    "state.sqlite": {
+      "sessions": {
+        "disposition": "discard_cutover_state",
+        "fields": {
+          "sid_hash": "discard",
+          "user_id": "discard",
+          "email": "discard",
+          "login": "discard",
+          "created_at": "discard",
+          "expires_at": "discard",
+          "last_seen_at": "discard"
+        }
+      },
+      "monitor_devices": {
+        "disposition": "transform",
+        "fields": {
+          "monitor_id": "venue.monitor_devices.contract_id",
+          "label": "venue.monitor_devices.label",
+          "token_hash": "venue.monitor_devices.token_hash:hex_to_bytea32",
+          "created_at": "venue.monitor_devices.created_at:unix_ms_to_timestamptz3",
+          "updated_at": "venue.monitor_devices.updated_at:unix_ms_to_timestamptz3",
+          "last_seen_at": "venue.monitor_devices.last_seen_at:unix_ms_to_timestamptz3_nullable",
+          "revoked_at": "venue.monitor_devices.revoked_at:unix_ms_to_timestamptz3_nullable"
+        }
+      },
+      "operations": {
+        "disposition": "transform_unexpired_terminal_only",
+        "fields": {
+          "actor_key": "ops.idempotency_operations.actor_person_id:resolve_actor",
+          "operation_id": "ops.idempotency_operations.operation_id",
+          "endpoint": "ops.idempotency_operations.command",
+          "payload_hash": "ops.idempotency_operations.request_hash:hex_to_bytea32",
+          "result_json": "ops.idempotency_operations.response_projection:validate_contract",
+          "created_at": "ops.idempotency_operations.started_at:unix_ms_to_timestamptz3"
+        }
+      },
+      "login_failures": {
+        "disposition": "discard_cutover_state",
+        "fields": {
+          "key_hash": "discard",
+          "window_start": "discard",
+          "count": "discard",
+          "blocked_until": "discard"
+        }
+      },
+      "app_state": {
+        "disposition": "dispatch_by_key",
+        "fields": {
+          "key": "dispatch_key",
+          "value_json": "validate_and_transform",
+          "revision": "target_revision",
+          "updated_at": "target_updated_at:unix_ms_to_timestamptz3"
+        },
+        "keyFamilies": {
+          "court:*": "venue.courts|venue.court_assignments|venue.court_live_state|venue.court_state_events",
+          "monitor-target:*": "venue.monitor_devices",
+          "favorites:*": "identity.user_favorites",
+          "start-page:*": "identity.user_start_pages",
+          "frontend-logging:settings": "identity.frontend_logging_settings",
+          "frontend-logging:targets": "discard_person_targets_reconfigure_after_cutover",
+          "hall-times:v1": "venue.hall_time_grids|venue.hall_time_grid_participants|venue.hall_time_slots|venue.hall_time_allocations|venue.hall_time_constraints|venue.hall_time_history|venue.hall_time_history_items",
+          "match-result-ranking:*": "play.match_ranking_effects|play.ranking_changes|play.ranking_change_items",
+          "record-metadata-intent:*": "resolve_before_cutover_then_discard"
+        }
+      }
+    },
+    "scorelog.sqlite": {
+      "score_log_sequence": {
+        "disposition": "validation_only",
+        "fields": {
+          "instance": "source_provenance",
+          "court": "venue.courts.court_code:resolve",
+          "last_sequence": "validate_source_maximum"
+        }
+      },
+      "score_log": {
+        "disposition": "transform",
+        "fields": {
+          "event_id": "venue.score_events.event_id",
+          "instance": "venue.score_events.source_instance",
+          "court": "venue.score_events.court_id:resolve_code",
+          "sequence": "venue.score_events.source_sequence",
+          "occurred_at": "venue.score_events.source_occurred_at:iso_to_timestamptz3",
+          "score": "venue.score_events:parse_eight_components",
+          "match_id": "venue.score_events.assignment_id:resolve_match_assignment",
+          "court_active": "validate_true",
+          "court_revision": "venue.score_events.court_revision",
+          "created_at": "venue.score_events.accepted_at:unix_ms_to_timestamptz3"
+        }
+      }
+    },
+    "audit.sqlite": {
+      "audit_log": {
+        "disposition": "transform_with_12_month_retention",
+        "fields": {
+          "event_id": "ops.audit_transitions.id:parse_uuid_or_provenance",
+          "occurred_at": "ops.audit_transitions.occurred_at:iso_to_timestamptz3",
+          "actor_type": "ops.audit_operations.actor_type",
+          "actor_id": "ops.audit_operations.actor_person_id:resolve_nullable",
+          "actor_name": "ops.audit_operations.actor_name_snapshot",
+          "role": "ops.audit_operations.role_snapshot",
+          "action": "ops.audit_operations.action",
+          "target_type": "ops.audit_operations.subject_type",
+          "target_id": "ops.audit_operations.subject_id",
+          "target_name": "ops.audit_operations.subject_name_snapshot",
+          "request_id": "ops.audit_operations.request_id",
+          "operation_id": "ops.audit_operations.operation_id",
+          "result": "ops.audit_operations.status|ops.audit_transitions.transition",
+          "before_json": "ops.audit_operations.before_projection:validate_controlled_projection",
+          "after_json": "ops.audit_operations.after_projection:validate_controlled_projection",
+          "error_code": "ops.audit_transitions.error_code",
+          "source_ip": "ops.audit_security_context.source_ip:parse_inet_nullable",
+          "attempted_email": "ops.audit_security_context.attempted_email:nullable",
+          "attempted_login": "ops.audit_security_context.attempted_login:nullable",
+          "instance": "ops.audit_operations.source_instance",
+          "created_at": "import_provenance:unix_ms",
+          "updated_at": "ops.audit_operations.completed_at:unix_ms_to_timestamptz3_nullable"
+        }
+      }
+    },
+    "messaging.sqlite": {
+      "competition_events": {
+        "disposition": "transform",
+        "fields": {
+          "event_id": "messaging.events.contract_id",
+          "competition_id": "messaging.events.competition_id:resolve_nullable",
+          "created_at": "messaging.events.created_at:unix_ms_to_timestamptz3",
+          "event_type": "messaging.events.event_type",
+          "source": "messaging.events.template_key:map_legacy_source",
+          "source_id": "messaging.events.source_operation_id:resolve_or_provenance",
+          "actor_id": "messaging.event_participants.person_id:actor",
+          "actor_name": "messaging.event_participants:name_snapshot",
+          "summary": "messaging.event_recipients.legacy_subject",
+          "detail": "messaging.event_recipients.legacy_body",
+          "result": "messaging.events.template_parameters:controlled_result",
+          "inserted_at": "import_provenance:unix_ms"
+        }
+      },
+      "event_participants": {
+        "disposition": "split_participant_and_recipient",
+        "fields": {
+          "event_id": "messaging.event_participants.event_id|messaging.event_recipients.event_id",
+          "user_id": "messaging.event_participants.person_id|messaging.event_recipients.person_id",
+          "participant_role": "messaging.event_participants.participant_role",
+          "display_name": "messaging.event_participants:first_name_snapshot|last_name_snapshot",
+          "message_id": "messaging.event_recipients.id:parse_uuid_or_provenance",
+          "projection_type": "messaging.event_recipients.template_key:map_projection",
+          "subject": "messaging.event_recipients.legacy_subject",
+          "body": "messaging.event_recipients.legacy_body"
+        }
+      },
+      "event_receipts": {
+        "disposition": "transform",
+        "fields": {
+          "event_id": "messaging.receipts.recipient_id:resolve",
+          "user_id": "messaging.receipts.recipient_id:resolve",
+          "acknowledged_at": "messaging.receipts.acknowledged_at:unix_ms_to_timestamptz3_nullable"
+        }
+      },
+      "event_deliveries": {
+        "disposition": "transform_24_month_retention",
+        "fields": {
+          "event_id": "messaging.deliveries.recipient_id:resolve",
+          "user_id": "messaging.deliveries.recipient_id:resolve",
+          "channel": "messaging.deliveries.channel",
+          "status": "messaging.deliveries.status:map_delivered_to_sent",
+          "updated_at": "messaging.deliveries.updated_at:unix_ms_to_timestamptz3"
+        }
+      },
+      "event_ack_operations": {
+        "disposition": "transform_unexpired_terminal_only",
+        "fields": {
+          "user_id": "ops.idempotency_operations.actor_person_id:resolve",
+          "operation_id": "ops.idempotency_operations.operation_id",
+          "event_id": "ops.idempotency_operations.response_projection:event_id",
+          "message_id": "ops.idempotency_operations.response_projection:message_id",
+          "acknowledged_at": "ops.idempotency_operations.completed_at:unix_ms_to_timestamptz3"
+        }
+      },
+      "messaging_revisions": {
+        "disposition": "transform",
+        "fields": { "user_id": "messaging.user_revisions.person_id:resolve", "revision": "messaging.user_revisions.revision" }
+      },
+      "message_bulk_ack_operations": {
+        "disposition": "transform_unexpired_terminal_only",
+        "fields": {
+          "user_id": "ops.idempotency_operations.actor_person_id:resolve",
+          "operation_id": "ops.idempotency_operations.operation_id",
+          "acknowledged_at": "ops.idempotency_operations.completed_at:unix_ms_to_timestamptz3",
+          "changed_count": "ops.idempotency_operations.response_projection:changed_count"
+        }
+      },
+      "event_comments": {
+        "disposition": "transform",
+        "fields": {
+          "comment_id": "messaging.comments.id",
+          "event_id": "messaging.comments.event_id:resolve",
+          "author_id": "messaging.comments.author_person_id:resolve",
+          "author_name": "messaging.comments.author_name_snapshot",
+          "body": "messaging.comments.body",
+          "status": "messaging.comments.revision:validate_legacy_status",
+          "created_at": "messaging.comments.created_at:unix_ms_to_timestamptz3",
+          "updated_at": "import_provenance:unix_ms_nullable",
+          "moderated_at": "import_provenance:unix_ms_nullable",
+          "moderated_by": "import_provenance:person_reference_nullable"
+        }
+      },
+      "comment_reactions": {
+        "disposition": "transform",
+        "fields": {
+          "comment_id": "messaging.reactions.comment_id:resolve",
+          "user_id": "messaging.reactions.person_id:resolve",
+          "user_name": "participant_snapshot_validation",
+          "reaction_key": "messaging.reactions.reaction_key",
+          "created_at": "messaging.reactions.created_at:unix_ms_to_timestamptz3",
+          "updated_at": "import_provenance:unix_ms"
+        }
+      },
+      "event_reactions": {
+        "disposition": "transform",
+        "fields": {
+          "event_id": "messaging.reactions.event_id:resolve",
+          "user_id": "messaging.reactions.person_id:resolve",
+          "user_name": "participant_snapshot_validation",
+          "reaction_key": "messaging.reactions.reaction_key",
+          "created_at": "messaging.reactions.created_at:unix_ms_to_timestamptz3",
+          "updated_at": "import_provenance:unix_ms"
+        }
+      },
+      "event_interaction_operations": {
+        "disposition": "transform_unexpired_terminal_only",
+        "fields": {
+          "user_id": "ops.idempotency_operations.actor_person_id:resolve",
+          "operation_id": "ops.idempotency_operations.operation_id",
+          "action": "ops.idempotency_operations.command",
+          "target_id": "ops.idempotency_operations.response_projection:target_id",
+          "payload_hash": "ops.idempotency_operations.request_hash:hex_to_bytea32",
+          "result_json": "ops.idempotency_operations.response_projection:validate_contract",
+          "created_at": "ops.idempotency_operations.started_at:unix_ms_to_timestamptz3"
+        }
+      },
+      "competition_history_revision": {
+        "disposition": "validation_only",
+        "fields": { "singleton": "validate_one", "revision": "core.projection_revisions.revision:competition_history" }
+      }
+    }
+  }
+}

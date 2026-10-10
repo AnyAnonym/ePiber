@@ -1006,5 +1006,60 @@ Die vollstaendige verbindliche Liste steht in
 
 
 ================================================================================
+  10. VORBEREITETES POSTGRESQL-ZIELMODELL UND IMPORTWERKZEUGE
+================================================================================
+
+Das vorbereitete, noch nicht vom Backend verwendete PostgreSQL-Zielmodell liegt
+versioniert unter `Backend/db/migrations/` und als kanonischer Snapshot in
+`Backend/db/schema.sql`. Es umfasst:
+
+- `core`: Tenant, Sektion, kontrollierte Konfiguration und Projektionsrevisionen;
+- `identity`: Personen, Kontakte, Anschriften, externe Kennungen,
+  Mitgliedschaften, Konten, Credentials, Rollen, Sessions, Loginlimits,
+  Frontenddiagnosekonfiguration, Favoriten und Startseiten;
+- `play`: versionierte Bewerbs- und Matchformate, Bewerbe, Meldungen, Matches,
+  typisierte Seiten/Teilnehmer, unveraenderliche Ergebnisse, Ergebnisjournal,
+  KO-Fortschreibung und Ranglistenwirkungen;
+- `venue`: Anlagen, Courts, Zuweisungen, Live-State, dauerhafte Scoreereignisse,
+  Monitore, Navigation und normalisierte Hallenzeiten samt Historie;
+- `messaging`: Ereignisse, Teilnehmersnapshots, Empfaenger, Quittierungen,
+  Zustellungen, Kommentare, Reaktionen und Benutzerversionen;
+- `ops`: Migrationen, Seeds, Importprovenienz, Idempotenz, Jobs, Outbox und
+  getrennte Auditoperationen, Sicherheitskontexte und Zustandsuebergaenge.
+
+`Backend/db/seeds/full-devel.sql` befuellt dieses Modell synthetisch ueber alle
+Persistenzdomaenen. `Backend/db/seeds/full-devel.expected.json` bindet die
+erwarteten Tabellenzaehler; die Seedtransaktion wird nur bei vollstaendiger
+Uebereinstimmung committet. Fachliche Zeitpunkte werden deterministisch vom
+expliziten `as_of` abgeleitet. Wiederholte Leeraufbauten muessen dieselbe
+kanonische Projektionspruefsumme liefern.
+
+Ein unveraendertes Quellpaket bindet Exportlauf, Pflichtdateien, Dateigroessen und
+SHA-256-Pruefsummen. CSV- und SQLite-Strukturen sind geschlossen; unbekannte
+Tabellen, Felder, persistente State-Keys, offene/unklare Operationen,
+nicht aufloesbare Referenzen und ungeklaerte Dubletten blockieren. Warnungen
+benoetigen ein versioniertes, an Exportlauf und Manifestpruefsumme gebundenes
+Ausnahmemanifest. Freie Personen-, Nachrichten-, Kommentar- und Auditwerte
+erscheinen nicht in Betriebslogs oder Abgleichberichten.
+
+CLI aus `Backend/`:
+
+```text
+npm run db:source-package -- verify <quellpaket>
+npm run db:import -- inspect <quellpaket>
+npm run db:import -- dry-run <quellpaket>
+npm run db:import -- apply <quellpaket>
+npm run db:import -- validate <quellpaket>
+```
+
+`apply` verlangt ein frisch aufgebautes, technisch gesperrtes Ziel und schreibt
+den synthetischen Gesamtbestand in einer Transaktion. Fehler rollen den gesamten
+Fachbestand zurueck. Eine Wiederholung desselben erfolgreich gebundenen Laufs
+schreibt keine Dubletten; `validate` prueft Zaehler, Fremdschluessel, Sequenzen
+und die kanonische Zielprojektionspruefsumme. Reale Daten, ein dauerhafter
+Realbestand und die Laufzeitumstellung sind dadurch nicht freigegeben.
+
+
+================================================================================
   ENDE DATENBANK.txt
 ================================================================================

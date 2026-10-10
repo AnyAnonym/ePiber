@@ -1292,5 +1292,48 @@ gesperrt; Live-Deployment folgt erst nach Backup- und Rollbackfreigabe.
 
 
 ================================================================================
+  11. VORBEREITETE POSTGRESQL-MIGRATIONSARCHITEKTUR
+================================================================================
+
+Die PostgreSQL-Migrationsgrundlage ist bis zum Stoppunkt unmittelbar vor der
+Umstellung des Backend-Laufzeitcodes implementiert. Sie aktiviert noch keinen
+PostgreSQL-Pfad im Server: Die laufende Anwendung verwendet weiterhin
+unveraendert Google Sheets und die vier SQLite-Dateien.
+
+Der vorbereitete Zielstand umfasst:
+
+- eine global nummerierte, pruefsummengebundene Initialmigrationskette fuer
+  `core`, `identity`, `play`, `venue`, `messaging` und `ops`;
+- einen Migration Runner, einen kanonischen `pg_dump --schema-only`-Snapshot und
+  Driftpruefung gegen kurzlebige PostgreSQL-18-Cluster ohne TCP-Listener;
+- getrennte Owner-, Migrator-, App-, Worker-, Monitoring-, Backup- und
+  Refreshrollen mit minimalen Grants;
+- technische Minimal-Seeds und den schemaweiten synthetischen Referenzbestand
+  `full-devel` mit einem versionierten Erwartungsvertrag fuer Tabellenzaehler;
+- deterministische fachliche Zeitpunkte relativ zu einem verpflichtenden
+  `as_of`; zwei vollstaendige Neuaufbauten mit identischem `as_of` muessen
+  dieselbe kanonische Projektionspruefsumme erzeugen;
+- manifestgebundene Importwerkzeuge fuer alle acht Sheet-CSV-Quellen und die vier
+  SQLite-Quellen mit `inspect`, `dry-run`, `apply` und `validate`;
+- atomaren Gesamtimport, Rollback bei jedem Fehler, idempotente Wiederholung,
+  Importprovenienz, kontrollierte Ausnahmemanifeste und datensparsame
+  Start-/Abschlusslogs.
+
+Der naechste Architekturblock beginnt mit asynchronen `pg`-Repositories und
+gemeinsamen Transaktionsgrenzen. Controller, WebSocket-Routing und Fachservices
+erhalten keinen direkten SQL-Zugriff. Der PostgreSQL-Modus muss bei einer
+fehlenden Domaene kontrolliert den Start ablehnen und darf innerhalb dieses Modus
+nicht auf Sheets oder SQLite zurueckfallen. Der bestehende Legacybetrieb bleibt
+bis zum vollstaendigen Gesamtcutover getrennt aktiv.
+
+Backup, Restore und PITR sind bewusst als letzter technischer Freigabeblock nach
+PostgreSQL-Anwendungsumbau, synthetischer Gesamtintegration, Browser- und
+Betriebstests sowie geschuetzter kurzlebiger Realanalyse eingeordnet. Bis dahin
+sind ePiber-Development-Bestaende reproduzierbar und verwerfbar; es besteht keine
+Wiederherstellungszusage. Vor dauerhaftem Realbestand und Live bleiben
+pgBackRest, Off-site-WAL, Vollrestore und PITR zwingend.
+
+
+================================================================================
   ENDE ARCHITEKTUR.txt
 ================================================================================
