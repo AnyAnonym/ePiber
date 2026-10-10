@@ -4,7 +4,9 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { Client } = require("pg");
 const { runMigrations } = require("../db/migrationRunner");
-const { applyTechnicalSeed } = require("../db/seedRunner");
+const { applyFullDevelSeed, applyTechnicalSeed } = require("../db/seedRunner");
+const { verifySchemaSnapshot } = require("../db/schemaSnapshot");
+const { applyBootstrap, verifyBootstrap } = require("../db/bootstrap");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
 
 test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank", { timeout: 30_000 }, async (t) => {
@@ -77,6 +79,7 @@ test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank",
 
   assert.ok(events.some(({ event, result }) => event === "db_migration_completed" && result === "success"));
   assert.equal(JSON.stringify(events).includes("postgres-password"), false);
+  assert.match(verifySchemaSnapshot(cluster.connectionConfig), /CREATE TABLE core\.tenants/);
 
   const seedEvents = [];
   const seeded = await applyTechnicalSeed({
@@ -104,4 +107,63 @@ test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank",
     output: () => {},
   }), (error) => error.code === "SEED_DATABASE_NOT_EMPTY");
   assert.ok(seedEvents.some(({ event, result }) => event === "db_seed_completed" && result === "success"));
+  const fullSeed = await applyFullDevelSeed({
+    connectionConfig: cluster.connectionConfig,
+    asOf: "2026-10-10T00:00:00.000Z",
+    output: () => {},
+  });
+  assert.match(fullSeed.checksum, /^[0-9a-f]{64}$/);
+  const fullClient = new Client(cluster.connectionConfig);
+  await fullClient.connect();
+  try {
+    const counts = await fullClient.query(`
+      SELECT (SELECT count(*) FROM identity.people) AS people,
+             (SELECT count(*) FROM play.matches) AS matches,
+             (SELECT count(*) FROM venue.hall_time_allocations) AS allocations,
+             (SELECT count(*) FROM messaging.events) AS events,
+             (SELECT count(*) FROM ops.seed_runs WHERE result = 'success') AS seed_runs
+    `);
+    assert.deepEqual(counts.rows[0], { people: "5", matches: "1", allocations: "2", events: "1", seed_runs: "2" });
+  } finally {
+    await fullClient.end();
+  }
+});
+
+test("Bootstrap trennt Owner, Migration und Laufzeitrollen mit minimalen Grants", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  const prefix = "epiber_test";
+  const database = "epiber_role_test";
+  const passwords = Object.fromEntries(
+    ["migrator", "app", "worker", "monitor", "backup", "refresh"].map((suffix) => [suffix, `test-${suffix}-password`]),
+  );
+
+  const prepared = await applyBootstrap({
+    adminConnectionConfig: cluster.connectionConfig,
+    prefix,
+    database,
+    passwords,
+    output: () => {},
+  });
+  assert.equal(prepared.grantsApplied, false);
+
+  const migrationConnection = {
+    ...cluster.connectionConfig,
+    database,
+    user: prepared.names.migrator,
+    password: passwords.migrator,
+    options: `-c role=${prepared.names.owner}`,
+  };
+  await runMigrations({ connectionConfig: migrationConnection, command: "up", targetGeneration: 6, output: () => {} });
+
+  const granted = await applyBootstrap({
+    adminConnectionConfig: cluster.connectionConfig,
+    prefix,
+    database,
+    passwords,
+    output: () => {},
+  });
+  assert.equal(granted.grantsApplied, true);
+  const checks = await verifyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database });
+  assert.ok(Object.values(checks).every(Boolean));
 });

@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "id": "technical-minimal",
+      "dependsOn": [],
+      "scenarios": [
+        { "id": "tenant-section", "dimensions": ["tenant", "section", "locale", "time-zone"] }
+      ]
+    },
+    {
+      "id": "identity-auth",
+      "dependsOn": ["technical-minimal"],
+      "scenarios": [
+        { "id": "active-player", "dimensions": ["player", "active", "scrypt", "contact"] },
+        { "id": "player-a-without-account", "dimensions": ["player-a", "active", "no-account"] },
+        { "id": "player-b-dormant-account", "dimensions": ["player-b", "dormant", "credential-without-login"] },
+        { "id": "operator", "dimensions": ["operator", "explicit-role", "active"] },
+        { "id": "admin-inherits-operator", "dimensions": ["admin", "role-inheritance", "active"] },
+        { "id": "admin-and-explicit-operator", "dimensions": ["admin", "operator", "independent-grants"] },
+        { "id": "inactive-account", "dimensions": ["inactive", "session-revocation"] },
+        { "id": "legacy-password", "dimensions": ["legacy-sha256", "credential-upgrade"] },
+        { "id": "password-authorization", "dimensions": ["password-reset", "expiry", "single-use"] },
+        { "id": "duplicate-contact-email", "dimensions": ["duplicate-contact", "distinct-login"] },
+        { "id": "login-rate-limit", "dimensions": ["ip-hash", "login-hash", "blocked", "expiry"] },
+        { "id": "session-limit", "dimensions": ["ten-sessions", "oldest-revoked", "auth-revision"] }
+      ]
+    },
+    {
+      "id": "play",
+      "dependsOn": ["identity-auth"],
+      "scenarios": [
+        { "id": "ranking-competition", "dimensions": ["competition-type", "age", "gender", "entry-window"] },
+        { "id": "ko-competition", "dimensions": ["bracket", "progression", "bye", "open-bracket"] },
+        { "id": "round-robin", "dimensions": ["round-robin", "group", "format-version"] },
+        { "id": "entry-withdraw-reentry", "dimensions": ["entry", "withdrawn", "reentry", "legacy-fee"] },
+        { "id": "regular-result", "dimensions": ["sets", "tiebreak", "winner", "ranking-effect"] },
+        { "id": "walkover", "dimensions": ["walkover", "no-sets", "scheduled-cleared"] },
+        { "id": "retirement", "dimensions": ["retirement", "incomplete-set", "winner"] },
+        { "id": "result-correction-clear", "dimensions": ["immutable-version", "correction", "clear", "history"] },
+        { "id": "ranking-withdraw-return", "dimensions": ["rank-zero", "previous-rank", "reason", "return"] },
+        { "id": "concurrency-conflict", "dimensions": ["revision", "serialization", "retry-limit"] }
+      ]
+    },
+    {
+      "id": "venue",
+      "dependsOn": ["play"],
+      "scenarios": [
+        { "id": "court-baseline-score", "dimensions": ["activation", "baseline", "score-event", "revision"] },
+        { "id": "court-assignment-switch", "dimensions": ["assignment", "release", "epoch", "state-event"] },
+        { "id": "court-source-failure", "dimensions": ["stale", "failed", "recovery"] },
+        { "id": "monitor-navigation", "dimensions": ["monitor-navigation", "token-hash", "command", "acknowledgement", "revision"] },
+        { "id": "hall-confirmed-waiting", "dimensions": ["capacity", "confirmed", "waiting", "promotion"] },
+        { "id": "hall-fair-use", "dimensions": ["fair-use", "open-day", "limit"] },
+        { "id": "hall-constraints", "dimensions": ["unavailable", "avoid", "distribution"] },
+        { "id": "hall-history-retention", "dimensions": ["batch-history", "slot-snapshot", "10000-limit"] }
+      ]
+    },
+    {
+      "id": "messaging-ops",
+      "dependsOn": ["identity-auth", "play", "venue"],
+      "scenarios": [
+        { "id": "personal-inbox", "dimensions": ["event", "participant-snapshot", "recipient", "receipt"] },
+        { "id": "comment-reaction-delete", "dimensions": ["comment", "reaction", "tombstone", "privacy"] },
+        { "id": "delivery-not-configured", "dimensions": ["email", "whatsapp", "not-configured"] },
+        { "id": "idempotency-success", "dimensions": ["request-hash", "response-window", "tombstone"] },
+        { "id": "idempotency-unknown", "dimensions": ["unknown", "recovery", "no-blind-retry"] },
+        { "id": "job-lease-recovery", "dimensions": ["pending", "leased", "expired-lease", "retrying"] },
+        { "id": "outbox-at-least-once", "dimensions": ["outbox", "idempotency-key", "unknown", "reconcile"] },
+        { "id": "audit-lifecycle", "dimensions": ["started", "success", "failed", "unknown", "controlled-projection"] },
+        { "id": "deadlock-retry", "dimensions": ["deadlock", "same-operation", "three-attempts"] },
+        { "id": "permission-denied", "dimensions": ["app-no-ddl", "worker-no-identity-write", "monitor-no-person-data"] }
+      ]
+    },
+    {
+      "id": "time-boundaries",
+      "dependsOn": ["identity-auth", "play", "venue", "messaging-ops"],
+      "scenarios": [
+        { "id": "vienna-dst-spring", "dimensions": ["dst-gap", "reject-nonexistent-time"] },
+        { "id": "vienna-dst-autumn", "dimensions": ["dst-overlap", "reject-ambiguous-time"] },
+        { "id": "competition-date-boundaries", "dimensions": ["date-precision", "inclusive-end", "year-age"] },
+        { "id": "retention-boundaries", "dimensions": ["24-hours", "12-months", "24-months", "370-days"] }
+      ]
+    }
+  ]
+}

@@ -212,19 +212,22 @@ CREATE TABLE play.ranking_entries (
   id uuid PRIMARY KEY DEFAULT uuidv7(),
   competition_id uuid NOT NULL REFERENCES play.competitions(id) ON DELETE RESTRICT,
   person_id uuid NOT NULL REFERENCES identity.people(id) ON DELETE RESTRICT,
+  contract_id text,
   status text NOT NULL CHECK (status IN ('active', 'withdrawn')),
   rank integer CHECK (rank > 0),
-  previous_rank integer CHECK (previous_rank > 0),
+  last_active_rank integer CHECK (last_active_rank > 0),
   withdrawn_at timestamptz(3),
   withdrawal_reason text,
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  CHECK ((status = 'active' AND rank IS NOT NULL AND withdrawn_at IS NULL AND withdrawal_reason IS NULL)
-      OR (status = 'withdrawn' AND rank IS NULL AND previous_rank IS NOT NULL AND withdrawn_at IS NOT NULL
+  CHECK ((status = 'active' AND rank IS NOT NULL)
+      OR (status = 'withdrawn' AND rank IS NULL AND last_active_rank IS NOT NULL AND withdrawn_at IS NOT NULL
           AND length(btrim(withdrawal_reason)) BETWEEN 3 AND 500)),
   UNIQUE (competition_id, person_id),
   UNIQUE (id, competition_id)
 );
+CREATE UNIQUE INDEX ranking_entries_contract_id
+  ON play.ranking_entries (competition_id, contract_id) WHERE contract_id IS NOT NULL;
 CREATE UNIQUE INDEX ranking_entries_active_rank
   ON play.ranking_entries (competition_id, rank) WHERE status = 'active';
 

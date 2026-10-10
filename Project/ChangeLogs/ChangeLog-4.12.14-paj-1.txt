@@ -22,3 +22,28 @@ Commit: 4.12.14-paj-1-2 | PostgreSQL-Migrationsbasis begonnen
   - [Sicherheit] Datenbankzugang fuer Werkzeuge auf Unix-Socket, SCRAM-Credentialdateien und kontrollierte strukturierte Abschlusslogs vorbereitet.
   - [Sicherheit] Transitive `qs`-Abhaengigkeit auf die gegen die gemeldeten Denial-of-Service-Schwachstellen korrigierte Version gebunden.
   - [Tests] Nummerierung, Pruefsummen, Driftabweichungen, Wiederanlauf und CLI-Vertrag sowie der reale Leeraufbau in einem kurzlebigen PostgreSQL-18-Cluster automatisiert geprueft.
+
+[4.12.14-paj-1-3] - 2026-10-10
+Commit: 4.12.14-paj-1-3 | PostgreSQL-Schema und Rollen abgesichert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.14-paj-1-2-x` gesetzt.
+  - [Datenbank] Kanonischen `pg_dump --schema-only`-Snapshot fuer alle ePiber-Schemas samt automatischer Driftpruefung aufgenommen.
+  - [Datenbank] Idempotenten Infrastruktur-Bootstrap fuer getrennte Owner-, Migrator-, App-, Worker-, Monitoring-, Backup- und Refreshrollen vorbereitet.
+  - [Sicherheit] Minimale positive Grants und negative Rechtepruefungen fuer Migrationen, Fachdaten, Worker und Monitoring festgelegt.
+  - [Sicherheit] Session-, Geraete-, Rate-Limit-, Request-, Manifest- und Scorepruefhashes schemaweit als exakt 32 Byte statt redundantem Hextext erzwungen.
+  - [Datenschutz] Audit-IP und versuchte Login-/Kontaktwerte in eine gesonderte Tabelle ohne App-Leserecht getrennt.
+  - [Datenbank] Frontend-Logging-Einstellungen und zeitlich begrenzte Zielpersonen aus generischem App-State in kontrollierte Relationen ueberfuehrt.
+  - [Sicherheit] Snapshot-Credentials nur ueber eine kurzlebige restriktive pgpass-Datei an `pg_dump` uebergeben und danach kontrolliert entfernt.
+  - [Tests] Schema-Snapshot bei jedem PostgreSQL-Leeraufbau gegen die vollstaendige Migrationskette verifiziert.
+  - [Tests] Maschinenlesbaren synthetischen Szenariokatalog fuer Identitaet, Spielbetrieb, Courts, Hallenzeiten, Messaging, Operations-, Fehler-, Zeit- und Berechtigungsgrenzen festgelegt.
+  - [Tests] Zentrale Identity-, Ranglisten- und Jobinvarianten praktisch gegen PostgreSQL-Constraints nachgewiesen.
+  - [Dokumentation] Erledigte und verbleibende Phase-3-Artefakte im Migrationsfahrplan auf den tatsaechlichen Umsetzungsstand gebracht.
+  - [Datenmigration] Geschlossene feldgenaue Source-to-Target-Matrix fuer alle vier SQLite-Dateien und ein versioniertes restriktives Ausnahmemanifestformat aufgenommen.
+  - [Datenbank] Ausfuehrbaren schemauebergreifenden `full-devel`-Seed fuer Identitaet, Rollen, Bewerb, Ergebnis, Rangliste, Court, Monitor, Hallenzeiten, Messaging, Jobs und Outbox aufgenommen.
+  - [Dokumentation] Statisch-synthetischen Phase-3-Exit nach erfolgreicher Migrations-, Grant-, Seed-, Constraint- und Driftpruefung festgehalten.
+  - [Datenmigration] Unveraenderlichen Quellpaketvertrag mit geschlossener Dateiliste, Groessen, SHA-256-Pruefsummen, Pfadschutz und Symlinkablehnung begonnen.
+  - [Datenmigration] CLI zum kontrollierten Erzeugen und Verifizieren synthetischer Quellpaketmanifeste bereitgestellt.
+  - [Datenmigration] Read-only-SQLite-Inspektor blockiert unbekannte Quelltabellen und Felder vor jeder Transformation.
+  - [Datenmigration] Geschlossener CSV-Inspektor prueft alle acht aktiven Sheetquellen auf exakte Spalten, sichere Quotierung, Zeilenbreite und Dateigrenzen.
+  - [Dokumentation] Temporaeren Phase-4-Handoff mit geprueftem Zwischenstand, Implementierungseinstiegen und exakter naechster Transformationsreihenfolge fuer die Kontextkompaktierung aufgenommen.

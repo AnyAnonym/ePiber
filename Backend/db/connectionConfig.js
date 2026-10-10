@@ -25,6 +25,11 @@ function createConnectionConfig(env = process.env) {
   }
   if (!config.user) throw new Error("DB_USER_REQUIRED");
 
+  if (env.EPIBER_DB_ROLE) {
+    if (!/^[a-z][a-z0-9_]{2,62}$/.test(env.EPIBER_DB_ROLE)) throw new Error("DB_ROLE_INVALID");
+    config.options = `-c role=${env.EPIBER_DB_ROLE}`;
+  }
+
   const passwordFile = env.EPIBER_DB_PASSWORD_FILE
     || (env.CREDENTIALS_DIRECTORY ? `${env.CREDENTIALS_DIRECTORY}/postgres-password` : null);
   if (passwordFile) config.password = readSecret(passwordFile);

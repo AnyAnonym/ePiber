@@ -6,6 +6,7 @@ const path = require("node:path");
 const { Client } = require("pg");
 
 const TECHNICAL_SEED = path.join(__dirname, "seeds", "technical-minimal.sql");
+const FULL_DEVEL_SEED = path.join(__dirname, "seeds", "full-devel.sql");
 
 function seedChecksum(sql) {
   return crypto.createHash("sha256").update(sql).digest("hex");
@@ -54,4 +55,47 @@ async function applyTechnicalSeed({ connectionConfig, asOf, output = console.log
   }
 }
 
-module.exports = { applyTechnicalSeed, seedChecksum, TECHNICAL_SEED };
+async function applyFullDevelSeed({ connectionConfig, asOf, output = console.log }) {
+  const parsedAsOf = new Date(asOf);
+  if (!asOf || Number.isNaN(parsedAsOf.getTime()) || parsedAsOf.toISOString() !== asOf) {
+    throw Object.assign(new Error("Seed as_of muss ein kanonischer ISO-Zeitpunkt sein"), { code: "SEED_AS_OF_INVALID" });
+  }
+  const sql = fs.readFileSync(FULL_DEVEL_SEED, "utf8");
+  const checksum = seedChecksum(sql);
+  const client = new Client(connectionConfig);
+  await client.connect();
+  output(JSON.stringify({ event: "db_seed_started", seed: "full-devel", asOf }));
+  try {
+    const state = await client.query(`
+      SELECT count(*) FILTER (WHERE seed_name = 'technical-minimal' AND result = 'success') AS technical_count,
+             count(*) FILTER (WHERE seed_name = 'full-devel' AND result = 'success') AS full_count
+        FROM ops.seed_runs
+    `);
+    if (Number(state.rows[0].technical_count) !== 1) throw Object.assign(new Error("Technischer Seed fehlt"), { code: "SEED_DEPENDENCY_MISSING" });
+    if (Number(state.rows[0].full_count) !== 0) throw Object.assign(new Error("Full-Devel-Seed ist bereits vorhanden"), { code: "SEED_ALREADY_APPLIED" });
+    await client.query("BEGIN");
+    try {
+      await client.query(sql);
+      await client.query(`
+        INSERT INTO ops.seed_runs
+          (tenant_id, seed_name, seed_version, as_of, checksum, started_at, completed_at, result)
+        VALUES
+          ('0199c800-0000-7000-8000-000000000001', 'full-devel', '1', $1, $2,
+           clock_timestamp(), clock_timestamp(), 'success')
+      `, [asOf, checksum]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+    output(JSON.stringify({ event: "db_seed_completed", seed: "full-devel", result: "success", checksum }));
+    return { seed: "full-devel", checksum };
+  } catch (error) {
+    output(JSON.stringify({ event: "db_seed_completed", seed: "full-devel", result: "failed", errorCode: error.code || "DB_SEED_FAILED" }));
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+module.exports = { applyFullDevelSeed, applyTechnicalSeed, seedChecksum, FULL_DEVEL_SEED, TECHNICAL_SEED };

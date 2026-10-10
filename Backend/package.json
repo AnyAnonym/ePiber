@@ -1,13 +1,16 @@
 {
   "name": "epiber-backend",
-  "version": "4.12.14-paj-1-2",
+  "version": "4.12.14-paj-1-3",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + Google Sheets)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node scripts/check.js",
     "check:runtime-version": "node scripts/check-runtime-version.js",
+    "db:bootstrap": "node scripts/db-bootstrap.js",
     "db:migrate": "node scripts/db-migrate.js",
+    "db:schema": "node scripts/db-schema-snapshot.js",
+    "db:source-package": "node scripts/db-source-package.js",
     "db:seed": "node scripts/db-seed.js",
     "test": "node --test test/*.test.js",
     "test:browser": "npm run test:browser:smoke && npm run test:browser:chromium",

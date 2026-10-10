@@ -2,17 +2,19 @@
 "use strict";
 
 const { createConnectionConfig } = require("../db/connectionConfig");
-const { applyTechnicalSeed } = require("../db/seedRunner");
+const { applyFullDevelSeed, applyTechnicalSeed } = require("../db/seedRunner");
 
 function parseArguments(argv) {
-  if (argv.length !== 2 || argv[0] !== "--as-of") {
-    throw Object.assign(new Error("Usage: node scripts/db-seed.js --as-of <ISO-Zeitpunkt>"), { code: "SEED_ARGUMENT_INVALID" });
+  if (argv.length !== 3 || !["technical-minimal", "full-devel"].includes(argv[0]) || argv[1] !== "--as-of") {
+    throw Object.assign(new Error("Usage: node scripts/db-seed.js technical-minimal|full-devel --as-of <ISO-Zeitpunkt>"), { code: "SEED_ARGUMENT_INVALID" });
   }
-  return { asOf: argv[1] };
+  return { seed: argv[0], asOf: argv[2] };
 }
 
 async function main() {
-  await applyTechnicalSeed({ connectionConfig: createConnectionConfig(), ...parseArguments(process.argv.slice(2)) });
+  const { seed, asOf } = parseArguments(process.argv.slice(2));
+  const apply = seed === "technical-minimal" ? applyTechnicalSeed : applyFullDevelSeed;
+  await apply({ connectionConfig: createConnectionConfig(), asOf });
 }
 
 if (require.main === module) {

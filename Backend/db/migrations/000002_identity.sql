@@ -147,7 +147,7 @@ CREATE UNIQUE INDEX tenant_role_assignments_one_active
 CREATE TABLE identity.sessions (
   id uuid PRIMARY KEY DEFAULT uuidv7(),
   account_id uuid NOT NULL REFERENCES identity.user_accounts(id) ON DELETE CASCADE,
-  token_hash text NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  token_hash bytea NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
   auth_revision bigint NOT NULL CHECK (auth_revision > 0),
   login_snapshot text,
   issued_at timestamptz NOT NULL,
@@ -163,7 +163,7 @@ CREATE INDEX sessions_account_active
 CREATE INDEX sessions_expiry ON identity.sessions (expires_at);
 
 CREATE TABLE identity.login_rate_limits (
-  key_hash text NOT NULL CHECK (key_hash ~ '^[0-9a-f]{64}$'),
+  key_hash bytea NOT NULL CHECK (octet_length(key_hash) = 32),
   key_type text NOT NULL CHECK (key_type IN ('ip', 'ip_login')),
   window_started_at timestamptz NOT NULL,
   attempt_count integer NOT NULL CHECK (attempt_count > 0),
@@ -174,3 +174,25 @@ CREATE TABLE identity.login_rate_limits (
   CHECK (blocked_until IS NULL OR blocked_until >= window_started_at)
 );
 CREATE INDEX login_rate_limits_expiry ON identity.login_rate_limits (expires_at);
+
+CREATE TABLE identity.frontend_logging_settings (
+  tenant_id uuid PRIMARY KEY REFERENCES core.tenants(id) ON DELETE RESTRICT,
+  minimum_level text NOT NULL CHECK (minimum_level IN ('error', 'warn', 'info', 'debug')),
+  info_sample_rate numeric(5,4) NOT NULL CHECK (info_sample_rate BETWEEN 0 AND 1),
+  debug_sample_rate numeric(5,4) NOT NULL CHECK (debug_sample_rate BETWEEN 0 AND 1),
+  info_retention_days smallint NOT NULL DEFAULT 14 CHECK (info_retention_days = 14),
+  debug_retention_days smallint NOT NULL DEFAULT 7 CHECK (debug_retention_days = 7),
+  revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+  updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE identity.frontend_logging_targets (
+  tenant_id uuid NOT NULL REFERENCES core.tenants(id) ON DELETE RESTRICT,
+  person_id uuid NOT NULL REFERENCES identity.people(id) ON DELETE CASCADE,
+  minimum_level text NOT NULL CHECK (minimum_level IN ('error', 'warn', 'info', 'debug')),
+  expires_at timestamptz(3) NOT NULL,
+  revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+  created_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (tenant_id, person_id)
+);
+CREATE INDEX frontend_logging_targets_expiry ON identity.frontend_logging_targets (expires_at);

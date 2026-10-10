@@ -4,7 +4,7 @@ CREATE TABLE ops.idempotency_operations (
   operation_id uuid NOT NULL,
   actor_person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
   command text NOT NULL CHECK (command ~ '^[A-Za-z][A-Za-z0-9_.:-]{1,126}$'),
-  request_hash text NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+  request_hash bytea NOT NULL CHECK (octet_length(request_hash) = 32),
   status text NOT NULL CHECK (status IN ('started', 'success', 'failed', 'unknown')),
   response_projection jsonb,
   response_expires_at timestamptz(3),
@@ -64,11 +64,16 @@ CREATE TABLE ops.audit_operations (
   tenant_id uuid NOT NULL REFERENCES core.tenants(id) ON DELETE RESTRICT,
   operation_id uuid NOT NULL,
   actor_person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
+  actor_type text NOT NULL DEFAULT 'user' CHECK (actor_type IN ('anonymous', 'user', 'monitor', 'system')),
+  actor_name_snapshot text,
+  role_snapshot text,
   action text NOT NULL CHECK (action ~ '^[a-z][a-z0-9_.-]{1,126}$'),
   subject_type text,
   subject_id text,
+  subject_name_snapshot text,
+  request_id text,
   status text NOT NULL CHECK (status IN ('started', 'success', 'failed', 'unknown')),
-  source_ip inet,
+  source_instance text NOT NULL,
   before_projection jsonb,
   after_projection jsonb,
   started_at timestamptz(3) NOT NULL,
@@ -80,6 +85,15 @@ CREATE TABLE ops.audit_operations (
   CHECK (after_projection IS NULL OR jsonb_typeof(after_projection) = 'object')
 );
 CREATE INDEX audit_operations_retention ON ops.audit_operations (expires_at, id);
+
+CREATE TABLE ops.audit_security_context (
+  audit_operation_id uuid PRIMARY KEY REFERENCES ops.audit_operations(id) ON DELETE CASCADE,
+  source_ip inet,
+  attempted_login text,
+  attempted_email text,
+  CHECK (attempted_login IS NULL OR length(attempted_login) <= 254),
+  CHECK (attempted_email IS NULL OR length(attempted_email) <= 254)
+);
 
 CREATE TABLE ops.audit_transitions (
   id uuid PRIMARY KEY DEFAULT uuidv7(),

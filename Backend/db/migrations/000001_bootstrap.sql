@@ -81,7 +81,7 @@ CREATE TABLE ops.import_runs (
   tenant_id uuid NOT NULL REFERENCES core.tenants(id) ON DELETE RESTRICT,
   source_instance text NOT NULL,
   export_run_id text NOT NULL,
-  source_manifest_sha256 text NOT NULL CHECK (source_manifest_sha256 ~ '^[0-9a-f]{64}$'),
+  source_manifest_sha256 bytea NOT NULL CHECK (octet_length(source_manifest_sha256) = 32),
   format_version integer NOT NULL CHECK (format_version > 0),
   started_at timestamptz NOT NULL,
   completed_at timestamptz,

@@ -57,7 +57,7 @@ CREATE TABLE venue.court_live_state (
   side_two_set_three text NOT NULL DEFAULT '0',
   side_one_points text NOT NULL DEFAULT '0',
   side_two_points text NOT NULL DEFAULT '0',
-  baseline_sha256 text CHECK (baseline_sha256 IS NULL OR baseline_sha256 ~ '^[0-9a-f]{64}$'),
+  baseline_sha256 bytea CHECK (baseline_sha256 IS NULL OR octet_length(baseline_sha256) = 32),
   source_state text NOT NULL DEFAULT 'unknown' CHECK (source_state IN ('unknown', 'ready', 'stale', 'failed')),
   last_source_at timestamptz(3),
   epoch bigint NOT NULL DEFAULT 0 CHECK (epoch >= 0),
@@ -89,7 +89,7 @@ CREATE TABLE venue.score_events (
   source_instance text NOT NULL,
   source_sequence bigint,
   source_key text,
-  source_sha256 text CHECK (source_sha256 IS NULL OR source_sha256 ~ '^[0-9a-f]{64}$'),
+  source_sha256 bytea CHECK (source_sha256 IS NULL OR octet_length(source_sha256) = 32),
   FOREIGN KEY (assignment_id, court_id) REFERENCES venue.court_assignments(id, court_id) ON DELETE RESTRICT,
   FOREIGN KEY (source_id, court_id) REFERENCES venue.score_sources(id, court_id) ON DELETE RESTRICT,
   UNIQUE (court_id, court_sequence)
@@ -111,16 +111,19 @@ CREATE INDEX court_state_events_court_time ON venue.court_state_events (court_id
 CREATE TABLE venue.monitor_devices (
   id uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id uuid NOT NULL REFERENCES core.tenants(id) ON DELETE RESTRICT,
-  device_code text NOT NULL CHECK (device_code ~ '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$'),
-  token_hash text NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+  contract_id text NOT NULL CHECK (contract_id ~ '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$'),
+  label text NOT NULL CHECK (label = btrim(label) AND label <> ''),
+  token_hash bytea NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
   target_type text NOT NULL DEFAULT 'page' CHECK (target_type IN ('page', 'competition', 'ranking', 'entry_list', 'competition_history', 'hall_time_grid')),
   page_key text,
   competition_id uuid REFERENCES play.competitions(id) ON DELETE RESTRICT,
   hall_time_grid_id uuid,
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+  created_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
+  updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
   revoked_at timestamptz,
   last_seen_at timestamptz,
-  UNIQUE (tenant_id, device_code),
+  UNIQUE (tenant_id, contract_id),
   CHECK ((target_type = 'page' AND page_key IS NOT NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL)
       OR (target_type IN ('competition', 'ranking', 'entry_list', 'competition_history') AND page_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL)
       OR (target_type = 'hall_time_grid' AND page_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NOT NULL))

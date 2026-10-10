@@ -3711,6 +3711,70 @@ Scorequellen und die endgueltige versionierte Dublettenregel folgen in Phase 5A.
 Erkannte Sonderfaelle werden danach als synthetische Regressionen in die
 Importwerkzeuge uebernommen.
 
+#### Temporaerer Umsetzungsstand und Wiedereinstieg nach Kontextkompaktierung
+
+Stand 10.10.2026 ist Paket 1 im statisch-synthetischen Umfang abgeschlossen.
+Folgende Phase-4-Grundlagen sind implementiert und mit einem gueltigen
+diffgebundenen Buildnachweis erfolgreich geprueft:
+
+- unveraenderliches Quellpaketmanifest mit geschlossener Dateiliste, Groesse und
+  SHA-256 je Datei;
+- Pfadtraversal- und Symlinkablehnung;
+- CLI zum Schreiben und Verifizieren synthetischer Paketmanifeste;
+- geschlossener CSV-Parser und exakte Strukturpruefung aller acht aktiven
+  Sheetquellen;
+- read-only SQLite-Strukturinspektor fuer alle vier Legacydatenbanken;
+- geschlossene feldgenaue Source-to-Target-Matrix mit Blockade unbekannter
+  Quellen, Tabellen und Felder;
+- versioniertes geschlossenes Ausnahmemanifestformat;
+- technischer Minimal-Seed und schemauebergreifender `full-devel`-Seed;
+- 472 erfolgreiche Backendtests und 17 erfolgreiche Workflowtests.
+
+Der naechste Umsetzungsauftrag beginnt ohne erneuten Fragenblock und ohne Zugriff
+auf reale Daten bei der **deterministischen synthetischen Transformationsschicht
+von Paket 2**. Die feste Reihenfolge lautet:
+
+1. Sheet-CSV-Dateien aus einem bereits verifizierten Quellpaket in kontrollierte
+   typisierte Zwischenobjekte transformieren. Zuerst `Personen`, danach
+   `Bewerbsart`, `Matchtyp`, `Bewerb`, `EntryList`, `RL-Platzierung`, `Matches1`
+   und `Navigator`, damit Referenzen nur rueckwaerts aufgeloest werden.
+2. Fuer jeden Transformationsschritt geschlossene Fehlercodes, datensparsame
+   Befunde, Quellzaehler und kanonische Zwischenpruefsummen erzeugen. Freie
+   Personen-, Nachrichten-, Kommentar- oder Auditwerte duerfen nicht in Logs
+   beziehungsweise Berichte gelangen.
+3. Danach die vier SQLite-Dateien read-only transformieren: zuerst zuordenbarer
+   `state.sqlite`-State, danach Messaging, Score und Audit unter den festgelegten
+   Retention- und Blockervertraegen.
+4. Einen schreibfreien `inspect`-/`dry-run`-Ablauf ueber das vollstaendige Paket
+   herstellen. Jede unbekannte Struktur, offene beziehungsweise `unknown`
+   Operation, nicht aufloesbare Referenz oder ungeklaerte Dublette blockiert den
+   Gesamtimport.
+5. Erst danach den synthetischen Gesamtimport als eine kontrollierte
+   Zieltransaktion mit Importprovenienz implementieren. Ein Fehler rollt den
+   gesamten Fachbestand zurueck; Teilfreigaben sind ausgeschlossen.
+6. Counts, Fremdschluessel, Sequenzen, kanonische Projektionspruefsummen,
+   Wiederholung ohne Dubletten, absichtlichen Abbruch und sauberen Neuaufbau in
+   kurzlebigen PostgreSQL-18-Clustern pruefen.
+7. Die CLI um `inspect`, `dry-run`, `apply` und `validate` mit strukturierten
+   Start-/Abschlusslogs erweitern.
+
+Massgebliche Implementierungseinstiege fuer die Fortsetzung sind:
+
+- `Backend/db/import/sourcePackage.js` fuer Paketbindung;
+- `Backend/db/import/sheetInspector.js` fuer CSV-Struktur und Parser;
+- `Backend/db/import/sourceInspector.js` fuer SQLite-Struktur;
+- `Backend/db/import/source-target.json` fuer jede Feldbehandlung;
+- `Backend/db/import/exception-manifest.schema.json` fuer erlaubte Abweichungen;
+- `Backend/db/migrations/` und `Backend/db/schema.sql` fuer das noch nicht
+  eingefrorene Zielmodell;
+- `Backend/test/postgresTestCluster.js` fuer echte kurzlebige Testcluster.
+
+Bis zum Zugriff auf reale ePiber-Daten, auf Secrets, zur privilegierten Anwendung
+des Bootstraps im gemeinsamen Development-Cluster oder zu einem nicht sicher
+entscheidbaren Transformations-/Dublettenbefund besteht kein Rueckfragebedarf.
+Die Anwendung verwendet weiterhin unveraendert Google Sheets und SQLite; kein
+neuer PostgreSQL-Laufzeitpfad ist derzeit aktiviert.
+
 ### Phase 5: Anwendungsumbau
 
 - vollstaendigen relationalen Schemaerstentwurf und alle schemauebergreifenden
@@ -3937,22 +4001,29 @@ nicht vor ihrer fachlichen oder betrieblichen Notwendigkeit implementieren.
 ## 26. Verbleibende Artefakte und spaetere Konkretisierung
 
 Die priorisierten Architektur- und Fachentscheidungen fuer die ersten drei
-Phasen sind abgeschlossen. Vor dem in Abschnitt 23 definierten Phase-3-Exit
-muessen noch folgende pruefbare Artefakte erstellt werden:
+Phasen sind abgeschlossen. Der Umsetzungsstand der vor dem in Abschnitt 23
+definierten Phase-3-Exit verlangten Artefakte lautet:
 
-1. Vollstaendige initiale SQL-Migrationskette mit allen Tabellen, Spalten,
-   Constraints, Indizes, Rollen-/Grantannahmen und Beziehungen.
-2. Vervollstaendigte Source-to-Target-Feldmatrix fuer die noch nicht feldgenau
-   ausformulierten SQLite-Messaging-, Audit-, Score- und `app_state`-Strukturen
-   sowie das versionierte Ausnahmemanifestformat.
-3. Technische Minimal-Seeds fuer Struktur-, Constraint-, Rollen- und
-   Neuaufbaupruefungen. Der vollstaendige synthetische Szenariokatalog mit
-   Paketabhaengigkeiten, Rollen-, Alters-, Zeit-, Ergebnis-, Fehler- und
-   Berechtigungskonstellationen folgt nach eigener gesammelter Freigabe vor dem
-   Anwendungsumbau.
-4. Erfolgreicher Leeraufbau in einem kurzlebigen PostgreSQL-Cluster,
+1. **Abgeschlossen fuer den statisch-synthetischen Erstentwurf:** Die global nummerierte initiale SQL-Migrationskette fuer
+   `core`, `identity`, `play`, `venue`, `messaging` und `ops` sowie der getrennte
+   Rollen-/Grant-Bootstrap liegen vor und bauen erfolgreich. Korrekturen aus der
+   spaeteren geschuetzten Realanalyse bleiben bis zum Schema-Freeze zulaessig.
+2. **Abgeschlossen:** Maschinenlesbare geschlossene Source-to-Target-Feldmatrix
+   fuer SQLite-Messaging, Audit, Score und `app_state` sowie versioniertes
+   Ausnahmemanifestformat; unbekannte Quellen, Tabellen und Felder blockieren.
+3. **Abgeschlossen:** Technischer Minimal-Seed, schemauebergreifender
+   `full-devel`-Seed und maschinenlesbarer
+   vollstaendiger Szenariokatalog mit Paketabhaengigkeiten, Rollen-, Alters-,
+   Zeit-, Ergebnis-, Fehler- und Berechtigungskonstellationen liegen vor.
+4. **Abgeschlossen:** Erfolgreicher Leeraufbau in einem kurzlebigen PostgreSQL-Cluster,
    Schema-/Grantverifikation und generierter kanonischer
    `pg_dump --schema-only`-Snapshot ohne Drift.
+
+Damit ist der statisch-synthetische Phase-3-Exit erreicht. Der Erstentwurf bleibt
+gemaess Abschnitt 17 bis zum ersten offiziellen gemeinsamen `epiber_devel`-Aufbau
+veraenderbar; Realanalysebefunde werden als neue synthetische Regressionen und
+gegebenenfalls korrigierte, noch nicht eingefrorene Initialmigrationen
+uebernommen.
 
 Die bereits fachlich entschiedenen, aber erst mit ihrer Umsetzungsphase zu
 erzeugenden Betriebsartefakte bleiben davon getrennt:
