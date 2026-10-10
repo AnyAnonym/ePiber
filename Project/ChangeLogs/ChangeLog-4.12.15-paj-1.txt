@@ -6,3 +6,21 @@ Commit: 4.12.15-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.15-paj-1-1` gesetzt.
+
+[4.12.15-paj-1-2] - 2026-10-10
+Commit: 4.12.15-paj-1-2 | Spielunterbrechung und Fortsetzung konzipiert
+
+  Added
+  - [Dokumentation] Nicht-kanonisches Sollkonzept fuer Spielunterbrechung, vollstaendige Zwischenstandsicherung einschliesslich Aufschlaeger und spaetere Fortsetzung ueber das favoritenfaehige Overlay `Fortsetzbare Spiele` angelegt.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` fuer den Zielcommit auf `4.12.15-paj-1-2` finalisiert.
+
+  Dokumentationsuebernahme beim Main-Versionssprung
+
+    Project/2do/SPIELUNTERBRECHUNG-UND-FORTSETZUNG.md
+    - Als nicht-kanonische Arbeitsgrundlage mit dem bestaetigten Zielbild fuer unterbrochene und fortsetzbare Matches uebernehmen.
+    - Vollstaendige Sicherung von Satz-/Gamewerten, laufenden Punkten, exaktem Aufschlaeger, Court-, Matchtyp- und Revisionskontext als Anforderung festhalten, ohne bereits ein Persistenzschema festzulegen.
+    - Terminunabhaengigkeit, Berechtigungen fuer Beteiligte und Administratoren, das favoritenfaehige Overlay `Fortsetzbare Spiele` und den kontrollierten Wiederherstellungsablauf dokumentieren.
+    - Die heutige reine Lesebeziehung zur externen Scoreboard-Einheit, die fehlende Aufschlaegerquelle, die Rollenabgrenzung zur Court-Bedienung und alle weiteren Entscheidungen vor Implementierungsbeginn ausdruecklich offen halten.
+    - Klarstellen, dass dieser Dokumentationsstand keine Datenstruktur-, Backend-, Frontend-, Deployment- oder Laufzeitaenderung enthaelt und kanonische Ist-Dokumente erst mit einer spaeter freigegebenen Umsetzung angepasst werden.
