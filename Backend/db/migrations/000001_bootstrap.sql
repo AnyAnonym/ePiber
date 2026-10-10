@@ -83,10 +83,18 @@ CREATE TABLE ops.import_runs (
   export_run_id text NOT NULL,
   source_manifest_sha256 bytea NOT NULL CHECK (octet_length(source_manifest_sha256) = 32),
   format_version integer NOT NULL CHECK (format_version > 0),
+  rule_version integer NOT NULL CHECK (rule_version > 0),
+  transformed_sha256 bytea NOT NULL CHECK (octet_length(transformed_sha256) = 32),
+  exception_manifest_sha256 bytea CHECK (exception_manifest_sha256 IS NULL OR octet_length(exception_manifest_sha256) = 32),
+  target_sha256 bytea CHECK (target_sha256 IS NULL OR octet_length(target_sha256) = 32),
+  source_counts jsonb NOT NULL CHECK (jsonb_typeof(source_counts) = 'object'),
+  target_counts jsonb CHECK (target_counts IS NULL OR jsonb_typeof(target_counts) = 'object'),
   started_at timestamptz NOT NULL,
   completed_at timestamptz,
+  validated_at timestamptz,
   result text NOT NULL CHECK (result IN ('running', 'success', 'failed', 'blocked')),
-  UNIQUE (tenant_id, export_run_id)
+  UNIQUE (tenant_id, export_run_id),
+  CHECK ((result = 'success') = (target_sha256 IS NOT NULL AND target_counts IS NOT NULL AND validated_at IS NOT NULL))
 );
 
 CREATE TABLE ops.import_findings (

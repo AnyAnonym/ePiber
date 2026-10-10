@@ -47,3 +47,22 @@ Commit: 4.12.14-paj-1-3 | PostgreSQL-Schema und Rollen abgesichert
   - [Datenmigration] Read-only-SQLite-Inspektor blockiert unbekannte Quelltabellen und Felder vor jeder Transformation.
   - [Datenmigration] Geschlossener CSV-Inspektor prueft alle acht aktiven Sheetquellen auf exakte Spalten, sichere Quotierung, Zeilenbreite und Dateigrenzen.
   - [Dokumentation] Temporaeren Phase-4-Handoff mit geprueftem Zwischenstand, Implementierungseinstiegen und exakter naechster Transformationsreihenfolge fuer die Kontextkompaktierung aufgenommen.
+
+[4.12.14-paj-1-4] - 2026-10-10
+Commit: 4.12.14-paj-1-4 | Synthetischen PostgreSQL-Gesamtimport umgesetzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.14-paj-1-3-x` gesetzt.
+  - [Datenmigration] Alle acht manifestgebundenen Sheet-CSV-Quellen in fester Abhaengigkeitsreihenfolge zu typisierten PostgreSQL-Zwischenobjekten transformiert.
+  - [Datenmigration] State-, Messaging-, Score- und Audit-SQLite-Quellen read-only unter Retention-, Referenz-, Sequenz- und Blockervertraegen transformiert.
+  - [Datenmigration] Schreibfreie `inspect`- und `dry-run`-Laeufe sowie atomaren, wiederholbaren `apply`- und driftpruefenden `validate`-Ablauf als CLI aufgenommen.
+  - [Datenmigration] Warnungsfreigaben strikt und pruefsummengebunden ueber ein geschlossenes versioniertes Ausnahmemanifest in die Importprovenienz aufgenommen.
+  - [Datenbank] Importprovenienz um Regelversion, Quell- und Zielzaehler, Transformations- und kanonische Zielpruefsumme sowie Validierungszeitpunkt erweitert.
+  - [Zeitverarbeitung] Gepinnten Temporal-Polyfill fuer eindeutige Wiener Legacyzeitpunkte und explizite DST-Ablehnung aufgenommen.
+  - [Observability] Importstart, Erfolg, Ablehnung, Fehler und unklaren Commit-Ausgang strukturiert und ohne freie Quellwerte protokolliert.
+  - [Tests] Vollstaendige synthetische Sheet-/SQLite-Transformation, unbekannten State-Blocker, echten PostgreSQL-Import, Rollback, Wiederholung, Sequenz, Fremdschluessel und nachtraegliche Zieldrift automatisiert geprueft.
+  - [Dokumentation] Paket 2 als statisch-synthetisch abgeschlossen kommentiert und den Wiedereinstieg in den PostgreSQL-Anwendungsumbau von Phase 5 festgehalten.
+  - [Datenbank] `full-devel` zu einem schemaweiten synthetischen Referenzbestand mit Auth-, Bewerbs-, Ergebnis-, Ranglisten-, Venue-, Messaging- und Operationsgrenzfaellen ausgebaut.
+  - [Datenbank] Versionierten Erwartungsvertrag fuer Seedzaehler und deterministische Verschiebung fachlicher Zeitpunkte anhand von `as_of` aufgenommen.
+  - [Tests] Praktische Seedabdeckung aller Persistenztabellen, Szenariostatus und abweichender `as_of`-Zeitpunkte gegen kurzlebige PostgreSQL-18-Cluster geprueft.
+  - [Dokumentation] Backup, Restore und PITR ausdruecklich als letzten technischen Freigabeblock nach Backendumbau, synthetischer Gesamtintegration und Tests eingeordnet sowie den Stoppunkt vor Laufzeitcodeaenderungen markiert.

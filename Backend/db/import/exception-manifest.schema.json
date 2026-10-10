@@ -3,10 +3,13 @@
   "$id": "https://epiber.at/contracts/postgresql-import-exceptions-v1.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["manifestVersion", "exportRunId", "rules"],
+  "required": ["manifestVersion", "exportRunId", "sourceManifestSha256", "approvedBy", "approvedAt", "rules"],
   "properties": {
     "manifestVersion": { "const": 1 },
     "exportRunId": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$" },
+    "sourceManifestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "approvedBy": { "type": "string", "pattern": "^[A-Za-z0-9_.:@-]{1,128}$" },
+    "approvedAt": { "type": "string", "format": "date-time" },
     "rules": {
       "type": "array",
       "items": {

@@ -681,12 +681,26 @@ CREATE TABLE ops.import_runs (
     export_run_id text NOT NULL,
     source_manifest_sha256 bytea NOT NULL,
     format_version integer NOT NULL,
+    rule_version integer NOT NULL,
+    transformed_sha256 bytea NOT NULL,
+    exception_manifest_sha256 bytea,
+    target_sha256 bytea,
+    source_counts jsonb NOT NULL,
+    target_counts jsonb,
     started_at timestamp with time zone NOT NULL,
     completed_at timestamp with time zone,
+    validated_at timestamp with time zone,
     result text NOT NULL,
+    CONSTRAINT import_runs_check CHECK (((result = 'success'::text) = ((target_sha256 IS NOT NULL) AND (target_counts IS NOT NULL) AND (validated_at IS NOT NULL)))),
+    CONSTRAINT import_runs_exception_manifest_sha256_check CHECK (((exception_manifest_sha256 IS NULL) OR (octet_length(exception_manifest_sha256) = 32))),
     CONSTRAINT import_runs_format_version_check CHECK ((format_version > 0)),
     CONSTRAINT import_runs_result_check CHECK ((result = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text, 'blocked'::text]))),
-    CONSTRAINT import_runs_source_manifest_sha256_check CHECK ((octet_length(source_manifest_sha256) = 32))
+    CONSTRAINT import_runs_rule_version_check CHECK ((rule_version > 0)),
+    CONSTRAINT import_runs_source_counts_check CHECK ((jsonb_typeof(source_counts) = 'object'::text)),
+    CONSTRAINT import_runs_source_manifest_sha256_check CHECK ((octet_length(source_manifest_sha256) = 32)),
+    CONSTRAINT import_runs_target_counts_check CHECK (((target_counts IS NULL) OR (jsonb_typeof(target_counts) = 'object'::text))),
+    CONSTRAINT import_runs_target_sha256_check CHECK (((target_sha256 IS NULL) OR (octet_length(target_sha256) = 32))),
+    CONSTRAINT import_runs_transformed_sha256_check CHECK ((octet_length(transformed_sha256) = 32))
 );
 
 --

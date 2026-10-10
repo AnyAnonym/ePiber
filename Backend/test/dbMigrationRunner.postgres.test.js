@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { Client } = require("pg");
 const { runMigrations } = require("../db/migrationRunner");
-const { applyFullDevelSeed, applyTechnicalSeed } = require("../db/seedRunner");
+const { applyFullDevelSeed, applyTechnicalSeed, validateFullDevelSeed } = require("../db/seedRunner");
 const { verifySchemaSnapshot } = require("../db/schemaSnapshot");
 const { applyBootstrap, verifyBootstrap } = require("../db/bootstrap");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
@@ -113,6 +113,7 @@ test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank",
     output: () => {},
   });
   assert.match(fullSeed.checksum, /^[0-9a-f]{64}$/);
+  assert.match(fullSeed.projectionChecksum, /^[0-9a-f]{64}$/);
   const fullClient = new Client(cluster.connectionConfig);
   await fullClient.connect();
   try {
@@ -123,10 +124,88 @@ test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank",
              (SELECT count(*) FROM messaging.events) AS events,
              (SELECT count(*) FROM ops.seed_runs WHERE result = 'success') AS seed_runs
     `);
-    assert.deepEqual(counts.rows[0], { people: "5", matches: "1", allocations: "2", events: "1", seed_runs: "2" });
+    assert.deepEqual(counts.rows[0], { people: "5", matches: "5", allocations: "2", events: "1", seed_runs: "2" });
+
+    const baseTables = await fullClient.query(`
+      SELECT table_schema, table_name
+        FROM information_schema.tables
+       WHERE table_schema IN ('core','identity','play','venue','messaging','ops')
+         AND table_type = 'BASE TABLE'
+         AND NOT (table_schema = 'ops' AND table_name IN ('import_runs','import_findings'))
+       ORDER BY table_schema, table_name
+    `);
+    for (const { table_schema: schema, table_name: table } of baseTables.rows) {
+      const populated = await fullClient.query(`SELECT count(*)::integer AS count FROM "${schema}"."${table}"`);
+      assert.ok(populated.rows[0].count > 0, `${schema}.${table}`);
+    }
+
+    const scenarios = await fullClient.query(`
+      SELECT
+        (SELECT array_agg(DISTINCT completion_type ORDER BY completion_type) FROM play.match_results) AS result_types,
+        (SELECT array_agg(DISTINCT status ORDER BY status) FROM ops.idempotency_operations) AS operation_states,
+        (SELECT array_agg(DISTINCT status ORDER BY status) FROM ops.jobs) AS job_states,
+        (SELECT array_agg(DISTINCT status ORDER BY status) FROM ops.outbox) AS outbox_states,
+        (SELECT array_agg(DISTINCT transition ORDER BY transition) FROM ops.audit_transitions) AS audit_states,
+        (SELECT array_agg(DISTINCT constraint_type ORDER BY constraint_type) FROM venue.hall_time_constraints) AS constraint_types,
+        (SELECT count(*)::integer FROM venue.score_events) AS score_events,
+        (SELECT count(*)::integer FROM venue.monitor_commands) AS monitor_commands,
+        (SELECT count(*)::integer FROM messaging.comments) AS comments,
+        (SELECT count(*)::integer FROM messaging.reactions) AS reactions
+    `);
+    assert.deepEqual(scenarios.rows[0], {
+      result_types: ["regular", "retirement", "walkover"],
+      operation_states: ["success", "unknown"],
+      job_states: ["leased", "pending", "retrying"],
+      outbox_states: ["pending", "unknown"],
+      audit_states: ["started", "success", "unknown"],
+      constraint_types: ["avoid", "unavailable"],
+      score_events: 1,
+      monitor_commands: 1,
+      comments: 2,
+      reactions: 2,
+    });
+    await assert.rejects(validateFullDevelSeed(fullClient, { version: 1, counts: { "identity.people": 4 } }), (error) => error.code === "SEED_PROJECTION_MISMATCH");
   } finally {
     await fullClient.end();
   }
+});
+
+test("Full-Devel-Seed verschiebt fachliche Zeitpunkte deterministisch mit as_of", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
+  await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
+  await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
+  const client = new Client(cluster.connectionConfig);
+  await client.connect();
+  try {
+    const shifted = await client.query(`
+      SELECT starts_at, expires_at,
+             (SELECT as_of FROM ops.seed_runs WHERE seed_name='full-devel') AS as_of
+        FROM venue.hall_time_slots,
+             identity.password_authorizations
+       WHERE venue.hall_time_slots.id='0199c800-0000-7000-8000-000000000311'
+         AND identity.password_authorizations.id='0199c800-0000-7000-8000-000000000132'
+    `);
+    assert.equal(shifted.rows[0].starts_at.toISOString(), "2026-11-02T17:00:00.000Z");
+    assert.equal(shifted.rows[0].expires_at.toISOString(), "2026-10-12T00:00:00.000Z");
+    assert.equal(shifted.rows[0].as_of.toISOString(), "2026-10-11T00:00:00.000Z");
+  } finally { await client.end(); }
+});
+
+test("zwei Full-Devel-Neuaufbauten erzeugen dieselbe kanonische Projektion", { timeout: 30_000 }, async (t) => {
+  const checksums = [];
+  for (let index = 0; index < 2; index += 1) {
+    const cluster = startPostgresTestCluster();
+    t.after(() => cluster.stop());
+    await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
+    await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-10T00:00:00.000Z", output: () => {} });
+    const result = await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-10T00:00:00.000Z", output: () => {} });
+    checksums.push(result.projectionChecksum);
+    cluster.stop();
+  }
+  assert.match(checksums[0], /^[0-9a-f]{64}$/);
+  assert.equal(checksums[0], checksums[1]);
 });
 
 test("Bootstrap trennt Owner, Migration und Laufzeitrollen mit minimalen Grants", { timeout: 30_000 }, async (t) => {
