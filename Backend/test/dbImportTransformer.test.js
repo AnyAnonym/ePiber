@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { approveWarnings, transformSource } = require("../db/import/importRunner");
+const { ensureHistoricalPerson, normalizePlayTimes, validateLegacyCompletion } = require("../db/import/sheetTransformer");
 const { createImportTestPackage } = require("./importTestPackage");
 
 test("synthetisches Quellpaket wird deterministisch, typisiert und datensparsam transformiert", (t) => {
@@ -37,6 +38,39 @@ test("synthetisches Quellpaket wird deterministisch, typisiert und datensparsam 
   assert.deepEqual(first.plan.tables.history_revision, [{ singleton: true, revision: 1 }]);
   assert.equal(first.plan.tables.audit_operations.length, 1);
   assert.deepEqual(first.findings, []);
+});
+
+test("nichtpositive historische Matchdauer behaelt den Start ohne ein Ende zu erfinden", () => {
+  const findings = new Map(), value = normalizePlayTimes("261001-1000", "261001-1000", "Matches1:2", findings);
+  assert.match(value.playStartedAt, /^2026-10-01T08:00:00/);
+  assert.equal(value.playEndedAt, null);
+  assert.equal([...findings.values()][0].code, "MATCH_NONPOSITIVE_DURATION_END_DISCARDED");
+});
+
+test("verwaiste numerische Matchpersonen werden ohne erfundene Identitaet inaktiv erhalten", () => {
+  const tables = { people: [] }, refs = { people: new Map() }, findings = new Map();
+  const id = ensureHistoricalPerson("99", "Matches1:2", tables, refs, findings);
+  assert.equal(ensureHistoricalPerson("99", "Matches1:3", tables, refs, findings), id);
+  assert.deepEqual(tables.people, [{ id, tenant_id: "0199c800-0000-7000-8000-000000000001", contract_id: "99", first_name: null, last_name: "Historischer Spieler", birth_date: null, gender_code: null, active: false }]);
+  assert.equal([...findings.values()][0].code, "MATCH_PERSON_PLACEHOLDER_CREATED");
+  assert.throws(() => ensureHistoricalPerson("alt", "Matches1:4", tables, refs, findings), { code: "MATCH_PERSON_REFERENCE_MISSING" });
+});
+
+test("historischer 7-6-Satz ohne Tie-Break-Detail wird nur im Import ohne erfundene Punktzahl akzeptiert", () => {
+  const result = validateLegacyCompletion({ kind: "regular", result: "6-2/6-7/6-3" }, { winningSets: 2, setTarget: 6, decidingSet: "vollstaendiger Satz" });
+  assert.equal(result.completion.valid, true);
+  assert.equal(result.missingTiebreakDetails, 1);
+  assert.equal(result.completion.result, "6-2/6-7/6-3");
+  assert.equal(result.completion.sets[1].tiebreakLoserPoints, null);
+  const retirement = validateLegacyCompletion({ kind: "retirement", result: "7-6/2-6/1-1", losingSide: 2 }, { winningSets: 2, setTarget: 6, decidingSet: "vollstaendiger Satz" });
+  assert.equal(retirement.completion.valid, true);
+  assert.equal(retirement.completion.sets[0].tiebreakLoserPoints, null);
+  const legacyMatchTiebreak = validateLegacyCompletion({ kind: "regular", result: "6-3/3-6/10-7" }, { winningSets: 2, setTarget: 6, decidingSet: "vollstaendiger Satz" });
+  assert.equal(legacyMatchTiebreak.completion.valid, true);
+  assert.equal(legacyMatchTiebreak.decidingSetOverride, "MT10");
+  const legacyLongSet = validateLegacyCompletion({ kind: "regular", result: "7-6(4)/6-4" }, { winningSets: 2, setTarget: 4, decidingSet: "MT7" });
+  assert.equal(legacyLongSet.completion.valid, true);
+  assert.equal(legacyLongSet.setTargetOverride, 6);
 });
 
 test("unbekannter persistenter State blockiert ohne Ausgabe seines Werts", (t) => {

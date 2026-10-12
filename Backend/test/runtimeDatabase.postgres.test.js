@@ -832,7 +832,7 @@ test("Operations-Repository bindet Idempotenz an Akteur, Requesthash und kontrol
   assert.equal(repeated.repeated, true);
   assert.equal(repeated.status, "success");
   assert.deepEqual(repeated.response, { personId: "1", revision: "2" });
-  await assert.rejects(repositories.ops.beginIdempotency({ operationId, actorPersonId: "1", command: "identity.profile.update", requestHash: Buffer.alloc(32, 8) }), (error) => error.code === "IDEMPOTENCY_CONFLICT");
+  await assert.rejects(repositories.ops.beginIdempotency({ operationId, actorPersonId: "1", command: "identity.profile.update", requestHash: Buffer.alloc(32, 8) }), (error) => error.code === "IDEMPOTENCY_CONFLICT" && error.status === 409);
 });
 
 test("PostgreSQL-Spielbetrieb bindet Entry, Messaging, Audit und Idempotenz in eine Fachtransaktion", { timeout: 30_000 }, async (t) => {

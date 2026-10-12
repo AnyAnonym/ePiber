@@ -10,7 +10,9 @@ async function main() {
     throw Object.assign(new Error("Usage: node scripts/db-bootstrap.js apply|verify"), { code: "DB_BOOTSTRAP_ARGUMENT_INVALID" });
   }
   const bootstrap = createBootstrapConfig();
-  const adminConnectionConfig = createConnectionConfig();
+  const adminEnvironment = { ...process.env };
+  if (!adminEnvironment.EPIBER_DB_PASSWORD_FILE) delete adminEnvironment.CREDENTIALS_DIRECTORY;
+  const adminConnectionConfig = createConnectionConfig(adminEnvironment);
   if (command === "apply") await applyBootstrap({ adminConnectionConfig, ...bootstrap });
   else {
     await verifyBootstrap({ adminConnectionConfig, ...bootstrap });

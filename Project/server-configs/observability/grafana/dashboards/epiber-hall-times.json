@@ -98,7 +98,7 @@
   "tags": ["epiber", "hall-times", "reservations"],
   "templating": {
     "list": [
-      { "current": { "text": "live", "value": "live" }, "hide": 0, "includeAll": false, "label": "Deployment", "multi": false, "name": "deployment", "options": [{ "selected": true, "text": "live", "value": "live" }, { "selected": false, "text": "paj", "value": "paj" }], "query": "live,paj", "skipUrlSync": false, "type": "custom" },
+      { "current": { "text": "live", "value": "live" }, "hide": 0, "includeAll": false, "label": "Deployment", "multi": false, "name": "deployment", "options": [{ "selected": true, "text": "live", "value": "live" }, { "selected": false, "text": "devel", "value": "devel" }], "query": "live,devel", "skipUrlSync": false, "type": "custom" },
       { "allValue": ".*", "current": { "text": "Alle", "value": "$__all" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(epiber_hall_time_grid_info{deployment=\"$deployment\"}, grid_id)", "hide": 0, "includeAll": true, "label": "Raster", "multi": true, "name": "grid", "options": [], "query": { "query": "label_values(epiber_hall_time_grid_info{deployment=\"$deployment\"}, grid_id)", "refId": "PrometheusVariableQueryEditor-VariableQuery" }, "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query" }
     ]
   },

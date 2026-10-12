@@ -157,3 +157,153 @@ Commit: 4.12.16-paj-1-3 | PostgreSQL-only Serverlaufzeit vollständig aktiviert
   - [Backend] PostgreSQL-only Serverstart, Readiness, HTTP-Login,
     authentifizierter WebSocket-Request, Automationsdrain und Pool-/Listener-
     Shutdown integriert geprueft.
+
+[4.12.16-paj-1-4] - 2026-10-12
+Commit: 4.12.16-paj-1-4 | PostgreSQL-Migration real geprüft und Devel vollständig abgenommen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-3-x` gesetzt.
+  - [Migration] Kontrollierten Nur-Lese-Legacy-Exporter fuer einen gebuendelten
+    Sheet-Snapshot, Developer Metadata, konsistente SQLite-Backups,
+    Vorher-/Nachherfingerprint und manifestgebundenes Quellpaket aufgenommen.
+  - [Migration] Datensparsame Realanalyse um Quell-/Zielzaehler, Befundcodes,
+    Transformationshash und eine ereignis- sowie quellsequenzgebundene
+    Score-Dublettenpruefung ergaenzt; Scoretext bleibt ausdruecklich keine
+    Ereignisidentitaet.
+  - [Import] In der Realanalyse beobachtete rein technische Legacy-
+    Headerabweichungen als geschlossene Kanonisierung aufgenommen: bekannte
+    Gross-/Kleinschreibungsvarianten, dokumentierte ungenutzte Zusatzspalten,
+    optional fehlende Altspalten und die bestehende doppelte Matchtyp-
+    Spaltenbezeichnung; unbekannte Spalten bleiben blockierend.
+  - [Import] Reale `inbox_visible`-Provenienz der Messagingteilnehmer in den
+    Quellvertrag aufgenommen und Empfaengerprojektionen nur fuer historisch
+    tatsaechlich sichtbare Inboxeintraege erzeugt.
+  - [Import] Verwaiste Quittierungs- und Zustelldetails historisch unsichtbarer
+    Messagingteilnehmer kontrolliert verworfen, waehrend neutrales Ereignis und
+    Teilnehmerhistorie erhalten bleiben.
+  - [Import] Redundante Legacy-Deliveryzeilen des internen Kanals `Inbox`
+    kontrolliert verworfen; Sichtbarkeit und Quittierung werden aus ihren
+    eigenen relationalen Projektionen uebernommen.
+  - [Import] Fehlende echte Legacy-Operation-IDs bei Messagingereignissen nicht
+    mehr aus wiederverwendbaren Fachquellkennungen abgeleitet, sondern als
+    eindeutige importgebundene Operation aus der Ereignis-ID erzeugt;
+    Fachquellkennung und Ereignisidentitaet bleiben getrennt erhalten.
+  - [Import] Real beobachtete Legacy-Booleanwerte geschlossen als leer/`0`
+    fuer falsch und `1` fuer wahr kanonisiert; alle anderen Werte bleiben
+    blockierend.
+  - [Import] Kompakte reale Bewerbsgrenzen im eindeutig validierten
+    `YYYYMMDD`-Legacyformat zusaetzlich zu ISO- und Punktformaten unterstuetzt.
+  - [Import] Reale Bewerbszeitpunkte im eindeutigen
+    `YYYYMMDD-HHmm`-Legacyformat kontrolliert als Wiener Lokalzeit interpretiert.
+  - [Import] Historische `7-6`-/`6-7`-Saetze ohne gespeicherten Tie-Break-
+    Verliererpunkt nur im Legacyimport als vollstaendigen Satz akzeptiert, ohne
+    einen unbekannten Detailwert zu erfinden; neue Ergebniseingaben bleiben
+    unveraendert streng.
+  - [Import] Verwaiste numerische Personenreferenzen historischer Matches als
+    inaktive technische Platzhalter ohne erfundene Kontakt-, Rollen- oder
+    Identitaetsdaten erhalten; nichtnumerische Fremdreferenzen bleiben
+    blockierend.
+  - [Import] Historische Match-Tie-Break-Entscheidungssaetze bei heute als
+    Vollsatz definierten Matchtypen ueber eine matchgebundene immutable
+    Altversion erhalten, ohne den aktuellen Bewerbsstandard umzuschreiben.
+  - [Import] Historische Langsatzergebnisse bei heute als Kurzsatz definierten
+    Matchtypen ebenfalls ueber eine matchgebundene immutable Altversion
+    erhalten.
+  - [Import] Paketgebundene Staging-Freigabepolicy fuer den einzigen bekannten
+    Realwarncode `NAVIGATION_TARGET_INVALID` aufgenommen; solche Ziele bleiben
+    deaktiviert und mit Problemcode erhalten, jede unbekannte Warnung blockiert.
+  - [Import] Fehlende Austrittszeitpunkte bereits inaktiver
+    Legacy-Mitgliedschaften deterministisch mit dem Exportbeginn als spaetestem
+    sicher bekannten Stichtag belegt; aktive Mitgliedschaften bleiben offen.
+  - [Import] Nichtpositive historische Matchdauern ohne erfundene Dauer
+    uebernommen: Spielbeginn und Ergebnis bleiben erhalten, der ungueltige
+    Endzeitpunkt wird mit Info-Befund verworfen.
+  - [Import] Legacy-Auditakteurstyp `device` geschlossen auf den PostgreSQL-
+    Begriff `monitor` abgebildet; unbekannte Akteurstypen bleiben blockierend.
+  - [Betrieb] Root-orchestrierten Phase-5A-Staginglauf mit eigenem
+    `epiber-migration`-Benutzer, kurzlebigem LUKS2-Container, Age-
+    Verschluesselungs-/Entschluesselungstest, lokalem PostgreSQL-Cluster ohne
+    TCP, kontrolliertem PAJ-Quellsnapshot sowie garantiertem Cleanup ergaenzt.
+  - [Migration] Reale Stagingprobe um einen zweiten identischen Importlauf
+    erweitert, der ausschliesslich als idempotenter Replay mit unveraendertem
+    Zielhash erfolgreich sein darf.
+  - [Betrieb] Gehaertete PostgreSQL-only systemd-Vorlagen fuer getrennte Devel-
+    App und Worker mit Socketgruppe, systemd-Credentials, Loopbackbegrenzung und
+    Konfliktschutz zum PAJ-Legacydienst vorbereitet.
+  - [Betrieb] Geheimnisfreie Devel-Umgebungsvorlage fuer Port, Origin,
+    Secure-Cookie und lokale HTTPS-Court-Testgegenstelle ergaenzt.
+  - [Sicherheit] Loginlimit-Geheimnis alternativ aus einer restriktiven
+    Credentialdatei lesbar gemacht, damit es nicht als Klartext-Environment
+    installiert werden muss.
+  - [Datenbank] Bootstrap-Rollencredentials vom optionalen Admin-
+    Verbindungscredential getrennt, damit lokales Peer-Bootstrap kein
+    nicht vorhandenes gemeinsames `postgres-password` voraussetzt.
+  - [Sicherheit] Secretdateileser fuer das von systemd-Credentials verwendete
+    read-only `0440` freigegeben; Gruppen-Schreib-/Ausfuehrrechte und saemtliche
+    Rechte fuer andere Benutzer bleiben verboten.
+  - [Sicherheit] Neutrale systemd-Credential-IDs fuer Datenbank und Loginlimit
+    verwendet; installierte Quelldateipfade und restriktive Rechte bleiben
+    unveraendert.
+  - [Fehlerpfad] Abweichende Payloads unter einer bereits verwendeten
+    PostgreSQL-Operation-ID werden an HTTP/WebSocket kontrolliert als
+    `IDEMPOTENCY_CONFLICT` mit Status 409 statt als interner Fehler projiziert.
+  - [Frontend] Fehlende Uhrinitialisierung auf den Adminseiten fuer Logging,
+    Personennormalisierung, Mitgliederabgleich, Servicebereich und
+    Hallenzeitenverwaltung vor dem gemeinsamen Footer ergaenzt.
+  - [Reconnect] Sichere Lese-RPCs nach einem WebSocket-Verbindungsverlust auf
+    der wiederhergestellten Verbindung begrenzt wiederholt; mutierende Requests
+    bleiben von automatischen Wiederholungen ausgeschlossen.
+  - [Tests] Achtprofil-Browserwrapper startet seine nicht-ausfuehrbare
+    versionierte Shellvorlage rekursiv explizit ueber `bash`.
+  - [Worker] PostgreSQL-Devel-Worker erhaelt die verpflichtende HTTPS-
+    `PUBLIC_ORIGIN` sowie einen eindeutigen Journalbezeichner; App und Worker
+    sind in Loki getrennt filterbar und der Worker startet ohne Restartschleife.
+  - [Worker] Minimal notwendige DELETE-/INSERT-/UPDATE-Rechte fuer Retention und
+    Hallenwartelistenablauf ergaenzt und in die Bootstrap-Verifikation gebunden.
+  - [Observability] Aktive Testprojektion von `paj` auf `devel` umgestellt:
+    Prometheusziel, Alloy-Journal und Caddylog, Node-Exporter-Units,
+    Grafana-Auth-Realm, Messagingreport, Dashboards und PostgreSQL-taugliche
+    Alerts; historische `paj`-Zeitreihen und -Logs bleiben unveraendert.
+
+  Tests
+  - [Backend] Legacy-Exporter auf geschlossene CSV-Kodierung,
+    Metadatensparsamkeit, SQLite-Pruefung, Paketverifikation und Verwerfen bei
+    waehrend des Exports geaenderter Quelle geprueft.
+  - [Backend] Realanalyse auf ausschliesslich kontrollierte Zaehler, Hashes,
+    Befundcodes und die festgelegte Score-Dublettenregel geprueft.
+  - [Backend] Synthetische Regressionen fuer reale Header-, Boolean-, Datums-,
+    Matchtyp-, Ergebnis-, Personenreferenz-, Messaging-, Court-, Hallenzeit-,
+    Praeferenz- und Rangprovenienz-Sonderfaelle aufgenommen.
+  - [Migration] Geschuetzter Realexport, LUKS2-/Age-Staging, sechs Migrationen,
+    technischer Seed, Dry-Run, vollstaendiger Import, Zielvalidierung und
+    idempotenter Replay erfolgreich; Manifest-, Transformations-, Archiv- und
+    Zielhash sind im rootgeschuetzten Bericht `real-paj-20261012-35` gebunden.
+  - [Betrieb] Gemeinsamen synthetischen `epiber_devel`-Bestand mit sechs
+    Migrationen, technischem und vollem Seed, getrennten Rollen, Grants,
+    systemd-Credentials sowie praktisch gepruefter App- und Workerkomposition
+    aufgebaut und als aktiven PostgreSQL-only-Testbetrieb freigegeben.
+  - [Betrieb] Drei identische saubere Neuaufbauten und einen weiteren Neuaufbau
+    nach absichtlichem atomarem Importabbruch mit `as_of`
+    `2026-10-12T10:00:00.000Z` und Projektionspruefsumme
+    `b982925fa03eb60631b791ed42848d7eea660a8529955d880e4b8a5c91fcdaa1`
+    nachgewiesen.
+  - [Betrieb] App-, Worker- und PostgreSQL-Restart, SIGTERM-Drain mit
+    WebSocket-Close 1012, abgelaufene Workerlease, alle vier Wartungsjobklassen
+    sowie Outbox-Recovery praktisch geprueft.
+  - [Last] 500 parallele HTTPS-Sessionreads mit p99 190 ms und 160
+    WebSocket-Reads mit p99 108 ms fehlerfrei gegen die aktive Test-Origin
+    ausgefuehrt; Upgrade-Rate-Limit lehnte den absichtlichen Burst oberhalb der
+    konfigurierten Grenze mit HTTP 429 ab.
+  - [Browser] 18 reale Seiten der aktiven PostgreSQL-Devel-Origin in allen acht
+    Zielprofilen ohne Seiten-, Server- oder terminale WebSocketfehler geladen;
+    zusaetzlich 22 Fixture-Kernablaeufe je Profil und die vollstaendige
+    Chromium-Suite mit 58 Ablaeufen erfolgreich.
+  - [Court] Lokale HTTPS-Testgegenstelle ausschliesslich auf Loopback mit
+    kurzlebiger eigener CA betrieben, aktiven Poll ohne Fehler nachgewiesen und
+    eine externe Scoreaenderung relational als neues Court-Scoreevent
+    persistiert; Gegenstelle, Schluessel und Testevent anschliessend entfernt.
+  - [Observability] Aktive Live-/Devel-Ziele in Prometheus, App-/Caddy-Streams in
+    Loki, systemd-Metriken fuer App und Worker, geschuetzten Devel-
+    Messagingreport sowie Devel-Grafana-Adminsession praktisch geprueft.
+  - [Backend] 520 Backendtests und 17 Workflowtests sowie das vollstaendige
+    Achtprofil-Browserprofil im diffgebundenen Nachweis erfolgreich.

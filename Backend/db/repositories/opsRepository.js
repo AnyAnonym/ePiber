@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const { AppError } = require("../../errors.js");
 
 const AUDIT_STATUS = new Set(["success", "failed", "unknown"]);
 const ACTOR_TYPES = new Set(["anonymous", "user", "monitor", "system"]);
@@ -128,7 +129,7 @@ class OpsRepository {
         const prior = existing.rows[0];
         const sameActor = (prior.actorPersonId || null) === (actorPersonId === null ? null : String(actorPersonId));
         if (prior.command !== normalizedCommand || !sameActor || !crypto.timingSafeEqual(prior.requestHash, hash)) {
-          throw Object.assign(new Error("IDEMPOTENCY_CONFLICT"), { code: "IDEMPOTENCY_CONFLICT" });
+          throw new AppError("IDEMPOTENCY_CONFLICT", "Operation-ID wurde bereits mit anderen Daten verwendet", 409);
         }
         return { repeated: true, status: prior.status, response: prior.response, responseExpiresAt: prior.responseExpiresAt };
       }

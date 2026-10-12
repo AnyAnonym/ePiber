@@ -292,7 +292,7 @@
   "templating": {
     "list": [
       {
-        "current": { "selected": true, "text": "PAJ", "value": "paj" },
+        "current": { "selected": true, "text": "Devel", "value": "devel" },
         "hide": 0,
         "includeAll": false,
         "label": "System",
@@ -300,9 +300,9 @@
         "name": "deployment",
         "options": [
           { "selected": false, "text": "Live", "value": "live" },
-          { "selected": true, "text": "PAJ", "value": "paj" }
+          { "selected": true, "text": "Devel", "value": "devel" }
         ],
-        "query": "live,paj",
+        "query": "live,devel",
         "skipUrlSync": false,
         "type": "custom"
       }

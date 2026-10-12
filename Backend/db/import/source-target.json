@@ -150,7 +150,8 @@
           "message_id": "messaging.event_recipients.id:parse_uuid_or_provenance",
           "projection_type": "messaging.event_recipients.template_key:map_projection",
           "subject": "messaging.event_recipients.legacy_subject",
-          "body": "messaging.event_recipients.legacy_body"
+          "body": "messaging.event_recipients.legacy_body",
+          "inbox_visible": "messaging.event_recipients:include_when_true"
         }
       },
       "event_receipts": {

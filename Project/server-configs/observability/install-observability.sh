@@ -9,7 +9,7 @@ fi
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SECRETS=/etc/epiber-observability/grafana.env
 MESSAGING_SECRETS=/etc/epiber-observability/messaging-api.env
-ENABLED_DEPLOYMENTS="live paj"
+ENABLED_DEPLOYMENTS="live devel"
 PROMETHEUS_PLUGIN_ID=prometheus
 PROMETHEUS_PLUGIN_VERSION=13.1.9
 LOKI_PLUGIN_ID=loki
@@ -126,7 +126,7 @@ promtool check config "$ROOT/prometheus/prometheus.yml"
 for deployment in $ENABLED_DEPLOYMENTS; do
   case "$deployment" in
     live) port=8080 ;;
-    paj) port=8083 ;;
+    devel) port=8083 ;;
     *) echo "Unbekanntes aktives Deployment: $deployment" >&2; exit 1 ;;
   esac
   curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:$port/metrics" >/dev/null || {
@@ -134,13 +134,13 @@ for deployment in $ENABLED_DEPLOYMENTS; do
     exit 1
   }
 done
-BROKER=/srv/http/ePiber/piber/Backend/grafanaAuthBroker.js
+BROKER=/srv/http/ePiber/paj/Backend/grafanaAuthBroker.js
 if [ ! -r "$BROKER" ]; then
-  echo "Der freigegebene Live-Stand enthaelt grafanaAuthBroker.js noch nicht" >&2
+  echo "Der aktive Devel-Stand enthaelt grafanaAuthBroker.js noch nicht" >&2
   exit 1
 fi
-if ! node -e 'const broker = require(process.argv[1]); const selected = broker.selectRealms?.("live,paj").map((realm) => realm.name).join(","); if (selected !== "live,paj") process.exit(1);' "$BROKER"; then
-  echo "Der installierte Grafana-Auth-Broker unterstuetzt die fail-closed Live-/PAJ-Allowlist nicht" >&2
+if ! node -e 'const broker = require(process.argv[1]); const selected = broker.selectRealms?.("live,devel").map((realm) => realm.name).join(","); if (selected !== "live,devel") process.exit(1);' "$BROKER"; then
+  echo "Der installierte Grafana-Auth-Broker unterstuetzt die fail-closed Live-/Devel-Allowlist nicht" >&2
   exit 1
 fi
 
@@ -153,6 +153,7 @@ ensure_grafana_plugin "$INFINITY_PLUGIN_ID" "$INFINITY_PLUGIN_VERSION" "Infinity
 install -m 0644 "$ROOT/alloy/config.alloy" /etc/grafana-alloy/config.alloy
 install -m 0644 "$ROOT/loki/loki.yaml" /etc/loki/loki.yaml
 install -m 0644 "$ROOT/prometheus/prometheus.yml" /etc/prometheus/prometheus.yml
+rm -f /etc/prometheus/targets/epiber/paj.json
 for deployment in $ENABLED_DEPLOYMENTS; do
   target="$ROOT/prometheus/targets/epiber/$deployment.json"
   if [ ! -r "$target" ]; then
@@ -234,5 +235,5 @@ echo "$PROMETHEUS_PLUGIN_ID $PROMETHEUS_PLUGIN_VERSION"
 echo "$LOKI_PLUGIN_ID $LOKI_PLUGIN_VERSION"
 echo "$INFINITY_PLUGIN_ID $INFINITY_PLUGIN_VERSION"
 
-echo "Gemeinsame Live-/PAJ-Observability installiert. Caddy-Vorlage separat kontrolliert installieren/reloaden."
-echo "Grafana nach dem Caddy-Reload als Live- oder PAJ-Admin unter https://epiber.at/grafana/ verwenden."
+echo "Gemeinsame Live-/Devel-Observability installiert. Caddy-Vorlage separat kontrolliert installieren/reloaden."
+echo "Grafana nach dem Caddy-Reload als Live- oder Devel-Admin unter https://epiber.at/grafana/ verwenden."

@@ -104,8 +104,8 @@
     "list": [
       {
         "current": { "selected": true, "text": "Live", "value": "http://127.0.0.1:8080" }, "hide": 0, "includeAll": false, "label": "Deployment", "multi": false, "name": "deployment",
-        "options": [{ "selected": true, "text": "Live", "value": "http://127.0.0.1:8080" }, { "selected": false, "text": "PAJ", "value": "http://127.0.0.1:8083" }],
-        "query": "Live : http://127.0.0.1:8080, PAJ : http://127.0.0.1:8083", "skipUrlSync": false, "type": "custom"
+        "options": [{ "selected": true, "text": "Live", "value": "http://127.0.0.1:8080" }, { "selected": false, "text": "Devel", "value": "http://127.0.0.1:8083" }],
+        "query": "Live : http://127.0.0.1:8080, Devel : http://127.0.0.1:8083", "skipUrlSync": false, "type": "custom"
       },
       {
         "allValue": "all", "current": { "selected": true, "text": "Alle", "value": "$__all" },

@@ -20,7 +20,7 @@ function writeSheet(root, name, records) {
   fs.writeFileSync(path.join(root, "sheets", `${name}.csv`), `${lines.map((row) => row.map(csvValue).join(";")).join("\n")}\n`, { mode: 0o600 });
 }
 
-function createImportTestPackage(t, { unknownState = false, invalidEmail = false, approveEmailWarning = false } = {}) {
+function createImportTestPackage(t, { unknownState = false, invalidEmail = false, approveEmailWarning = false, withLegacyState = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-import-package-"));
   t?.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, "sheets"), { recursive: true, mode: 0o700 });
@@ -51,6 +51,16 @@ function createImportTestPackage(t, { unknownState = false, invalidEmail = false
     if (source === "state.sqlite") {
       database.prepare("INSERT INTO monitor_devices VALUES (?,?,?,?,?,?,?)").run("monitor-1", "Importmonitor", "c".repeat(64), "1791622800000", "1791626400000", "1791626400000", null);
       database.prepare("INSERT INTO operations VALUES (?,?,?,?,?,?)").run("user:1", "11111111-1111-4111-8111-111111111111", "setMyFavorites", "d".repeat(64), '{"status":"success","success":true}', "1791626400000");
+      if (withLegacyState) {
+        const state = database.prepare("INSERT INTO app_state(key,value_json,revision,updated_at) VALUES (?,?,?,?)");
+        state.run("hall-times:v1", JSON.stringify({ grids: [{ id: "hall-1", name: "Synthetische Halle", description: "", mode: "fair_use", active: true, publicJoinable: true, capacity: 1, waitlistEnabled: true, maxWaitlistEntries: 2, fairUse: { base: 1, extendedDays: 7, percent: 50, openDays: 1 }, createdAt: 1790841600000, updatedAt: 1790845200000, participants: [{ id: "1", firstName: "Ada", lastName: "Import", name: "Ada Import" }], slots: [{ id: "slot-1", date: "2026-10-20", start: "18:00", end: "19:00" }], entries: [{ slotId: "slot-1", personId: "1", status: "confirmed", queuedAt: 1790845200000 }], constraints: [], history: [{ id: "44444444-4444-4444-8444-444444444444", at: 1790845200000, action: "booking_added", actorId: "1", actorName: "Ada Import", personId: "1", personName: "Ada Import", slotId: "slot-1", from: "red", to: "confirmed", detail: "" }] }] }), "2", "1790845200000");
+        state.run("court:1", JSON.stringify({ matchId: "match-1", bewerbId: "2", matchtypId: "1", displayRules: null, bewerb: "Import-Rangliste", homePlayerIds: ["1"], guestPlayerIds: ["2"], homePlayer: "Ada Import", guestPlayer: "Berta Import", dateTime: "2026-10-01T08:00:00.000Z", runde: "R1", aktiv: 0, automaticActivation: { matchId: "match-1", matchDate: "2026-10-01T08:00:00.000Z", status: "finished" } }), "2", "1790845200000");
+        state.run("monitor-target:monitor-1", JSON.stringify({ monitorId: "monitor-1", path: "/scoreboard.html", commandId: "55555555-5555-4555-8555-555555555555", issuedAt: 1790845200000 }), "2", "1790845200000");
+        state.run("favorites:1", JSON.stringify([{ type: "page", page: "index", targetId: "favorite-test" }, { type: "page", page: "hallzeiten", params: { id: "hall-1" }, targetId: "favorite-hall" }]), "2", "1790845200000");
+        state.run("start-page:1", JSON.stringify({ type: "page", page: "scoreboard" }), "2", "1790845200000");
+        state.run("match-result-ranking:match-1", JSON.stringify({ before: [{ personId: "1", beforeRank: 1 }, { personId: "2", beforeRank: 2 }], after: [{ personId: "1", afterRank: 2 }, { personId: "2", afterRank: 1 }] }), "2", "1790845200000");
+        state.run("record-metadata-intent:synthetic", JSON.stringify({ status: "confirmed", at: 1790845200000, metadataId: 1 }), "1", "1790845200000");
+      }
     }
     if (source === "scorelog.sqlite") {
       database.prepare("INSERT INTO score_log_sequence VALUES (?,?,?)").run("paj", "1", "1");
@@ -58,7 +68,7 @@ function createImportTestPackage(t, { unknownState = false, invalidEmail = false
     }
     if (source === "messaging.sqlite") {
       database.prepare("INSERT INTO competition_events VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").run("event-1", "2", "1790845200000", "challenge", "match", "source-1", "1", "Ada Import", "Forderung", "Details", "{}", "1790845200000");
-      database.prepare("INSERT INTO event_participants VALUES (?,?,?,?,?,?,?,?)").run("event-1", "2", "challenged", "Berta Import", "message-1", "challenge", "Forderung", "Details");
+      database.prepare("INSERT INTO event_participants VALUES (?,?,?,?,?,?,?,?,?)").run("event-1", "2", "challenged", "Berta Import", "message-1", "challenge", "Forderung", "Details", "1");
       database.prepare("INSERT INTO event_receipts VALUES (?,?,?)").run("event-1", "2", "1790845300000");
       database.prepare("INSERT INTO event_deliveries VALUES (?,?,?,?,?)").run("event-1", "2", "email", "delivered", "1790845400000");
       database.prepare("INSERT INTO messaging_revisions VALUES (?,?)").run("2", "3");

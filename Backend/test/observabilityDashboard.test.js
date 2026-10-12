@@ -212,7 +212,7 @@ test("Matchergebnis-Dashboard begrenzt Auditqueries auf kontrollierte Felder", (
   assert.equal(dashboard.time.from, "now-14d");
   assert.equal(dashboard.refresh, "10s");
   assert.deepEqual(dashboard.templating.list.map(({ name }) => name), ["deployment", "competitionId"]);
-  assert.equal(dashboard.templating.list[0].query, "live,paj");
+  assert.equal(dashboard.templating.list[0].query, "live,devel");
   assert.equal(dashboard.templating.list[1].type, "textbox");
   assert.equal(dashboard.templating.list[1].query, ".*");
 
@@ -274,7 +274,7 @@ test("Meldungsdashboard kombiniert dynamisch ausgewaehlte geschuetzte Projektion
   assert.equal(dashboard.time.from, "now-30d");
   assert.equal(dashboard.refresh, "5m");
   assert.deepEqual(dashboard.templating.list.map(({ name }) => name), ["deployment", "sources"]);
-  assert.equal(dashboard.templating.list[0].query, "Live : http://127.0.0.1:8080, PAJ : http://127.0.0.1:8083");
+  assert.equal(dashboard.templating.list[0].query, "Live : http://127.0.0.1:8080, Devel : http://127.0.0.1:8083");
   const sources = dashboard.templating.list[1];
   assert.equal(sources.multi, true);
   assert.equal(sources.includeAll, true);

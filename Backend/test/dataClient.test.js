@@ -361,19 +361,38 @@ test("dataClient korreliert Requests, propagiert Fehler und stellt Subscriptions
   assert.equal(runtime.timeouts.size, 0);
 });
 
-test("dataClient lehnt Pending Requests bei Verbindungsabbruch sofort ab", async (t) => {
+test("dataClient wiederholt mutierende Pending Requests bei Verbindungsabbruch nicht", async (t) => {
   const runtime = loadDataClient();
   t.after(() => runtime.api.disconnect());
   const socket = runtime.sockets[0];
   socket.open();
   socket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
-  const pending = runtime.api.request("players", {});
+  const pending = runtime.api.request("setMyFavorites", {});
   await Promise.resolve();
   socket.close(1006, "network lost");
   await assert.rejects(pending, /getrennt/);
   runtime.api.disconnect();
   assert.equal(runtime.intervals.size, 0);
   assert.equal(runtime.timeouts.size, 0);
+});
+
+test("dataClient wiederholt sichere Reads nach Verbindungsabbruch auf der neuen Verbindung", async (t) => {
+  const runtime = loadDataClient();
+  t.after(() => runtime.api.disconnect());
+  const firstSocket = runtime.sockets[0];
+  firstSocket.open();
+  firstSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  const pending = runtime.api.request("players", {});
+  await Promise.resolve();
+  firstSocket.close(1006, "network lost");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const secondSocket = runtime.sockets[1];
+  secondSocket.open();
+  secondSocket.receive({ type: "welcome", v: 2, protocol: 2, principal: { type: "anonymous", role: "anonymous" } });
+  await Promise.resolve();
+  const repeated = secondSocket.sent.find((message) => message.type === "request" && message.endpoint === "players");
+  secondSocket.receive({ type: "response", v: 2, id: repeated.id, endpoint: "players", data: { success: true, rows: [] } });
+  assert.equal(JSON.stringify(await pending), JSON.stringify({ success: true, rows: [] }));
 });
 
 test("operationId bleibt ohne randomUUID ein gueltiger UUID-v4-Wert", (t) => {

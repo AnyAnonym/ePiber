@@ -1,3 +1,4 @@
+const fs = require("fs");
 const path = require("path");
 
 function parseInteger(name, fallback, min, max) {
@@ -38,7 +39,15 @@ if (!/^[a-z0-9_-]{1,32}$/i.test(INSTANCE_ID)) {
 
 const PERSISTENCE_MODE = String(process.env.PERSISTENCE_MODE || "legacy").trim().toLowerCase();
 if (!new Set(["legacy", "postgres"]).has(PERSISTENCE_MODE)) throw new Error("PERSISTENCE_MODE muss legacy oder postgres sein");
-const AUTH_RATE_LIMIT_SECRET = String(process.env.EPIBER_AUTH_RATE_LIMIT_SECRET || "").trim();
+function runtimeSecret(name, filenameName) {
+  const direct = String(process.env[name] || "").trim(), filename = String(process.env[filenameName] || "").trim();
+  if (direct && filename) throw new Error(`${name} und ${filenameName} duerfen nicht gemeinsam gesetzt sein`);
+  if (!filename) return direct;
+  const stat = fs.statSync(filename);
+  if (!stat.isFile() || (stat.mode & 0o037) !== 0) throw new Error(`${filenameName} ist unsicher`);
+  return fs.readFileSync(filename, "utf8").trim();
+}
+const AUTH_RATE_LIMIT_SECRET = runtimeSecret("EPIBER_AUTH_RATE_LIMIT_SECRET", "EPIBER_AUTH_RATE_LIMIT_SECRET_FILE");
 
 const LOG_LEVEL = String(process.env.LOG_LEVEL || "info").trim().toLowerCase();
 if (!["debug", "info", "warn", "error"].includes(LOG_LEVEL)) {
@@ -156,7 +165,7 @@ function validateRuntimeConfig() {
     }
   }
   if (MESSAGING_REPORT_ENABLED) {
-    if (!["live", "paj"].includes(MESSAGING_REPORT_DEPLOYMENT)) errors.push("MESSAGING_REPORT_DEPLOYMENT muss live oder paj sein");
+    if (!["live", "devel", "paj"].includes(MESSAGING_REPORT_DEPLOYMENT)) errors.push("MESSAGING_REPORT_DEPLOYMENT muss live, devel oder paj sein");
     if (!/^[A-Za-z0-9_-]{43,128}$/.test(MESSAGING_REPORT_TOKEN)) errors.push("EPIBER_OBSERVABILITY_API_TOKEN muss ein Base64url-Token mit mindestens 43 Zeichen sein");
   }
   if (SHEET_STARTUP_RETRY_MAX_MS < SHEET_STARTUP_RETRY_BASE_MS) {

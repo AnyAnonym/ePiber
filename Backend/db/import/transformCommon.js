@@ -65,7 +65,7 @@ function integer(value, source, projection, { min = Number.MIN_SAFE_INTEGER, max
   return parsed;
 }
 
-function legacyBoolean(value, source, projection, { trueValues = ["1"], falseValues = [""] } = {}) {
+function legacyBoolean(value, source, projection, { trueValues = ["1"], falseValues = ["", "0"] } = {}) {
   const raw = String(value ?? "").trim();
   if (trueValues.includes(raw)) return true;
   if (falseValues.includes(raw)) return false;
@@ -75,12 +75,14 @@ function legacyBoolean(value, source, projection, { trueValues = ["1"], falseVal
 function dateOnly(value, source, projection, { optional = true } = {}) {
   const raw = String(value ?? "").trim();
   if (!raw && optional) return null;
-  const match = raw.match(/^(?:(\d{2})\.(\d{2})\.(\d{4})|(\d{4})-(\d{2})-(\d{2}))$/);
+  const match = raw.match(/^(?:(\d{2})\.(\d{2})\.(\d{4})|(\d{4})-(\d{2})-(\d{2})|(\d{4})(\d{2})(\d{2}))$/);
   if (!match) fail("SOURCE_DATE_INVALID", source, projection);
   try {
     return Temporal.PlainDate.from(match[1]
       ? { year: Number(match[3]), month: Number(match[2]), day: Number(match[1]) }
-      : { year: Number(match[4]), month: Number(match[5]), day: Number(match[6]) }).toString();
+      : match[4]
+        ? { year: Number(match[4]), month: Number(match[5]), day: Number(match[6]) }
+        : { year: Number(match[7]), month: Number(match[8]), day: Number(match[9]) }).toString();
   } catch { fail("SOURCE_DATE_INVALID", source, projection); }
 }
 
@@ -94,9 +96,11 @@ function instant(value, source, projection, { optional = true, unixMs = false } 
       if (!Number.isSafeInteger(milliseconds)) throw new Error();
       return Temporal.Instant.fromEpochMilliseconds(milliseconds).toString({ smallestUnit: "millisecond" });
     }
-    if (/^\d{6}-\d{4}$/.test(raw)) {
-      const year = 2000 + Number(raw.slice(0, 2));
-      const plain = Temporal.PlainDateTime.from({ year, month: Number(raw.slice(2, 4)), day: Number(raw.slice(4, 6)), hour: Number(raw.slice(7, 9)), minute: Number(raw.slice(9, 11)) });
+    if (/^(?:\d{6}|\d{8})-\d{4}$/.test(raw)) {
+      const longYear = raw.indexOf("-") === 8;
+      const year = longYear ? Number(raw.slice(0, 4)) : 2000 + Number(raw.slice(0, 2));
+      const offset = longYear ? 2 : 0;
+      const plain = Temporal.PlainDateTime.from({ year, month: Number(raw.slice(2 + offset, 4 + offset)), day: Number(raw.slice(4 + offset, 6 + offset)), hour: Number(raw.slice(7 + offset, 9 + offset)), minute: Number(raw.slice(9 + offset, 11 + offset)) });
       return plain.toZonedDateTime("Europe/Vienna", { disambiguation: "reject" }).toInstant().toString({ smallestUnit: "millisecond" });
     }
     return Temporal.Instant.from(raw).toString({ smallestUnit: "millisecond" });
@@ -106,7 +110,7 @@ function instant(value, source, projection, { optional = true, unixMs = false } 
 function dateOrInstant(value, source, projection) {
   const raw = String(value ?? "").trim();
   if (!raw) return { date: null, instant: null };
-  if (/^(?:\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})$/.test(raw)) return { date: dateOnly(raw, source, projection), instant: null };
+  if (/^(?:\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2}|\d{8})$/.test(raw)) return { date: dateOnly(raw, source, projection), instant: null };
   return { date: null, instant: instant(raw, source, projection, { optional: false }) };
 }
 

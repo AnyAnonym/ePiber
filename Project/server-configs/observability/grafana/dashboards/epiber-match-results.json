@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "description": "Erfolgreiche, korrigierte, zurueckgenommene und technisch problematische Matchergebnisvorgaenge fuer Live und PAJ.",
+  "description": "Erfolgreiche, korrigierte, zurueckgenommene und technisch problematische Matchergebnisvorgaenge fuer Live und Devel.",
   "editable": true,
   "graphTooltip": 1,
   "links": [],
@@ -86,7 +86,7 @@
   "tags": ["epiber", "matches", "results", "audit"],
   "templating": {
     "list": [
-      { "current": { "text": "live", "value": "live" }, "hide": 0, "includeAll": false, "label": "Deployment", "multi": false, "name": "deployment", "options": [{ "selected": true, "text": "live", "value": "live" }, { "selected": false, "text": "paj", "value": "paj" }], "query": "live,paj", "skipUrlSync": false, "type": "custom" },
+      { "current": { "text": "live", "value": "live" }, "hide": 0, "includeAll": false, "label": "Deployment", "multi": false, "name": "deployment", "options": [{ "selected": true, "text": "live", "value": "live" }, { "selected": false, "text": "devel", "value": "devel" }], "query": "live,devel", "skipUrlSync": false, "type": "custom" },
       { "current": { "text": ".*", "value": ".*" }, "description": "Optionaler Regexfilter auf das geparste JSON-Feld competitionId; IDs bleiben ausdruecklich ohne Loki-Label.", "hide": 0, "label": "Bewerb-ID (Regex)", "name": "competitionId", "options": [], "query": ".*", "skipUrlSync": false, "type": "textbox" }
     ]
   },

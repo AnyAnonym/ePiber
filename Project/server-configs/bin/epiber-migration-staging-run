@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( EUID != 0 )); then
+  echo '{"event":"migration_staging_completed","result":"failed","errorCode":"ROOT_REQUIRED"}' >&2
+  exit 1
+fi
+
+repo="${1:-/srv/http/ePiber/paj}"
+run_id="${2:-real-$(date -u +%Y%m%dT%H%M%SZ)}"
+if [[ ! "${run_id}" =~ ^[A-Za-z0-9_.:-]{1,128}$ ]]; then
+  echo '{"event":"migration_staging_completed","result":"failed","errorCode":"RUN_ID_INVALID"}' >&2
+  exit 1
+fi
+
+backend="${repo}/Backend"
+environment_file="${backend}/.env"
+credential_file="${backend}/epiberpaj-5032a34639bf.json"
+service="epiber-paj.service"
+base="/var/lib/development-data/epiber-migration-staging"
+runtime="/run/epiber-migration/${run_id}"
+image="${base}/${run_id}.luks"
+mapping="epiber-migration-${run_id//[^A-Za-z0-9]/-}"
+mountpoint="${runtime}/mnt"
+keyfile="${runtime}/luks.key"
+result_root="/var/lib/epiber-migration-results"
+result="${result_root}/${run_id}"
+socket="${mountpoint}/postgres-socket"
+pgdata="${mountpoint}/postgres-data"
+package="${mountpoint}/source-package"
+decrypted="${mountpoint}/decrypted"
+archive="${mountpoint}/source-package.tar.age"
+age_identity="${mountpoint}/age-identity.txt"
+app_was_active=false
+app_stopped=false
+postgres_started=false
+mounted=false
+mapping_open=false
+loop_device=""
+
+log_failure() {
+  local code="$1"
+  install -d -m 0750 -o root -g PiberDevel "${result_root}"
+  install -d -m 0750 -o root -g PiberDevel "${result}"
+  printf '{"event":"migration_staging_completed","result":"failed","errorCode":"%s","exportRunId":"%s"}\n' "${code}" "${run_id}" > "${result}/completion.json"
+  chmod 0640 "${result}/completion.json"
+  chown root:PiberDevel "${result}/completion.json"
+}
+
+cleanup() {
+  local status=$?
+  set +e
+  if [[ "${app_stopped}" == true && "${app_was_active}" == true ]]; then systemctl start "${service}"; fi
+  if [[ "${postgres_started}" == true ]]; then runuser -u epiber-migration -- pg_ctl -D "${pgdata}" -m fast -w stop >/dev/null; fi
+  if [[ "${mounted}" == true ]]; then umount "${mountpoint}"; fi
+  if [[ "${mapping_open}" == true ]]; then cryptsetup close "${mapping}"; fi
+  if [[ -n "${loop_device}" ]]; then losetup -d "${loop_device}"; fi
+  rm -f -- "${keyfile}"
+  rm -f -- "${image}"
+  rmdir --ignore-fail-on-non-empty "${mountpoint}" "${runtime}" /run/epiber-migration 2>/dev/null
+  if (( status != 0 )) && [[ ! -f "${result}/completion.json" ]]; then log_failure "STAGING_RUN_FAILED"; fi
+  exit "${status}"
+}
+trap cleanup EXIT INT TERM HUP
+
+for command in age age-keygen cryptsetup initdb losetup mkfs.ext4 mount node pg_ctl psql runuser sqlite3 systemctl tar; do
+  command -v "${command}" >/dev/null || { log_failure "TOOL_MISSING"; exit 1; }
+done
+[[ -f "${environment_file}" && -f "${credential_file}" ]] || { log_failure "SOURCE_CONFIG_MISSING"; exit 1; }
+for source in state messaging scorelog audit; do [[ -f "/var/lib/epiber-paj/${source}.sqlite" ]] || { log_failure "SQLITE_SOURCE_MISSING"; exit 1; }; done
+
+if ! id epiber-migration >/dev/null 2>&1; then
+  useradd --system --no-create-home --home-dir /nonexistent --shell /usr/bin/nologin epiber-migration
+fi
+install -d -m 0711 -o root -g root /run/epiber-migration
+install -d -m 0711 -o root -g root "${runtime}"
+install -d -m 0700 -o root -g root "${base}"
+install -d -m 0750 -o root -g PiberDevel "${result_root}"
+if [[ -e "${image}" || -e "/dev/mapper/${mapping}" || -e "${result}" ]]; then log_failure "STAGING_RUN_EXISTS"; exit 1; fi
+install -d -m 0750 -o root -g PiberDevel "${result}"
+
+dd if=/dev/urandom of="${keyfile}" bs=64 count=1 status=none
+chmod 0600 "${keyfile}"
+truncate -s 2G "${image}"
+loop_device="$(losetup --find --show "${image}")"
+cryptsetup luksFormat --batch-mode --type luks2 --key-file "${keyfile}" "${loop_device}"
+cryptsetup open --key-file "${keyfile}" "${loop_device}" "${mapping}"
+mapping_open=true
+mkfs.ext4 -q -L epiber-migration "/dev/mapper/${mapping}"
+install -d -m 0700 -o epiber-migration -g epiber-migration "${mountpoint}"
+mount -o nodev,nosuid,noexec,noatime "/dev/mapper/${mapping}" "${mountpoint}"
+mounted=true
+chown epiber-migration:epiber-migration "${mountpoint}"
+install -d -m 0700 -o epiber-migration -g epiber-migration "${mountpoint}/source-snapshots"
+install -m 0400 -o epiber-migration -g epiber-migration "${credential_file}" "${mountpoint}/google-service-account.json"
+awk -F= '$1=="SHEET_ID" { print $0 }' "${environment_file}" > "${mountpoint}/export.env"
+chmod 0400 "${mountpoint}/export.env"
+chown epiber-migration:epiber-migration "${mountpoint}/export.env"
+
+if systemctl is-active --quiet "${service}"; then app_was_active=true; fi
+systemctl stop "${service}"
+app_stopped=true
+for source in state messaging scorelog audit; do
+  sqlite3 "/var/lib/epiber-paj/${source}.sqlite" ".timeout 30000" ".backup '${mountpoint}/source-snapshots/${source}.sqlite'"
+  chmod 0600 "${mountpoint}/source-snapshots/${source}.sqlite"
+  chown epiber-migration:epiber-migration "${mountpoint}/source-snapshots/${source}.sqlite"
+done
+namei -l "${mountpoint}/source-snapshots/state.sqlite" > "${result}/source-permissions.log"
+if ! runuser -u epiber-migration -- test -r "${mountpoint}/source-snapshots/state.sqlite"; then log_failure "SOURCE_SNAPSHOT_NOT_READABLE"; exit 1; fi
+runuser -u epiber-migration -- env \
+  STATE_FILE="${mountpoint}/source-snapshots/state.sqlite" \
+  MESSAGING_FILE="${mountpoint}/source-snapshots/messaging.sqlite" \
+  SCORELOG_FILE="${mountpoint}/source-snapshots/scorelog.sqlite" \
+  AUDITLOG_FILE="${mountpoint}/source-snapshots/audit.sqlite" \
+  EPIBER_EXPORT_PRE_SNAPSHOTTED=1 \
+  node "${backend}/scripts/db-export.js" --output "${package}" --run-id "${run_id}" --source-env "${mountpoint}/export.env" --credentials "${mountpoint}/google-service-account.json" \
+  > "${result}/export.jsonl" 2>&1
+if [[ "${app_was_active}" == true ]]; then systemctl start "${service}"; fi
+app_stopped=false
+
+runuser -u epiber-migration -- age-keygen -o "${age_identity}" >/dev/null 2>&1
+recipient="$(runuser -u epiber-migration -- age-keygen -y "${age_identity}")"
+runuser -u epiber-migration -- bash -c 'set -euo pipefail; tar -C "$1" -cf - source-package | age -r "$2" -o "$3"' _ "${mountpoint}" "${recipient}" "${archive}"
+archive_sha256="$(sha256sum "${archive}" | awk '{print $1}')"
+rm -rf -- "${package}"
+install -d -m 0700 -o epiber-migration -g epiber-migration "${decrypted}"
+runuser -u epiber-migration -- bash -c 'set -euo pipefail; age -d -i "$1" "$2" | tar -C "$3" -xf -' _ "${age_identity}" "${archive}" "${decrypted}"
+package="${decrypted}/source-package"
+runuser -u epiber-migration -- node "${backend}/scripts/db-source-package.js" verify "${package}" > "${result}/package-verification.jsonl" 2>&1
+runuser -u epiber-migration -- node "${backend}/scripts/db-analyze-source.js" "${package}" > "${result}/analysis.jsonl" 2>&1
+
+analysis_status="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);const value=JSON.parse(lines.at(-1));process.stdout.write(value.status||value.result)' "${result}/analysis.jsonl")"
+if [[ "${analysis_status}" != "ready" ]]; then log_failure "REAL_ANALYSIS_BLOCKED"; exit 2; fi
+runuser -u epiber-migration -- node "${backend}/scripts/db-approve-known-findings.js" "${package}" > "${result}/finding-approval.jsonl" 2>&1
+
+install -d -m 0700 -o epiber-migration -g epiber-migration "${socket}"
+runuser -u epiber-migration -- initdb -D "${pgdata}" --username=staging_admin --auth-local=trust --auth-host=reject --encoding=UTF8 --locale=C.utf8 --data-checksums > "${result}/initdb.log" 2>&1
+cat >> "${pgdata}/postgresql.conf" <<EOF
+listen_addresses = ''
+unix_socket_directories = '${socket}'
+unix_socket_permissions = 0700
+timezone = 'UTC'
+max_connections = 10
+shared_buffers = '64MB'
+fsync = on
+full_page_writes = on
+EOF
+runuser -u epiber-migration -- pg_ctl -D "${pgdata}" -w start > "${result}/postgres-start.log" 2>&1
+postgres_started=true
+runuser -u epiber-migration -- createdb -h "${socket}" -U staging_admin epiber_staging
+pg_env=(env PGHOST="${socket}" PGPORT=5432 PGDATABASE=epiber_staging PGUSER=staging_admin)
+runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-migrate.js" up --target-generation 6 > "${result}/migrations.jsonl" 2>&1
+as_of="$(node -e 'const value=require(process.argv[1]);process.stdout.write(value.exportStartedAt)' "${package}/manifest.json")"
+runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-seed.js" technical-minimal --as-of "${as_of}" > "${result}/seed.jsonl" 2>&1
+runuser -u epiber-migration -- node "${backend}/scripts/db-import.js" dry-run "${package}" > "${result}/dry-run.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" apply "${package}" > "${result}/import.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" validate "${package}" > "${result}/validation.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" apply "${package}" > "${result}/replay.jsonl" 2>&1
+
+manifest_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).manifestSha256)' "${result}/package-verification.jsonl")"
+target_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).targetSha256)' "${result}/validation.jsonl")"
+printf '{"event":"migration_staging_completed","result":"success","exportRunId":"%s","manifestSha256":"%s","encryptedArchiveSha256":"%s","targetSha256":"%s"}\n' \
+  "${run_id}" "${manifest_sha256}" "${archive_sha256}" "${target_sha256}" > "${result}/completion.json"
+chmod 0640 "${result}"/*
+chown -R root:PiberDevel "${result}"

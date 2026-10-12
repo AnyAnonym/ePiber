@@ -627,7 +627,7 @@ export async function request(endpoint, params = {}) {
     } catch (error) {
       const canRetry = retryable
         && attempt < 3
-        && ["REQUEST_TIMEOUT", "SHUTTING_DOWN"].includes(error.code);
+        && ["CONNECTION_LOST", "REQUEST_TIMEOUT", "SHUTTING_DOWN"].includes(error.code);
       if (!canRetry) {
         diagnostic.warn("rpc_request_failed", {
           endpoint,
