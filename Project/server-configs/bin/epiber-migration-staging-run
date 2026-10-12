@@ -155,11 +155,13 @@ runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-seed.j
 runuser -u epiber-migration -- node "${backend}/scripts/db-import.js" dry-run "${package}" > "${result}/dry-run.jsonl" 2>&1
 runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" apply "${package}" > "${result}/import.jsonl" 2>&1
 runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" validate "${package}" > "${result}/validation.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-shadow-read.js" "${package}" > "${result}/shadow-read.jsonl" 2>&1
 runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" apply "${package}" > "${result}/replay.jsonl" 2>&1
 
 manifest_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).manifestSha256)' "${result}/package-verification.jsonl")"
 target_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).targetSha256)' "${result}/validation.jsonl")"
-printf '{"event":"migration_staging_completed","result":"success","exportRunId":"%s","manifestSha256":"%s","encryptedArchiveSha256":"%s","targetSha256":"%s"}\n' \
-  "${run_id}" "${manifest_sha256}" "${archive_sha256}" "${target_sha256}" > "${result}/completion.json"
+shadow_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).shadowSha256)' "${result}/shadow-read.jsonl")"
+printf '{"event":"migration_staging_completed","result":"success","exportRunId":"%s","manifestSha256":"%s","encryptedArchiveSha256":"%s","targetSha256":"%s","shadowSha256":"%s"}\n' \
+  "${run_id}" "${manifest_sha256}" "${archive_sha256}" "${target_sha256}" "${shadow_sha256}" > "${result}/completion.json"
 chmod 0640 "${result}"/*
 chown -R root:PiberDevel "${result}"

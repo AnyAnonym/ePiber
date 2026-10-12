@@ -379,23 +379,28 @@ logische Migration auf einen anderen Server verschoben werden; ein physischer
 Restore nur einer enthaltenen Datenbank wird nicht behauptet.
 
 Der Livebetrieb bleibt waehrenddessen mit seinem bisherigen Legacyrelease und
-seinen bisherigen Persistenzquellen unveraendert. Vor dem Aufbau der spaeteren
-PostgreSQL-Live-Instanz ist ein verpflichtendes Kapazitaets- und Isolationsgate
-vorgesehen. Zu diesem Zeitpunkt wird anhand gemessener Last entschieden:
+seinen bisherigen Persistenzquellen unveraendert. Vor dem dauerhaften Aufbau der
+spaeteren PostgreSQL-Live-Instanz ist ein verpflichtendes Kapazitaets- und
+Isolationsgate vorgesehen. Die aktuelle Infrastruktur darf bis dahin fuer
+kontrollierte, nicht dauerhafte Tests der getrennten Instanz verwendet werden.
+Zu diesem Zeitpunkt wird anhand gemessener Last entschieden:
 
-1. bestehender Host mit mindestens 8 GiB RAM, bevorzugt 16 GiB, fuer zwei
-   getrennte PostgreSQL-Instanzen erweitern; oder
+1. bestehenden Host fuer zwei getrennte PostgreSQL-Instanzen erweitern; als
+   erste Planungsempfehlung gelten 8 GiB RAM, bevorzugt 16 GiB, jedoch nicht als
+   vorab festgelegter harter Mindestwert; oder
 2. `epiber_devel` auf den Engineering-/Testserver verlagern und
    `epiber_askoe` auf dem Produktionshost aufbauen.
 
 Am 25.09.2026 besitzt der bestehende Host drei CPU-Kerne, 3,7 GiB RAM, bereits
 genutzten Swap und rund 34 GiB freien Primaerspeicher. Dieser Stand ist fuer den
 ersten sparsam konfigurierten Development-Cluster mit den zunaechst kleinen
-Datenbanken voraussichtlich ausreichend, aber nicht fuer den dauerhaften
-Parallelbetrieb einer zusaetzlichen PostgreSQL-Live-Instanz samt Anwendungen und
-Observability freigegeben. Nachdem Gitea und die kleine Anwendung eingerichtet
-sind, werden CPU, RAM, Swap, I/O, freier Speicher, Verbindungen, Backup- und
-Restorelast erneut gemessen, bevor ePiber seinen dauerhaften Bestand aufnimmt.
+Datenbanken und fuer kontrollierte Migrationstests voraussichtlich ausreichend.
+Er ist damit noch nicht fuer den dauerhaften Parallelbetrieb einer zusaetzlichen
+PostgreSQL-Live-Instanz samt Anwendungen und Observability freigegeben. Nachdem
+Gitea und die kleine Anwendung eingerichtet sind, werden CPU, RAM, Swap, I/O,
+freier Speicher, Verbindungen, Backup- und Restorelast erneut gemessen. Erst aus
+diesen Messungen wird die notwendige Zielkapazitaet abgeleitet, bevor ePiber
+seinen dauerhaften Bestand aufnimmt.
 
 Werden Development und Live spaeter auf demselben Host betrieben, erhalten die
 beiden Instanzen trotzdem getrennte:

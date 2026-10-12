@@ -30,6 +30,7 @@ const {
   SCORELOG_FILE,
   SHUTDOWN_GRACE_MS,
   STATE_FILE,
+  WRITE_MODE,
   validateRuntimeConfig,
 } = require("./config.js");
 const dataPoller = require("./dataPoller.js");
@@ -87,6 +88,11 @@ const EMOJI_ASSETS = new Map([
   ["/api/emoji-picker/i18n/de.js", emojiAsset(path.join(EMOJI_PICKER_ROOT, "i18n", "de.js"), "text/javascript; charset=utf-8")],
   ["/api/emoji-picker/data/de.json", emojiAsset(path.join(EMOJI_DATA_ROOT, "de", "cldr-native", "data.json"), "application/json; charset=utf-8")],
 ]);
+const HTTP_WRITE_PATHS = new Set([
+  "/api/frontend-events", "/api/session", "/api/password", "/api/admin/frontend-logging",
+  "/api/admin/frontend-logging/targets", "/api/password-setup", "/api/admin/password-setup",
+  "/api/admin/password", "/api/monitor/session",
+]);
 
 function sendJson(response, status, body, headers = {}) {
   const text = JSON.stringify(body);
@@ -137,7 +143,7 @@ function authIdentifier(body, passwordField) {
   return loginValue(matches(canonical) ? body.login : body.email);
 }
 
-function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, dataPollerService = dataPoller, courtService = null, runtime = null, persistenceMode = "legacy", initialized, shuttingDown }) {
+function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, dataPollerService = dataPoller, courtService = null, runtime = null, persistenceMode = "legacy", writeMode = "read_write", initialized, shuttingDown }) {
   const data = dataStore.getReadiness();
   const refresh = dataPollerService.getStatus();
   const court = courtPoller.getStatus();
@@ -168,6 +174,7 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
   const ready = Object.values(components).every(Boolean);
   return {
     ready,
+    writeMode,
     initialized,
     shuttingDown,
     components,
@@ -186,6 +193,7 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
 function createApplication(overrides = {}) {
   const persistenceMode = overrides.persistenceMode || "legacy";
   const postgresMode = persistenceMode === "postgres";
+  const writeMode = overrides.writeMode || "read_write";
   const dataPollerService = overrides.dataPoller || dataPoller;
   const repository = overrides.repository || new StateRepository(STATE_FILE);
   repository.init?.();
@@ -244,7 +252,7 @@ function createApplication(overrides = {}) {
   let cleanupTimer = null;
   let initializePromise = null;
   let normalizationMetricsCache = { revision: null, summary: null };
-  const currentReadiness = () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, courtService, runtime, persistenceMode, initialized, shuttingDown });
+  const currentReadiness = () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, courtService, runtime, persistenceMode, writeMode, initialized, shuttingDown });
   const httpWriteLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 6, idleMs: 900000 });
   const frontendLoggingAdminLimiter = new TokenBucketLimiter({ rate: 1, burst: 20, idleMs: 900000 });
   const deviceLoginLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 10, idleMs: 900000 });
@@ -391,6 +399,10 @@ function createApplication(overrides = {}) {
         throw new AppError("SHUTTING_DOWN", "Server wird beendet", 503);
       }
 
+      if (writeMode === "read_only" && HTTP_WRITE_PATHS.has(pathname) && new Set(["POST", "DELETE"]).has(request.method)) {
+        throw new AppError("READ_ONLY_MODE", "Schreiboperationen sind waehrend der Abnahme gesperrt", 503);
+      }
+
       if (EMOJI_ASSETS.has(pathname)) {
         if (!new Set(["GET", "HEAD"]).has(request.method)) return methodNotAllowed(response, ["GET", "HEAD"], supportId);
         const asset = EMOJI_ASSETS.get(pathname);
@@ -491,7 +503,7 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/api/session") {
         if (request.method === "GET") {
-          const auth = await authService.getUserForToken(sessionToken, { refreshSession: true });
+          const auth = await authService.getUserForToken(sessionToken, { refreshSession: writeMode !== "read_only" });
           return sendJson(response, 200, {
             success: true,
             authenticated: !!auth,
@@ -779,6 +791,7 @@ function createApplication(overrides = {}) {
     sheetService,
     competitionService,
     courtService,
+    writeMode,
   });
 
   function initialize() {
@@ -792,19 +805,21 @@ function createApplication(overrides = {}) {
       dataPollerService.start(result);
       const courts = courtService ? await courtService.getScoreboardCourts() : stateStore.getScoreboardCourts();
       courtPoller.setCourtActive(
-        { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
+        writeMode === "read_only" ? { "1": false, "2": false } : { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
         { initial: true },
       );
-      courtAutomation.start();
+      if (writeMode !== "read_only") courtAutomation.start();
       if (overrides.startInvalidationListener) stopInvalidationListener = await overrides.startInvalidationListener();
       for (const court of ["1", "2"]) courtPoller.logCourtSnapshot(court, "startup");
       initialized = true;
       logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: currentReadiness().ready, persistenceMode, durationMs: Date.now() - startedAt });
-      cleanupTimer = setInterval(() => {
-        repository.cleanup?.();
-        Promise.resolve(hallTimeService.cleanupExpired()).catch((error) => logger.log("warn", "hall_time_expiration_failed", { errorCode: error.code || "HALL_TIME_EXPIRATION_FAILED" }));
-      }, 300000);
-      cleanupTimer.unref?.();
+      if (writeMode !== "read_only") {
+        cleanupTimer = setInterval(() => {
+          repository.cleanup?.();
+          Promise.resolve(hallTimeService.cleanupExpired()).catch((error) => logger.log("warn", "hall_time_expiration_failed", { errorCode: error.code || "HALL_TIME_EXPIRATION_FAILED" }));
+        }, 300000);
+        cleanupTimer.unref?.();
+      }
       return result;
     })();
     return initializePromise;
@@ -893,7 +908,7 @@ function createApplication(overrides = {}) {
 
 async function start() {
   validateRuntimeConfig();
-  const app = PERSISTENCE_MODE === "postgres" ? await createPostgresApplication() : createApplication();
+  const app = PERSISTENCE_MODE === "postgres" ? await createPostgresApplication({ writeMode: WRITE_MODE }) : createApplication({ writeMode: WRITE_MODE });
   await new Promise((resolve, reject) => {
     const onStartupError = (error) => reject(error);
     app.server.once("error", onStartupError);
@@ -938,7 +953,7 @@ async function start() {
   return app;
 }
 
-async function createPostgresApplication({ env = process.env, connectionConfig = null } = {}) {
+async function createPostgresApplication({ env = process.env, connectionConfig = null, writeMode = WRITE_MODE } = {}) {
   const components = await createPostgresComponents({
     connectionConfig: connectionConfig || createConnectionConfig({ ...env, PGAPPNAME: env.PGAPPNAME || `epiber-${INSTANCE_ID}-app` }),
     expectedTenantCode: String(env.EPIBER_TENANT_CODE || "").trim(),
@@ -958,6 +973,7 @@ async function createPostgresApplication({ env = process.env, connectionConfig =
   try {
     return createApplication({
       persistenceMode: "postgres",
+      writeMode,
       runtime: components.runtime,
       repository: components.stateAdapter,
       scoreLogRepository: components.scoreLogRepository,

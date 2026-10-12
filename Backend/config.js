@@ -39,6 +39,9 @@ if (!/^[a-z0-9_-]{1,32}$/i.test(INSTANCE_ID)) {
 
 const PERSISTENCE_MODE = String(process.env.PERSISTENCE_MODE || "legacy").trim().toLowerCase();
 if (!new Set(["legacy", "postgres"]).has(PERSISTENCE_MODE)) throw new Error("PERSISTENCE_MODE muss legacy oder postgres sein");
+const WRITE_MODE = String(process.env.EPIBER_WRITE_MODE || "read_write").trim().toLowerCase();
+if (!new Set(["read_only", "read_write"]).has(WRITE_MODE)) throw new Error("EPIBER_WRITE_MODE muss read_only oder read_write sein");
+if (WRITE_MODE === "read_only" && PERSISTENCE_MODE !== "postgres") throw new Error("EPIBER_WRITE_MODE=read_only ist nur mit PostgreSQL zulaessig");
 function runtimeSecret(name, filenameName) {
   const direct = String(process.env[name] || "").trim(), filename = String(process.env[filenameName] || "").trim();
   if (direct && filename) throw new Error(`${name} und ${filenameName} duerfen nicht gemeinsam gesetzt sein`);
@@ -230,5 +233,6 @@ module.exports = {
   WS_PING_INTERVAL_MS,
   WS_REQUEST_BURST,
   WS_REQUEST_RATE,
+  WRITE_MODE,
   validateRuntimeConfig,
 };

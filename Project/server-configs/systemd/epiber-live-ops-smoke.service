@@ -1,0 +1,34 @@
+[Unit]
+Description=ePiber PostgreSQL live technical ops smoke
+After=postgresql-live.service epiber-live.service epiber-live-worker.service
+Requires=postgresql-live.service epiber-live.service epiber-live-worker.service
+ConditionPathExists=/etc/epiber-live/ops-smoke-approved
+
+[Service]
+Type=oneshot
+User=piber
+SupplementaryGroups=postgres-live-client
+WorkingDirectory=/srv/http/ePiber/piber/Backend
+SyslogIdentifier=epiber-live-ops-smoke
+LoadCredential=database:/etc/epiber-live/credentials/postgres-app-password
+LoadCredential=cleanup-database:/etc/epiber-live/credentials/postgres-migrator-password
+ExecStart=/usr/bin/env NODE_ENV=production TZ=UTC EPIBER_TENANT_CODE=askoe-piberbach PGHOST=/run/postgresql/epiber-live PGPORT=5432 PGDATABASE=epiber_askoe PGUSER=epiber_live_app EPIBER_DB_PASSWORD_FILE=%d/database EPIBER_DB_SMOKE_CLEANUP_USER=epiber_live_migrator EPIBER_DB_SMOKE_CLEANUP_PASSWORD_FILE=%d/cleanup-database EPIBER_DB_SMOKE_CLEANUP_ROLE=epiber_live_owner /usr/bin/node scripts/db-ops-smoke.js
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native

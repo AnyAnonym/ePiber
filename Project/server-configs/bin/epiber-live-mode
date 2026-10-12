@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( EUID != 0 )); then
+  echo '{"event":"live_mode_change_completed","result":"rejected","errorCode":"ROOT_REQUIRED"}' >&2
+  exit 1
+fi
+
+mode="${1:-}"
+case "${mode}" in
+  active|maintenance) ;;
+  *)
+    echo '{"event":"live_mode_change_completed","result":"rejected","errorCode":"MODE_INVALID"}' >&2
+    exit 1
+    ;;
+esac
+
+source_file="/usr/share/epiber-live/caddy/${mode}.caddy"
+target_file="/etc/caddy/epiber-live-mode.caddy"
+if [[ ! -f "${source_file}" ]]; then
+  echo '{"event":"live_mode_change_completed","result":"failed","errorCode":"MODE_SOURCE_MISSING"}' >&2
+  exit 1
+fi
+
+before_sha256="$(sha256sum "${target_file}" 2>/dev/null | awk '{print $1}' || true)"
+after_sha256="$(sha256sum "${source_file}" | awk '{print $1}')"
+echo "{\"event\":\"live_mode_change_started\",\"mode\":\"${mode}\",\"beforeSha256\":\"${before_sha256}\",\"afterSha256\":\"${after_sha256}\"}"
+
+candidate="$(mktemp /etc/caddy/epiber-live-mode.caddy.XXXXXX)"
+rollback="$(mktemp /etc/caddy/epiber-live-mode.rollback.XXXXXX)"
+cleanup() { rm -f "${candidate}" "${rollback}"; }
+trap cleanup EXIT
+install -o root -g root -m 0644 "${source_file}" "${candidate}"
+if [[ -f "${target_file}" ]]; then cp --preserve=mode,ownership,timestamps "${target_file}" "${rollback}"; fi
+install -o root -g root -m 0644 "${candidate}" "${target_file}"
+
+if ! caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1 || ! systemctl reload caddy; then
+  if [[ -s "${rollback}" ]]; then install -o root -g root -m 0644 "${rollback}" "${target_file}"; systemctl reload caddy || true; fi
+  echo "{\"event\":\"live_mode_change_completed\",\"mode\":\"${mode}\",\"result\":\"failed\",\"errorCode\":\"CADDY_ACTIVATION_FAILED\"}" >&2
+  exit 1
+fi
+
+installed_sha256="$(sha256sum "${target_file}" | awk '{print $1}')"
+if [[ "${installed_sha256}" != "${after_sha256}" ]]; then
+  echo "{\"event\":\"live_mode_change_completed\",\"mode\":\"${mode}\",\"result\":\"unknown\",\"errorCode\":\"MODE_HASH_MISMATCH\"}" >&2
+  exit 1
+fi
+echo "{\"event\":\"live_mode_change_completed\",\"mode\":\"${mode}\",\"result\":\"success\",\"sha256\":\"${installed_sha256}\"}"

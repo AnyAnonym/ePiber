@@ -1,6 +1,6 @@
 {
   "name": "epiber-backend",
-  "version": "4.12.16-paj-1-5",
+  "version": "4.12.16-paj-1-6",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + PostgreSQL/Legacy)",
   "main": "server.js",
   "scripts": {
@@ -13,7 +13,9 @@
     "db:import": "node scripts/db-import.js",
     "db:analyze-source": "node scripts/db-analyze-source.js",
     "db:migrate": "node scripts/db-migrate.js",
+    "db:ops-smoke": "node scripts/db-ops-smoke.js",
     "db:schema": "node scripts/db-schema-snapshot.js",
+    "db:shadow-read": "node scripts/db-shadow-read.js",
     "db:source-package": "node scripts/db-source-package.js",
     "db:seed": "node scripts/db-seed.js",
     "test": "node --test test/*.test.js",

@@ -1954,6 +1954,7 @@ async function handleRequest(info, message, supportId) {
   if (shuttingDown) throw new AppError("SHUTTING_DOWN", "Server wird beendet", 503);
   const endpoint = endpoints[message.endpoint];
   if (!endpoint || !Object.hasOwn(endpoints, message.endpoint)) throw new AppError("ENDPOINT_NOT_FOUND", "Unbekannter Endpoint", 404);
+  if (endpoint.write && dependencies.writeMode === "read_only") throw new AppError("READ_ONLY_MODE", "Schreiboperationen sind waehrend der Abnahme gesperrt", 503);
   if (info.inflight >= WS_MAX_INFLIGHT) throw new AppError("TOO_MANY_REQUESTS", "Zu viele parallele Requests", 429);
   const connectionAuthContext = await refreshPrincipal(info);
   let authContext = connectionAuthContext;

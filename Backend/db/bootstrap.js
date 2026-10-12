@@ -4,6 +4,7 @@ const { Client } = require("pg");
 const { readSecret } = require("./connectionConfig");
 
 const LOGIN_ROLE_SUFFIXES = ["migrator", "app", "worker", "monitor", "backup", "refresh"];
+const OPTIONAL_LOGIN_ROLE_SUFFIXES = ["app_readonly"];
 const BOOTSTRAP_LOCK = 0x45504253;
 
 function identifier(value, label) {
@@ -19,7 +20,7 @@ function literal(value) {
 
 function roleNames(prefix) {
   identifier(prefix, "Rollenpraefix");
-  return Object.fromEntries(["owner", ...LOGIN_ROLE_SUFFIXES].map((suffix) => [suffix, `${prefix}_${suffix}`]));
+  return Object.fromEntries(["owner", ...LOGIN_ROLE_SUFFIXES, ...OPTIONAL_LOGIN_ROLE_SUFFIXES].map((suffix) => [suffix, `${prefix}_${suffix}`]));
 }
 
 function createBootstrapConfig(env = process.env) {
@@ -35,6 +36,9 @@ function createBootstrapConfig(env = process.env) {
     if (!filename) throw Object.assign(new Error(`Credentialdatei fuer ${suffix} fehlt`), { code: "DB_BOOTSTRAP_CREDENTIAL_REQUIRED" });
     passwords[suffix] = readSecret(filename);
   }
+  const readOnlyFile = env.EPIBER_DB_APP_READONLY_PASSWORD_FILE
+    || (env.EPIBER_DB_ENABLE_READONLY === "true" && credentialsDirectory ? `${credentialsDirectory}/postgres-app-readonly-password` : null);
+  if (readOnlyFile) passwords.app_readonly = readSecret(readOnlyFile);
   return { prefix, database, passwords };
 }
 
@@ -53,7 +57,7 @@ async function applicationSchemasExist(client) {
   return result.rows[0].present;
 }
 
-async function grantSchemaPrivileges(client, names) {
+async function grantSchemaPrivileges(client, names, { readOnly = false } = {}) {
   const owner = identifier(names.owner, "Ownerrolle");
   const app = identifier(names.app, "Approlle");
   const worker = identifier(names.worker, "Workerrolle");
@@ -82,6 +86,19 @@ async function grantSchemaPrivileges(client, names) {
   await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ops.import_runs, ops.import_findings, ops.seed_runs TO ${refresh}`);
   await client.query(`GRANT SELECT ON ops.schema_migrations, ops.seed_runs TO ${monitor}`);
 
+  if (readOnly) {
+    const appReadonly = identifier(names.app_readonly, "Read-only-Approlle");
+    await client.query(`GRANT USAGE ON SCHEMA core, identity, play, venue, messaging, ops TO ${appReadonly}`);
+    await client.query(`GRANT SELECT ON ALL TABLES IN SCHEMA core, play, venue, messaging TO ${appReadonly}`);
+    await client.query(`GRANT SELECT ON identity.people, identity.person_contacts, identity.person_addresses,
+      identity.person_external_identifiers, identity.memberships, identity.user_accounts, identity.sessions,
+      identity.tenant_role_assignments, identity.user_favorites,
+      identity.user_start_pages, identity.user_preference_states, identity.frontend_logging_settings,
+      identity.frontend_logging_targets TO ${appReadonly}`);
+    await client.query(`GRANT SELECT (account_id, consumed_at, revoked_at, expires_at) ON identity.password_authorizations TO ${appReadonly}`);
+    await client.query(`GRANT SELECT ON ops.schema_migrations, ops.seed_runs, ops.import_runs TO ${appReadonly}`);
+  }
+
   for (const schema of ["core", "identity", "play", "venue", "messaging"]) {
     await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} IN SCHEMA ${schema} GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${app}, ${refresh}`);
     await client.query(`ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} IN SCHEMA ${schema} GRANT SELECT ON TABLES TO ${worker}`);
@@ -99,7 +116,10 @@ async function applyBootstrap({ adminConnectionConfig, prefix, database, passwor
     await admin.query("SELECT pg_advisory_lock($1)", [BOOTSTRAP_LOCK]);
     try {
       await ensureRole(admin, names.owner, { login: false });
-      for (const suffix of LOGIN_ROLE_SUFFIXES) await ensureRole(admin, names[suffix], { login: true, password: passwords[suffix] });
+      for (const suffix of Object.keys(passwords)) {
+        if (![...LOGIN_ROLE_SUFFIXES, ...OPTIONAL_LOGIN_ROLE_SUFFIXES].includes(suffix)) throw Object.assign(new Error("Unbekannte Bootstraprolle"), { code: "DB_BOOTSTRAP_ROLE_INVALID" });
+        await ensureRole(admin, names[suffix], { login: true, password: passwords[suffix] });
+      }
       await admin.query(`GRANT ${identifier(names.owner, "Ownerrolle")} TO ${identifier(names.migrator, "Migratorrolle")}`);
       await admin.query(`GRANT pg_monitor TO ${identifier(names.monitor, "Monitoringrolle")}`);
       const existingDatabase = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [database]);
@@ -118,9 +138,9 @@ async function applyBootstrap({ adminConnectionConfig, prefix, database, passwor
   let grantsApplied = false;
   try {
     await target.query("REVOKE CONNECT ON DATABASE " + identifier(database, "Datenbankname") + " FROM PUBLIC");
-    await target.query(`GRANT CONNECT ON DATABASE ${identifier(database, "Datenbankname")} TO ${LOGIN_ROLE_SUFFIXES.map((suffix) => identifier(names[suffix], "Rollenname")).join(", ")}`);
+    await target.query(`GRANT CONNECT ON DATABASE ${identifier(database, "Datenbankname")} TO ${Object.keys(passwords).map((suffix) => identifier(names[suffix], "Rollenname")).join(", ")}`);
     if (await applicationSchemasExist(target)) {
-      await grantSchemaPrivileges(target, names);
+      await grantSchemaPrivileges(target, names, { readOnly: Boolean(passwords.app_readonly) });
       grantsApplied = true;
     }
   } finally {
@@ -130,7 +150,7 @@ async function applyBootstrap({ adminConnectionConfig, prefix, database, passwor
   return { names, grantsApplied };
 }
 
-async function verifyBootstrap({ adminConnectionConfig, prefix, database }) {
+async function verifyBootstrap({ adminConnectionConfig, prefix, database, passwords = {} }) {
   const names = roleNames(prefix);
   const client = new Client({ ...adminConnectionConfig, database });
   await client.connect();
@@ -164,6 +184,22 @@ async function verifyBootstrap({ adminConnectionConfig, prefix, database }) {
     const checks = result.rows[0];
     if (Object.values(checks).some((value) => value !== true)) {
       throw Object.assign(new Error("Rollen- oder Grantverifikation fehlgeschlagen"), { code: "DB_BOOTSTRAP_VERIFY_FAILED", checks });
+    }
+    if (passwords.app_readonly) {
+      const readOnly = await client.query(`
+        SELECT has_database_privilege($1, current_database(), 'CONNECT') AS connect,
+               has_table_privilege($1, 'identity.people', 'SELECT') AS people_read,
+               has_table_privilege($1, 'play.matches', 'SELECT') AS matches_read,
+               has_table_privilege($1, 'ops.import_runs', 'SELECT') AS import_read,
+               NOT (has_table_privilege($1, 'identity.people', 'INSERT') OR has_table_privilege($1, 'identity.people', 'UPDATE') OR has_table_privilege($1, 'identity.people', 'DELETE')) AS no_people_write,
+               NOT (has_table_privilege($1, 'identity.sessions', 'INSERT') OR has_table_privilege($1, 'identity.sessions', 'UPDATE') OR has_table_privilege($1, 'identity.sessions', 'DELETE')) AS no_session_write,
+               NOT (has_table_privilege($1, 'ops.audit_operations', 'INSERT') OR has_table_privilege($1, 'ops.audit_operations', 'UPDATE') OR has_table_privilege($1, 'ops.audit_operations', 'DELETE')) AS no_audit_write,
+               NOT (has_table_privilege($1, 'ops.idempotency_operations', 'INSERT') OR has_table_privilege($1, 'ops.idempotency_operations', 'UPDATE') OR has_table_privilege($1, 'ops.idempotency_operations', 'DELETE')) AS no_idempotency_write,
+               NOT (has_table_privilege($1, 'ops.jobs', 'INSERT') OR has_table_privilege($1, 'ops.jobs', 'UPDATE') OR has_table_privilege($1, 'ops.jobs', 'DELETE')) AS no_job_write,
+               NOT (has_table_privilege($1, 'ops.outbox', 'INSERT') OR has_table_privilege($1, 'ops.outbox', 'UPDATE') OR has_table_privilege($1, 'ops.outbox', 'DELETE')) AS no_outbox_write
+      `, [names.app_readonly]);
+      if (Object.values(readOnly.rows[0]).some((value) => value !== true)) throw Object.assign(new Error("Read-only-Rollenverifikation fehlgeschlagen"), { code: "DB_BOOTSTRAP_VERIFY_FAILED", checks: readOnly.rows[0] });
+      Object.assign(checks, Object.fromEntries(Object.entries(readOnly.rows[0]).map(([key, value]) => [`readonly_${key}`, value])));
     }
     return checks;
   } finally {

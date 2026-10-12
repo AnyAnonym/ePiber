@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { Client } = require("pg");
 const { WebSocket } = require("ws");
+const { applyBootstrap } = require("../db/bootstrap");
 const { runMigrations } = require("../db/migrationRunner");
 const { applyFullDevelSeed, applyTechnicalSeed } = require("../db/seedRunner");
 const { createRuntimeRepositories } = require("../db/createRuntimeRepositories");
@@ -407,6 +408,80 @@ test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sow
   const session = await fetch(`http://127.0.0.1:${restartAddress.port}/api/session`, { headers: { Cookie: cookie } });
   assert.equal((await session.json()).authenticated, true);
   await restarted.shutdown("restart-test");
+});
+
+test("PostgreSQL-Read-only-Abnahme blockiert HTTP- und WebSocket-Writes vor Audit und Fachlogik", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
+  await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  const before = new Client(cluster.connectionConfig); await before.connect();
+  await before.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false");
+  const auditCount = Number((await before.query("SELECT count(*) FROM ops.audit_operations")).rows[0].count);
+  await before.end();
+  const app = await createPostgresApplication({
+    connectionConfig: cluster.connectionConfig,
+    writeMode: "read_only",
+    env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 7).toString("base64url") },
+  });
+  await new Promise((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  await app.initialize();
+  assert.equal(app.status().writeMode, "read_only");
+  const address = app.server.address(), base = `http://127.0.0.1:${address.port}`;
+  const login = await fetch(`${base}/api/session`, {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:8080" },
+    body: JSON.stringify({ login: "player", passwordHash: "a".repeat(64) }),
+  });
+  assert.equal(login.status, 503);
+  assert.equal((await login.json()).error.code, "READ_ONLY_MODE");
+
+  const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`, { headers: { Origin: "http://localhost:8080" } });
+  const messages = [];
+  socket.on("message", (raw) => messages.push(JSON.parse(raw.toString())));
+  await new Promise((resolve, reject) => { socket.once("open", resolve); socket.once("error", reject); });
+  socket.send(JSON.stringify({ type: "hello", v: 2, protocol: 2, clientId: "readonly-test", deviceId: "readonly-test", pageType: "index", appVersion: require("../package.json").version }));
+  await new Promise((resolve) => { const timer = setInterval(() => { if (messages.some(({ type }) => type === "welcome")) { clearInterval(timer); resolve(); } }, 5); });
+  socket.send(JSON.stringify({ type: "request", v: 2, id: "readonly-write", endpoint: "setMyFavorites", params: {} }));
+  await new Promise((resolve) => { const timer = setInterval(() => { if (messages.some(({ id }) => id === "readonly-write")) { clearInterval(timer); resolve(); } }, 5); });
+  assert.equal(messages.find(({ id }) => id === "readonly-write").data.error.code, "READ_ONLY_MODE");
+  socket.send(JSON.stringify({ type: "request", v: 2, id: "readonly-read", endpoint: "players", params: {} }));
+  await new Promise((resolve) => { const timer = setInterval(() => { if (messages.some(({ id }) => id === "readonly-read")) { clearInterval(timer); resolve(); } }, 5); });
+  assert.equal(messages.find(({ id }) => id === "readonly-read").data.success, true);
+  socket.close(); await new Promise((resolve) => socket.once("close", resolve));
+  await app.shutdown("readonly-test");
+  const after = new Client(cluster.connectionConfig); await after.connect();
+  assert.equal(Number((await after.query("SELECT count(*) FROM ops.audit_operations")).rows[0].count), auditCount);
+  await after.end();
+});
+
+test("PostgreSQL-Read-only-Abnahme startet mit der minimalen app_readonly-Datenbankrolle", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  const prefix = "readonly_runtime", database = "readonly_runtime_test";
+  const passwords = Object.fromEntries(
+    ["migrator", "app", "worker", "monitor", "backup", "refresh", "app_readonly"].map((suffix) => [suffix, `runtime-${suffix}-password`]),
+  );
+  const prepared = await applyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords, output: () => {} });
+  const ownerConnection = {
+    ...cluster.connectionConfig, database, user: prepared.names.migrator, password: passwords.migrator,
+    options: `-c role=${prepared.names.owner}`,
+  };
+  await runMigrations({ connectionConfig: ownerConnection, command: "up", targetGeneration: 6, output: () => {} });
+  await applyTechnicalSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await applyFullDevelSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await applyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords, output: () => {} });
+  const readOnlyPassword = passwords.app_readonly;
+  const app = await createPostgresApplication({
+    connectionConfig: { ...cluster.connectionConfig, database, user: prepared.names.app_readonly, password: readOnlyPassword },
+    writeMode: "read_only",
+    env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 8).toString("base64url") },
+  });
+  await new Promise((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  await app.initialize();
+  assert.equal(app.status().ready, true);
+  assert.equal(app.status().writeMode, "read_only");
+  await app.shutdown("readonly-role-test");
 });
 
 test("Messaging-Repository liest Inbox, quittiert idempotent und erzeugt kontrollierte Ereignisse", { timeout: 30_000 }, async (t) => {

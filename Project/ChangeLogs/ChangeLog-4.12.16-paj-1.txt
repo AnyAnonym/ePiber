@@ -328,3 +328,51 @@ Commit: 4.12.16-paj-1-5 | Gemeinsame Caddy-Konfiguration gegen Fremdrouten abges
     geprueft.
   - [Backend] 523 Backendtests und 17 Workflowtests im diffgebundenen
     Buildprofil erfolgreich.
+
+[4.12.16-paj-1-6] - 2026-10-12
+Commit: 4.12.16-paj-1-6 | Shadow-Read und Live-Cutover-Vorbereitung umgesetzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-5-x` gesetzt.
+  - [Migration] Datensparsamen Shadow-Read fuer Identity, Spielbetrieb, Venue,
+    Messaging, Praeferenzen und Operations an Counts und SHA-256-Projektionen
+    gebunden; Passwoerter, Tokens, Kontakte, freie Texte und Auditpayloads werden
+    nicht in die Vergleichsprojektion oder den Bericht uebernommen.
+  - [Betrieb] Geschuetzten Real-Staginglauf um den blockierenden Shadow-Read und
+    dessen paketgebundene Gesamtpruefsumme erweitert.
+  - [Cutover] PostgreSQL-Read-only-Modus fuer die interne Live-Abnahme
+    vorbereitet: HTTP- und WebSocket-Writes werden vor Auth-, Audit- und
+    Fachlogik kontrolliert mit `READ_ONLY_MODE` abgelehnt, Court-Automation und
+    periodische Cleanup-Writes bleiben gestoppt.
+  - [Datenbank] Optionale getrennte `app_readonly`-Rolle mit ausschliesslich
+    kontrollierten Projektions- und Laufzeitmetadatenreads in Bootstrap und
+    Grantverifikation aufgenommen; Fach-, Session-, Audit-, Idempotenz-, Job-
+    und Outboxwrites bleiben datenbankseitig verboten.
+  - [Datenbank] Technischen Minimal-Seed ohne Schemaabweichung an einen
+    kontrollierten Umgebungs-Tenantcode und Anzeigenamen bindbar gemacht; Devel
+    behaelt seine bisherigen Standardwerte, Live verwendet `askoe-piberbach`.
+  - [Cutover] Atomar wechselbare Caddy-Fragmente fuer regulaeren Livebetrieb und
+    vollstaendige Wartung vorbereitet; im Wartungsmodus bleiben Grafana und die
+    statische neutrale Statusseite erreichbar, waehrend Fach-HTTP, WebSocket und
+    WC kontrolliert mit 503 gesperrt sind.
+  - [Live-Vorbereitung] Getrennte, noch nicht installierte PostgreSQL-Live-
+    Konfiguration fuer Socket, HBA/Ident, Datenpfad und systemd sowie gehaertete
+    App-Units fuer Read-only-Abnahme, Read-write-Betrieb und Worker vorbereitet.
+    WAL-Archivierung bleibt in der Vorlage bis zum Phase-7B-Gate explizit aus.
+  - [Cutover] Rein technischen Ops-Smoke fuer atomaren Commit,
+    Idempotenzstatus, gueltige Outboxverarbeitung durch den Worker und
+    privilegiert-exakte Bereinigung vorbereitet; Fachobjekte werden nicht
+    erzeugt, Fehler und unklarer Cleanup werden strukturiert unterschieden.
+  - [Cutover] Root-gebundenen, validierenden und bei Aktivierungsfehlern
+    rueckrollenden Caddy-Moduswechsel sowie eine erst durch lokale
+    aktionsbezogene Freigabedatei startbare Ops-Smoke-One-shot-Unit vorbereitet.
+  - [Planung] Aktuelle Infrastruktur ausdruecklich fuer kontrollierte Tests
+    eingeordnet; 8 GiB RAM bleiben eine erste Empfehlung und kein fixer
+    Mindestwert. Die dauerhafte Zielkapazitaet wird vor Phase 7B und Live anhand
+    erneuter Last-, Backup- und Restoremessungen festgelegt.
+
+  Tests
+  - [PostgreSQL] Vollstaendige Shadow-Paritaet sowie absichtliche, ohne
+    Fachwertausgabe erkannte Projektionsdrift gegen kurzlebige Cluster geprueft.
+  - [Backend] Read-only-Start mit weiterhin verfuegbaren Projektionen und
+    schreibfreien HTTP-/WebSocket-Ablehnungen gegen PostgreSQL geprueft.

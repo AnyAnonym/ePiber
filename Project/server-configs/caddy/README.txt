@@ -16,6 +16,10 @@ Installierte Fragmentverzeichnisse:
   `epiber.at`, importiert vor dem allgemeinen statischen ePiber-Fallback. Das
   versionierte Fragment `epiber-live-routes/wc.caddy` stellt `/wc/*` auf
   `127.0.0.1:8090` bereit.
+- `/etc/caddy/epiber-live-mode.caddy`: genau ein aktiver ePiber-Live-Modus.
+  `epiber-live-modes/active.caddy` stellt den regulaeren Betrieb bereit;
+  `epiber-live-modes/maintenance.caddy` sperrt HTTP-/WebSocket-Fachpfade und
+  liefert ausschliesslich die statische, datensparsame Wartungsseite aus.
 
 Ein Anwendungsrollout installiert oder aktualisiert nur seine eigenen
 Fragmente. Weder ePiber noch eine andere Anwendung darf eines der beiden
@@ -25,3 +29,8 @@ Hauptdatei ohne vorherige Diffpruefung vollstaendig ersetzen.
 Vor jedem Reload wird die zusammengesetzte installierte Konfiguration mit
 `caddy validate --config /etc/caddy/Caddyfile` geprueft. Nach dem Reload werden
 alle von der Aenderung betroffenen Origins und Pfade einzeln getestet.
+
+Ein Moduswechsel kopiert atomar genau eines der beiden versionierten Fragmente
+nach `/etc/caddy/epiber-live-mode.caddy`, validiert die gesamte installierte
+Konfiguration und laedt Caddy erst danach neu. Die gemeinsame Hauptdatei und
+anwendungsfremde Fragmente werden dabei nicht ersetzt.

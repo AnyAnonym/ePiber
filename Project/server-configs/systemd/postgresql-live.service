@@ -1,0 +1,54 @@
+[Unit]
+Description=ePiber PostgreSQL live cluster
+After=network-online.target
+Wants=network-online.target
+ConditionPathIsMountPoint=/var/lib/epiber-live
+
+[Service]
+Type=notify
+User=postgres-live
+Group=postgres-live
+SupplementaryGroups=postgres-live-client
+Environment=PGDATA=/var/lib/epiber-live/postgresql/18/data
+Environment=TMPDIR=/var/lib/epiber-live/postgresql/18/tmp
+SyslogIdentifier=postgresql-live
+PIDFile=/var/lib/epiber-live/postgresql/18/data/postmaster.pid
+ExecStartPre=/usr/bin/postgresql-check-db-dir /var/lib/epiber-live/postgresql/18/data
+ExecStart=/usr/bin/postgres -D /var/lib/epiber-live/postgresql/18/data -c config_file=/etc/postgresql-live/postgresql.conf
+ExecReload=/bin/kill -HUP ${MAINPID}
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStartSec=120
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=5s
+OOMScoreAdjust=-300
+MemoryHigh=768M
+MemoryMax=1G
+MemorySwapMax=0
+CPUQuota=150%
+CPUWeight=100
+IOWeight=100
+TasksMax=256
+LimitNOFILE=65536
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/epiber-live/postgresql /run/postgresql/epiber-live
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectClock=true
+ProtectHostname=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

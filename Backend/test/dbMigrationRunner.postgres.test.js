@@ -193,6 +193,22 @@ test("Full-Devel-Seed verschiebt fachliche Zeitpunkte deterministisch mit as_of"
   } finally { await client.end(); }
 });
 
+test("technischer Seed bindet den spaeteren Live-Tenant ohne eigenes Schema", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
+  await applyTechnicalSeed({
+    connectionConfig: cluster.connectionConfig,
+    asOf: "2026-10-12T00:00:00.000Z",
+    tenantCode: "askoe-piberbach",
+    tenantName: "ASKOE Piberbach Tennis",
+    output: () => {},
+  });
+  const client = new Client(cluster.connectionConfig); await client.connect();
+  assert.deepEqual((await client.query("SELECT tenant_code,display_name FROM core.tenants")).rows, [{ tenant_code: "askoe-piberbach", display_name: "ASKOE Piberbach Tennis" }]);
+  await client.end();
+});
+
 test("zwei Full-Devel-Neuaufbauten erzeugen dieselbe kanonische Projektion", { timeout: 30_000 }, async (t) => {
   const checksums = [];
   for (let index = 0; index < 2; index += 1) {
@@ -214,7 +230,7 @@ test("Bootstrap trennt Owner, Migration und Laufzeitrollen mit minimalen Grants"
   const prefix = "epiber_test";
   const database = "epiber_role_test";
   const passwords = Object.fromEntries(
-    ["migrator", "app", "worker", "monitor", "backup", "refresh"].map((suffix) => [suffix, `test-${suffix}-password`]),
+    ["migrator", "app", "worker", "monitor", "backup", "refresh", "app_readonly"].map((suffix) => [suffix, `test-${suffix}-password`]),
   );
 
   const prepared = await applyBootstrap({
@@ -243,6 +259,12 @@ test("Bootstrap trennt Owner, Migration und Laufzeitrollen mit minimalen Grants"
     output: () => {},
   });
   assert.equal(granted.grantsApplied, true);
-  const checks = await verifyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database });
+  const checks = await verifyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords });
   assert.ok(Object.values(checks).every(Boolean));
+  const readOnlyPassword = passwords.app_readonly;
+  const readOnly = new Client({ ...cluster.connectionConfig, database, user: granted.names.app_readonly, password: readOnlyPassword });
+  await readOnly.connect();
+  assert.equal((await readOnly.query("SELECT count(*) FROM identity.people")).rows[0].count, "0");
+  await assert.rejects(readOnly.query("INSERT INTO identity.people(tenant_id,contract_id,last_name) VALUES ('0199c800-0000-7000-8000-000000000001','readonly-test','Blocked')"), (error) => error.code === "42501");
+  await readOnly.end();
 });

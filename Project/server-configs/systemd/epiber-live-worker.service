@@ -1,0 +1,40 @@
+[Unit]
+Description=ePiber PostgreSQL live worker
+After=postgresql-live.service epiber-live.service
+Requires=postgresql-live.service
+Conflicts=epiber-live-readonly.service
+
+[Service]
+Type=simple
+User=piber
+SupplementaryGroups=postgres-live-client
+WorkingDirectory=/srv/http/ePiber/piber/Backend
+SyslogIdentifier=epiber-live-worker
+LoadCredential=database:/etc/epiber-live/credentials/postgres-worker-password
+ExecStart=/usr/bin/env NODE_ENV=production TZ=UTC INSTANCE_ID=live-worker PUBLIC_ORIGIN=https://epiber.at EPIBER_TENANT_CODE=askoe-piberbach PGHOST=/run/postgresql/epiber-live PGPORT=5432 PGDATABASE=epiber_askoe PGUSER=epiber_live_worker EPIBER_DB_PASSWORD_FILE=%d/database /usr/bin/node worker.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=95
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

@@ -103,6 +103,16 @@ test("PostgreSQL-Modus verlangt keine Legacydateien und validiert seine eigenen 
   } finally { fs.rmSync(secretDirectory, { recursive: true, force: true }); }
 });
 
+test("Read-only-Modus ist ausschliesslich fuer PostgreSQL zulaessig", () => {
+  const script = "require('./config.js').validateRuntimeConfig()";
+  const legacy = spawnSync(process.execPath, ["-e", script], {
+    cwd: BACKEND_ROOT, encoding: "utf8",
+    env: { ...process.env, NODE_ENV: "test", PERSISTENCE_MODE: "legacy", EPIBER_WRITE_MODE: "read_only", SHEET_ID: "test", COURT_URL: "https://court.test/scores.json" },
+  });
+  assert.notEqual(legacy.status, 0);
+  assert.match(legacy.stderr, /read_only ist nur mit PostgreSQL/);
+});
+
 test("PostgreSQL-Devel-Units trennen App und Worker mit systemd-Credentials", () => {
   const app = fs.readFileSync(path.join(SYSTEMD_ROOT, "epiber-devel.service"), "utf8");
   const worker = fs.readFileSync(path.join(SYSTEMD_ROOT, "epiber-devel-worker.service"), "utf8");
@@ -134,7 +144,8 @@ test("nur Live, Devel und die Legacy-PAJ-Vorlage aktivieren den internen Reporti
   assert.equal(pkUnit.includes("messaging-api.env"), false);
   const credentialTemplate = fs.readFileSync(path.join(SYSTEMD_ROOT, "../observability/grafana/messaging-api.env.example"), "utf8");
   assert.match(credentialTemplate, /^MESSAGING_REPORT_ENABLED=true$/m);
-  const caddy = fs.readFileSync(path.join(SYSTEMD_ROOT, "../Caddyfile"), "utf8");
+  const caddy = fs.readFileSync(path.join(SYSTEMD_ROOT, "../Caddyfile"), "utf8")
+    + fs.readFileSync(path.join(SYSTEMD_ROOT, "../caddy/epiber-live-modes/active.caddy"), "utf8");
   assert.equal((caddy.match(/handle \/internal\/\*/g) || []).length, 3);
   assert.equal((caddy.match(/handle \/internal\/\* \{\s*respond 404/g) || []).length, 3);
 });
