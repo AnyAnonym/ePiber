@@ -39,6 +39,7 @@ class PostgresPreferenceService {
         if (repeated) return repeated;
         const written = await write(transaction);
         const { updatedAt, ...response } = written;
+        await this.ops.queueInvalidation(transaction, { operationId, projection: "identity", eventId: personId });
         await this.ops.completeIdempotency(transaction, { operationId, command, status: "success", response });
         return { ...response, repeated: false };
       }, { isolation: "serializable", retries: 2 });

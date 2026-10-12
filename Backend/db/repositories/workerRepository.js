@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WORKER_ID = /^[a-z0-9][a-z0-9_.:-]{2,126}$/i;
 
@@ -24,6 +25,26 @@ class WorkerRepository {
   constructor({ database, context }) {
     this.database = database;
     this.context = context;
+  }
+
+  async ensureMaintenanceJobs(now = new Date()) {
+    const time = now instanceof Date ? now : new Date(now);
+    if (!Number.isFinite(time.getTime())) throw Object.assign(new Error("MAINTENANCE_TIME_INVALID"), { code: "MAINTENANCE_TIME_INVALID" });
+    const quarter = Math.floor(time.getTime() / 900000), hour = Math.floor(time.getTime() / 3600000);
+    const day = time.toISOString().slice(0, 10), minuteOfDay = time.getUTCHours() * 60 + time.getUTCMinutes();
+    const jobs = [
+      ["retention.short", `quarter:${quarter}`],
+      ["retention.hourly", `hour:${hour}`],
+      ["hall_time.expire_waitlists", `quarter:${quarter}`],
+      ...(minuteOfDay >= 135 ? [["retention.daily", `day:${day}`]] : []),
+    ];
+    for (const [type, key] of jobs) await this.database.query(`
+      INSERT INTO ops.jobs(tenant_id,job_type,payload_version,payload,idempotency_key,status,available_at)
+      VALUES ($1::uuid,$2,1,'{"batchSize":1000}'::jsonb,$3,'pending',clock_timestamp())
+      ON CONFLICT (tenant_id,job_type,idempotency_key) DO NOTHING
+    `, [this.context.tenantId, type, key]);
+    if (jobs.length) await this.database.query("SELECT pg_notify('epiber_worker_wake','maintenance')");
+    return { scheduled: jobs.length };
   }
 
   async claimJob(owner, leaseMs = 60_000) {
@@ -116,6 +137,61 @@ class WorkerRepository {
     }
     const payload = JSON.stringify({ eventId, projection });
     await this.database.query("SELECT pg_notify('epiber_app_invalidate', $1)", [payload]);
+  }
+
+  async retentionShort(batchSize = 1000) {
+    const limit = Math.max(1, Math.min(1000, Number(batchSize) || 1000));
+    return this.database.withTransaction("ops.retention.short", async (transaction) => {
+      const loginLimits = await transaction.query("DELETE FROM identity.login_rate_limits WHERE ctid IN (SELECT ctid FROM identity.login_rate_limits WHERE expires_at<clock_timestamp() LIMIT $1 FOR UPDATE SKIP LOCKED) RETURNING 1", [limit]);
+      const sessions = await transaction.query(`DELETE FROM identity.sessions session WHERE session.id IN (SELECT candidate.id FROM identity.sessions candidate JOIN identity.user_accounts account ON account.id=candidate.account_id WHERE account.tenant_id=$1::uuid AND (candidate.expires_at<clock_timestamp() OR candidate.revoked_at<clock_timestamp()-interval '24 hours') LIMIT $2 FOR UPDATE OF candidate SKIP LOCKED) RETURNING 1`, [this.context.tenantId, limit]);
+      const projections = await transaction.query("UPDATE ops.idempotency_operations SET response_projection=NULL,response_expires_at=NULL WHERE id IN (SELECT id FROM ops.idempotency_operations WHERE tenant_id=$1::uuid AND response_expires_at<clock_timestamp() LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING 1", [this.context.tenantId, limit]);
+      return { loginLimits: loginLimits.rowCount, sessions: sessions.rowCount, idempotencyResponses: projections.rowCount };
+    });
+  }
+
+  async retentionHourly(batchSize = 1000) {
+    const limit = Math.max(1, Math.min(1000, Number(batchSize) || 1000));
+    return this.database.withTransaction("ops.retention.hourly", async (transaction) => {
+      const outbox = await transaction.query("DELETE FROM ops.outbox WHERE id IN (SELECT id FROM ops.outbox WHERE tenant_id=$1::uuid AND status='sent' AND completed_at<clock_timestamp()-interval '30 days' LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING 1", [this.context.tenantId, limit]);
+      const jobs = await transaction.query("DELETE FROM ops.jobs WHERE id IN (SELECT id FROM ops.jobs WHERE tenant_id=$1::uuid AND status IN ('success','aborted') AND completed_at<clock_timestamp()-interval '90 days' LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING 1", [this.context.tenantId, limit]);
+      const monitorCommands = await transaction.query(`DELETE FROM venue.monitor_commands command WHERE command.id IN (SELECT candidate.id FROM venue.monitor_commands candidate JOIN venue.monitor_devices monitor ON monitor.id=candidate.monitor_id WHERE monitor.tenant_id=$1::uuid AND candidate.acknowledged_at IS NOT NULL AND candidate.expires_at<clock_timestamp()-interval '30 days' LIMIT $2 FOR UPDATE OF candidate SKIP LOCKED) RETURNING 1`, [this.context.tenantId, limit]);
+      return { outbox: outbox.rowCount, jobs: jobs.rowCount, monitorCommands: monitorCommands.rowCount };
+    });
+  }
+
+  async retentionDaily(batchSize = 1000) {
+    const limit = Math.max(1, Math.min(1000, Number(batchSize) || 1000));
+    return this.database.withTransaction("ops.retention.daily", async (transaction) => {
+      const audit = await transaction.query("DELETE FROM ops.audit_operations WHERE id IN (SELECT id FROM ops.audit_operations WHERE tenant_id=$1::uuid AND completed_at<clock_timestamp()-interval '12 months' AND status<>'started' LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING 1", [this.context.tenantId, limit]);
+      const recipients = await transaction.query(`DELETE FROM messaging.event_recipients recipient WHERE recipient.id IN (SELECT candidate.id FROM messaging.event_recipients candidate JOIN messaging.events event ON event.id=candidate.event_id WHERE event.tenant_id=$1::uuid AND candidate.created_at<clock_timestamp()-interval '24 months' LIMIT $2 FOR UPDATE OF candidate SKIP LOCKED) RETURNING 1`, [this.context.tenantId, limit]);
+      const roles = await transaction.query("DELETE FROM identity.tenant_role_assignments WHERE id IN (SELECT id FROM identity.tenant_role_assignments WHERE tenant_id=$1::uuid AND revoked_at<clock_timestamp()-interval '12 months' LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING 1", [this.context.tenantId, limit]);
+      const credentials = await transaction.query(`DELETE FROM identity.credentials credential WHERE credential.id IN (SELECT candidate.id FROM identity.credentials candidate JOIN identity.user_accounts account ON account.id=candidate.account_id WHERE account.tenant_id=$1::uuid AND candidate.revoked_at<clock_timestamp()-interval '12 months' AND NOT candidate.active LIMIT $2 FOR UPDATE OF candidate SKIP LOCKED) RETURNING 1`, [this.context.tenantId, limit]);
+      const deadJobs = await transaction.query("DELETE FROM ops.jobs WHERE id IN (SELECT id FROM ops.jobs WHERE tenant_id=$1::uuid AND status='dead' AND clarified_at<clock_timestamp()-interval '12 months' LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING 1", [this.context.tenantId, limit]);
+      return { audit: audit.rowCount, recipients: recipients.rowCount, roles: roles.rowCount, credentials: credentials.rowCount, deadJobs: deadJobs.rowCount };
+    });
+  }
+
+  async expireHallTimeWaitlists(batchSize = 1000) {
+    const limit = Math.max(1, Math.min(1000, Number(batchSize) || 1000));
+    return this.database.withTransaction("ops.hall_time.expire_waitlists", async (transaction) => {
+      const expired = await transaction.query(`SELECT candidate.id,grid.id AS grid_id,slot.id AS slot_id,candidate.person_id,slot.starts_at,person.contract_id,concat_ws(' ',person.first_name,person.last_name) AS person_name
+        FROM venue.hall_time_allocations candidate JOIN venue.hall_time_slots slot ON slot.id=candidate.slot_id
+        JOIN venue.hall_time_grids grid ON grid.id=slot.grid_id JOIN core.sections section ON section.id=grid.section_id
+        JOIN identity.people person ON person.id=candidate.person_id
+        WHERE section.tenant_id=$1::uuid AND candidate.status='waiting' AND slot.ends_at<=clock_timestamp()
+        ORDER BY slot.ends_at,candidate.id LIMIT $2 FOR UPDATE OF candidate SKIP LOCKED`, [this.context.tenantId, limit]);
+      if (!expired.rowCount) return { expired: 0 };
+      await transaction.query("DELETE FROM venue.hall_time_allocations WHERE id=ANY($1::uuid[])", [expired.rows.map(({ id }) => id)]);
+      const groups = new Map(); for (const row of expired.rows) { if (!groups.has(row.grid_id)) groups.set(row.grid_id, []); groups.get(row.grid_id).push(row); }
+      for (const [gridId, rows] of groups) {
+        const history = await transaction.query(`INSERT INTO venue.hall_time_history(grid_id,operation_id,action_code,occurred_at,item_count)
+          VALUES ($1::uuid,$2::uuid,'waitlist_expired',clock_timestamp(),$3) RETURNING id`, [gridId, crypto.randomUUID(), rows.length]);
+        for (const [index, row] of rows.entries()) await transaction.query(`INSERT INTO venue.hall_time_history_items(history_id,item_no,slot_id,person_id,before_status,slot_starts_at_snapshot,person_contract_id_snapshot,person_name_snapshot)
+          VALUES ($1::uuid,$2,$3::uuid,$4::uuid,'waiting',$5,$6,$7)`, [history.rows[0].id, index + 1, row.slot_id, row.person_id, row.starts_at, row.contract_id, row.person_name]);
+        await transaction.query("UPDATE venue.hall_time_grids SET revision=revision+1,projection_revision=projection_revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [gridId]);
+      }
+      return { expired: expired.rowCount };
+    });
   }
 }
 

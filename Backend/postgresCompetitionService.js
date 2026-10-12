@@ -74,6 +74,7 @@ class PostgresCompetitionService {
           }, transaction);
         }
         const response = { success: true, entryId: entry.id, alreadyPresent: entry.alreadyPresent };
+        await this.ops.queueInvalidation(transaction, { operationId, projection: "play", eventId: payload.competitionId });
         await this.ops.completeIdempotency(transaction, { operationId, command, status: "success", response });
         return {
           ...response,
@@ -140,6 +141,7 @@ class PostgresCompetitionService {
           }, transaction);
         }
         const response = { success: true, removed: Boolean(entry), entryId: entry?.id || "none" };
+        await this.ops.queueInvalidation(transaction, { operationId, projection: "play", eventId: payload.competitionId });
         await this.ops.completeIdempotency(transaction, { operationId, command, status: "success", response });
         return {
           ...response,

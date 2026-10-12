@@ -155,7 +155,7 @@ async function readBoundedText(response) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function acceptCourtScores(courts, activeAtStart, epochAtStart) {
+async function acceptCourtScores(courts, activeAtStart, epochAtStart) {
   let changed = false;
   const byCourt = new Map(lastCourts.map((court) => [court.platz, court]));
   for (const court of courts) {
@@ -164,6 +164,7 @@ function acceptCourtScores(courts, activeAtStart, epochAtStart) {
     if (waitForExternalChange[court.platz]) {
       if (externalBaseline[court.platz] === null) {
         externalBaseline[court.platz] = current;
+        await scoreLogRepository?.acceptBaseline?.({ court: court.platz, score: current });
         continue;
       }
       if (externalBaseline[court.platz] === current) continue;
@@ -178,7 +179,7 @@ function acceptCourtScores(courts, activeAtStart, epochAtStart) {
       try {
         if (!scoreLogRepository) throw new Error("ScoreLog-Repository ist nicht initialisiert");
         const context = getCourtContext(court.platz);
-        const event = scoreLogRepository.append({
+        const event = await scoreLogRepository.append({
           eventId: crypto.randomUUID(),
           court: court.platz,
           score: current,
@@ -270,7 +271,7 @@ async function poll(myGeneration = generation) {
     if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { code: `HTTP_${response.status}` });
     const text = await readBoundedText(response);
     const courts = normalizeData(JSON.parse(text), activeAtStart);
-    const changed = acceptCourtScores(courts, activeAtStart, epochAtStart);
+    const changed = await acceptCourtScores(courts, activeAtStart, epochAtStart);
     const recovered = failureCount > 0;
     const recoveredErrorCode = lastError?.code || null;
     const recoveredErrorSequence = failureCount;

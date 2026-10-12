@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { Client } = require("pg");
+const { WebSocket } = require("ws");
 const { runMigrations } = require("../db/migrationRunner");
 const { applyFullDevelSeed, applyTechnicalSeed } = require("../db/seedRunner");
 const { createRuntimeRepositories } = require("../db/createRuntimeRepositories");
@@ -18,6 +19,10 @@ const { PostgresAuditAdapter } = require("../postgresAuditAdapter");
 const { IDEMPOTENCY_CONTRACTS, LEGACY_AUDIT_CONTRACTS } = require("../postgresRuntimeContracts");
 const dataStore = require("../dataStore");
 const { createPostgresComponents } = require("../createPostgresComponents");
+const { createPostgresApplication } = require("../server");
+const { matchCompletionFingerprint } = require("../matchRules");
+const { headerIndex, headerOf } = require("../tableUtils");
+const { projectPeopleNormalization } = require("../peopleNormalization");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
 
 async function preparedRuntime(t) {
@@ -156,7 +161,7 @@ test("PostgreSQL-Projektionsloader ersetzt den Sheet-Initialload atomar und ohne
   assert.equal(events.some(({ event, fields }) => event === "postgres_projection_refresh_completed" && fields.result === "success"), true);
 });
 
-test("PostgreSQL-Komposition liefert aktivierbare Teilservices, bleibt fuer unvollstaendigen Serverstart aber fail-closed", { timeout: 30_000 }, async (t) => {
+test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufzeit", { timeout: 30_000 }, async (t) => {
   const cluster = startPostgresTestCluster();
   t.after(() => cluster.stop());
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
@@ -172,13 +177,99 @@ test("PostgreSQL-Komposition liefert aktivierbare Teilservices, bleibt fuer unvo
     sessionMaxPerUser: 10,
   });
   t.after(() => components.runtime.close());
-  assert.equal(components.capabilities.serverReady, false);
-  assert.equal(components.capabilities.missing.includes("match-and-ranking-writes"), true);
+  assert.equal(components.capabilities.serverReady, true);
+  assert.deepEqual(components.capabilities.missing, []);
   assert.equal(typeof components.authService.login, "function");
   assert.equal(typeof components.competitionService.addEntry, "function");
   assert.equal(typeof components.messagingService.addCompetitionHistoryComment, "function");
   assert.equal(components.auditLogRepository.status().backend, "postgres");
   const principal = { type: "user", id: "1", name: "Ada Admin", role: "admin" };
+  const assignedCourt = await components.courtService.assign(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd01", court: "1", expectedRevision: 2,
+    homePlayerIds: ["1"], guestPlayerIds: ["2"],
+  });
+  assert.deepEqual(assignedCourt.court.homePlayerIds, ["1"]);
+  const repeatedAssignment = await components.courtService.assign(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd01", court: "1", expectedRevision: 2,
+    homePlayerIds: ["1"], guestPlayerIds: ["2"],
+  });
+  assert.equal(repeatedAssignment.repeated, true);
+  const inactiveCourt = await components.courtService.setActive(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd02", court: "1", expectedRevision: 3, active: false,
+  });
+  assert.equal(inactiveCourt.court.aktiv, 0);
+  const hallGrid = await components.hallTimeService.grid(principal, "hall-seed");
+  assert.equal(hallGrid.grid.entries.length, 2);
+  const hallBooking = await components.hallTimeService.setBooking(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd03", gridId: "hall-seed",
+    slotId: hallGrid.grid.slots[0].id, personId: "1", selected: false,
+  });
+  assert.equal(hallBooking.grid.entries.some(({ personId }) => personId === "1"), false);
+  assert.equal(hallBooking.grid.entries.find(({ personId }) => personId === "2").status, "confirmed");
+  const savedGrid = await components.hallTimeService.saveGrid(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd04", expectedRevision: hallBooking.revision, gridId: "hall-seed",
+    name: "Synthetische Hallenzeit", description: "PostgreSQL", mode: "fair_use", capacity: 2,
+    waitlistEnabled: true, maxWaitlistEntries: 2, publicJoinable: true,
+    fairUse: { base: 1, extendedDays: 14, percent: 50, openDays: 7 }, active: true,
+    participantIds: ["1", "2"], slots: hallBooking.grid.slots.map(({ id, date, start, end }) => ({ id, date, start, end })),
+  });
+  assert.equal(savedGrid.grid.publicJoinable, true);
+  await components.projectionLoader.refresh("play-service-test");
+  const player = { type: "user", id: "2", name: "Olivia Operator", role: "player" };
+  const match = await components.sheetService.addMatch(player, {
+    operationId: "0199c800-0000-7000-8000-00000000fd05", bewerbId: "2", opponentId: "1",
+  });
+  assert.equal(match.newMatchId.startsWith("m-"), true);
+  await components.sheetService.setMatchAppointment(player, {
+    operationId: "0199c800-0000-7000-8000-00000000fd06", matchId: match.newMatchId, matchDate: "261011-1800",
+  });
+  const matchValues = dataStore.get("matches1"), matchHeader = headerOf(matchValues);
+  const matchRow = matchValues.slice(1).find((row) => String(row[headerIndex(matchHeader, "id")]) === match.newMatchId);
+  const completed = await components.sheetService.setMatchResult(player, {
+    operationId: "0199c800-0000-7000-8000-00000000fd07", matchId: match.newMatchId,
+    kind: "regular", result: "6-0/6-0", matchStart: "261011-1800", matchEnd: "261011-1900",
+    expectedFingerprint: matchCompletionFingerprint(matchRow, matchHeader),
+  });
+  assert.equal(completed.completionType, "regular");
+  const rankings = await components.repositories.play.rankings("2");
+  assert.equal(rankings.find(({ personId }) => personId === "2").rank, 1);
+  assert.equal(rankings.find(({ personId }) => personId === "1").rank, 2);
+  const firstCompletedValues = dataStore.get("matches1"), firstCompletedHeader = headerOf(firstCompletedValues);
+  const firstCompletedRow = firstCompletedValues.slice(1).find((row) => String(row[headerIndex(firstCompletedHeader, "id")]) === match.newMatchId);
+  const corrected = await components.sheetService.setMatchResult(player, {
+    operationId: "0199c800-0000-7000-8000-00000000fd0b", matchId: match.newMatchId,
+    kind: "regular", result: "6-1/6-1", matchStart: "261011-1800", matchEnd: "261011-1900",
+    expectedFingerprint: matchCompletionFingerprint(firstCompletedRow, firstCompletedHeader),
+  });
+  assert.equal(corrected.result, "6-1/6-1");
+  const completedValues = dataStore.get("matches1"), completedHeader = headerOf(completedValues);
+  const completedRow = completedValues.slice(1).find((row) => String(row[headerIndex(completedHeader, "id")]) === match.newMatchId);
+  const cleared = await components.sheetService.adminClearMatchResult(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd0a", matchId: match.newMatchId,
+    expectedFingerprint: matchCompletionFingerprint(completedRow, completedHeader), reason: "Integrationstest Rücknahme",
+  });
+  assert.equal(cleared.cleared, true);
+  const restoredRankings = await components.repositories.play.rankings("2");
+  assert.equal(restoredRankings.find(({ personId }) => personId === "1").rank, 1);
+  assert.equal(restoredRankings.find(({ personId }) => personId === "2").rank, 2);
+  const normalizedPerson = projectPeopleNormalization(dataStore.get("players")).people.find(({ id }) => id === "2");
+  const normalization = await components.sheetService.normalizePerson(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd08", personId: "2",
+    expectedFingerprint: normalizedPerson.fingerprint, changes: { phone: "0043 660 123456" },
+  });
+  assert.equal(normalization.changedFieldCount, 1);
+  const createdPerson = await components.sheetService.reconcilePerson(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fd09", action: "create", externalId: "999999",
+    values: { firstName: "Petra", lastName: "Postgres", active: "1", member: "player" },
+  });
+  assert.equal(Number(createdPerson.personId) > 3, true);
+  const reportHallTimes = await components.hallTimeService.reportingSnapshot(0, Date.now() + 365 * 24 * 60 * 60 * 1000);
+  const reportOptions = components.messagingService.messagingReportOptions({ deployment: "paj", hallTimes: reportHallTimes });
+  assert.equal(reportOptions.options.some(({ __value }) => __value === "personal"), true);
+  const report = await components.messagingService.messagingReport({
+    fromMs: 0, toMs: Date.now() + 365 * 24 * 60 * 60 * 1000, deployment: "paj", selection: ["all"], hallTimes: reportHallTimes,
+  });
+  assert.equal(report.totals.totalCount > 0, true);
   const provisionParams = { operationId: "0199c800-0000-7000-8000-00000000fc01", label: "Kompositionsmonitor" };
   const provisioned = await components.monitorBroker.provision(principal, provisionParams);
   assert.equal(typeof provisioned.monitor.token, "string");
@@ -266,6 +357,56 @@ test("Venue-Repository liest Courts und Hallenzeiten und persistiert Scores atom
   assert.equal((await repositories.venue.monitorByToken(rotated.token)).monitorId, "monitor-runtime");
   await repositories.venue.revokeMonitor("monitor-runtime");
   assert.equal(await repositories.venue.monitorByToken(rotated.token), null);
+});
+
+test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sowie Listener", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
+  await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  const client = new Client(cluster.connectionConfig); await client.connect();
+  await client.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false"); await client.end();
+  const app = await createPostgresApplication({
+    connectionConfig: cluster.connectionConfig,
+    env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 7).toString("base64url") },
+  });
+  await new Promise((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  await app.initialize();
+  assert.equal(app.status().ready, true);
+  assert.equal(app.status().components.postgres_runtime, true);
+  const address = app.server.address(), base = `http://127.0.0.1:${address.port}`;
+  const login = await fetch(`${base}/api/session`, {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:8080" },
+    body: JSON.stringify({ login: "player", passwordHash: "a".repeat(64) }),
+  });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get("set-cookie").split(";", 1)[0];
+  const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`, { headers: { Origin: "http://localhost:8080", Cookie: cookie } });
+  const messages = [];
+  socket.on("message", (raw) => messages.push(JSON.parse(raw.toString())));
+  await new Promise((resolve, reject) => { socket.once("open", resolve); socket.once("error", reject); });
+  socket.send(JSON.stringify({ type: "hello", v: 2, protocol: 2, clientId: "postgres-test", deviceId: "postgres-test", pageType: "index", appVersion: require("../package.json").version }));
+  await new Promise((resolve, reject) => { const deadline = setTimeout(() => reject(new Error("WELCOME_TIMEOUT")), 2000); const timer = setInterval(() => { if (messages.some(({ type }) => type === "welcome")) { clearInterval(timer); clearTimeout(deadline); resolve(); } }, 5); });
+  socket.send(JSON.stringify({ type: "request", v: 2, id: "postgres-scoreboard", endpoint: "getScoreboardCourts", params: {} }));
+  await new Promise((resolve, reject) => { const deadline = setTimeout(() => reject(new Error("RESPONSE_TIMEOUT")), 2000); const timer = setInterval(() => { if (messages.some(({ type, id }) => type === "response" && id === "postgres-scoreboard")) { clearInterval(timer); clearTimeout(deadline); resolve(); } }, 5); });
+  const response = messages.find(({ type, id }) => type === "response" && id === "postgres-scoreboard");
+  assert.equal(response.data.success, true);
+  assert.equal(response.data.courts["1"].matchId, "m-seed");
+  socket.close();
+  await new Promise((resolve) => socket.once("close", resolve));
+  await app.shutdown("test");
+  assert.equal(app.status().shuttingDown, true);
+  const restarted = await createPostgresApplication({
+    connectionConfig: cluster.connectionConfig,
+    env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 7).toString("base64url") },
+  });
+  await new Promise((resolve) => restarted.server.listen(0, "127.0.0.1", resolve));
+  await restarted.initialize();
+  const restartAddress = restarted.server.address();
+  const session = await fetch(`http://127.0.0.1:${restartAddress.port}/api/session`, { headers: { Cookie: cookie } });
+  assert.equal((await session.json()).authenticated, true);
+  await restarted.shutdown("restart-test");
 });
 
 test("Messaging-Repository liest Inbox, quittiert idempotent und erzeugt kontrollierte Ereignisse", { timeout: 30_000 }, async (t) => {

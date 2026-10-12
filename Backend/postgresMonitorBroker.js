@@ -36,6 +36,11 @@ class PostgresMonitorBroker {
     })).sort((left, right) => left.label.localeCompare(right.label, "de") || left.monitorId.localeCompare(right.monitorId));
   }
   publishMonitorList() { this.publish?.("monitors", { monitors: this.listMonitors(), at: Date.now() }); }
+  async refresh() {
+    const rows = await this.venue.listMonitors();
+    this.monitors = new Map(rows.map((monitor) => [monitor.monitorId, monitor]));
+    this.publishMonitorList();
+  }
   publishStatus(monitorId, status) {
     const value = { monitorId, ...status, at: status.at || Date.now() };
     if (status.kind === "navigate") this.commandStatus.set(monitorId, value);
@@ -58,6 +63,7 @@ class PostgresMonitorBroker {
           throw new AppError(operation.status === "unknown" ? "WRITE_OUTCOME_UNKNOWN" : "OPERATION_IN_PROGRESS", "Ausgang der Monitoroperation ist unklar", operation.status === "unknown" ? 503 : 409);
         }
         const { response, publicResponse = response } = await callback(transaction);
+        await this.ops.queueInvalidation(transaction, { operationId: opId, projection: "venue", eventId: response.monitorId || response.monitor?.monitorId || opId });
         await this.ops.completeIdempotency(transaction, { operationId: opId, command, status: "success", response });
         return { ...publicResponse, repeated: false };
       }, { isolation: "serializable", retries: 2 });

@@ -212,9 +212,14 @@ CREATE TABLE venue.hall_time_grids (
   waiting_list_enabled boolean NOT NULL DEFAULT false,
   waiting_limit_per_person smallint CHECK (waiting_limit_per_person > 0),
   fair_use_enabled boolean NOT NULL DEFAULT false,
+  fair_use_base integer NOT NULL DEFAULT 0 CHECK (fair_use_base >= 0),
+  fair_use_extended_days integer NOT NULL DEFAULT 1 CHECK (fair_use_extended_days > 0),
+  fair_use_percent integer NOT NULL DEFAULT 0 CHECK (fair_use_percent >= 0),
   fair_use_open_days integer CHECK (fair_use_open_days >= 0),
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   projection_revision bigint NOT NULL DEFAULT 1 CHECK (projection_revision > 0),
+  created_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
+  updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
   UNIQUE (section_id, contract_id),
   UNIQUE (id, section_id),
   CHECK (waiting_list_enabled OR waiting_limit_per_person IS NULL)
@@ -278,7 +283,14 @@ CREATE TABLE venue.hall_time_history (
   action_code text NOT NULL,
   actor_person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
   occurred_at timestamptz(3) NOT NULL,
-  item_count integer NOT NULL CHECK (item_count > 0)
+  item_count integer NOT NULL CHECK (item_count >= 0),
+  detail text,
+  unavailable_count integer CHECK (unavailable_count IS NULL OR unavailable_count >= 0),
+  avoid_count integer CHECK (avoid_count IS NULL OR avoid_count >= 0),
+  assigned_count integer CHECK (assigned_count IS NULL OR assigned_count >= 0),
+  removed_count integer CHECK (removed_count IS NULL OR removed_count >= 0),
+  promoted_count integer CHECK (promoted_count IS NULL OR promoted_count >= 0),
+  unchanged_count integer CHECK (unchanged_count IS NULL OR unchanged_count >= 0)
 );
 CREATE INDEX hall_time_history_retention ON venue.hall_time_history (grid_id, occurred_at, id);
 
@@ -289,11 +301,10 @@ CREATE TABLE venue.hall_time_history_items (
   person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
   before_status text CHECK (before_status IN ('confirmed', 'waiting')),
   after_status text CHECK (after_status IN ('confirmed', 'waiting')),
-  slot_starts_at_snapshot timestamptz(3) NOT NULL,
+  slot_starts_at_snapshot timestamptz(3),
   person_contract_id_snapshot text,
   person_name_snapshot text,
-  PRIMARY KEY (history_id, item_no),
-  CHECK (before_status IS NOT NULL OR after_status IS NOT NULL)
+  PRIMARY KEY (history_id, item_no)
 );
 
 CREATE TABLE identity.user_favorites (

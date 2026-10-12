@@ -941,12 +941,12 @@ function matchRowContext(matchId) {
   return { header, row, participantIds };
 }
 
-function resultSuggestion(params, principal) {
+async function resultSuggestion(params, principal) {
   const context = matchRowContext(params.matchId);
   if (!hasRole(principal, "admin") && !context.participantIds.includes(String(principal.id))) {
     throw new AppError("MATCH_PARTICIPANT_REQUIRED", "Nur Beteiligte duerfen einen Ergebnisvorschlag lesen", 403);
   }
-  const state = stateStore.getCourt(params.court);
+  const state = await dependencies.courtService.getCourt(params.court);
   let score = null;
   let source = { type: "none", court: params.court };
   if (String(state.matchId || "") === params.matchId) {
@@ -957,7 +957,7 @@ function resultSuggestion(params, principal) {
       source = { type: "court", court: params.court, revision: snapshot.revision };
     }
   } else {
-    const logged = dependencies.scoreLogRepository?.getLatestByMatchIdAndCourt(params.matchId, params.court) || null;
+    const logged = await dependencies.scoreLogRepository?.getLatestByMatchIdAndCourt(params.matchId, params.court) || null;
     if (logged) {
       score = logged.score.split("/").slice(0, 3).flatMap((set) => set.split("-"));
       source = { type: "scoreLog", court: params.court, sequence: logged.sequence, occurredAt: logged.occurredAt };
@@ -1094,9 +1094,9 @@ function compileNavigator(params) {
   return { success: true, items };
 }
 
-function scoreboardScores(scoreSnapshot = courtPoller.getLastData()) {
+async function scoreboardScores(scoreSnapshot = courtPoller.getLastData()) {
   return projectScoreboardScores(scoreSnapshot, {
-    courts: stateStore.getScoreboardCourts(),
+    courts: await dependencies.courtService.getScoreboardCourts(),
     matches: dataStore.get("matches1"),
   });
 }
@@ -1110,8 +1110,8 @@ async function scoreboardSnapshot() {
     playersValues: await dependencies.authService.publicPlayersTable(),
     bewerbValues: publicTable("bewerbe"),
     matchesValues: publicTable("matches1", filterIgnored(dataStore.get("matches1"))),
-    courts: stateStore.getScoreboardCourts(),
-    scores: scoreboardScores(),
+    courts: await dependencies.courtService.getScoreboardCourts(),
+    scores: await scoreboardScores(),
     revisions: {
       players: dataStore.getMeta("players")?.revision || 0,
       bewerbe: dataStore.getMeta("bewerbe")?.revision || 0,
@@ -1307,7 +1307,7 @@ const endpoints = {
     access: "authenticated",
     handler: (params) => ({ success: true, ...withdrawnRankingPlayers(idValue(params.bewerbId, "bewerbId")) }),
   },
-  getScoreboardCourts: { access: "public", handler: () => ({ success: true, courts: stateStore.getScoreboardCourts() }) },
+  getScoreboardCourts: { access: "public", handler: async () => ({ success: true, courts: await dependencies.courtService.getScoreboardCourts() }) },
   courtScores: { access: "public", handler: () => ({ success: true, data: courtPoller.getLastData() }) },
   scoreboardSnapshot: { access: "public", handler: scoreboardSnapshot },
 
@@ -1379,7 +1379,7 @@ const endpoints = {
   },
   hallTimeGrid: {
     access: "authenticated",
-    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.grid(context.principal, params.gridId)),
+    handler: async (params, context) => projectHallTimePlayerNames(await dependencies.hallTimeService.grid(context.principal, params.gridId)),
   },
   hallTimeHistory: {
     access: "authenticated",
@@ -1387,18 +1387,18 @@ const endpoints = {
   },
   adminHallTimeGrids: {
     access: ["admin"],
-    handler: (_params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.adminGrids(context.principal)),
+    handler: async (_params, context) => projectHallTimePlayerNames(await dependencies.hallTimeService.adminGrids(context.principal)),
   },
   adminSaveHallTimeGrid: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => {
+    handler: async (params, context) => {
       requireCurrentTables("players");
       const names = hallTimePlayerMap();
       for (const personId of params.participantIds) {
         if (!names.has(personId)) throw new AppError("PLAYER_NOT_FOUND", "Mindestens ein Spieler wurde nicht gefunden", 404);
       }
-      return projectHallTimePlayerNames(dependencies.hallTimeService.saveGrid(context.principal, params, names));
+      return projectHallTimePlayerNames(await dependencies.hallTimeService.saveGrid(context.principal, params, names));
     },
   },
   setHallTimeBooking: {
@@ -1409,7 +1409,7 @@ const endpoints = {
   setMyHallTimeGroupMembership: {
     access: "authenticated",
     write: true,
-    handler: (params, context) => {
+    handler: async (params, context) => {
       requireCurrentTables("players");
       const person = hallTimePlayerMap().get(context.principal.id);
       if (!person) throw new AppError("PLAYER_NOT_FOUND", "Person wurde nicht gefunden", 404);
@@ -1419,12 +1419,12 @@ const endpoints = {
   adminDistributeHallTimeGrid: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.distribute(context.principal, params)),
+    handler: async (params, context) => projectHallTimePlayerNames(await dependencies.hallTimeService.distribute(context.principal, params)),
   },
   adminSaveHallTimeConstraints: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.saveConstraints(context.principal, params)),
+    handler: async (params, context) => projectHallTimePlayerNames(await dependencies.hallTimeService.saveConstraints(context.principal, params)),
   },
   adminPreviewHallTimeDistribution: {
     access: ["admin"],
@@ -1433,12 +1433,12 @@ const endpoints = {
   adminApplyHallTimeDistribution: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.applyDistributionPreview(context.principal, params)),
+    handler: async (params, context) => projectHallTimePlayerNames(await dependencies.hallTimeService.applyDistributionPreview(context.principal, params)),
   },
   adminClearAllHallTimeStatuses: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => projectHallTimePlayerNames(dependencies.hallTimeService.clearAllStatuses(context.principal, params)),
+    handler: async (params, context) => projectHallTimePlayerNames(await dependencies.hallTimeService.clearAllStatuses(context.principal, params)),
   },
   myFavorites: {
     access: "authenticated",
@@ -1446,8 +1446,9 @@ const endpoints = {
     handler: async (_params, context) => {
       const snapshot = await dependencies.repository.getUserFavorites(context.principal.id);
       try {
-        const favorites = validateFavoriteTargets(snapshot.favorites.map(({ targetId, ...target }) => target))
-          .filter((favorite) => favorite.page !== "hallzeiten" || dependencies.hallTimeService.canView(context.principal, favorite.params?.id));
+        const candidates = validateFavoriteTargets(snapshot.favorites.map(({ targetId, ...target }) => target));
+        const favorites = [];
+        for (const favorite of candidates) if (favorite.page !== "hallzeiten" || await dependencies.hallTimeService.canView(context.principal, favorite.params?.id)) favorites.push(favorite);
         return { success: true, ...snapshot, favorites };
       } catch {
         throw new AppError("STATE_CORRUPT", "Favoriten-State ist ungueltig", 503);
@@ -1463,7 +1464,7 @@ const endpoints = {
         const target = validateStartTarget(snapshot.target);
         return {
           success: true, ...snapshot,
-          target: target.page === "hallzeiten" && !dependencies.hallTimeService.canView(context.principal, target.params?.id)
+          target: target.page === "hallzeiten" && !await dependencies.hallTimeService.canView(context.principal, target.params?.id)
             ? { type: "page", page: "index" }
             : target,
         };
@@ -1478,9 +1479,9 @@ const endpoints = {
     write: true,
     audit: false,
     writeCost: 0.1,
-    handler: (params, context) => {
+    handler: async (params, context) => {
       for (const favorite of params.favorites) {
-        if (favorite.page === "hallzeiten" && !dependencies.hallTimeService.canView(context.principal, favorite.params?.id)) {
+        if (favorite.page === "hallzeiten" && !await dependencies.hallTimeService.canView(context.principal, favorite.params?.id)) {
           throw new AppError("FORBIDDEN", "Dieser Hallenzeiten-Raster darf nicht als Favorit gespeichert werden", 403);
         }
       }
@@ -1493,8 +1494,8 @@ const endpoints = {
     write: true,
     audit: false,
     writeCost: 0.1,
-    handler: (params, context) => {
-      if (params.target.page === "hallzeiten" && !dependencies.hallTimeService.canView(context.principal, params.target.params?.id)) {
+    handler: async (params, context) => {
+      if (params.target.page === "hallzeiten" && !await dependencies.hallTimeService.canView(context.principal, params.target.params?.id)) {
         throw new AppError("FORBIDDEN", "Dieser Hallenzeiten-Raster darf nicht als Startseite gespeichert werden", 403);
       }
       return dependencies.repository.setUserStartPage(context.principal.id, params);
@@ -1720,7 +1721,7 @@ const endpoints = {
   courtAssign: {
     access: ["operator", "admin"],
     write: true,
-    handler: (rawParams, context) => {
+    handler: async (rawParams, context) => {
       const params = requireObject(rawParams);
       const opId = operationId(params.operationId);
       const court = idValue(params.court, "court");
@@ -1738,45 +1739,23 @@ const endpoints = {
           guestPlayerIds: (Array.isArray(params.guestPlayerIds) ? params.guestPlayerIds : []).map((id) => idValue(id, "guestPlayerId")),
         };
       }
-      const payload = { ...request, expectedRevision };
-      return stateStore.applyCourtOperation(court, {
-        principal: context.principal,
-        operationId: opId,
-        endpoint: "courtAssign",
-        payload,
-        expectedRevision,
-      }, (current) => {
-        if (!request.empty) requireCurrentTables("players", "bewerbe", "matchtyp", "matches1");
-        const assignment = resolveCourtAssignment(request);
-        return {
-          ...assignment.data,
-          aktiv: current.aktiv,
-          automaticActivation: request.matchId
-            ? pendingActivation(request.matchId, assignment.data.dateTime)
-            : null,
-        };
-      }, () => courtPoller.resetCourtScore(court, { reason: "assignment" }));
+      const result = await dependencies.courtService.assign(context.principal, { operationId: opId, expectedRevision, ...request });
+      if (dependencies.courtService.persistent && !result.repeated) courtPoller.resetCourtScore(court, { reason: "assignment" });
+      return result;
     },
   },
   courtSetActive: {
     access: ["operator", "admin"],
     write: true,
-    handler: (rawParams, context) => {
+    handler: async (rawParams, context) => {
       const params = requireObject(rawParams);
       const court = idValue(params.court, "court");
       if (!['1', '2'].includes(court)) throw new AppError("COURT_INVALID", "Court muss 1 oder 2 sein");
       const active = booleanValue(params.active, "active");
       const opId = operationId(params.operationId);
       const expectedRevision = integerValue(params.expectedRevision, "expectedRevision", { min: 1 });
-      const payload = { court, active, expectedRevision };
-      const result = stateStore.applyCourtOperation(court, {
-        principal: context.principal,
-        operationId: opId,
-        endpoint: "courtSetActive",
-        payload,
-        expectedRevision,
-      }, () => ({ aktiv: active ? 1 : 0 }));
-      const courts = stateStore.getScoreboardCourts();
+      const result = await dependencies.courtService.setActive(context.principal, { operationId: opId, court, active, expectedRevision });
+      const courts = await dependencies.courtService.getScoreboardCourts();
       courtPoller.setCourtActive({ "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 });
       return result;
     },
@@ -1951,8 +1930,8 @@ function publish(topic, data) {
 }
 
 async function sendSubscriptionSnapshot(info, topic) {
-  if (topic === "scores") send(info, { type: "event", topic, data: scoreboardScores() });
-  if (topic === "scoreboard-state") send(info, { type: "event", topic, data: { courts: stateStore.getScoreboardCourts() } });
+  if (topic === "scores") send(info, { type: "event", topic, data: await scoreboardScores() });
+  if (topic === "scoreboard-state") send(info, { type: "event", topic, data: { courts: await dependencies.courtService.getScoreboardCourts() } });
   if (topic === "monitors") send(info, { type: "event", topic, data: { monitors: await dependencies.monitorBroker.listMonitors() } });
   if (topic.startsWith("messages:") && canSubscribe(info, topic)) {
     const { revision, unreadCount } = await dependencies.messagingService.summary(info.principal);
@@ -2221,6 +2200,24 @@ function rejectUpgrade(socket, status, message) {
 function init(server, options) {
   dependencies = { ...options, canonicalizeMonitorPath: options.canonicalizeMonitorPath };
   dependencies.competitionService ||= options.sheetService;
+  dependencies.courtService ||= {
+    getCourt: (court) => stateStore.getCourt(court),
+    getScoreboardCourts: () => stateStore.getScoreboardCourts(),
+    onChange: (listener) => stateStore.onChange(listener),
+    assign(principal, request) {
+      const { court, operationId: opId, expectedRevision } = request;
+      const payload = { ...request };
+      return stateStore.applyCourtOperation(court, { principal, operationId: opId, endpoint: "courtAssign", payload, expectedRevision }, (current) => {
+        if (!request.empty) requireCurrentTables("players", "bewerbe", "matchtyp", "matches1");
+        const assignment = resolveCourtAssignment(request);
+        return { ...assignment.data, aktiv: current.aktiv, automaticActivation: request.matchId ? pendingActivation(request.matchId, assignment.data.dateTime) : null };
+      }, () => courtPoller.resetCourtScore(court, { reason: "assignment" }));
+    },
+    setActive(principal, request) {
+      const { court, operationId: opId, expectedRevision, active } = request;
+      return stateStore.applyCourtOperation(court, { principal, operationId: opId, endpoint: "courtSetActive", payload: request, expectedRevision }, () => ({ aktiv: active ? 1 : 0 }));
+    },
+  };
   shuttingDown = false;
   wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD_BYTES, perMessageDeflate: false });
 
@@ -2311,19 +2308,21 @@ function init(server, options) {
   }, WS_PING_INTERVAL_MS);
   pingTimer.unref?.();
 
-  courtPoller.setOnUpdate((scoreSnapshot) => publish("scores", scoreboardScores(scoreSnapshot)));
-  unsubscribeCallbacks.push(stateStore.onChange((event) => {
-    if (event.type === "court") publish("scoreboard-state", { courts: stateStore.getScoreboardCourts() });
+  courtPoller.setOnUpdate((scoreSnapshot) => {
+    scoreboardScores(scoreSnapshot).then((data) => publish("scores", data)).catch((error) => logger.log("error", "scoreboard_projection_failed", { errorCode: error.code || "SCOREBOARD_PROJECTION_FAILED" }));
+  });
+  unsubscribeCallbacks.push(dependencies.courtService.onChange((event) => {
+    if (event.type === "court") dependencies.courtService.getScoreboardCourts().then((courts) => publish("scoreboard-state", { courts })).catch(() => {});
   }));
   unsubscribeCallbacks.push(dataStore.onChange((event) => {
     if (event.table === "matchtyp" && event.current) {
-      const migration = stateStore.migrateLegacyCourtDisplayRules(dataStore.get("matchtyp"));
+      const migration = dependencies.courtService.migrateLegacyCourtDisplayRules?.(dataStore.get("matchtyp")) || { migratedCourts: [] };
       if (migration.migratedCourts.length) {
-        publish("scoreboard-state", { courts: stateStore.getScoreboardCourts() });
-        publish("scores", scoreboardScores());
+        dependencies.courtService.getScoreboardCourts().then((courts) => publish("scoreboard-state", { courts })).catch(() => {});
+        scoreboardScores().then((data) => publish("scores", data)).catch(() => {});
       }
     }
-    if (event.table === "matches1" && event.current) publish("scores", scoreboardScores());
+    if (event.table === "matches1" && event.current) scoreboardScores().then((data) => publish("scores", data)).catch(() => {});
     const topicByTable = { matches1: "matches", players: "players", bewerbe: "bewerbe", bewerbsart: "bewerbsart", matchtyp: "matchtyp", entryList: "entryList", rlPlatzierung: "ranking", navigator: "navigator" };
     const topic = topicByTable[event.table];
     if (topic) publish(topic, event);

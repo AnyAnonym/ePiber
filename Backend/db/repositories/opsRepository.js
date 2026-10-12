@@ -6,7 +6,7 @@ const AUDIT_STATUS = new Set(["success", "failed", "unknown"]);
 const ACTOR_TYPES = new Set(["anonymous", "user", "monitor", "system"]);
 const CODE_PATTERN = /^[a-z][a-z0-9_.-]{1,126}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const PROJECTION_TYPES = new Set(["boolean", "controlled", "count", "epoch_ms", "id", "monitor", "preference_target", "preference_targets", "revision", "status", "timestamp"]);
+const PROJECTION_TYPES = new Set(["boolean", "controlled", "count", "epoch_ms", "id", "id_list", "monitor", "preference_target", "preference_targets", "revision", "status", "timestamp"]);
 
 function preferenceTarget(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -31,6 +31,7 @@ function controlledProjectionValue(value, type) {
     || (typeof value === "string" && value.length <= 160 && /^[A-Za-z0-9ÄÖÜäöüß _./:?&=+,-]*$/.test(value));
   if (type === "epoch_ms") return Number.isSafeInteger(value) && value >= 0;
   if (type === "id") return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,160}$/.test(value);
+  if (type === "id_list") return Array.isArray(value) && value.length <= 100 && value.every((entry) => typeof entry === "string" && /^[A-Za-z0-9_.:-]{1,160}$/.test(entry));
   if (type === "monitor") return value && typeof value === "object" && !Array.isArray(value)
     && Object.keys(value).every((key) => new Set(["monitorId", "label", "createdAt", "updatedAt", "revokedAt"]).has(key))
     && typeof value.monitorId === "string" && /^[A-Za-z0-9_.:-]{1,64}$/.test(value.monitorId)
@@ -182,6 +183,17 @@ class OpsRepository {
     if (!result.rowCount) return null;
     const row = result.rows[0];
     return { endpoint: row.endpoint, status: new Set(["started", "unknown"]).has(row.status) ? row.status : "completed", createdAt: row.createdAt };
+  }
+
+  async queueInvalidation(target, { operationId, projection, eventId }) {
+    if (!UUID_PATTERN.test(String(operationId || ""))) throw Object.assign(new Error("OPERATION_ID_INVALID"), { code: "OPERATION_ID_INVALID" });
+    if (!new Set(["identity", "play", "venue", "messaging"]).has(projection)) throw Object.assign(new Error("PROJECTION_INVALID"), { code: "PROJECTION_INVALID" });
+    const id = String(eventId || operationId);
+    if (!/^[A-Za-z0-9_.:-]{1,160}$/.test(id)) throw Object.assign(new Error("EVENT_ID_INVALID"), { code: "EVENT_ID_INVALID" });
+    await target.query(`INSERT INTO ops.outbox(tenant_id,event_type,payload_version,payload,idempotency_key,status,available_at)
+      VALUES ($1::uuid,'websocket.invalidate',1,jsonb_build_object('eventId',$2::text,'projection',$3::text),$4,'pending',clock_timestamp())
+      ON CONFLICT (tenant_id,event_type,idempotency_key) DO NOTHING`, [this.context.tenantId, id, projection, `${projection}:${operationId}`]);
+    await target.query("SELECT pg_notify('epiber_worker_wake','')");
   }
 
   async startAudit({

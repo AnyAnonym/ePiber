@@ -3779,11 +3779,11 @@ fokussiert gegen kurzlebige, ausschliesslich synthetische PostgreSQL-Cluster
 geprueft; es gibt keine fachlich freigegebene Teilwelle und keinen Rueckfall auf
 Sheets oder SQLite innerhalb des neuen Modus.
 
-#### Umsetzungsstand Phase 5 nach Laufzeit-Repositorypaket 1
+#### Umsetzungsstand Phase 5 nach vollstaendiger Serverkomposition
 
-Stand 11.10.2026 ist die gemeinsame asynchrone PostgreSQL-Laufzeitgrundlage mit
-vollstaendiger Registrierung aller sechs Pflichtdomaenen hergestellt. Umgesetzt
-sind:
+Stand 12.10.2026 ist die gemeinsame asynchrone PostgreSQL-only Serverlaufzeit
+mit vollstaendiger Registrierung aller sechs Pflichtdomaenen hergestellt.
+Umgesetzt sind:
 
 - auf fuenf Verbindungen begrenzter App-Pool mit UTC-, Schema-, Tenant-,
   Sektions- und Seed-/Importgate;
@@ -3791,7 +3791,7 @@ sind:
   unbekanntem Commit-Ausgang und datensparsamen Abschlusslogs;
 - typisierte Repositories fuer Core, Identity/Auth, Spielbetrieb, Venue,
   Messaging und Operations;
-- erste PostgreSQL-Readprojektionen fuer Personen, Bewerbe, Matches,
+- PostgreSQL-Readprojektionen fuer Personen, Bewerbe, Matches,
   Ranglisten, Courts, Hallenzeiten und Inbox;
 - atomare Session-, Credential-, Score-, Messagingquittierungs-, Ereignis- und
   Auditpfade mit fokussierten Tests gegen kurzlebige PostgreSQL-18-Cluster;
@@ -3800,19 +3800,20 @@ sind:
 - PostgreSQL-only Authservice mit HMAC-gebundenen Loginlimits,
   `auth_revision`-Sessionpruefung, Hashupgrade, Passwortrotation und
   einmaliger 24-Stunden-Passwortfreigabe;
-- erster integrierter Spielbetriebswrite fuer EntryList-An- und Abmeldung mit
-  gemeinsamer Transaktion fuer Fachzeile, Messaging, Idempotenz und Audit;
+- integrierte Spielbetriebswrites fuer EntryList, Forderungen, Termine,
+  Ergebnisse, Korrekturen, Rangwirkungen, Rueckzug und KO-Fortschreibung mit
+  Messaging, Idempotenz, Audit und Outbox;
 - separater Worker-Repository- und Servicevertrag fuer Jobs und Outbox mit
   Lease, `SKIP LOCKED`, Retry, Dead- und Unknown-Pfad;
 - verlustfreie Favoriten-/Startseitenstruktur fuer Overlays, Round-Robin-Layout
   und Navigatorprofile;
-- asynchron vorbereitete Authentifizierungs- und Repositoryaufrufe in HTTP und
-  WebSocket bei unveraendert aktivem Legacybetrieb;
+- asynchrone PostgreSQL-Provider fuer HTTP und WebSocket bei unveraenderten
+  externen Vertraegen;
 - atomare PostgreSQL-Erzeugung aller acht bisherigen Tabellenprojektionen ohne
   Credentialhashes und ein nicht pollender Projektionsloader als Ersatz fuer den
   spaeter entfallenden Sheet-Initialload;
-- fail-closed Komposition der bereits migrierten Teilservices mit expliziter
-  Liste der noch fehlenden Serverfaehigkeiten;
+- vollstaendige PostgreSQL-only Serverkomposition mit Readiness, Invalidation,
+  Restart und kontrolliertem Shutdown;
 - atomare und idempotente PostgreSQL-Favoriten-/Startseitenwrites mit
   verlustfreier Zielmatrix und revisionsstabilen leeren Listen;
 - PostgreSQL-Frontenddiagnose fuer globale Policy und temporaere Zielpersonen;
@@ -3820,34 +3821,34 @@ sind:
   mit globaler Revision und Outbox-Invalidierung;
 - verlustfreie Importprojektion fuer Messagingquelle, Akteur, Summary, Detail,
   Ergebnis und Kommentar-Moderationsstatus;
-- echter Worker-Prozesseinstieg mit kontrolliertem Start, Wake-up und Shutdown;
-- expliziter, noch gesperrter `PERSISTENCE_MODE=postgres`, der Legacyvariablen
-  nicht verlangt und einen Teil-Cutover fail-closed verhindert;
+- echter Worker-Prozesseinstieg mit kontrolliertem Start, Wake-up, Shutdown und
+  registrierten Retentionhandlern;
+- aktivierbarer `PERSISTENCE_MODE=postgres`, der keine Legacyvariablen verlangt
+  und einen Teil-Cutover ohne Fallback verhindert;
 - asynchroner PostgreSQL-Auditadapter fuer bestehende HTTP-/WebSocket-Aktionen
   mit registrierten Feldern und Entfernung privater Normalisierungswerte;
 - PostgreSQL-Monitorbroker fuer Provisionierung, Rotation, Widerruf,
   Navigationsziel, Scrollsequenz, ACK und Reconnect-Resync;
-- relationale Match- und manuelle Court-Zuweisungen samt Teilnehmern sowie
-  transaktionale Zuweisungs- und Aktivstatuswrites als Grundlage der noch
-  ausstehenden Court-State-Serviceumschaltung.
+- relationale Match- und manuelle Court-Zuweisungen samt Teilnehmern,
+  Scorebaseline, Automation und Audit;
+- relationale Hallenzeiten inklusive Fair-Use, Warteliste, Verteilung, Historie
+  und Reporting;
+- relationale Personennormalisierung und ClubDesk-Neuanlage, -Verknuepfung,
+  -Aktualisierung und geschuetzte Deaktivierung;
+- PostgreSQL-Messagingreporting und typisierte Fachereignisse fuer Spielbetrieb
+  und Hallenzeiten.
 
-Der PostgreSQL-Modus ist noch nicht in `server.js` aktiviert. Die bestehenden
-Fachservices, HTTP-/WebSocket-Pfade, Readiness, Jobs/Outbox und der vollstaendige
-Shutdown muessen noch vollstaendig auf die asynchronen Repositoryvertraege
-umgestellt und gemeinsam aktiviert werden. Der Worker ist implementiert, aber
-noch nicht mit allen produktiven Job-/Outbox-Handlern als Dienst freigegeben.
-Offen bleiben insbesondere Court-Steuerwrites, Hallenzeitenwrites,
-Match-/Ranglistenwrites, PostgreSQL-Messagingreporting, Court-Automationsaudit
-und die finale Serverkomposition.
-Bis zu diesem integrierten Stand laeuft PAJ unveraendert im Legacybetrieb; ein
-domaenenweiser Mischbetrieb ist nicht freigegeben.
+Die Implementierungsgates fuer Court, Hallenzeiten, Spielbetrieb, Personen,
+Messaging, Jobs/Outbox und Serverkomposition sind geschlossen. Der synthetische
+Gesamtstand ist gegen kurzlebige PostgreSQL-18-Cluster, HTTP, WebSocket,
+Neustart, Shutdown und die Drei-Engine-Core-Smokesuite geprueft. Ein
+domaenenweiser Mischbetrieb bleibt ausgeschlossen.
 
-Die Anwendung verwendet bis zum spaeteren Gesamtcutover weiterhin unveraendert
-Google Sheets und SQLite. Paket 2 aktiviert keinen PostgreSQL-Laufzeitpfad. Der
-Zugriff auf reale ePiber-Daten, die geschuetzte Realanalyse aus Phase 5A, ein
-dauerhafter gemeinsamer Development-Bestand, privilegierter Bootstrap sowie
-Backup-/Restore- und Cutover-Schritte bleiben ihren ausdruecklichen Gates und
-Freigaben vorbehalten.
+Der aktuell installierte PAJ-Dienst wird durch diese Codefertigstellung nicht
+automatisch umgestellt. Zugriff auf reale ePiber-Daten, geschuetzte Realanalyse,
+dauerhafter gemeinsamer Development-Bestand, privilegierter Bootstrap,
+Credentialinstallation, Dienststart sowie Backup-/Restore- und Cutover-Schritte
+bleiben ihren ausdruecklichen Gates und Freigaben vorbehalten.
 
 ### Phase 5: Anwendungsumbau
 

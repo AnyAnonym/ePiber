@@ -159,6 +159,41 @@ class PostgresMessagingRepository {
     return result.rows[0] || null;
   }
 
+  async reportProjections(fromMs, toMs) {
+    const result = await this.database.query(`
+      SELECT recipient.id::text AS id,event.contract_id AS "eventId",competition.contract_id AS "competitionId",
+             person.contract_id AS "recipientId",concat_ws(' ',person.first_name,person.last_name) AS "recipientName",
+             'recipient'::text AS "participantRole",extract(epoch FROM recipient.created_at)*1000 AS "createdAt",
+             event.event_type AS "projectionType",COALESCE(recipient.legacy_subject,event.summary_snapshot,event.template_key) AS subject,
+             COALESCE(recipient.legacy_body,event.detail_snapshot,'') AS body,
+             extract(epoch FROM receipt.acknowledged_at)*1000 AS "acknowledgedAt",event.event_type AS "eventType",
+             event.source_type AS source,event.source_contract_id AS "sourceId",event.actor_contract_id_snapshot AS "actorId",
+             event.actor_name_snapshot AS "actorName",event.summary_snapshot AS summary,event.detail_snapshot AS detail,event.result_snapshot AS result,
+             COALESCE(deliveries.items,'[]'::jsonb) AS deliveries
+        FROM messaging.event_recipients recipient JOIN messaging.events event ON event.id=recipient.event_id
+        JOIN identity.people person ON person.id=recipient.person_id LEFT JOIN play.competitions competition ON competition.id=event.competition_id
+        LEFT JOIN messaging.receipts receipt ON receipt.recipient_id=recipient.id
+        LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('channel',delivery.channel,'status',delivery.status,'updatedAt',extract(epoch FROM delivery.updated_at)*1000) ORDER BY delivery.channel) AS items FROM messaging.deliveries delivery WHERE delivery.recipient_id=recipient.id) deliveries ON true
+       WHERE event.tenant_id=$1::uuid AND recipient.created_at>=to_timestamp($2/1000.0) AND recipient.created_at<to_timestamp($3/1000.0)
+       ORDER BY recipient.created_at DESC,recipient.id DESC
+    `, [this.context.tenantId, fromMs, toMs]);
+    return result.rows.map((row) => ({ ...row, createdAt: Number(row.createdAt), acknowledgedAt: row.acknowledgedAt === null ? null : Number(row.acknowledgedAt), deliveries: row.deliveries.map((entry) => ({ ...entry, updatedAt: Number(entry.updatedAt) })) }));
+  }
+
+  async reportEvents(fromMs, toMs) {
+    const result = await this.database.query(`
+      SELECT event.contract_id AS id,competition.contract_id AS "competitionId",event.event_type AS type,event.source_type AS source,
+             event.source_contract_id AS "sourceId",extract(epoch FROM event.created_at)*1000 AS "createdAt",
+             event.summary_snapshot AS summary,event.detail_snapshot AS detail,event.result_snapshot AS result,event.actor_name_snapshot AS "actorName",
+             COALESCE(participants.items,'[]'::jsonb) AS participants
+        FROM messaging.events event JOIN play.competitions competition ON competition.id=event.competition_id
+        LEFT JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('participantRole',participant.participant_role,'displayName',concat_ws(' ',participant.first_name_snapshot,participant.last_name_snapshot)) ORDER BY participant.participant_role,participant.contract_id_snapshot) AS items FROM messaging.event_participants participant WHERE participant.event_id=event.id) participants ON true
+       WHERE event.tenant_id=$1::uuid AND event.created_at>=to_timestamp($2/1000.0) AND event.created_at<to_timestamp($3/1000.0)
+       ORDER BY event.created_at DESC,event.id DESC
+    `, [this.context.tenantId, fromMs, toMs]);
+    return result.rows.map((row) => ({ ...row, createdAt: Number(row.createdAt) }));
+  }
+
   async historyRevision() {
     const result = await this.database.query("SELECT revision::text AS revision FROM messaging.history_revision WHERE singleton=true");
     return result.rows[0]?.revision || "0";

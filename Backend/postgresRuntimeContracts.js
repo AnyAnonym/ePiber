@@ -29,6 +29,31 @@ const IDEMPOTENCY_CONTRACTS = Object.freeze({
   "monitor.revoke": Object.freeze({ success: "boolean", monitor: "monitor" }),
   "monitor.navigate": Object.freeze({ success: "boolean", commandId: "id", monitorId: "id", path: "controlled", revision: "revision", issuedAt: "epoch_ms" }),
   "monitor.scroll": Object.freeze({ success: "boolean", commandId: "id", seq: "count", expiresAt: "epoch_ms" }),
+  "court.assign": Object.freeze({ success: "boolean", courtId: "id", revision: "revision", active: "boolean" }),
+  "court.active.set": Object.freeze({ success: "boolean", courtId: "id", revision: "revision", active: "boolean" }),
+  "hall_time.membership.set": Object.freeze({ success: "boolean", gridId: "id", selected: "boolean", revision: "revision" }),
+  "hall_time.grid.save": Object.freeze({ success: "boolean", gridId: "id", revision: "revision" }),
+  "hall_time.booking.set": Object.freeze({ success: "boolean", gridId: "id", revision: "revision" }),
+  "hall_time.constraints.save": Object.freeze({ success: "boolean", gridId: "id", revision: "revision" }),
+  "hall_time.distribution.apply": Object.freeze({ success: "boolean", gridId: "id", revision: "revision" }),
+  "hall_time.distribution.run": Object.freeze({ success: "boolean", gridId: "id", revision: "revision" }),
+  "hall_time.status.clear": Object.freeze({ success: "boolean", gridId: "id", revision: "revision", deletedEntryCount: "count" }),
+  "match.add": Object.freeze({ success: "boolean", newMatchId: "id" }),
+  "match.appointment.set": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
+  "match.appointment.admin_set": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
+  "match.appointment.clear": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
+  "match.appointment.admin_clear": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
+  "match.result.set": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status" }),
+  "match.result.correct": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status" }),
+  "match.end.set": Object.freeze({ success: "boolean", matchId: "id", matchEnd: "controlled" }),
+  "match.result.clear": Object.freeze({ success: "boolean", matchId: "id", cleared: "boolean" }),
+  "match.challenge.delete": Object.freeze({ success: "boolean", matchId: "id", deleted: "boolean" }),
+  "match.challenge_date.set": Object.freeze({ success: "boolean", matchId: "id", challengeDate: "controlled" }),
+  "ranking.withdraw": Object.freeze({ success: "boolean", bewerbId: "id", rank: "count", withdrawn: "boolean" }),
+  "person.normalize": Object.freeze({ success: "boolean", personId: "id", changedFieldCount: "count" }),
+  "person.reconcile.create": Object.freeze({ success: "boolean", action: "status", personId: "id" }),
+  "person.reconcile.update": Object.freeze({ success: "boolean", action: "status", personId: "id" }),
+  "person.reconcile.deactivate": Object.freeze({ success: "boolean", action: "status", personId: "id" }),
 });
 
 const MESSAGE_EVENT_CONTRACTS = Object.freeze({
@@ -42,6 +67,15 @@ const MESSAGE_EVENT_CONTRACTS = Object.freeze({
     templateVersion: 1,
     parameters: Object.freeze({ competitionId: "id", personId: "id" }),
   }),
+  "match.challenge.created": Object.freeze({ templateKey: "match.challenge.created", templateVersion: 1, parameters: Object.freeze({ matchId: "id", competitionId: "id" }) }),
+  "match.appointment.set": Object.freeze({ templateKey: "match.appointment.set", templateVersion: 1, parameters: Object.freeze({ matchId: "id", competitionId: "id", scheduledAt: "timestamp" }) }),
+  "match.appointment.cleared": Object.freeze({ templateKey: "match.appointment.cleared", templateVersion: 1, parameters: Object.freeze({ matchId: "id", competitionId: "id" }) }),
+  "match.result.set": Object.freeze({ templateKey: "match.result.set", templateVersion: 1, parameters: Object.freeze({ matchId: "id", competitionId: "id", completionType: "status" }) }),
+  "match.result.corrected": Object.freeze({ templateKey: "match.result.corrected", templateVersion: 1, parameters: Object.freeze({ matchId: "id", competitionId: "id", completionType: "status" }) }),
+  "match.result.cleared": Object.freeze({ templateKey: "match.result.cleared", templateVersion: 1, parameters: Object.freeze({ matchId: "id", competitionId: "id" }) }),
+  "ranking.withdrawn": Object.freeze({ templateKey: "ranking.withdrawn", templateVersion: 1, parameters: Object.freeze({ competitionId: "id", personId: "id", rank: "count" }) }),
+  "hall_time.booking.changed": Object.freeze({ templateKey: "hall_time.booking.changed", templateVersion: 1, parameters: Object.freeze({ gridId: "id", slotId: "id", personId: "id", status: "status" }) }),
+  "hall_time.waitlist.promoted": Object.freeze({ templateKey: "hall_time.waitlist.promoted", templateVersion: 1, parameters: Object.freeze({ gridId: "id", slotId: "id", personId: "id" }) }),
 });
 
 const LEGACY_AUDIT_ACTIONS = Object.freeze([
@@ -74,7 +108,7 @@ const LEGACY_AUDIT_FIELDS = Object.freeze([
   "operator", "phone", "postalCode", "role", "sampleRatePercent", "targetedRetentionDays",
   "completionType", "createdAt", "createdBy", "expiresAt", "koTargetMatchId", "koTargetStatus", "label",
   "shiftedCount", "source", "withdrawnAt",
-  "court", "reason", "scheduledAt",
+  "court", "reason", "scheduledAt", "automationStatus",
 ]);
 
 function auditActionCode(value) {

@@ -1382,13 +1382,21 @@ CREATE TABLE venue.hall_time_grids (
     waiting_list_enabled boolean DEFAULT false NOT NULL,
     waiting_limit_per_person smallint,
     fair_use_enabled boolean DEFAULT false NOT NULL,
+    fair_use_base integer DEFAULT 0 NOT NULL,
+    fair_use_extended_days integer DEFAULT 1 NOT NULL,
+    fair_use_percent integer DEFAULT 0 NOT NULL,
     fair_use_open_days integer,
     revision bigint DEFAULT 1 NOT NULL,
     projection_revision bigint DEFAULT 1 NOT NULL,
+    created_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
+    updated_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
     CONSTRAINT hall_time_grids_capacity_check CHECK ((capacity > 0)),
     CONSTRAINT hall_time_grids_check CHECK ((waiting_list_enabled OR (waiting_limit_per_person IS NULL))),
     CONSTRAINT hall_time_grids_contract_id_check CHECK ((contract_id ~ '^[A-Za-z0-9_.:-]{1,64}$'::text)),
+    CONSTRAINT hall_time_grids_fair_use_base_check CHECK ((fair_use_base >= 0)),
+    CONSTRAINT hall_time_grids_fair_use_extended_days_check CHECK ((fair_use_extended_days > 0)),
     CONSTRAINT hall_time_grids_fair_use_open_days_check CHECK ((fair_use_open_days >= 0)),
+    CONSTRAINT hall_time_grids_fair_use_percent_check CHECK ((fair_use_percent >= 0)),
     CONSTRAINT hall_time_grids_mode_check CHECK ((mode = ANY (ARRAY['reservation'::text, 'allocation'::text]))),
     CONSTRAINT hall_time_grids_name_check CHECK (((name = btrim(name)) AND (name <> ''::text))),
     CONSTRAINT hall_time_grids_projection_revision_check CHECK ((projection_revision > 0)),
@@ -1408,7 +1416,20 @@ CREATE TABLE venue.hall_time_history (
     actor_person_id uuid,
     occurred_at timestamp(3) with time zone NOT NULL,
     item_count integer NOT NULL,
-    CONSTRAINT hall_time_history_item_count_check CHECK ((item_count > 0))
+    detail text,
+    unavailable_count integer,
+    avoid_count integer,
+    assigned_count integer,
+    removed_count integer,
+    promoted_count integer,
+    unchanged_count integer,
+    CONSTRAINT hall_time_history_assigned_count_check CHECK (((assigned_count IS NULL) OR (assigned_count >= 0))),
+    CONSTRAINT hall_time_history_avoid_count_check CHECK (((avoid_count IS NULL) OR (avoid_count >= 0))),
+    CONSTRAINT hall_time_history_item_count_check CHECK ((item_count >= 0)),
+    CONSTRAINT hall_time_history_promoted_count_check CHECK (((promoted_count IS NULL) OR (promoted_count >= 0))),
+    CONSTRAINT hall_time_history_removed_count_check CHECK (((removed_count IS NULL) OR (removed_count >= 0))),
+    CONSTRAINT hall_time_history_unavailable_count_check CHECK (((unavailable_count IS NULL) OR (unavailable_count >= 0))),
+    CONSTRAINT hall_time_history_unchanged_count_check CHECK (((unchanged_count IS NULL) OR (unchanged_count >= 0)))
 );
 
 --
@@ -1422,12 +1443,11 @@ CREATE TABLE venue.hall_time_history_items (
     person_id uuid,
     before_status text,
     after_status text,
-    slot_starts_at_snapshot timestamp(3) with time zone NOT NULL,
+    slot_starts_at_snapshot timestamp(3) with time zone,
     person_contract_id_snapshot text,
     person_name_snapshot text,
     CONSTRAINT hall_time_history_items_after_status_check CHECK ((after_status = ANY (ARRAY['confirmed'::text, 'waiting'::text]))),
     CONSTRAINT hall_time_history_items_before_status_check CHECK ((before_status = ANY (ARRAY['confirmed'::text, 'waiting'::text]))),
-    CONSTRAINT hall_time_history_items_check CHECK (((before_status IS NOT NULL) OR (after_status IS NOT NULL))),
     CONSTRAINT hall_time_history_items_item_no_check CHECK ((item_no > 0))
 );
 

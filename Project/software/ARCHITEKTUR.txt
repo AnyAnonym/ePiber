@@ -1292,13 +1292,14 @@ gesperrt; Live-Deployment folgt erst nach Backup- und Rollbackfreigabe.
 
 
 ================================================================================
-  11. VORBEREITETE POSTGRESQL-MIGRATIONSARCHITEKTUR
+  11. POSTGRESQL-LAUFZEITARCHITEKTUR
 ================================================================================
 
-Die PostgreSQL-Migrationsgrundlage und der erste Laufzeit-Repositoryblock sind
-implementiert. Sie aktivieren noch keinen PostgreSQL-Pfad in `server.js`: Die
-laufende Anwendung verwendet weiterhin unveraendert Google Sheets und die vier
-SQLite-Dateien.
+Die PostgreSQL-Migrationsgrundlage und die vollstaendige alternative
+Serverlaufzeit sind implementiert. `server.js` waehlt beim Start genau einen
+Persistenzmodus. `PERSISTENCE_MODE=legacy` verwendet weiterhin Google Sheets und
+die vier SQLite-Dateien; `PERSISTENCE_MODE=postgres` komponiert ausschliesslich
+PostgreSQL-Repositories und besitzt keinen Rueckfall auf Legacy-Persistenz.
 
 Der vorbereitete Zielstand umfasst:
 
@@ -1325,16 +1326,16 @@ Der vorbereitete Zielstand umfasst:
 - `Backend/db/createRuntimeRepositories.js` und die Repositories unter
   `Backend/db/repositories/` fuer `core`, `identity`, `play`, `venue`,
   `messaging` und `ops`;
-- typisierte Readprojektionen fuer Personen, Bewerbe, Matches, Ranglisten,
-  Courts, Hallenzeiten und Messaging sowie erste atomare Writepfade fuer
-  Sessions, Credentialwechsel, Scores, Messagingquittierungen, Ereignisse und
-  Operationsaudit;
+- typisierte Readprojektionen und atomare Writepfade fuer Personen, Bewerbe,
+  Matches, Ranglisten, Courts, Hallenzeiten, Monitore, Messaging,
+  Praeferenzen, Sessions, Credentials, Audit, Idempotenz, Jobs und Outbox;
 - `Backend/postgresAuthService.js` fuer PostgreSQL-only Login, HMAC-gebundene
   Loginlimits, Legacy-Hashupgrade, Sessionbindung an `auth_revision`,
   Sessionrotation und zeitlich begrenzte Passwortfreigaben;
-- `Backend/postgresCompetitionService.js` fuer erste vollstaendige
-  Fachtransaktionen, in denen EntryList-Write, Messagingereignis,
-  Idempotenzabschluss und Auditabschluss gemeinsam committen;
+- `Backend/postgresCompetitionService.js` und
+  `Backend/postgresPlayService.js` fuer EntryList, Forderung, Termin,
+  Matchergebnis, Spielerkorrektur, administrative Ruecknahme, Rangverschiebung,
+  KO-Fortschreibung, Personennormalisierung und Mitgliederabgleich;
 - `Backend/workerService.js`, `Backend/db/createWorkerRuntime.js` und das
   Worker-Repository fuer einen getrennten Lease-basierten Jobs-/Outbox-Prozess
   mit Retry, Dead-/Unknown-Pfad und datensparsamen Abschlusslogs;
@@ -1342,9 +1343,9 @@ Der vorbereitete Zielstand umfasst:
   `Backend/postgresProjectionLoader.js` fuer die atomare, nicht pollende
   Erzeugung der acht bestehenden Tabellenvertraege aus PostgreSQL. Credentials
   werden dabei bewusst nicht in den allgemeinen Projektioncache aufgenommen;
-- `Backend/createPostgresComponents.js` als fail-closed Komposition der bereits
-  umgestellten Teilservices. Sie weist noch fehlende Serverfaehigkeiten explizit
-  aus und darf deshalb noch keinen PostgreSQL-Servermodus freigeben;
+- `Backend/createPostgresComponents.js` als vollstaendige PostgreSQL-only
+  Komposition. Eine fehlende Pflichtdomaene, inkompatible Schemageneration, ein
+  falscher Tenant oder ein fehlendes Seed-/Importgate verhindert den Start;
 - `Backend/postgresPreferenceService.js` fuer atomare, idempotente Favoriten-
   und Startseitenwrites mit eigenstaendigen Revisionsstaenden, auch bei einer
   leeren Favoritenliste;
@@ -1364,27 +1365,34 @@ Der vorbereitete Zielstand umfasst:
   Tokenrotation, Widerruf, Navigation, Scrollsequenzen und ACK-Zustaende. Die
   laufende WebSocket-Verbindung bleibt fluechtig; Ziel, Kommando, Reihenfolge,
   Ablauf und terminaler Zustand liegen in PostgreSQL.
+- `Backend/postgresCourtService.js` und
+  `Backend/postgresCourtAutomation.js` fuer revisionierte Zuweisung,
+  Aktivierung, Scorebaseline, dauerhafte Scoreereignisse, zeitgesteuerte
+  Aktivierung und Ergebnisdeaktivierung mit Audit und Outbox;
+- `Backend/postgresHallTimeService.js` fuer Raster, Mitgliedschaften,
+  Buchungen, Wartelisten, Fair-Use, Verhinderungen, Verteilung, Historie und
+  Reporting innerhalb serialisierbarer Fachtransaktionen;
+- versionierte Retentionhandler fuer Kurzzeit-, Stunden-, Tages- und
+  Hallenwartelistenbereinigung. Der Worker erzeugt faellige Wartungsjobs
+  periodengebunden und verarbeitet sie tenantbegrenzt in Batches bis 1.000.
 
 Die Runtime lehnt eine fehlende Domaene bereits vor dem Verbindungsaufbau ab.
-Controller, WebSocket-Routing und Fachservices erhalten keinen direkten
-SQL-Zugriff. Als naechster Architekturblock werden die bestehenden Services auf
-die asynchronen Repositoryvertraege und gemeinsamen Transaktionsgrenzen
-umgestellt. HTTP- und WebSocket-Authentifizierungsaufrufe sowie mehrere
-Repository-Reads akzeptieren bereits asynchrone Provider, verwenden im aktiven
-Legacybetrieb aber weiterhin ihre bisherigen Implementierungen. Erst wenn alle
-von `server.js`, HTTP und WebSocket benoetigten Reads,
-Writes, Audit- und Fehlerpfade vollstaendig angeschlossen sind, darf der
-PostgreSQL-Modus aktiviert werden. Innerhalb dieses Modus gibt es keinen Rueckfall
-auf Sheets oder SQLite. Der bestehende Legacybetrieb bleibt bis zum
-vollstaendigen Gesamtcutover getrennt aktiv.
+Controller und WebSocket-Routing erhalten keinen direkten SQL-Zugriff. Beim
+PostgreSQL-Start ersetzt ein atomarer Projektionsload den Sheet-Initialload;
+danach gibt es kein Datenpolling. Fachwrites aktualisieren die lokale Projektion
+unmittelbar und erzeugen zusaetzlich eine dauerhafte Outbox-Invalidierung.
+`LISTEN/NOTIFY` ist nur der verlierbare Weckhinweis; Worker und App lesen danach
+den autoritativen Datenbankstand.
 
-Die Konfiguration kennt bereits `PERSISTENCE_MODE=legacy|postgres`. Der
-PostgreSQL-Wert benoetigt keine Sheet- oder SQLite-Konfiguration, wird vom
-Serverstart aber derzeit bewusst mit `POSTGRES_SERVER_MODE_INCOMPLETE`
-abgelehnt. Damit kann weder versehentlich ein gemischter Betrieb noch ein
-Teil-Cutover entstehen. Der getrennte Worker ist unabhaengig davon ueber
-`npm run start:worker` startbar, sofern PostgreSQL-Tenant und Laufzeitgates
-vollstaendig erfuellt sind.
+Die Konfiguration kennt `PERSISTENCE_MODE=legacy|postgres`. Der PostgreSQL-Wert
+benoetigt keine Sheet- oder SQLite-Konfiguration, aber eine PostgreSQL-
+Verbindung, den erwarteten Tenantcode, die externe Court-URL und ein separates
+Base64url-Geheimnis fuer gehashte Loginlimit-Schluessel. Readiness verlangt den
+initialisierten Server, PostgreSQL-Laufzeit und Projektionen sowie bei aktiven
+Courts eine frische externe Courtquelle. Shutdown stoppt Annahme, Automation,
+Court-Polling, WebSocket, Invalidation-Listener und laufende Requests, bevor der
+Pool geschlossen wird. Der getrennte Worker startet ueber
+`npm run start:worker` und besitzt einen eigenen Pool und Drain.
 
 Backup, Restore und PITR sind bewusst als letzter technischer Freigabeblock nach
 PostgreSQL-Anwendungsumbau, synthetischer Gesamtintegration, Browser- und

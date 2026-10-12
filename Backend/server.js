@@ -6,6 +6,7 @@ const { version: APP_VERSION } = require("./package.json");
 const {
   ALLOWED_ORIGINS,
   AUDIT_ACTIONS,
+  AUTH_RATE_LIMIT_SECRET,
   AUDITLOG_FILE,
   AUDIT_LOG_JOURNAL,
   COOKIE_SECURE,
@@ -23,6 +24,8 @@ const {
   PORT,
   PERSISTENCE_MODE,
   SESSION_COOKIE,
+  SESSION_MAX_PER_USER,
+  SESSION_REFRESH_INTERVAL_MS,
   SESSION_TTL_MS,
   SCORELOG_FILE,
   SHUTDOWN_GRACE_MS,
@@ -35,6 +38,9 @@ const dataStore = require("./dataStore.js");
 const courtPoller = require("./courtPoller.js");
 const stateStore = require("./stateStore.js");
 const { CourtAutomation } = require("./courtAutomation.js");
+const { PostgresCourtAutomation } = require("./postgresCourtAutomation.js");
+const { createPostgresComponents } = require("./createPostgresComponents.js");
+const { createConnectionConfig } = require("./db/connectionConfig.js");
 const { AuthService } = require("./authService.js");
 const { AppError, errorData } = require("./errors.js");
 const { FrontendLoggingService } = require("./frontendLoggingService.js");
@@ -131,30 +137,30 @@ function authIdentifier(body, passwordField) {
   return loginValue(matches(canonical) ? body.login : body.email);
 }
 
-function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, dataPollerService = dataPoller, initialized, shuttingDown }) {
+function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, dataPollerService = dataPoller, courtService = null, runtime = null, persistenceMode = "legacy", initialized, shuttingDown }) {
   const data = dataStore.getReadiness();
   const refresh = dataPollerService.getStatus();
   const court = courtPoller.getStatus();
   const courtSource = courtPoller.getLastData().source;
-  const courtState = stateStore.getStatus();
+  const courtState = courtService?.status?.() || stateStore.getStatus();
   const unresolvedActiveRules = (courtState.displayRulesMigration?.unresolved || []).filter(
     (entry) => courtState.courts?.[entry.court]?.aktiv === 1,
   );
   const activeCourt = court.courtActive["1"] || court.courtActive["2"];
   const courtReady = !activeCourt || !courtSource.stale;
   const displayRulesReady = unresolvedActiveRules.length === 0;
-  const state = repository.status();
+  const state = runtime?.status?.() || repository.status?.() || { ready: true, open: true };
   const scoreLog = scoreLogRepository?.status?.() || null;
   const auditLog = auditLogRepository?.status?.() || null;
   const messaging = messagingRepository?.status?.() || null;
   const components = {
     initialized: Boolean(initialized),
     accepting_requests: !shuttingDown,
-    state_sqlite: Boolean(state.open && state.ready),
-    scorelog_sqlite: !scoreLog || Boolean(scoreLog.open && scoreLog.ready),
-    auditlog_sqlite: !auditLog || Boolean(auditLog.open && auditLog.ready),
-    messaging_sqlite: !messaging || Boolean(messaging.open && messaging.ready),
-    sheet_data: Boolean(data.ready),
+    [persistenceMode === "postgres" ? "postgres_runtime" : "state_sqlite"]: persistenceMode === "postgres" ? Boolean(state.ready) : Boolean(state.open && state.ready),
+    [persistenceMode === "postgres" ? "postgres_score_state" : "scorelog_sqlite"]: !scoreLog || Boolean(scoreLog.ready || scoreLog.open && scoreLog.ready),
+    [persistenceMode === "postgres" ? "postgres_audit" : "auditlog_sqlite"]: !auditLog || Boolean(auditLog.ready || auditLog.open && auditLog.ready),
+    [persistenceMode === "postgres" ? "postgres_messaging" : "messaging_sqlite"]: persistenceMode === "postgres" ? Boolean(state.ready) : !messaging || Boolean(messaging.open && messaging.ready),
+    [persistenceMode === "postgres" ? "postgres_projections" : "sheet_data"]: Boolean(data.ready),
     court_source: Boolean(courtReady),
     court_display_rules: Boolean(displayRulesReady),
   };
@@ -178,9 +184,11 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
 }
 
 function createApplication(overrides = {}) {
+  const persistenceMode = overrides.persistenceMode || "legacy";
+  const postgresMode = persistenceMode === "postgres";
   const dataPollerService = overrides.dataPoller || dataPoller;
   const repository = overrides.repository || new StateRepository(STATE_FILE);
-  repository.init();
+  repository.init?.();
   const scoreLogRepository = overrides.scoreLogRepository || new ScoreLogRepository(SCORELOG_FILE, { instanceId: INSTANCE_ID });
   const auditLogRepository = overrides.auditLogRepository || new AuditLogRepository(AUDITLOG_FILE, {
     instanceId: INSTANCE_ID,
@@ -192,8 +200,9 @@ function createApplication(overrides = {}) {
   scoreLogRepository.init?.();
   auditLogRepository.init?.();
   messagingRepository.init?.();
-  stateStore.init(repository);
-  courtPoller.configure({ scoreLog: scoreLogRepository, courtContext: (court) => stateStore.getCourt(court) });
+  if (!postgresMode) stateStore.init(repository);
+  const courtService = overrides.courtService || null;
+  courtPoller.configure({ scoreLog: scoreLogRepository, courtContext: (court) => courtService?.getCourtCached?.(court) || stateStore.getCourt(court) });
   const messagingService = overrides.messagingService || new MessagingService({
     repository: messagingRepository,
     emailAdapter: new EmailMessagingAdapter(),
@@ -227,12 +236,15 @@ function createApplication(overrides = {}) {
     appVersion: APP_VERSION,
   });
   const monitorBroker = overrides.monitorBroker || new MonitorBroker({ repository, stateStore, dataStore });
+  const runtime = overrides.runtime || null;
+  let stopInvalidationListener = null;
   let initialized = false;
   let shuttingDown = false;
   let activeRequests = 0;
   let cleanupTimer = null;
   let initializePromise = null;
   let normalizationMetricsCache = { revision: null, summary: null };
+  const currentReadiness = () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, courtService, runtime, persistenceMode, initialized, shuttingDown });
   const httpWriteLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 6, idleMs: 900000 });
   const frontendLoggingAdminLimiter = new TokenBucketLimiter({ rate: 1, burst: 20, idleMs: 900000 });
   const deviceLoginLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 10, idleMs: 900000 });
@@ -353,13 +365,13 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/ready" || pathname === "/health") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown });
+        const status = currentReadiness();
         return sendJson(response, status.ready ? 200 : 503, { status: status.ready ? "ready" : "not-ready", version: APP_VERSION });
       }
 
       if (pathname === "/metrics") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown });
+        const status = currentReadiness();
         return sendText(response, 200, metrics.render({
           appVersion: APP_VERSION,
           processStartedAt: PROCESS_STARTED_AT,
@@ -409,8 +421,8 @@ function createApplication(overrides = {}) {
         for (const key of url.searchParams.keys()) if (!allowedParameters.has(key) || url.searchParams.getAll(key).length !== 1) throw new AppError("VALIDATION_ERROR", "Reporting-Parameter sind ungueltig", 400);
         if (url.searchParams.get("view") === "options") {
           if ([...url.searchParams.keys()].some((key) => key !== "view")) throw new AppError("VALIDATION_ERROR", "Reporting-Parameter sind ungueltig", 400);
-          const hallTimes = hallTimeService.reportingSnapshot(0, 0);
-          return sendJson(response, 200, messagingService.messagingReportOptions({ deployment: messagingReporting.deployment, hallTimes, logCompletion: true }));
+          const hallTimes = await hallTimeService.reportingSnapshot(0, 0);
+          return sendJson(response, 200, await messagingService.messagingReportOptions({ deployment: messagingReporting.deployment, hallTimes, logCompletion: true }));
         }
         if (url.searchParams.has("view")) throw new AppError("VALIDATION_ERROR", "Reporting-Ansicht ist ungueltig", 400);
         if (!["from", "to"].every((key) => url.searchParams.has(key))) throw new AppError("VALIDATION_ERROR", "Reporting-Zeitraum fehlt", 400);
@@ -420,9 +432,9 @@ function createApplication(overrides = {}) {
         if (toMs - fromMs > 31 * 24 * 60 * 60 * 1000) throw new AppError("REPORTING_RANGE_TOO_LARGE", "Reporting-Zeitraum darf hoechstens 31 Tage umfassen", 400);
         const selection = url.searchParams.has("selection") ? url.searchParams.get("selection").split(",") : ["personal"];
         if (selection.length > 100 || selection.some((value) => !value || value.length > 160)) throw new AppError("REPORTING_SELECTION_INVALID", "Meldungsauswahl ist ungueltig", 400);
-        const people = messagingService.reportingPeople();
-        const hallTimes = hallTimeService.reportingSnapshot(fromMs, toMs, people);
-        return sendJson(response, 200, messagingService.messagingReport({ fromMs, toMs, deployment: messagingReporting.deployment, selection, hallTimes }));
+        const people = await messagingService.reportingPeople();
+        const hallTimes = await hallTimeService.reportingSnapshot(fromMs, toMs, people);
+        return sendJson(response, 200, await messagingService.messagingReport({ fromMs, toMs, deployment: messagingReporting.deployment, selection, hallTimes }));
       }
 
       const cookies = parseCookies(request.headers.cookie);
@@ -457,14 +469,14 @@ function createApplication(overrides = {}) {
             role: statusAuth.principal.role,
             roleSource: statusAuth.principal.roleSource || "current",
           },
-          status: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown }),
+          status: currentReadiness(),
           provider: dataProvider.getStatus(),
           monitor: monitorBroker.status(),
           sheets: sheetService.status(),
           scoreLog: scoreLogRepository.status(),
           auditLog: auditLogRepository.status(),
-          messaging: messagingRepository.status(),
-          state: stateStore.getStatus(),
+          messaging: messagingRepository.status?.() || { ready: true, backend: persistenceMode },
+          state: courtService?.status?.() || stateStore.getStatus(),
         });
       }
 
@@ -766,6 +778,7 @@ function createApplication(overrides = {}) {
     scoreLogRepository,
     sheetService,
     competitionService,
+    courtService,
   });
 
   function initialize() {
@@ -775,22 +788,21 @@ function createApplication(overrides = {}) {
       const result = await dataPollerService.initialLoad();
       if (shuttingDown) return { ...result, aborted: true };
       messagingService.enrichLegacyCompetitionAssignments?.();
-      stateStore.migrateLegacyCourtDisplayRules(dataStore.get("matchtyp"));
+      if (!postgresMode) stateStore.migrateLegacyCourtDisplayRules(dataStore.get("matchtyp"));
       dataPollerService.start(result);
-      const courts = stateStore.getScoreboardCourts();
+      const courts = courtService ? await courtService.getScoreboardCourts() : stateStore.getScoreboardCourts();
       courtPoller.setCourtActive(
         { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
         { initial: true },
       );
       courtAutomation.start();
+      if (overrides.startInvalidationListener) stopInvalidationListener = await overrides.startInvalidationListener();
       for (const court of ["1", "2"]) courtPoller.logCourtSnapshot(court, "startup");
       initialized = true;
-      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown }).ready, durationMs: Date.now() - startedAt });
+      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: currentReadiness().ready, persistenceMode, durationMs: Date.now() - startedAt });
       cleanupTimer = setInterval(() => {
-        repository.cleanup();
-        try { hallTimeService.cleanupExpired(); } catch (error) {
-          logger.log("warn", "hall_time_expiration_failed", { errorCode: error.code || "HALL_TIME_EXPIRATION_FAILED" });
-        }
+        repository.cleanup?.();
+        Promise.resolve(hallTimeService.cleanupExpired()).catch((error) => logger.log("warn", "hall_time_expiration_failed", { errorCode: error.code || "HALL_TIME_EXPIRATION_FAILED" }));
       }, 300000);
       cleanupTimer.unref?.();
       return result;
@@ -815,6 +827,7 @@ function createApplication(overrides = {}) {
         Promise.resolve(courtAutomation.stop()),
         courtPoller.stop(),
         dataProvider.shutdown(server),
+        Promise.resolve(stopInvalidationListener?.()),
         initializePromise || Promise.resolve(),
       ]);
       const rejected = results.find((result) => result.status === "rejected");
@@ -841,7 +854,8 @@ function createApplication(overrides = {}) {
       auditLogRepository.close?.();
       scoreLogRepository.close?.();
       messagingRepository.close?.();
-      repository.close();
+      repository.close?.();
+      await runtime?.close?.();
       logger.log("info", "server_shutdown_completed", { signal, durationMs: Date.now() - startedAt });
     } catch (error) {
       server.closeAllConnections();
@@ -849,7 +863,8 @@ function createApplication(overrides = {}) {
         auditLogRepository.close?.();
         scoreLogRepository.close?.();
         messagingRepository.close?.();
-        repository.close();
+        repository.close?.();
+        runtime?.close?.().catch?.(() => {});
       });
       throw error;
     } finally {
@@ -872,16 +887,13 @@ function createApplication(overrides = {}) {
     server,
     sheetService,
     shutdown,
-    status: () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown }),
+    status: currentReadiness,
   };
 }
 
 async function start() {
   validateRuntimeConfig();
-  if (PERSISTENCE_MODE === "postgres") {
-    throw Object.assign(new Error("PostgreSQL-Servermodus ist bis zur Vollstaendigkeit aller Laufzeitfaehigkeiten gesperrt"), { code: "POSTGRES_SERVER_MODE_INCOMPLETE" });
-  }
-  const app = createApplication();
+  const app = PERSISTENCE_MODE === "postgres" ? await createPostgresApplication() : createApplication();
   await new Promise((resolve, reject) => {
     const onStartupError = (error) => reject(error);
     app.server.once("error", onStartupError);
@@ -926,6 +938,49 @@ async function start() {
   return app;
 }
 
+async function createPostgresApplication({ env = process.env, connectionConfig = null } = {}) {
+  const components = await createPostgresComponents({
+    connectionConfig: connectionConfig || createConnectionConfig({ ...env, PGAPPNAME: env.PGAPPNAME || `epiber-${INSTANCE_ID}-app` }),
+    expectedTenantCode: String(env.EPIBER_TENANT_CODE || "").trim(),
+    sourceInstance: INSTANCE_ID,
+    rateLimitSecret: Buffer.from(String(env.EPIBER_AUTH_RATE_LIMIT_SECRET || AUTH_RATE_LIMIT_SECRET), "base64url"),
+    sessionTtlMs: SESSION_TTL_MS,
+    sessionRefreshIntervalMs: SESSION_REFRESH_INTERVAL_MS,
+    sessionMaxPerUser: SESSION_MAX_PER_USER,
+    appVersion: APP_VERSION,
+    publish: (topic, value) => dataProvider.publish(topic, value),
+    log: logger.log,
+  });
+  const courtAutomation = new PostgresCourtAutomation({
+    courtService: components.courtService, dataStore, courtPoller,
+    auditLogRepository: components.auditLogRepository, log: logger.log,
+  });
+  try {
+    return createApplication({
+      persistenceMode: "postgres",
+      runtime: components.runtime,
+      repository: components.stateAdapter,
+      scoreLogRepository: components.scoreLogRepository,
+      auditLogRepository: components.auditLogRepository,
+      messagingRepository: components.repositories.messaging,
+      messagingService: components.messagingService,
+      hallTimeService: components.hallTimeService,
+      sheetService: components.sheetService,
+      competitionService: components.competitionService,
+      authService: components.authService,
+      frontendLoggingService: components.frontendLoggingService,
+      monitorBroker: components.monitorBroker,
+      courtService: components.courtService,
+      courtAutomation,
+      dataPoller: components.dataPoller,
+      startInvalidationListener: components.startInvalidationListener,
+    });
+  } catch (error) {
+    await components.runtime.close().catch(() => {});
+    throw error;
+  }
+}
+
 if (require.main === module) {
   start().catch((error) => {
     logger.log("error", "server_start_failed", { error });
@@ -933,4 +988,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createApplication, readiness, start };
+module.exports = { createApplication, createPostgresApplication, readiness, start };

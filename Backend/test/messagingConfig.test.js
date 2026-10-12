@@ -52,7 +52,7 @@ test("Messaging-Reporting verlangt bei Aktivierung Deployment und starken Base64
   assert.equal(valid.status, 0, valid.stderr);
 });
 
-test("PostgreSQL-Modus verlangt keine Legacydateien, bleibt aber bis zur Vollstaendigkeit fail-closed", () => {
+test("PostgreSQL-Modus verlangt keine Legacydateien und validiert seine eigenen Laufzeitgeheimnisse", () => {
   const config = spawnSync(process.execPath, ["-e", "require('./config.js').validateRuntimeConfig()"], {
     cwd: BACKEND_ROOT,
     encoding: "utf8",
@@ -62,12 +62,13 @@ test("PostgreSQL-Modus verlangt keine Legacydateien, bleibt aber bis zur Vollsta
       PERSISTENCE_MODE: "postgres",
       PGUSER: "epiber_app_login",
       EPIBER_TENANT_CODE: "devel-epiber",
+      EPIBER_AUTH_RATE_LIMIT_SECRET: "b".repeat(43),
       SHEET_ID: "",
-      COURT_URL: "",
+      COURT_URL: "https://court.test/scores.json",
     },
   });
   assert.equal(config.status, 0, config.stderr);
-  const server = spawnSync(process.execPath, ["-e", "require('./server.js').start().catch((error)=>process.stdout.write(error.code || 'UNKNOWN'))"], {
+  const missingSecret = spawnSync(process.execPath, ["-e", "require('./config.js').validateRuntimeConfig()"], {
     cwd: BACKEND_ROOT,
     encoding: "utf8",
     env: {
@@ -76,12 +77,13 @@ test("PostgreSQL-Modus verlangt keine Legacydateien, bleibt aber bis zur Vollsta
       PERSISTENCE_MODE: "postgres",
       PGUSER: "epiber_app_login",
       EPIBER_TENANT_CODE: "devel-epiber",
+      EPIBER_AUTH_RATE_LIMIT_SECRET: "",
       SHEET_ID: "",
-      COURT_URL: "",
+      COURT_URL: "https://court.test/scores.json",
     },
   });
-  assert.equal(server.status, 0, server.stderr);
-  assert.equal(server.stdout, "POSTGRES_SERVER_MODE_INCOMPLETE");
+  assert.notEqual(missingSecret.status, 0);
+  assert.match(missingSecret.stderr, /EPIBER_AUTH_RATE_LIMIT_SECRET/);
 });
 
 test("nur Live und PAJ aktivieren den internen Reportingvertrag", () => {

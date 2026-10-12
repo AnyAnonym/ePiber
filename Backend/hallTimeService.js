@@ -1358,4 +1358,4 @@ class HallTimeService {
   }
 }
 
-module.exports = { HallTimeService, localDate, viennaDateTimeMs };
+module.exports = { HallTimeService, distributionPreview, localDate, projectedGrid, slotExpired, viennaDateTimeMs };

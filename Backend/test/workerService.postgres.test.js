@@ -113,6 +113,20 @@ test("PostgreSQL-Worker projiziert interne Outbox-Invalidierung nur als NOTIFY-W
   assert.equal(state.rows[0].status, "sent");
 });
 
+test("PostgreSQL-Worker registriert und verarbeitet die begrenzten Retentionklassen", { timeout: 30_000 }, async (t) => {
+  const { client, repository } = await fixture(t);
+  await repository.ensureMaintenanceJobs(new Date("2026-10-12T02:15:00.000Z"));
+  const scheduled = await client.query("SELECT job_type FROM ops.jobs WHERE status='pending' ORDER BY job_type");
+  assert.deepEqual(scheduled.rows.map(({ job_type: type }) => type), [
+    "hall_time.expire_waitlists", "retention.daily", "retention.hourly", "retention.short",
+  ]);
+  const handlers = createWorkerHandlers(repository);
+  const service = new WorkerService({ repository, workerId: "worker-test-retention", ...handlers });
+  for (let index = 0; index < 4; index++) assert.equal(await service.runOnce(), true);
+  const completed = await client.query("SELECT count(*)::int AS count FROM ops.jobs WHERE job_type=ANY($1::text[]) AND status='success'", [["retention.short", "retention.hourly", "retention.daily", "hall_time.expire_waitlists"]]);
+  assert.equal(completed.rows[0].count, 4);
+});
+
 test("PostgreSQL-Workerprozess startet fail-closed und beendet Listener sowie Pool kontrolliert", { timeout: 30_000 }, async (t) => {
   const cluster = startPostgresTestCluster();
   t.after(() => cluster.stop());

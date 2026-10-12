@@ -123,7 +123,10 @@ class WorkerService {
         this.log("error", "postgres_worker_listener_failed", { errorCode: error.code || "WORKER_LISTENER_FAILED" });
       });
     }
-    tick();
+    Promise.resolve(this.repository.ensureMaintenanceJobs?.()).then(tick).catch((error) => {
+      this.log("error", "postgres_worker_maintenance_schedule_failed", { errorCode: error.code || "MAINTENANCE_SCHEDULE_FAILED" });
+      tick();
+    });
   }
 
   wake() {

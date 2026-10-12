@@ -38,6 +38,7 @@ if (!/^[a-z0-9_-]{1,32}$/i.test(INSTANCE_ID)) {
 
 const PERSISTENCE_MODE = String(process.env.PERSISTENCE_MODE || "legacy").trim().toLowerCase();
 if (!new Set(["legacy", "postgres"]).has(PERSISTENCE_MODE)) throw new Error("PERSISTENCE_MODE muss legacy oder postgres sein");
+const AUTH_RATE_LIMIT_SECRET = String(process.env.EPIBER_AUTH_RATE_LIMIT_SECRET || "").trim();
 
 const LOG_LEVEL = String(process.env.LOG_LEVEL || "info").trim().toLowerCase();
 if (!["debug", "info", "warn", "error"].includes(LOG_LEVEL)) {
@@ -147,6 +148,12 @@ function validateRuntimeConfig() {
   } else {
     if (!process.env.PGUSER) errors.push("PGUSER fehlt");
     if (!/^[a-z0-9][a-z0-9_.-]{2,63}$/.test(String(process.env.EPIBER_TENANT_CODE || ""))) errors.push("EPIBER_TENANT_CODE fehlt oder ist ungueltig");
+    if (!/^[A-Za-z0-9_-]{43,128}$/.test(AUTH_RATE_LIMIT_SECRET)) errors.push("EPIBER_AUTH_RATE_LIMIT_SECRET muss ein Base64url-Token mit mindestens 43 Zeichen sein");
+    if (!COURT_URL) errors.push("COURT_URL fehlt");
+    else {
+      try { if (new URL(COURT_URL).protocol !== "https:") errors.push("COURT_URL muss HTTPS verwenden"); }
+      catch { errors.push("COURT_URL ist ungueltig"); }
+    }
   }
   if (MESSAGING_REPORT_ENABLED) {
     if (!["live", "paj"].includes(MESSAGING_REPORT_DEPLOYMENT)) errors.push("MESSAGING_REPORT_DEPLOYMENT muss live oder paj sein");
@@ -165,6 +172,7 @@ module.exports = {
   ALLOWED_ORIGINS,
   ALLOW_INSECURE_TRANSPORT,
   AUDIT_ACTIONS,
+  AUTH_RATE_LIMIT_SECRET,
   AUDITLOG_FILE,
   AUDIT_LOG_JOURNAL,
   COOKIE_SECURE,

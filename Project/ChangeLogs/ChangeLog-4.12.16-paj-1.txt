@@ -122,3 +122,38 @@ Commit: 4.12.16-paj-1-2 | PostgreSQL-Laufzeitdienste und persistente Fachoperati
   - [Backend] Persistente Monitorziele, Offline-/Online-Navigation,
     Scrollsequenzen sowie Navigations- und Scroll-ACKs im PostgreSQL-
     Komponentenlauf geprueft.
+
+[4.12.16-paj-1-3] - 2026-10-12
+Commit: 4.12.16-paj-1-3 | PostgreSQL-only Serverlaufzeit vollständig aktiviert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-2-x` gesetzt.
+  - [Persistenz] PostgreSQL-Court-State, Scorebaseline, Automatisierung,
+    Zuweisungen und Aktivierung an die produktiven HTTP-/WebSocket-Pfade
+    angebunden und den SQLite-State aus diesem Modus entfernt.
+  - [Hallenzeiten] Raster, Mitgliedschaften, Buchungen, Wartelisten,
+    Nachruecken, Fair-Use, Verhinderungen, Verteilung, Historie und Reporting
+    relational und transaktional umgesetzt.
+  - [Spielbetrieb] Forderungen, Termine, Ergebnisse, Spielerkorrekturen,
+    administrative Ruecknahmen, Rangverschiebungen, Rueckzug und KO-
+    Fortschreibung auf PostgreSQL umgestellt.
+  - [Personen] Normalisierung sowie ClubDesk-Neuanlage, Verknuepfung,
+    Aktualisierung und geschuetzte Deaktivierung relational umgesetzt.
+  - [Messaging] PostgreSQL-Reporting sowie typisierte Fachereignisse fuer
+    Forderungen, Termine, Ergebnisse, Ranglisten- und Hallenzeitenablaeufe
+    ergaenzt.
+  - [Worker] Versionierte Kurzzeit-, Stunden-, Tages- und
+    Hallenwartelisten-Retentionjobs mit Tenantgrenzen und begrenzten Batches
+    registriert.
+  - [Betrieb] PostgreSQL-only Serverkomposition, Readiness,
+    Invalidation-Listener, kontrollierter Shutdown und eigene
+    Rate-Limit-Geheimniskonfiguration aktiviert; das
+    `POSTGRES_SERVER_MODE_INCOMPLETE`-Startgate entfernt.
+
+  Tests
+  - [Backend] Court-, Hallenzeiten-, Match-, Ranglisten-, Personen-,
+    Messaging-, Worker- und Outboxpfade gegen kurzlebige PostgreSQL-18-Cluster
+    geprueft.
+  - [Backend] PostgreSQL-only Serverstart, Readiness, HTTP-Login,
+    authentifizierter WebSocket-Request, Automationsdrain und Pool-/Listener-
+    Shutdown integriert geprueft.

@@ -86,8 +86,8 @@ VALUES ('0199c800-0000-7000-8000-000000000302', '0199c800-0000-7000-8000-0000000
 INSERT INTO venue.monitor_devices(id, tenant_id, contract_id, label, token_hash, target_type, page_key)
 VALUES ('0199c800-0000-7000-8000-000000000304', '0199c800-0000-7000-8000-000000000001', 'monitor-seed', 'Testmonitor', decode(repeat('01',32),'hex'), 'page', 'index');
 
-INSERT INTO venue.hall_time_grids(id, section_id, contract_id, name, mode, capacity, waiting_list_enabled, waiting_limit_per_person, fair_use_enabled, fair_use_open_days)
-VALUES ('0199c800-0000-7000-8000-000000000310', '0199c800-0000-7000-8000-000000000002', 'hall-seed', 'Synthetische Hallenzeit', 'reservation', 1, true, 2, true, 7);
+INSERT INTO venue.hall_time_grids(id, section_id, contract_id, name, mode, capacity, waiting_list_enabled, waiting_limit_per_person, fair_use_enabled, fair_use_open_days, created_at, updated_at)
+VALUES ('0199c800-0000-7000-8000-000000000310', '0199c800-0000-7000-8000-000000000002', 'hall-seed', 'Synthetische Hallenzeit', 'reservation', 1, true, 2, true, 7, '2026-01-01T00:00:00Z', '2026-10-01T00:00:00Z');
 INSERT INTO venue.hall_time_grid_participants(grid_id, person_id, joined_at)
 VALUES
  ('0199c800-0000-7000-8000-000000000310', '0199c800-0000-7000-8000-000000000101', '2026-01-01T00:00:00Z'),

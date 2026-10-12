@@ -8,6 +8,11 @@ const { reactionCatalog, reactionByKey } = require("./competitionHistoryReaction
 const { normalizeWinnerPerspective } = require("./resultPerspective.js");
 
 const COMMENT_SEGMENTER = new Intl.Segmenter("de", { granularity: "grapheme" });
+const VIENNA_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" });
+const RESULT_REPORT_TYPES = new Set(["result", "result_corrected", "result_cleared", "match_end_corrected"]);
+const CHALLENGE_REPORT_TYPES = new Set(["challenge", "challenge_confirmation"]);
+const DATE_CHANGE_REPORT_TYPES = new Set(["appointment_changed", "ranking_challenge_date_changed", "ranking_match_date_admin_changed", "match_end_corrected"]);
+function viennaDay(timestamp) { const parts = Object.fromEntries(VIENNA_DAY.formatToParts(new Date(timestamp)).filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value])); return `${parts.year}-${parts.month}-${parts.day}`; }
 
 function hash(value) { return crypto.createHash("sha256").update(JSON.stringify(value)).digest(); }
 
@@ -175,6 +180,8 @@ class PostgresMessagingService {
     }
   }
 
+  createDomainEvent(values, transaction) { return this.repository.createEvent(values, transaction); }
+
   async competitionHistory(principal, { bewerbId, cursor = null, limit = 50 }) {
     const values = dataStore.get("bewerbe");
     const header = values[0] || [];
@@ -291,6 +298,66 @@ class PostgresMessagingService {
       reactions: details.reactions.filter(({ key }) => reactionByKey.has(key)).map(({ key, userId, userName, createdAt }) => ({ key, userName, createdAt, mine: userId === principal.id })),
       revision: await this.repository.historyRevision(),
     };
+  }
+
+  reportingPeople() {
+    const values = dataStore.get("players"), header = values[0] || [];
+    const index = (name) => header.findIndex((value) => String(value).toLowerCase() === name);
+    const indexes = { id: index("id"), first: index("vorname"), last: index("nachname"), role: index("role") };
+    return new Map(values.slice(1).flatMap((row) => {
+      const id = String(row[indexes.id] || ""); if (!id) return [];
+      const role = String(row[indexes.role] || "player").trim();
+      return [[id, { role, recipientClass: ["player", "player A", "player B"].includes(role) ? "Spieler" : role === "admin" ? "Administratoren" : "Andere/Unbekannt", name: [row[indexes.first], row[indexes.last]].filter(Boolean).join(" ") }]];
+    }));
+  }
+
+  messagingReportOptions({ deployment, hallTimes = { grids: [] }, logCompletion = false }) {
+    const startedAt = this.now(), values = dataStore.get("bewerbe"), header = values[0] || [];
+    if (!dataStore.getMeta("bewerbe")?.lastUpdate) {
+      if (logCompletion) this.log("warn", "messaging_report_options_completed", { deployment, result: "failed", durationMs: this.now() - startedAt, errorCode: "DATA_NOT_READY" });
+      throw new AppError("DATA_NOT_READY", "Meldungsbericht wartet auf aktuelle Grunddaten", 503);
+    }
+    const id = header.findIndex((value) => String(value).toLowerCase() === "id"), name = header.findIndex((value) => String(value).toLowerCase() === "bezeichnung");
+    const options = [{ __text: "Persönliche Meldungen", __value: "personal" }, { __text: "Historie aller Bewerbe", __value: "competitions:*" },
+      ...values.slice(1).filter((row) => row[id]).map((row) => ({ __text: `Historie: ${row[name] || `Bewerb ${row[id]}`}`, __value: `competition:${row[id]}` })),
+      { __text: "Historie aller Hallenraster", __value: "halls:*" }, ...hallTimes.grids.map((grid) => ({ __text: `Hallenraster: ${grid.name}`, __value: `hall:${grid.id}` }))];
+    if (logCompletion) this.log("info", "messaging_report_options_completed", { deployment, result: "success", durationMs: this.now() - startedAt, optionCount: options.length });
+    return { success: true, deployment, generatedAt: this.now(), options };
+  }
+
+  async messagingReport({ fromMs, toMs, deployment, selection = ["personal"], hallTimes = { grids: [], entries: [] } }) {
+    const startedAt = this.now(), people = this.reportingPeople();
+    try {
+      if (!dataStore.getMeta("players")?.lastUpdate || !dataStore.getMeta("bewerbe")?.lastUpdate) throw new AppError("DATA_NOT_READY", "Meldungsbericht wartet auf aktuelle Grunddaten", 503);
+      const competitionValues = dataStore.get("bewerbe"), header = competitionValues[0] || [];
+      const idIndex = header.findIndex((value) => String(value).toLowerCase() === "id"), nameIndex = header.findIndex((value) => String(value).toLowerCase() === "bezeichnung");
+      const competitions = new Map(competitionValues.slice(1).map((row) => [String(row[idIndex]), String(row[nameIndex] || `Bewerb ${row[idIndex]}`)]));
+      const requested = new Set(selection); if (requested.has("all")) { requested.clear(); requested.add("personal"); requested.add("competitions:*"); requested.add("halls:*"); }
+      const options = new Set(this.messagingReportOptions({ deployment, hallTimes }).options.map(({ __value }) => __value));
+      if (!requested.size || [...requested].some((value) => !options.has(value))) throw new AppError("REPORTING_SELECTION_INVALID", "Meldungsauswahl ist ungueltig", 400);
+      const dayKeys = new Set(); for (let value = fromMs; value < toMs; value += 21600000) dayKeys.add(viennaDay(value)); dayKeys.add(viennaDay(toMs - 1));
+      const days = new Map([...dayKeys].sort().map((day) => [day, { total: 0, personal: 0, competitions: 0, halls: 0, results: 0, challenges: 0, dateChanges: 0 }]));
+      const roleTotals = new Map(["Spieler", "Administratoren", "Andere/Unbekannt"].map((value) => [value, { messageCount: 0, recipients: new Set() }]));
+      const recipients = new Map(), entries = [], messages = [];
+      if (requested.has("personal")) for (const projection of await this.repository.reportProjections(fromMs, toMs)) {
+        const person = people.get(projection.recipientId) || { role: "unknown", recipientClass: "Andere/Unbekannt", name: "" };
+        const category = { result: RESULT_REPORT_TYPES.has(projection.projectionType), challenge: CHALLENGE_REPORT_TYPES.has(projection.projectionType), dateChange: DATE_CHANGE_REPORT_TYPES.has(projection.projectionType) };
+        const day = days.get(viennaDay(projection.createdAt)); day.total++; day.personal++; if (category.result) day.results++; if (category.challenge) day.challenges++; if (category.dateChange) day.dateChanges++;
+        const total = roleTotals.get(person.recipientClass); total.messageCount++; total.recipients.add(projection.recipientId);
+        const key = `${deployment}:${projection.recipientId}`, recipient = recipients.get(key) || { recipientKey: key, recipientId: projection.recipientId, recipientName: projection.recipientName || person.name || projection.recipientId, recipientRole: person.role, recipientClass: person.recipientClass, messageCount: 0, unreadCount: 0, latestAt: projection.createdAt };
+        recipient.messageCount++; if (projection.acknowledgedAt === null) recipient.unreadCount++; recipient.latestAt = Math.max(recipient.latestAt, projection.createdAt); recipients.set(key, recipient);
+        const message = { time: projection.createdAt, deployment, ...projection, recipientName: recipient.recipientName, recipientRole: person.role, recipientClass: person.recipientClass, competitionName: projection.competitionId ? competitions.get(projection.competitionId) || `Bewerb ${projection.competitionId}` : "Allgemeine Meldung", isResult: category.result, isChallenge: category.challenge, isDateChange: category.dateChange, deliveries: JSON.stringify(projection.deliveries) };
+        messages.push(message); entries.push({ id: `personal:${message.id}`, sourceId: message.id, time: message.time, area: "Persönliche Meldung", contextName: message.competitionName, eventType: message.projectionType, subject: message.subject, body: message.body, summary: message.summary, detail: message.detail, result: message.result, actorName: message.actorName, personName: message.recipientName, participants: "", statusChange: "", acknowledgedAt: message.acknowledgedAt, deliveries: message.deliveries });
+      }
+      const competitionIds = new Set([...requested].filter((value) => value.startsWith("competition:")).map((value) => value.slice(12)));
+      const competitionEvents = requested.has("competitions:*") || competitionIds.size ? (await this.repository.reportEvents(fromMs, toMs)).filter((event) => requested.has("competitions:*") || competitionIds.has(event.competitionId)) : [];
+      for (const event of competitionEvents) { const day = days.get(viennaDay(event.createdAt)); day.total++; day.competitions++; entries.push({ id: `competition:${event.id}`, sourceId: event.id, time: event.createdAt, area: "Bewerbshistorie", contextName: competitions.get(event.competitionId) || `Bewerb ${event.competitionId}`, eventType: event.type, subject: event.summary, body: "", summary: event.summary, detail: event.detail, result: RESULT_REPORT_TYPES.has(event.type) ? normalizeWinnerPerspective(event.result) : event.result, actorName: event.actorName, personName: "", participants: event.participants.map(({ displayName }) => displayName).filter(Boolean).join(", "), statusChange: "", acknowledgedAt: null, deliveries: "" }); }
+      const hallIds = new Set([...requested].filter((value) => value.startsWith("hall:")).map((value) => value.slice(5))), hallEntries = hallTimes.entries.filter((entry) => requested.has("halls:*") || hallIds.has(entry.gridId));
+      for (const entry of hallEntries) { const day = days.get(viennaDay(entry.time)); day.total++; day.halls++; entries.push({ id: `hall:${entry.id}`, sourceId: entry.id, time: entry.time, area: "Hallenraster-Historie", contextName: entry.gridName, eventType: entry.action, subject: entry.summary || entry.action, body: "", summary: entry.summary || "", detail: entry.detail || "", result: "", actorName: entry.actorName, personName: entry.personName || "", participants: entry.slotTime || "", statusChange: entry.from && entry.to && entry.from !== entry.to ? `${entry.from} → ${entry.to}` : "", acknowledgedAt: null, deliveries: "" }); }
+      entries.sort((a, b) => b.time - a.time || a.id.localeCompare(b.id));
+      const result = { success: true, deployment, from: fromMs, to: toMs, generatedAt: this.now(), selection: [...requested], totals: { totalCount: entries.length, messageCount: messages.length, personalCount: messages.length, competitionCount: competitionEvents.length, hallCount: hallEntries.length, recipientCount: recipients.size }, series: [...days].map(([day, counts]) => ({ time: Date.parse(`${day}T12:00:00Z`), ...counts })), roleSummary: [...roleTotals].map(([recipientClass, value]) => ({ recipientClass, messageCount: value.messageCount, recipientCount: value.recipients.size })), recipients: [...recipients.values()], messages, entries };
+      this.log("info", "messaging_report_completed", { deployment, result: "success", durationMs: this.now() - startedAt, totalCount: entries.length }); return result;
+    } catch (error) { this.log("warn", "messaging_report_completed", { deployment, result: "failed", durationMs: this.now() - startedAt, errorCode: error.code || "MESSAGING_REPORT_FAILED" }); throw error; }
   }
 }
 
