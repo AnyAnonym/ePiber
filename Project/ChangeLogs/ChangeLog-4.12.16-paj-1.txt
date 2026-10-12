@@ -376,3 +376,22 @@ Commit: 4.12.16-paj-1-6 | Shadow-Read und Live-Cutover-Vorbereitung umgesetzt
     Fachwertausgabe erkannte Projektionsdrift gegen kurzlebige Cluster geprueft.
   - [Backend] Read-only-Start mit weiterhin verfuegbaren Projektionen und
     schreibfreien HTTP-/WebSocket-Ablehnungen gegen PostgreSQL geprueft.
+
+[4.12.16-paj-1-7] - 2026-10-12
+Commit: 4.12.16-paj-1-7 | DBeaver-Zugriffsrollen vollständig berechtigt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-6-x` gesetzt.
+  - [Datenbank] Persoenliche DBeaver-Rollen fuer `epiber_devel` versioniert:
+    `paj_devel_ro` liest alle ePiber-Tabellen und -Spalten,
+    `paj_devel_admin` besitzt denselben Lesezugriff plus DML und
+    Sequenznutzung; DDL, TRUNCATE, Triggerrechte, Rollenmitgliedschaften und
+    globale PostgreSQL-Privilegien bleiben ausgeschlossen.
+  - [Betrieb] Idempotenten Apply-/Verify-One-shot fuer aktuelle und zukuenftige
+    Tabellen samt strukturierten Abschlusslogs und Rollen-/Grantpruefung
+    ergaenzt.
+
+  Tests
+  - [PostgreSQL] Vollstaendigen Lesezugriff beider Rollen, ausschliessliche
+    Admin-DML-Rechte, sensible technische Tabellen, Default Privileges und
+    negative DDL-/TRUNCATE-Pfade gegen einen kurzlebigen Cluster geprueft.

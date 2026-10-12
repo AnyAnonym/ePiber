@@ -2776,6 +2776,15 @@ getrennt verwahrtes erhoehtes Credential fuer ausdruecklich beabsichtigte
 administrative Arbeiten. Auch die erhoehte Verbindung ersetzt nicht den
 Migration Runner als regulaeren DDL-Weg.
 
+In `epiber_devel` lesen beide Rollen alle Tabellen und Spalten der sechs ePiber-
+Schemas einschliesslich technischer Credential-, Session- und Auditbereiche.
+Nur die Adminrolle besitzt zusaetzlich INSERT, UPDATE, DELETE und
+Sequenznutzung. Beide bleiben ohne Schema-CREATE, TRUNCATE, TRIGGER,
+Eigentuemerrollen-Mitgliedschaft, Superuser, CREATEDB, CREATEROLE, Replication
+und BYPASSRLS. Der weitreichende Zugriff ist auf persoenliche Development-
+Administration ueber den SSH-Tunnel begrenzt und wird nicht auf fremde
+Anwendungsdatenbanken oder Live uebertragen.
+
 Bootstrap, Migration Runner, Backup, Restore und weitere kontrollierte One-shots
 behalten unabhaengig davon ihre strukturierten Start-/Abschlusslogs. Freies
 manuelles Produktions-DML und manuell eingegebenes DDL sind kein regulaerer

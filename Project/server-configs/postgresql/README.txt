@@ -112,14 +112,41 @@ Loopback-Verbindungen verlangen SCRAM-SHA-256.
 
 Fuer DBeaver bestehen zwei getrennte Loginrollen:
 
-  paj_devel_ro       Standardverbindung ohne CREATEDB, CREATEROLE oder Superuser
-  paj_devel_admin    getrennte erhoehte Verbindung mit CREATEDB und CREATEROLE,
-                     aber ohne Superuser, Replication oder BYPASSRLS
+  paj_devel_ro       Standardverbindung mit SELECT auf allen Tabellen und
+                     Spalten der ePiber-Schemas
+  paj_devel_admin    derselbe vollstaendige Lesezugriff plus INSERT, UPDATE,
+                     DELETE und Sequenznutzung
+
+Beide Rollen erhalten CONNECT auf `epiber_devel`, USAGE aber kein CREATE auf den
+ePiber-Schemas und weder Superuser, CREATEDB, CREATEROLE, Replication, BYPASSRLS
+noch eine Eigentuemerrollen-Mitgliedschaft. TRUNCATE, TRIGGER und freies DDL
+bleiben auch fuer `paj_devel_admin` ausgeschlossen.
+
+Der bewusst vollstaendige Lesezugriff umfasst auch technische Credential-,
+Session- und Audit-Sicherheitstabellen. Die Rollen sind deshalb persoenlich,
+ihre Passwoerter getrennt verwahrt und ihre Verwendung auf den SSH-Tunnel
+begrenzt. `paj_devel_admin` kann mit direktem DML Anwendungsvalidierung und
+Fachaudit umgehen; diese Verbindung ist nur fuer ausdruecklich beabsichtigte
+Development-Arbeiten und nicht als regulaerer Anwendungspfad vorgesehen.
 
 Die Passwoerter liegen ausschliesslich in Keeper. DBeaver verwendet einen
 externen SSH-Tunnel vom lokalen Windows-Port 15433 auf Server-Loopback 5433. SSL
 in DBeaver und dessen eigener SSH-Tunnel bleiben dabei deaktiviert; die
 Transportverschluesselung uebernimmt SSH.
+
+Die Rechte werden idempotent und einschliesslich der Default Privileges fuer
+zukuenftige Tabellen mit folgendem kontrollierten One-shot angewendet und
+verifiziert:
+
+  runuser -u postgres-devel -- env \
+    PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=epiber_devel PGUSER=postgres \
+    EPIBER_DB_NAME=epiber_devel EPIBER_DB_OWNER_ROLE=epiber_devel_owner \
+    EPIBER_DB_PERSONAL_READER_ROLE=paj_devel_ro \
+    EPIBER_DB_PERSONAL_ADMIN_ROLE=paj_devel_admin \
+    node /srv/http/ePiber/paj/Backend/scripts/db-personal-access.js apply
+
+`verify` anstelle von `apply` prueft Rollenattribute, CONNECT, Schemas, alle
+aktuellen Tabellen und Sequenzen, ohne Rechte zu veraendern.
 
 Jede Anwendung erhaelt spaeter eine eigene Datenbank, Eigentuemer-, Migrations-
 und Laufzeitrolle. Keine normale Anwendungsrolle erhaelt Zugriff auf eine andere
