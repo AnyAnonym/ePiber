@@ -12,6 +12,10 @@
 	}
 }
 
+# Vollstaendige Sites anderer Anwendungen werden als eigene Fragmente betrieben.
+# Die ePiber-Installation darf dieses Verzeichnis nicht leeren oder ersetzen.
+import /etc/caddy/conf.d/*.caddy
+
 epiber.at {
 	import security_headers
 	@live_application not path /grafana/*
@@ -60,6 +64,10 @@ epiber.at {
 		reverse_proxy unix//run/epiber-observability/grafana.sock
 		log_append route grafana
 	}
+
+	# Pfadrouten anderer Anwendungen muessen vor dem statischen ePiber-Fallback
+	# liegen und werden unabhaengig von der ePiber-Hauptdatei installiert.
+	import /etc/caddy/epiber-live-routes/*.caddy
 
 	handle {
 		log_append route static

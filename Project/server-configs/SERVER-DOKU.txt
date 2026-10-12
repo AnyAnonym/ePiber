@@ -26,6 +26,11 @@ gitea/app.ini               | Geheimnisfreie gehaertete Gitea-Basiskonfiguration
 bin/development-services-*  | Manueller LUKS-, PostgreSQL- und Gitea-Start/Stop
 ROLLOUT-CHECKLIST.md        | Verbindliche Abnahme und aktuelle PAJ-Live-Promotion
 Caddyfile                   | Vorlage fuer /etc/caddy/Caddyfile
+caddy/README.txt            | Vertrag fuer den gemeinsam genutzten Caddy und
+                            | anwendungseigene, nicht destruktiv installierte
+                            | Site- und Live-Pfadfragmente
+caddy/conf.d/               | Vollstaendige zusaetzliche Sites, derzeit M365
+caddy/epiber-live-routes/   | Pfadrouten vor dem Live-Frontend-Fallback, derzeit WC
 systemd/                    | Vorlagen fuer /etc/systemd/system/
   epiber-piber.service      | Live, User piber, Backend 127.0.0.1:8080
   epiber-paj.service        | PAJ, User paj, Backend 127.0.0.1:8083
@@ -38,7 +43,7 @@ observability/              | Gemeinsame Grafana-/Prometheus-/Loki-/Alloy-
 rollouts/                   | Datensparsame versionierte Protokolle abgeschlossener
                             | Produktionsfreigaben; keine Backups oder Geheimnisse
 systemd/epiber-grafana-     | Gemeinsamer Loopback-Auth-Broker fuer Adminsessions
-  auth.service              | aus den aktiven Realms Live und PAJ
+  auth.service              | aus den aktiven Realms Live und Devel
 tmpfiles/epiber-            | Geschuetztes Laufzeitverzeichnis fuer den
   observability.conf        | Caddy-/Grafana-Unix-Socket
 tmpfiles/postgresql-        | Geschuetztes Socketverzeichnis fuer den gemeinsamen

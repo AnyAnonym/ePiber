@@ -74,10 +74,20 @@ Diese Checkliste ist das verbindliche Gate fuer die aktuelle Reihenfolge **PAJ -
 - [ ] Im `Backend/` des Releasecheckouts ist `npm ci --omit=dev` erfolgreich.
 - [ ] `npm run build` ist erfolgreich; statischer Check und vollstaendige Testsuite sind gruen.
 - [ ] `npm audit --omit=dev` meldet keine nicht akzeptierte Produktionsluecke.
-- [ ] `caddy validate --config /etc/caddy/Caddyfile` ist mit der Vorlage aus dem eingetragenen Release-Commit erfolgreich.
+- [ ] Der Diff zwischen installierter Caddy-Hauptdatei und Releasevorlage ist
+  vor der Installation vollstaendig erklaert; keine fremde Site oder Pfadroute
+  wird durch einen ePiber-Rollout entfernt.
+- [ ] Die versionierten Fragmente fuer M365 und WC sind installiert; unbekannte
+  Dateien in `/etc/caddy/conf.d/` und `/etc/caddy/epiber-live-routes/` bleiben
+  unveraendert.
+- [ ] `caddy validate --config /etc/caddy/Caddyfile` ist mit Hauptdatei und allen
+  installierten Fragmenten erfolgreich.
 - [ ] Die aktiven Units `epiber-piber.service`, `epiber-paj.service` und `epiber-grafana-auth.service` bestehen `systemd-analyze verify`; die installierte PK-Unit bleibt unveraendert.
 - [ ] Caddy proxyt nur `/ws`, `/api/*`, `/live`, `/ready`, `/health`, `/version`, `/status` auf die aktiven Backends; `/metrics` und `/api/admin/grafana-auth` bleiben auf allen Origins extern gesperrt. `/internal/*` liefert auf Live, PAJ und PK explizit 404. Nur die zentrale Live-Origin proxyt das separat geschuetzte `/grafana/*` ueber den Grafana-Unix-Socket. Auf PK bleibt ausser den expliziten 404-Sperren interner Pfade das bestehende Anwendungsrouting unveraendert.
 - [ ] Caddy-Roots zeigen exakt auf die jeweiligen `Frontend/`-Verzeichnisse; Backend, `.env`, Credentials und SQLite sind nicht statisch erreichbar.
+- [ ] `https://epiber.at/wc/` und
+  `https://m365-connector.pi-tec.at/health/ready` sind nach dem Reload
+  erreichbar; die Anwendungen bleiben ausschliesslich an ihren Loopback-Ports.
 - [ ] CSP und Security-Header sind vorhanden; alle drei Origins und WebSockets verwenden HTTPS/WSS ohne Mixed Content.
 - [ ] Es existiert keine systemspezifische `SDK.js`; der Browser verbindet same-origin auf `/ws`.
 - [ ] Beobachtete WebSocket-Schliesscodes und Reconnectentscheidungen stimmen mit `Project/software/WEBSOCKET-CLOSE-CODES.txt` ueberein.

@@ -1,0 +1,8 @@
+# Muss innerhalb des Site-Blocks epiber.at vor dessen allgemeinem Fallback
+# importiert werden. Vertragspartner ist /srv/http/ePiber/wc/deploy/Caddyfile.snippet.
+redir /wc /wc/ 308
+handle_path /wc/* {
+	reverse_proxy 127.0.0.1:8090
+	log_append request_id {rp.header.X-Request-ID}
+	log_append route wc
+}

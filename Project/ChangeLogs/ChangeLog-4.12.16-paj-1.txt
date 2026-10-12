@@ -307,3 +307,24 @@ Commit: 4.12.16-paj-1-4 | PostgreSQL-Migration real geprüft und Devel vollstän
     Messagingreport sowie Devel-Grafana-Adminsession praktisch geprueft.
   - [Backend] 520 Backendtests und 17 Workflowtests sowie das vollstaendige
     Achtprofil-Browserprofil im diffgebundenen Nachweis erfolgreich.
+
+[4.12.16-paj-1-5] - 2026-10-12
+Commit: 4.12.16-paj-1-5 | Gemeinsame Caddy-Konfiguration gegen Fremdrouten abgesichert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-4-x` gesetzt.
+  - [Betrieb] Gemeinsam genutzte Caddy-Konfiguration auf getrennte Fragmente
+    fuer vollstaendige Fremdsites und Live-Pfadrouten umgestellt; WC und der
+    interne M365-Konnektor bleiben dadurch bei ePiber-Rollouts erhalten.
+  - [Dokumentation] Caddy-Besitzgrenzen, verpflichtende Diffpruefung,
+    nichtdestruktive Fragmentinstallation und anwendungsuebergreifende Smokes
+    in Server-Setup, Rollout-Checkliste und Fragmentvertrag festgehalten.
+
+  Tests
+  - [Backend] Importreihenfolge, Loopbackziele und datensparsamer M365-
+    Loggingvertrag der gemeinsamen Caddy-Fragmente statisch abgesichert.
+  - [Betrieb] Zusammengesetzte installierte Caddy-Konfiguration validiert und
+    Live, Devel, WC samt Health sowie M365-Readiness nach dem Reload erfolgreich
+    geprueft.
+  - [Backend] 523 Backendtests und 17 Workflowtests im diffgebundenen
+    Buildprofil erfolgreich.
