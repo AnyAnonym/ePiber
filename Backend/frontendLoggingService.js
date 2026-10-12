@@ -455,5 +455,6 @@ module.exports = {
   DEFAULT_SETTINGS,
   EVENT_LEVELS,
   FrontendLoggingService,
+  validateSettings,
   validateClientEvent,
 };

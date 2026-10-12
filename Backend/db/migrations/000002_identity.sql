@@ -101,13 +101,14 @@ CREATE TABLE identity.credentials (
   account_id uuid NOT NULL REFERENCES identity.user_accounts(id) ON DELETE CASCADE,
   credential_type text NOT NULL CHECK (credential_type = 'password'),
   credential_schema text NOT NULL CHECK (credential_schema IN ('scrypt_v1', 'legacy_sha256')),
-  secret_hash text NOT NULL CHECK (secret_hash <> ''),
+  secret_hash text,
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   revoked_at timestamptz,
   revoked_reason text,
-  CHECK ((active AND revoked_at IS NULL AND revoked_reason IS NULL) OR (NOT active AND revoked_at IS NOT NULL)),
-  CHECK (credential_schema <> 'legacy_sha256' OR secret_hash ~ '^[0-9a-fA-F]{64}$')
+  CHECK ((active AND revoked_at IS NULL AND revoked_reason IS NULL AND secret_hash IS NOT NULL AND secret_hash <> '')
+      OR (NOT active AND revoked_at IS NOT NULL AND secret_hash IS NULL)),
+  CHECK (credential_schema <> 'legacy_sha256' OR NOT active OR secret_hash ~ '^[0-9a-fA-F]{64}$')
 );
 CREATE UNIQUE INDEX credentials_one_active_password
   ON identity.credentials (account_id, credential_type) WHERE active;
@@ -177,11 +178,18 @@ CREATE INDEX login_rate_limits_expiry ON identity.login_rate_limits (expires_at)
 
 CREATE TABLE identity.frontend_logging_settings (
   tenant_id uuid PRIMARY KEY REFERENCES core.tenants(id) ON DELETE RESTRICT,
+  enabled boolean NOT NULL DEFAULT false,
   minimum_level text NOT NULL CHECK (minimum_level IN ('error', 'warn', 'info', 'debug')),
+  include_anonymous boolean NOT NULL DEFAULT false,
   info_sample_rate numeric(5,4) NOT NULL CHECK (info_sample_rate BETWEEN 0 AND 1),
   debug_sample_rate numeric(5,4) NOT NULL CHECK (debug_sample_rate BETWEEN 0 AND 1),
+  batch_size smallint NOT NULL DEFAULT 10 CHECK (batch_size BETWEEN 1 AND 20),
+  flush_interval_ms integer NOT NULL DEFAULT 5000 CHECK (flush_interval_ms BETWEEN 1000 AND 30000),
+  default_target_level text NOT NULL DEFAULT 'debug' CHECK (default_target_level IN ('error', 'warn', 'info', 'debug')),
+  default_target_duration_minutes smallint NOT NULL DEFAULT 120 CHECK (default_target_duration_minutes BETWEEN 15 AND 1440),
   info_retention_days smallint NOT NULL DEFAULT 14 CHECK (info_retention_days = 14),
   debug_retention_days smallint NOT NULL DEFAULT 7 CHECK (debug_retention_days = 7),
+  targets_revision bigint NOT NULL DEFAULT 0 CHECK (targets_revision >= 0),
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp()
 );
@@ -191,6 +199,7 @@ CREATE TABLE identity.frontend_logging_targets (
   person_id uuid NOT NULL REFERENCES identity.people(id) ON DELETE CASCADE,
   minimum_level text NOT NULL CHECK (minimum_level IN ('error', 'warn', 'info', 'debug')),
   expires_at timestamptz(3) NOT NULL,
+  created_by_person_id uuid NOT NULL REFERENCES identity.people(id) ON DELETE RESTRICT,
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   created_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (tenant_id, person_id)

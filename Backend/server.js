@@ -21,6 +21,7 @@ const {
   MESSAGING_REPORT_TOKEN,
   MONITOR_COOKIE,
   PORT,
+  PERSISTENCE_MODE,
   SESSION_COOKIE,
   SESSION_TTL_MS,
   SCORELOG_FILE,
@@ -130,9 +131,9 @@ function authIdentifier(body, passwordField) {
   return loginValue(matches(canonical) ? body.login : body.email);
 }
 
-function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, initialized, shuttingDown }) {
+function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, dataPollerService = dataPoller, initialized, shuttingDown }) {
   const data = dataStore.getReadiness();
-  const refresh = dataPoller.getStatus();
+  const refresh = dataPollerService.getStatus();
   const court = courtPoller.getStatus();
   const courtSource = courtPoller.getLastData().source;
   const courtState = stateStore.getStatus();
@@ -177,6 +178,7 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
 }
 
 function createApplication(overrides = {}) {
+  const dataPollerService = overrides.dataPoller || dataPoller;
   const repository = overrides.repository || new StateRepository(STATE_FILE);
   repository.init();
   const scoreLogRepository = overrides.scoreLogRepository || new ScoreLogRepository(SCORELOG_FILE, { instanceId: INSTANCE_ID });
@@ -210,6 +212,7 @@ function createApplication(overrides = {}) {
     token: String(MESSAGING_REPORT_TOKEN),
   };
   const sheetService = overrides.sheetService || new SheetService({ repository, messagingService });
+  const competitionService = overrides.competitionService || sheetService;
   const courtAutomation = overrides.courtAutomation || new CourtAutomation({
     stateStore,
     dataStore,
@@ -272,7 +275,7 @@ function createApplication(overrides = {}) {
     let httpAudit = null;
     let httpActionCompleted = false;
     let route = "invalid";
-    const beginAudit = ({ action, principal = null, targetType = "", targetId = "", before = null, sourceIp = "", attemptedLogin = "" }) => {
+    const beginAudit = async ({ action, principal = null, targetType = "", targetId = "", before = null, sourceIp = "", attemptedLogin = "" }) => {
       if (!(AUDIT_ACTIONS.has("*") || AUDIT_ACTIONS.has(action))) return;
       httpAudit = {
         eventId: supportId,
@@ -289,9 +292,9 @@ function createApplication(overrides = {}) {
         sourceIp,
         attemptedLogin,
       };
-      auditLogRepository.record(httpAudit);
+      await auditLogRepository.record(httpAudit);
     };
-    const finishAudit = ({ principal = null, targetType, targetId, after = null, result = "success", errorCode = null } = {}) => {
+    const finishAudit = async ({ principal = null, targetType, targetId, after = null, result = "success", errorCode = null } = {}) => {
       if (!httpAudit) return;
       if (result === "success") httpActionCompleted = true;
       const completedAudit = {
@@ -304,7 +307,7 @@ function createApplication(overrides = {}) {
         errorCode,
         finished: true,
       };
-      auditLogRepository.record(completedAudit);
+      await auditLogRepository.record(completedAudit);
       httpAudit = completedAudit;
     };
     const publicResult = (result) => {
@@ -350,20 +353,20 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/ready" || pathname === "/health") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown });
+        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown });
         return sendJson(response, status.ready ? 200 : 503, { status: status.ready ? "ready" : "not-ready", version: APP_VERSION });
       }
 
       if (pathname === "/metrics") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown });
+        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown });
         return sendText(response, 200, metrics.render({
           appVersion: APP_VERSION,
           processStartedAt: PROCESS_STARTED_AT,
           activeHttpRequests: activeRequests,
           readiness: status,
           ws: dataProvider.getMetricsStatus(),
-          sheetPoller: dataPoller.getStatus(),
+          sheetPoller: dataPollerService.getStatus(),
           court: courtPoller.getStatus(),
           state: status.state,
           sheets: status.sheets,
@@ -430,7 +433,7 @@ function createApplication(overrides = {}) {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
         return sendJson(response, 200, {
           success: true,
-          frontendLogging: frontendLoggingService.getPolicy(diagnosticIdentity()?.id || null),
+          frontendLogging: await frontendLoggingService.getPolicy((await diagnosticIdentity())?.id || null),
         });
       }
 
@@ -438,9 +441,9 @@ function createApplication(overrides = {}) {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
         const body = await readJsonBody(request, HTTP_BODY_LIMIT_BYTES);
-        const result = frontendLoggingService.recordBatch({
+        const result = await frontendLoggingService.recordBatch({
           body,
-          identity: diagnosticIdentity(),
+          identity: await diagnosticIdentity(),
           sourceIp: getRequestIp(request),
         });
         return sendJson(response, 200, result);
@@ -448,13 +451,13 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/status") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const statusAuth = authService.requireRole(sessionToken, ["admin"], { allowLastKnownGoodRole: true });
+        const statusAuth = await authService.requireRole(sessionToken, ["admin"], { allowLastKnownGoodRole: true });
         return sendJson(response, 200, {
           authorization: {
             role: statusAuth.principal.role,
             roleSource: statusAuth.principal.roleSource || "current",
           },
-          status: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }),
+          status: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown }),
           provider: dataProvider.getStatus(),
           monitor: monitorBroker.status(),
           sheets: sheetService.status(),
@@ -467,7 +470,7 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/api/admin/grafana-auth") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         return sendJson(response, 200, { success: true }, {
           "X-WEBAUTH-USER": `epiber-${INSTANCE_ID}:${auth.principal.id}`,
           "X-WEBAUTH-ROLE": "Admin",
@@ -476,14 +479,14 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/api/session") {
         if (request.method === "GET") {
-          const auth = authService.getUserForToken(sessionToken, { refreshSession: true });
+          const auth = await authService.getUserForToken(sessionToken, { refreshSession: true });
           return sendJson(response, 200, {
             success: true,
             authenticated: !!auth,
             user: auth?.user || null,
             expiresAt: auth?.session.expiresAt || null,
             serverTime: Date.now(),
-            frontendLogging: frontendLoggingService.getPolicy(auth?.principal.id || null),
+            frontendLogging: await frontendLoggingService.getPolicy(auth?.principal.id || null),
           }, auth?.session.refreshed ? {
             "Set-Cookie": serializeCookie(SESSION_COOKIE, sessionToken, { maxAge: SESSION_TTL_MS / 1000, secure: COOKIE_SECURE }),
           } : {});
@@ -497,12 +500,12 @@ function createApplication(overrides = {}) {
           try {
             attemptedLogin = authIdentifier(body, "passwordHash");
           } catch (error) {
-            beginAudit({ action: "login", targetType: "session", sourceIp, before: { identifierValid: false } });
+             await beginAudit({ action: "login", targetType: "session", sourceIp, before: { identifierValid: false } });
             throw error;
           }
-          beginAudit({ action: "login", targetType: "session", sourceIp, attemptedLogin, before: { identifierValid: true } });
+          await beginAudit({ action: "login", targetType: "session", sourceIp, attemptedLogin, before: { identifierValid: true } });
           const result = await authService.login({ login: attemptedLogin, passwordHash: body.passwordHash, ip: sourceIp });
-          finishAudit({
+          await finishAudit({
             principal: {
               type: "user",
               id: result.user.id,
@@ -518,18 +521,18 @@ function createApplication(overrides = {}) {
             user: result.user,
             expiresAt: result.session.expiresAt,
             serverTime: Date.now(),
-            frontendLogging: frontendLoggingService.getPolicy(result.user.id),
+            frontendLogging: await frontendLoggingService.getPolicy(result.user.id),
           }, { "Set-Cookie": cookie });
         }
         if (request.method === "DELETE") {
           assertAllowedOrigin(request, ALLOWED_ORIGINS);
-          const auth = authService.getUserForToken(sessionToken);
-          beginAudit({ action: "logout", principal: auth?.principal, targetType: "session", targetId: auth?.principal.id || "" });
-          authService.logout(sessionToken);
-          finishAudit();
+          const auth = await authService.getUserForToken(sessionToken);
+          await beginAudit({ action: "logout", principal: auth?.principal, targetType: "session", targetId: auth?.principal.id || "" });
+          await authService.logout(sessionToken);
+          await finishAudit();
           return sendJson(response, 200, {
             success: true,
-            frontendLogging: frontendLoggingService.getPolicy(null),
+            frontendLogging: await frontendLoggingService.getPolicy(null),
           }, { "Set-Cookie": clearCookie(SESSION_COOKIE, COOKIE_SECURE) });
         }
         return methodNotAllowed(response, ["GET", "POST", "DELETE"], supportId);
@@ -538,8 +541,8 @@ function createApplication(overrides = {}) {
       if (pathname === "/api/password") {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireUser(sessionToken);
-        beginAudit({ action: "passwordChange", principal: auth.principal, targetType: "user", targetId: auth.principal.id });
+        const auth = await authService.requireUser(sessionToken);
+        await beginAudit({ action: "passwordChange", principal: auth.principal, targetType: "user", targetId: auth.principal.id });
         limitHttpWrite(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
         const result = await authService.changeOwnPassword(
@@ -547,37 +550,37 @@ function createApplication(overrides = {}) {
           passwordHashValue(body.currentPasswordHash, "currentPasswordHash"),
           passwordHashValue(body.newPasswordHash, "newPasswordHash"),
         );
-        finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
+        await finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
         const cookie = serializeCookie(SESSION_COOKIE, result.session.token, { maxAge: SESSION_TTL_MS / 1000, secure: COOKIE_SECURE });
         return sendJson(response, 200, {
           success: true,
           user: result.user,
           expiresAt: result.session.expiresAt,
           serverTime: Date.now(),
-          frontendLogging: frontendLoggingService.getPolicy(result.user.id),
+          frontendLogging: await frontendLoggingService.getPolicy(result.user.id),
         }, { "Set-Cookie": cookie });
       }
 
       if (pathname === "/api/admin/frontend-logging") {
         if (request.method === "GET") {
-          authService.requireRole(sessionToken, ["admin"]);
-          return sendJson(response, 200, frontendLoggingService.adminView());
+          await authService.requireRole(sessionToken, ["admin"]);
+          return sendJson(response, 200, await frontendLoggingService.adminView());
         }
         if (request.method === "POST") {
           assertAllowedOrigin(request, ALLOWED_ORIGINS);
-          const auth = authService.requireRole(sessionToken, ["admin"]);
+          const auth = await authService.requireRole(sessionToken, ["admin"]);
           limitFrontendLoggingAdmin(request, auth.principal.id);
           const body = await readJsonBody(request, Math.min(4096, HTTP_BODY_LIMIT_BYTES));
-          const before = frontendLoggingService.settingsSnapshot();
-          beginAudit({
+          const before = await frontendLoggingService.settingsSnapshot();
+          await beginAudit({
             action: "frontendLoggingSettings",
             principal: auth.principal,
             targetType: "frontend-logging",
             targetId: "global",
             before,
           });
-          const stored = frontendLoggingService.updateSettings(body);
-          finishAudit({ after: { ...stored.value, revision: stored.revision } });
+          const stored = await frontendLoggingService.updateSettings(body);
+          await finishAudit({ after: { ...stored.value, revision: stored.revision } });
           return sendJson(response, 200, { success: true, settings: { ...stored.value, revision: stored.revision } });
         }
         return methodNotAllowed(response, ["GET", "POST"], supportId);
@@ -586,12 +589,12 @@ function createApplication(overrides = {}) {
       if (pathname === "/api/admin/frontend-logging/targets") {
         if (!["POST", "DELETE"].includes(request.method)) return methodNotAllowed(response, ["POST", "DELETE"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         limitFrontendLoggingAdmin(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
         const personId = idValue(body.personId, "personId");
-        const before = frontendLoggingService.targetsSnapshot().value[personId] || null;
-        beginAudit({
+        const before = (await frontendLoggingService.targetsSnapshot()).value[personId] || null;
+        await beginAudit({
           action: request.method === "POST" ? "frontendLoggingTargetSet" : "frontendLoggingTargetRemove",
           principal: auth.principal,
           targetType: "user",
@@ -599,9 +602,9 @@ function createApplication(overrides = {}) {
           before,
         });
         const result = request.method === "POST"
-          ? frontendLoggingService.setTarget(body, auth.principal)
-          : frontendLoggingService.removeTarget(body);
-        finishAudit({ after: request.method === "POST" ? result.target : { removed: result.removed } });
+          ? await frontendLoggingService.setTarget(body, auth.principal)
+          : await frontendLoggingService.removeTarget(body);
+        await finishAudit({ after: request.method === "POST" ? result.target : { removed: result.removed } });
         return sendJson(response, 200, { success: true, ...result });
       }
 
@@ -615,53 +618,53 @@ function createApplication(overrides = {}) {
         try {
           attemptedLogin = authIdentifier(body, "newPasswordHash");
         } catch (error) {
-          beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, before: { identifierValid: false } });
+          await beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, before: { identifierValid: false } });
           throw error;
         }
-        beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, attemptedLogin, before: { identifierValid: true } });
+        await beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, attemptedLogin, before: { identifierValid: true } });
         const result = await authService.setupPassword(
           attemptedLogin,
           passwordHashValue(body.newPasswordHash, "newPasswordHash"),
         );
-        finishAudit({ targetId: result._audit?.personId || "", after: { credentialChanged: true, sessionsRevoked: true } });
+        await finishAudit({ targetId: result._audit?.personId || "", after: { credentialChanged: true, sessionsRevoked: true } });
         return sendJson(response, 200, publicResult(result));
       }
 
       if (pathname === "/api/admin/password-setup") {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         limitHttpWrite(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-        beginAudit({ action: "adminPasswordSetup", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
+        await beginAudit({ action: "adminPasswordSetup", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
         const result = await authService.setPasswordSetupAllowed(
           sessionToken,
           idValue(body.personId, "personId"),
           booleanValue(body.allowed, "allowed"),
         );
-        finishAudit({ after: { allowed: result.allowed } });
+        await finishAudit({ after: { allowed: result.allowed } });
         return sendJson(response, 200, result);
       }
 
       if (pathname === "/api/admin/password") {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         limitHttpWrite(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-        beginAudit({ action: "adminPasswordSet", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
+        await beginAudit({ action: "adminPasswordSet", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
         const result = await authService.setPasswordAsAdmin(
           sessionToken,
           idValue(body.personId, "personId"),
           passwordHashValue(body.newPasswordHash, "newPasswordHash"),
         );
-        finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
+        await finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
         return sendJson(response, 200, result);
       }
 
       if (pathname === "/api/monitor/session") {
         if (request.method === "GET") {
-          const device = repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
+          const device = await repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
           return sendJson(response, 200, { success: true, authenticated: !!device, monitor: device ? { id: device.monitorId, label: device.label } : null });
         }
         if (request.method === "POST") {
@@ -670,19 +673,19 @@ function createApplication(overrides = {}) {
             throw new AppError("DEVICE_LOGIN_RATE_LIMIT", "Zu viele Geraete-Anmeldeversuche", 429);
           }
           const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-          beginAudit({ action: "monitorEnroll", targetType: "monitor" });
+          await beginAudit({ action: "monitorEnroll", targetType: "monitor" });
           const token = stringValue(body.token, "token", { min: 32, max: 128 });
-          const device = repository.authenticateMonitor(token);
+          const device = await repository.authenticateMonitor(token);
           if (!device) throw new AppError("DEVICE_LOGIN_FAILED", "Geraetetoken ist ungueltig", 401);
-          finishAudit({ principal: { type: "device", id: device.monitorId, role: "device" }, targetId: device.monitorId });
+          await finishAudit({ principal: { type: "device", id: device.monitorId, role: "device" }, targetId: device.monitorId });
           const cookie = serializeCookie(MONITOR_COOKIE, token, { maxAge: 31536000, secure: COOKIE_SECURE });
           return sendJson(response, 200, { success: true, monitor: { id: device.monitorId, label: device.label } }, { "Set-Cookie": cookie });
         }
         if (request.method === "DELETE") {
           assertAllowedOrigin(request, ALLOWED_ORIGINS);
-          const device = repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
-          beginAudit({ action: "monitorLogout", principal: device ? { type: "device", id: device.monitorId, role: "device" } : null, targetType: "monitor", targetId: device?.monitorId || "" });
-          finishAudit();
+          const device = await repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
+          await beginAudit({ action: "monitorLogout", principal: device ? { type: "device", id: device.monitorId, role: "device" } : null, targetType: "monitor", targetId: device?.monitorId || "" });
+          await finishAudit();
           return sendJson(response, 200, { success: true }, { "Set-Cookie": clearCookie(MONITOR_COOKIE, COOKIE_SECURE) });
         }
         return methodNotAllowed(response, ["GET", "POST", "DELETE"], supportId);
@@ -696,7 +699,7 @@ function createApplication(overrides = {}) {
       let responseError = error;
       if (httpAudit && !httpAudit.finished) {
         try {
-          finishAudit({ result: httpActionCompleted || error.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : "failed", errorCode: error.code || "INTERNAL_ERROR" });
+          await finishAudit({ result: httpActionCompleted || error.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : "failed", errorCode: error.code || "INTERNAL_ERROR" });
         } catch (auditError) {
           logger.log("error", "audit_record_failed", { supportId, action: httpAudit.action, error: auditError });
         }
@@ -762,17 +765,18 @@ function createApplication(overrides = {}) {
     repository,
     scoreLogRepository,
     sheetService,
+    competitionService,
   });
 
   function initialize() {
     if (initializePromise) return initializePromise;
     const startedAt = Date.now();
     initializePromise = (async () => {
-      const result = await dataPoller.initialLoad();
+      const result = await dataPollerService.initialLoad();
       if (shuttingDown) return { ...result, aborted: true };
       messagingService.enrichLegacyCompetitionAssignments?.();
       stateStore.migrateLegacyCourtDisplayRules(dataStore.get("matchtyp"));
-      dataPoller.start(result);
+      dataPollerService.start(result);
       const courts = stateStore.getScoreboardCourts();
       courtPoller.setCourtActive(
         { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
@@ -781,7 +785,7 @@ function createApplication(overrides = {}) {
       courtAutomation.start();
       for (const court of ["1", "2"]) courtPoller.logCourtSnapshot(court, "startup");
       initialized = true;
-      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }).ready, durationMs: Date.now() - startedAt });
+      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown }).ready, durationMs: Date.now() - startedAt });
       cleanupTimer = setInterval(() => {
         repository.cleanup();
         try { hallTimeService.cleanupExpired(); } catch (error) {
@@ -807,7 +811,7 @@ function createApplication(overrides = {}) {
       : Promise.resolve();
     const drains = (async () => {
       const results = await Promise.allSettled([
-        dataPoller.stop(),
+        dataPollerService.stop(),
         Promise.resolve(courtAutomation.stop()),
         courtPoller.stop(),
         dataProvider.shutdown(server),
@@ -868,12 +872,15 @@ function createApplication(overrides = {}) {
     server,
     sheetService,
     shutdown,
-    status: () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }),
+    status: () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, initialized, shuttingDown }),
   };
 }
 
 async function start() {
   validateRuntimeConfig();
+  if (PERSISTENCE_MODE === "postgres") {
+    throw Object.assign(new Error("PostgreSQL-Servermodus ist bis zur Vollstaendigkeit aller Laufzeitfaehigkeiten gesperrt"), { code: "POSTGRES_SERVER_MODE_INCOMPLETE" });
+  }
   const app = createApplication();
   await new Promise((resolve, reject) => {
     const onStartupError = (error) => reject(error);

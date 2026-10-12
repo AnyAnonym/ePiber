@@ -3779,6 +3779,69 @@ fokussiert gegen kurzlebige, ausschliesslich synthetische PostgreSQL-Cluster
 geprueft; es gibt keine fachlich freigegebene Teilwelle und keinen Rueckfall auf
 Sheets oder SQLite innerhalb des neuen Modus.
 
+#### Umsetzungsstand Phase 5 nach Laufzeit-Repositorypaket 1
+
+Stand 11.10.2026 ist die gemeinsame asynchrone PostgreSQL-Laufzeitgrundlage mit
+vollstaendiger Registrierung aller sechs Pflichtdomaenen hergestellt. Umgesetzt
+sind:
+
+- auf fuenf Verbindungen begrenzter App-Pool mit UTC-, Schema-, Tenant-,
+  Sektions- und Seed-/Importgate;
+- gemeinsame Transaktionsgrenzen mit kontrollierten Retries, Rollback,
+  unbekanntem Commit-Ausgang und datensparsamen Abschlusslogs;
+- typisierte Repositories fuer Core, Identity/Auth, Spielbetrieb, Venue,
+  Messaging und Operations;
+- erste PostgreSQL-Readprojektionen fuer Personen, Bewerbe, Matches,
+  Ranglisten, Courts, Hallenzeiten und Inbox;
+- atomare Session-, Credential-, Score-, Messagingquittierungs-, Ereignis- und
+  Auditpfade mit fokussierten Tests gegen kurzlebige PostgreSQL-18-Cluster;
+- Schemaerzwungene Entfernung alter Passwort-Hashes bei Credentialwiderruf und
+  minimale App-Leserechte fuer Laufzeitmetadaten;
+- PostgreSQL-only Authservice mit HMAC-gebundenen Loginlimits,
+  `auth_revision`-Sessionpruefung, Hashupgrade, Passwortrotation und
+  einmaliger 24-Stunden-Passwortfreigabe;
+- erster integrierter Spielbetriebswrite fuer EntryList-An- und Abmeldung mit
+  gemeinsamer Transaktion fuer Fachzeile, Messaging, Idempotenz und Audit;
+- separater Worker-Repository- und Servicevertrag fuer Jobs und Outbox mit
+  Lease, `SKIP LOCKED`, Retry, Dead- und Unknown-Pfad;
+- verlustfreie Favoriten-/Startseitenstruktur fuer Overlays, Round-Robin-Layout
+  und Navigatorprofile;
+- asynchron vorbereitete Authentifizierungs- und Repositoryaufrufe in HTTP und
+  WebSocket bei unveraendert aktivem Legacybetrieb;
+- atomare PostgreSQL-Erzeugung aller acht bisherigen Tabellenprojektionen ohne
+  Credentialhashes und ein nicht pollender Projektionsloader als Ersatz fuer den
+  spaeter entfallenden Sheet-Initialload;
+- fail-closed Komposition der bereits migrierten Teilservices mit expliziter
+  Liste der noch fehlenden Serverfaehigkeiten;
+- atomare und idempotente PostgreSQL-Favoriten-/Startseitenwrites mit
+  verlustfreier Zielmatrix und revisionsstabilen leeren Listen;
+- PostgreSQL-Frontenddiagnose fuer globale Policy und temporaere Zielpersonen;
+- Inboxquittierung sowie Bewerbshistorien-Kommentare, Moderation und Reaktionen
+  mit globaler Revision und Outbox-Invalidierung;
+- verlustfreie Importprojektion fuer Messagingquelle, Akteur, Summary, Detail,
+  Ergebnis und Kommentar-Moderationsstatus;
+- echter Worker-Prozesseinstieg mit kontrolliertem Start, Wake-up und Shutdown;
+- expliziter, noch gesperrter `PERSISTENCE_MODE=postgres`, der Legacyvariablen
+  nicht verlangt und einen Teil-Cutover fail-closed verhindert;
+- asynchroner PostgreSQL-Auditadapter fuer bestehende HTTP-/WebSocket-Aktionen
+  mit registrierten Feldern und Entfernung privater Normalisierungswerte;
+- PostgreSQL-Monitorbroker fuer Provisionierung, Rotation, Widerruf,
+  Navigationsziel, Scrollsequenz, ACK und Reconnect-Resync;
+- relationale Match- und manuelle Court-Zuweisungen samt Teilnehmern sowie
+  transaktionale Zuweisungs- und Aktivstatuswrites als Grundlage der noch
+  ausstehenden Court-State-Serviceumschaltung.
+
+Der PostgreSQL-Modus ist noch nicht in `server.js` aktiviert. Die bestehenden
+Fachservices, HTTP-/WebSocket-Pfade, Readiness, Jobs/Outbox und der vollstaendige
+Shutdown muessen noch vollstaendig auf die asynchronen Repositoryvertraege
+umgestellt und gemeinsam aktiviert werden. Der Worker ist implementiert, aber
+noch nicht mit allen produktiven Job-/Outbox-Handlern als Dienst freigegeben.
+Offen bleiben insbesondere Court-Steuerwrites, Hallenzeitenwrites,
+Match-/Ranglistenwrites, PostgreSQL-Messagingreporting, Court-Automationsaudit
+und die finale Serverkomposition.
+Bis zu diesem integrierten Stand laeuft PAJ unveraendert im Legacybetrieb; ein
+domaenenweiser Mischbetrieb ist nicht freigegeben.
+
 Die Anwendung verwendet bis zum spaeteren Gesamtcutover weiterhin unveraendert
 Google Sheets und SQLite. Paket 2 aktiviert keinen PostgreSQL-Laufzeitpfad. Der
 Zugriff auf reale ePiber-Daten, die geschuetzte Realanalyse aus Phase 5A, ein
@@ -4039,6 +4102,14 @@ definierten Phase-3-Exit verlangten Artefakte lautet:
 4. **Abgeschlossen:** Erfolgreicher Leeraufbau in einem kurzlebigen PostgreSQL-Cluster,
    Schema-/Grantverifikation und generierter kanonischer
    `pg_dump --schema-only`-Snapshot ohne Drift.
+5. **Abgeschlossen:** Die gemeinsame PostgreSQL-/Gitea-Development-Grundlage mit
+   LUKS-/Swapabsicherung, systemd-Units, produktneutralem Socket sowie getrennten
+   Rollen und HBA-Regeln ist aufgebaut und technisch verifiziert.
+6. **Abgeschlossen fuer synthetische Quellpakete:** Import-CLI, geschlossene
+   Quellpaketpruefung, deterministische Sheet-/SQLite-Transformationen,
+   PostgreSQL-Gesamtimport und synthetische Transformationspruefungen liegen vor.
+   Der kontrollierte Export realer Legacyquellen bleibt Teil der geschuetzten
+   Realanalyse in Phase 5A.
 
 Damit ist der statisch-synthetische Phase-3-Exit erreicht. Der Erstentwurf bleibt
 gemaess Abschnitt 17 bis zum ersten offiziellen gemeinsamen `epiber_devel`-Aufbau
@@ -4046,17 +4117,15 @@ veraenderbar; Realanalysebefunde werden als neue synthetische Regressionen und
 gegebenenfalls korrigierte, noch nicht eingefrorene Initialmigrationen
 uebernommen.
 
-Die bereits fachlich entschiedenen, aber erst mit ihrer Umsetzungsphase zu
-erzeugenden Betriebsartefakte bleiben davon getrennt:
+Die bereits fachlich entschiedenen, aber erst mit ihrer spaeteren
+Umsetzungsphase zu erzeugenden Betriebsartefakte bleiben davon getrennt:
 
-- Phase 1: systemd-Units, LUKS-/Swap-/Socketkonfiguration und Rollen/HBA;
-- Phase 5A nach synthetischem Anwendungsumbau: isolierte Realanalyse,
-  Score-Dublettenregel und datensparsamer Abgleichbericht;
+- Phase 5A nach synthetischem Anwendungsumbau: kontrollierter Legacy-Exporter,
+  isolierte Realanalyse, Score-Dublettenregel und datensparsamer Abgleichbericht;
 - Phase 7B nach Anwendungsumbau, Realanalyse sowie vollstaendiger synthetischer
   Funktions- und Betriebsabnahme, jedoch vor dauerhaftem Realimport und Live:
   pgBackRest-/Scaleway-PoC, praktischer Restore, PITR, postgres_exporter,
   notwendige Dashboards und Alarmregeln;
-- Phase 2/4: Import-/Export-CLI und synthetische Transformationspruefungen;
 - Phase 6/7: gemessene Last-, Pool-, Import-, Backup- und Restorewerte sowie
   Devel-/Live-Runbooks;
 - nach Live: kontrollierter Loeschlauf fuer das 370-Tage-Compliance-Archiv.

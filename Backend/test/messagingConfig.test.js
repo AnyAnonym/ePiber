@@ -52,6 +52,38 @@ test("Messaging-Reporting verlangt bei Aktivierung Deployment und starken Base64
   assert.equal(valid.status, 0, valid.stderr);
 });
 
+test("PostgreSQL-Modus verlangt keine Legacydateien, bleibt aber bis zur Vollstaendigkeit fail-closed", () => {
+  const config = spawnSync(process.execPath, ["-e", "require('./config.js').validateRuntimeConfig()"], {
+    cwd: BACKEND_ROOT,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      PERSISTENCE_MODE: "postgres",
+      PGUSER: "epiber_app_login",
+      EPIBER_TENANT_CODE: "devel-epiber",
+      SHEET_ID: "",
+      COURT_URL: "",
+    },
+  });
+  assert.equal(config.status, 0, config.stderr);
+  const server = spawnSync(process.execPath, ["-e", "require('./server.js').start().catch((error)=>process.stdout.write(error.code || 'UNKNOWN'))"], {
+    cwd: BACKEND_ROOT,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      PERSISTENCE_MODE: "postgres",
+      PGUSER: "epiber_app_login",
+      EPIBER_TENANT_CODE: "devel-epiber",
+      SHEET_ID: "",
+      COURT_URL: "",
+    },
+  });
+  assert.equal(server.status, 0, server.stderr);
+  assert.equal(server.stdout, "POSTGRES_SERVER_MODE_INCOMPLETE");
+});
+
 test("nur Live und PAJ aktivieren den internen Reportingvertrag", () => {
   for (const [system, deployment] of [["piber", "live"], ["paj", "paj"]]) {
     const unit = fs.readFileSync(path.join(SYSTEMD_ROOT, `epiber-${system}.service`), "utf8");

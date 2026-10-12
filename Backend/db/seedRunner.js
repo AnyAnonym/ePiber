@@ -68,6 +68,8 @@ const FULL_DEVEL_TECHNICAL_TIME_COLUMNS = {
   "identity.frontend_logging_settings": ["updated_at"],
   "identity.frontend_logging_targets": ["created_at"],
   "identity.user_start_pages": ["updated_at"],
+  "identity.user_preference_states": ["favorites_updated_at", "start_page_updated_at"],
+  "messaging.history_revision": ["updated_at"],
   "play.competition_types": ["created_at"],
   "play.competition_type_versions": ["created_at"],
   "play.match_formats": ["created_at"],

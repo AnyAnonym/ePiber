@@ -99,8 +99,18 @@ VALUES
  ('0199c800-0000-7000-8000-000000000312', '0199c800-0000-7000-8000-000000000311', '0199c800-0000-7000-8000-000000000101', 'confirmed', '2026-10-01T10:00:00Z', '2026-10-01T10:00:00Z'),
  ('0199c800-0000-7000-8000-000000000313', '0199c800-0000-7000-8000-000000000311', '0199c800-0000-7000-8000-000000000102', 'waiting', '2026-10-01T10:01:00Z', NULL);
 
-INSERT INTO messaging.events(id, tenant_id, contract_id, event_type, template_key, template_version, source_operation_id, competition_id, match_id, created_at)
-VALUES ('0199c800-0000-7000-8000-000000000401', '0199c800-0000-7000-8000-000000000001', 'event-seed', 'match_result', 'match.result', 1, '0199c800-0000-7000-8000-000000000402', '0199c800-0000-7000-8000-000000000205', '0199c800-0000-7000-8000-000000000220', '2026-03-02T11:15:00Z');
+INSERT INTO messaging.events(
+  id, tenant_id, contract_id, event_type, template_key, template_version, source_operation_id,
+  competition_id, match_id, source_type, source_contract_id, actor_person_id, actor_contract_id_snapshot,
+  actor_name_snapshot, summary_snapshot, detail_snapshot, result_snapshot, created_at
+)
+VALUES (
+  '0199c800-0000-7000-8000-000000000401', '0199c800-0000-7000-8000-000000000001', 'event-seed',
+  'match_result', 'match.result', 1, '0199c800-0000-7000-8000-000000000402',
+  '0199c800-0000-7000-8000-000000000205', '0199c800-0000-7000-8000-000000000220',
+  'match', 'm-seed', '0199c800-0000-7000-8000-000000000101', '1', 'Ada Admin',
+  'Ada Admin hat ein Ergebnis eingetragen.', '', '6-3/6-4', '2026-03-02T11:15:00Z'
+);
 INSERT INTO messaging.event_participants(event_id, person_id, participant_role, contract_id_snapshot, first_name_snapshot, last_name_snapshot)
 VALUES ('0199c800-0000-7000-8000-000000000401', '0199c800-0000-7000-8000-000000000101', 'winner', '1', 'Ada', 'Admin');
 INSERT INTO messaging.event_recipients(id, event_id, person_id, template_key, template_version, created_at)
@@ -130,10 +140,10 @@ INSERT INTO identity.login_rate_limits(key_hash, key_type, window_started_at, at
 VALUES
  (decode(repeat('13',32),'hex'), 'ip', '2026-10-10T00:00:00Z', 20, '2026-10-10T00:15:00Z', '2026-10-10T00:30:00Z'),
  (decode(repeat('14',32),'hex'), 'ip_login', '2026-10-10T00:00:00Z', 5, '2026-10-10T00:15:00Z', '2026-10-10T00:30:00Z');
-INSERT INTO identity.frontend_logging_settings(tenant_id, minimum_level, info_sample_rate, debug_sample_rate)
-VALUES ('0199c800-0000-7000-8000-000000000001', 'warn', 0.1000, 0.0100);
-INSERT INTO identity.frontend_logging_targets(tenant_id, person_id, minimum_level, expires_at)
-VALUES ('0199c800-0000-7000-8000-000000000001', '0199c800-0000-7000-8000-000000000103', 'debug', '2026-10-10T01:00:00Z');
+INSERT INTO identity.frontend_logging_settings(tenant_id, minimum_level, info_sample_rate, debug_sample_rate, targets_revision)
+VALUES ('0199c800-0000-7000-8000-000000000001', 'warn', 0.1000, 0.1000, 1);
+INSERT INTO identity.frontend_logging_targets(tenant_id, person_id, minimum_level, expires_at, created_by_person_id)
+VALUES ('0199c800-0000-7000-8000-000000000001', '0199c800-0000-7000-8000-000000000103', 'debug', '2026-10-10T01:00:00Z', '0199c800-0000-7000-8000-000000000101');
 
 INSERT INTO play.competition_types(id, tenant_id, contract_id, name)
 VALUES
@@ -200,16 +210,20 @@ VALUES
 INSERT INTO play.match_ranking_effects(match_result_history_id, ranking_change_id, challenger_rank_snapshot, challenged_rank_snapshot)
 VALUES ('0199c800-0000-7000-8000-000000000262', '0199c800-0000-7000-8000-000000000269', 2, 1);
 
-INSERT INTO venue.court_assignments(id, court_id, match_id, assigned_at)
-VALUES ('0199c800-0000-7000-8000-000000000320', '0199c800-0000-7000-8000-000000000302', '0199c800-0000-7000-8000-000000000220', '2026-03-02T09:55:00Z');
+INSERT INTO venue.court_assignments(id, court_id, match_id, competition_id, match_format_version_id, competition_name_snapshot, assigned_at)
+VALUES ('0199c800-0000-7000-8000-000000000320', '0199c800-0000-7000-8000-000000000302', '0199c800-0000-7000-8000-000000000220', '0199c800-0000-7000-8000-000000000205', '0199c800-0000-7000-8000-000000000204', 'Rangliste Herren', '2026-03-02T09:55:00Z');
+INSERT INTO venue.court_assignment_participants(assignment_id,side_no,position_no,person_id,first_name_snapshot,last_name_snapshot)
+VALUES
+ ('0199c800-0000-7000-8000-000000000320',1,1,'0199c800-0000-7000-8000-000000000101','Ada','Admin'),
+ ('0199c800-0000-7000-8000-000000000320',2,1,'0199c800-0000-7000-8000-000000000102','Olivia','Operator');
 UPDATE venue.courts SET active=true, epoch=1, revision=2 WHERE id='0199c800-0000-7000-8000-000000000302';
 UPDATE venue.court_live_state SET assignment_id='0199c800-0000-7000-8000-000000000320', active=true, source_state='ready', epoch=1, revision=2, updated_at='2026-03-02T10:05:00Z' WHERE court_id='0199c800-0000-7000-8000-000000000302';
 INSERT INTO venue.score_events(id, event_id, court_id, assignment_id, source_id, court_sequence, source_occurred_at, accepted_at, side_one_set_one, side_two_set_one, side_one_set_two, side_two_set_two, side_one_set_three, side_two_set_three, side_one_points, side_two_points, court_revision, source_instance, source_sequence)
 VALUES ('0199c800-0000-7000-8000-000000000321', '0199c800-0000-7000-8000-000000000322', '0199c800-0000-7000-8000-000000000302', '0199c800-0000-7000-8000-000000000320', '0199c800-0000-7000-8000-000000000303', 1, '2026-03-02T10:05:00Z', '2026-03-02T10:05:01Z', '1', '0', '0', '0', '0', '0', '15', '0', 2, 'synthetic', 1);
 INSERT INTO venue.court_state_events(id, court_id, assignment_id, actor_person_id, event_type, resulting_revision, occurred_at)
 VALUES ('0199c800-0000-7000-8000-000000000323', '0199c800-0000-7000-8000-000000000302', '0199c800-0000-7000-8000-000000000320', '0199c800-0000-7000-8000-000000000101', 'assignment_started', 2, '2026-03-02T09:55:00Z');
-INSERT INTO venue.monitor_commands(id, monitor_id, command_id, command_type, target_revision, created_at, acknowledged_at, expires_at)
-VALUES ('0199c800-0000-7000-8000-000000000324', '0199c800-0000-7000-8000-000000000304', '0199c800-0000-7000-8000-000000000325', 'navigate', 1, '2026-10-10T00:00:00Z', '2026-10-10T00:00:01Z', '2026-10-10T00:05:00Z');
+INSERT INTO venue.monitor_commands(id, monitor_id, command_id, command_type, target_revision, target_path, status, created_at, updated_at, acknowledged_at, expires_at)
+VALUES ('0199c800-0000-7000-8000-000000000324', '0199c800-0000-7000-8000-000000000304', '0199c800-0000-7000-8000-000000000325', 'navigate', 1, '/scoreboard.html', 'loaded', '2026-10-10T00:00:00Z', '2026-10-10T00:00:01Z', '2026-10-10T00:00:01Z', '2026-10-10T00:05:00Z');
 INSERT INTO venue.navigation_presets(id, tenant_id, contract_id, profile_code, label, target_type, page_key, enabled, sort_order)
 VALUES ('0199c800-0000-7000-8000-000000000326', '0199c800-0000-7000-8000-000000000001', 'nav-seed', '1', 'Scoreboard', 'page', 'scoreboard', true, 1);
 INSERT INTO venue.hall_time_constraints(id, grid_id, person_id, slot_id, constraint_type, created_at)
@@ -228,10 +242,14 @@ VALUES
  ('0199c800-0000-7000-8000-000000000121', 3, 'hall_time_grid', NULL, NULL, '0199c800-0000-7000-8000-000000000310', 1);
 INSERT INTO identity.user_start_pages(account_id, target_type, competition_id, revision)
 VALUES ('0199c800-0000-7000-8000-000000000121', 'ranking', '0199c800-0000-7000-8000-000000000205', 1);
+INSERT INTO identity.user_preference_states(account_id, favorites_revision, favorites_updated_at, start_page_revision, start_page_updated_at)
+VALUES ('0199c800-0000-7000-8000-000000000121', 1, '2026-10-01T10:00:00Z', 1, '2026-10-01T10:00:00Z');
 
 INSERT INTO messaging.receipts(recipient_id, read_at, acknowledged_at, revision)
 VALUES ('0199c800-0000-7000-8000-000000000403', '2026-03-02T11:20:00Z', '2026-03-02T11:21:00Z', 2)
 ON CONFLICT (recipient_id) DO UPDATE SET read_at=excluded.read_at, acknowledged_at=excluded.acknowledged_at, revision=excluded.revision;
+INSERT INTO messaging.history_revision(singleton, revision)
+VALUES (true, 1);
 INSERT INTO messaging.deliveries(id, recipient_id, channel, status, idempotency_key, attempt_count, updated_at)
 VALUES
  ('0199c800-0000-7000-8000-000000000410', '0199c800-0000-7000-8000-000000000403', 'email', 'sent', 'delivery-email-seed', 1, '2026-03-02T11:16:00Z'),

@@ -25,7 +25,7 @@ const TABLES = {
   navigation_presets: "venue.navigation_presets", frontend_logging_settings: "identity.frontend_logging_settings",
   idempotency_operations: "ops.idempotency_operations", events: "messaging.events", event_participants: "messaging.event_participants",
   event_recipients: "messaging.event_recipients", receipts: "messaging.receipts", deliveries: "messaging.deliveries", comments: "messaging.comments",
-  reactions: "messaging.reactions", user_revisions: "messaging.user_revisions", audit_operations: "ops.audit_operations",
+  reactions: "messaging.reactions", user_revisions: "messaging.user_revisions", history_revision: "messaging.history_revision", audit_operations: "ops.audit_operations",
   audit_security_context: "ops.audit_security_context", audit_transitions: "ops.audit_transitions",
 };
 

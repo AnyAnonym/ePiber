@@ -36,6 +36,9 @@ if (!/^[a-z0-9_-]{1,32}$/i.test(INSTANCE_ID)) {
   throw new Error("INSTANCE_ID enthaelt ungueltige Zeichen");
 }
 
+const PERSISTENCE_MODE = String(process.env.PERSISTENCE_MODE || "legacy").trim().toLowerCase();
+if (!new Set(["legacy", "postgres"]).has(PERSISTENCE_MODE)) throw new Error("PERSISTENCE_MODE muss legacy oder postgres sein");
+
 const LOG_LEVEL = String(process.env.LOG_LEVEL || "info").trim().toLowerCase();
 if (!["debug", "info", "warn", "error"].includes(LOG_LEVEL)) {
   throw new Error("LOG_LEVEL muss debug, info, warn oder error sein");
@@ -123,25 +126,28 @@ function validateRuntimeConfig() {
   if (!["127.0.0.1", "::1", "localhost"].includes(LISTEN_HOST)) {
     errors.push("LISTEN_HOST muss auf Loopback zeigen");
   }
-  if (!SHEET_ID) errors.push("SHEET_ID fehlt");
-  if (!COURT_URL) {
-    errors.push("COURT_URL fehlt");
-  } else {
-    try {
-      const url = new URL(COURT_URL);
-      if (url.protocol !== "https:") errors.push("COURT_URL muss HTTPS verwenden");
-    } catch {
-      errors.push("COURT_URL ist ungueltig");
+  if (PERSISTENCE_MODE === "legacy") {
+    if (!SHEET_ID) errors.push("SHEET_ID fehlt");
+    if (!COURT_URL) {
+      errors.push("COURT_URL fehlt");
+    } else {
+      try {
+        const url = new URL(COURT_URL);
+        if (url.protocol !== "https:") errors.push("COURT_URL muss HTTPS verwenden");
+      } catch {
+        errors.push("COURT_URL ist ungueltig");
+      }
     }
+    if (!path.isAbsolute(STATE_FILE) && STATE_FILE !== ":memory:") errors.push("STATE_FILE muss absolut sein");
+    for (const [name, filename] of [["SCORELOG_FILE", SCORELOG_FILE], ["AUDITLOG_FILE", AUDITLOG_FILE], ["MESSAGING_FILE", MESSAGING_FILE]]) {
+      if (!path.isAbsolute(filename) && filename !== ":memory:") errors.push(`${name} muss absolut sein`);
+    }
+    const persistentFiles = [STATE_FILE, SCORELOG_FILE, AUDITLOG_FILE, MESSAGING_FILE].filter((value) => value !== ":memory:");
+    if (new Set(persistentFiles).size !== persistentFiles.length) errors.push("STATE_FILE, SCORELOG_FILE, AUDITLOG_FILE und MESSAGING_FILE muessen getrennte Dateien sein");
+  } else {
+    if (!process.env.PGUSER) errors.push("PGUSER fehlt");
+    if (!/^[a-z0-9][a-z0-9_.-]{2,63}$/.test(String(process.env.EPIBER_TENANT_CODE || ""))) errors.push("EPIBER_TENANT_CODE fehlt oder ist ungueltig");
   }
-  if (!path.isAbsolute(STATE_FILE) && STATE_FILE !== ":memory:") {
-    errors.push("STATE_FILE muss absolut sein");
-  }
-  for (const [name, filename] of [["SCORELOG_FILE", SCORELOG_FILE], ["AUDITLOG_FILE", AUDITLOG_FILE], ["MESSAGING_FILE", MESSAGING_FILE]]) {
-    if (!path.isAbsolute(filename) && filename !== ":memory:") errors.push(`${name} muss absolut sein`);
-  }
-  const persistentFiles = [STATE_FILE, SCORELOG_FILE, AUDITLOG_FILE, MESSAGING_FILE].filter((value) => value !== ":memory:");
-  if (new Set(persistentFiles).size !== persistentFiles.length) errors.push("STATE_FILE, SCORELOG_FILE, AUDITLOG_FILE und MESSAGING_FILE muessen getrennte Dateien sein");
   if (MESSAGING_REPORT_ENABLED) {
     if (!["live", "paj"].includes(MESSAGING_REPORT_DEPLOYMENT)) errors.push("MESSAGING_REPORT_DEPLOYMENT muss live oder paj sein");
     if (!/^[A-Za-z0-9_-]{43,128}$/.test(MESSAGING_REPORT_TOKEN)) errors.push("EPIBER_OBSERVABILITY_API_TOKEN muss ein Base64url-Token mit mindestens 43 Zeichen sein");
@@ -181,6 +187,7 @@ module.exports = {
   MESSAGING_REPORT_TOKEN,
   MONITOR_COOKIE,
   PORT,
+  PERSISTENCE_MODE,
   PROTOCOL_VERSION,
   PUBLIC_ORIGIN,
   SHEET_STARTUP_RETRY_BASE_MS,

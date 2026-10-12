@@ -1295,10 +1295,10 @@ gesperrt; Live-Deployment folgt erst nach Backup- und Rollbackfreigabe.
   11. VORBEREITETE POSTGRESQL-MIGRATIONSARCHITEKTUR
 ================================================================================
 
-Die PostgreSQL-Migrationsgrundlage ist bis zum Stoppunkt unmittelbar vor der
-Umstellung des Backend-Laufzeitcodes implementiert. Sie aktiviert noch keinen
-PostgreSQL-Pfad im Server: Die laufende Anwendung verwendet weiterhin
-unveraendert Google Sheets und die vier SQLite-Dateien.
+Die PostgreSQL-Migrationsgrundlage und der erste Laufzeit-Repositoryblock sind
+implementiert. Sie aktivieren noch keinen PostgreSQL-Pfad in `server.js`: Die
+laufende Anwendung verwendet weiterhin unveraendert Google Sheets und die vier
+SQLite-Dateien.
 
 Der vorbereitete Zielstand umfasst:
 
@@ -1317,14 +1317,74 @@ Der vorbereitete Zielstand umfasst:
   SQLite-Quellen mit `inspect`, `dry-run`, `apply` und `validate`;
 - atomaren Gesamtimport, Rollback bei jedem Fehler, idempotente Wiederholung,
   Importprovenienz, kontrollierte Ausnahmemanifeste und datensparsame
-  Start-/Abschlusslogs.
+  Start-/Abschlusslogs;
+- `Backend/db/runtimeDatabase.js` als asynchrone PostgreSQL-Laufzeit mit
+  begrenztem Pool, UTC-, Schema-, Tenant-, Sektions- und Datengate,
+  vollstaendiger Pflichtdomaenenregistrierung, gemeinsamen Transaktionsgrenzen
+  sowie kontrolliertem Shutdown;
+- `Backend/db/createRuntimeRepositories.js` und die Repositories unter
+  `Backend/db/repositories/` fuer `core`, `identity`, `play`, `venue`,
+  `messaging` und `ops`;
+- typisierte Readprojektionen fuer Personen, Bewerbe, Matches, Ranglisten,
+  Courts, Hallenzeiten und Messaging sowie erste atomare Writepfade fuer
+  Sessions, Credentialwechsel, Scores, Messagingquittierungen, Ereignisse und
+  Operationsaudit;
+- `Backend/postgresAuthService.js` fuer PostgreSQL-only Login, HMAC-gebundene
+  Loginlimits, Legacy-Hashupgrade, Sessionbindung an `auth_revision`,
+  Sessionrotation und zeitlich begrenzte Passwortfreigaben;
+- `Backend/postgresCompetitionService.js` fuer erste vollstaendige
+  Fachtransaktionen, in denen EntryList-Write, Messagingereignis,
+  Idempotenzabschluss und Auditabschluss gemeinsam committen;
+- `Backend/workerService.js`, `Backend/db/createWorkerRuntime.js` und das
+  Worker-Repository fuer einen getrennten Lease-basierten Jobs-/Outbox-Prozess
+  mit Retry, Dead-/Unknown-Pfad und datensparsamen Abschlusslogs;
+- `Backend/postgresProjectionService.js` und
+  `Backend/postgresProjectionLoader.js` fuer die atomare, nicht pollende
+  Erzeugung der acht bestehenden Tabellenvertraege aus PostgreSQL. Credentials
+  werden dabei bewusst nicht in den allgemeinen Projektioncache aufgenommen;
+- `Backend/createPostgresComponents.js` als fail-closed Komposition der bereits
+  umgestellten Teilservices. Sie weist noch fehlende Serverfaehigkeiten explizit
+  aus und darf deshalb noch keinen PostgreSQL-Servermodus freigeben;
+- `Backend/postgresPreferenceService.js` fuer atomare, idempotente Favoriten-
+  und Startseitenwrites mit eigenstaendigen Revisionsstaenden, auch bei einer
+  leeren Favoritenliste;
+- `Backend/postgresFrontendLoggingService.js` fuer gecachte, revisionierte
+  Diagnosepolicy sowie PostgreSQL-persistierte globale Einstellungen und
+  temporaere Zielpersonen. Freie Browserpayloads werden nicht persistiert;
+- `Backend/postgresMessagingService.js` fuer Inboxquittierung,
+  Bewerbshistorienprojektion, Kommentare, Moderation und Reaktionen mit
+  transaktionaler Idempotenz und Outbox-Invalidierung;
+- `Backend/worker.js` als eigener Prozessstart mit Tenant-/Schemagate,
+  registrierten Handlern, LISTEN/NOTIFY-Weckhinweis und kontrolliertem Drain;
+- `Backend/postgresAuditAdapter.js` als asynchrone Bruecke fuer die bestehenden
+  HTTP-/WebSocket-Auditvertraege. Start und terminaler Abschluss werden von den
+  Requestpfaden abgewartet; private Normalisierungswerte werden vor der
+  typisierten PostgreSQL-Projektion auf einen Aenderungsmarker reduziert.
+- `Backend/postgresMonitorBroker.js` fuer persistente Monitorbereitstellung,
+  Tokenrotation, Widerruf, Navigation, Scrollsequenzen und ACK-Zustaende. Die
+  laufende WebSocket-Verbindung bleibt fluechtig; Ziel, Kommando, Reihenfolge,
+  Ablauf und terminaler Zustand liegen in PostgreSQL.
 
-Der naechste Architekturblock beginnt mit asynchronen `pg`-Repositories und
-gemeinsamen Transaktionsgrenzen. Controller, WebSocket-Routing und Fachservices
-erhalten keinen direkten SQL-Zugriff. Der PostgreSQL-Modus muss bei einer
-fehlenden Domaene kontrolliert den Start ablehnen und darf innerhalb dieses Modus
-nicht auf Sheets oder SQLite zurueckfallen. Der bestehende Legacybetrieb bleibt
-bis zum vollstaendigen Gesamtcutover getrennt aktiv.
+Die Runtime lehnt eine fehlende Domaene bereits vor dem Verbindungsaufbau ab.
+Controller, WebSocket-Routing und Fachservices erhalten keinen direkten
+SQL-Zugriff. Als naechster Architekturblock werden die bestehenden Services auf
+die asynchronen Repositoryvertraege und gemeinsamen Transaktionsgrenzen
+umgestellt. HTTP- und WebSocket-Authentifizierungsaufrufe sowie mehrere
+Repository-Reads akzeptieren bereits asynchrone Provider, verwenden im aktiven
+Legacybetrieb aber weiterhin ihre bisherigen Implementierungen. Erst wenn alle
+von `server.js`, HTTP und WebSocket benoetigten Reads,
+Writes, Audit- und Fehlerpfade vollstaendig angeschlossen sind, darf der
+PostgreSQL-Modus aktiviert werden. Innerhalb dieses Modus gibt es keinen Rueckfall
+auf Sheets oder SQLite. Der bestehende Legacybetrieb bleibt bis zum
+vollstaendigen Gesamtcutover getrennt aktiv.
+
+Die Konfiguration kennt bereits `PERSISTENCE_MODE=legacy|postgres`. Der
+PostgreSQL-Wert benoetigt keine Sheet- oder SQLite-Konfiguration, wird vom
+Serverstart aber derzeit bewusst mit `POSTGRES_SERVER_MODE_INCOMPLETE`
+abgelehnt. Damit kann weder versehentlich ein gemischter Betrieb noch ein
+Teil-Cutover entstehen. Der getrennte Worker ist unabhaengig davon ueber
+`npm run start:worker` startbar, sofern PostgreSQL-Tenant und Laufzeitgates
+vollstaendig erfuellt sind.
 
 Backup, Restore und PITR sind bewusst als letzter technischer Freigabeblock nach
 PostgreSQL-Anwendungsumbau, synthetischer Gesamtintegration, Browser- und

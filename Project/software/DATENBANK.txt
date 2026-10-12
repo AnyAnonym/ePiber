@@ -1006,11 +1006,11 @@ Die vollstaendige verbindliche Liste steht in
 
 
 ================================================================================
-  10. VORBEREITETES POSTGRESQL-ZIELMODELL UND IMPORTWERKZEUGE
+  10. POSTGRESQL-ZIELMODELL, IMPORTWERKZEUGE UND LAUFZEITREPOSITORIES
 ================================================================================
 
-Das vorbereitete, noch nicht vom Backend verwendete PostgreSQL-Zielmodell liegt
-versioniert unter `Backend/db/migrations/` und als kanonischer Snapshot in
+Das noch nicht von `server.js` aktivierte PostgreSQL-Zielmodell liegt versioniert
+unter `Backend/db/migrations/` und als kanonischer Snapshot in
 `Backend/db/schema.sql`. Es umfasst:
 
 - `core`: Tenant, Sektion, kontrollierte Konfiguration und Projektionsrevisionen;
@@ -1058,6 +1058,106 @@ Fachbestand zurueck. Eine Wiederholung desselben erfolgreich gebundenen Laufs
 schreibt keine Dubletten; `validate` prueft Zaehler, Fremdschluessel, Sequenzen
 und die kanonische Zielprojektionspruefsumme. Reale Daten, ein dauerhafter
 Realbestand und die Laufzeitumstellung sind dadurch nicht freigegeben.
+
+Der erste PostgreSQL-Laufzeitblock liegt in `Backend/db/runtimeDatabase.js`,
+`Backend/db/createRuntimeRepositories.js` und `Backend/db/repositories/`. Die
+Runtime verwendet einen auf hoechstens fuenf Verbindungen begrenzten Pool und
+prueft vor der Repositoryfreigabe UTC, kompatible Schemageneration, den exakt
+erwarteten Tenant, die aktive Tennis-Sektion sowie ein erfolgreiches Seed- oder
+Importgate. `core`, `identity`, `play`, `venue`, `messaging` und `ops` muessen
+vollstaendig registriert sein; eine fehlende Domaene verhindert bereits den
+Verbindungsaufbau.
+
+Die Repositories besitzen parametrisierte typisierte Abfragen und gemeinsame
+Transaktionsgrenzen. Vorbereitet sind insbesondere Personen-/Kontoprojektionen,
+Sessions und Credentialwechsel, Bewerbs-/Match-/Ranglistenprojektionen,
+Court-/Score- und Hallenzeitenprojektionen, Messaging-Inbox und -Quittierung
+sowie aktionsgebundene Auditprojektionen. Widerrufene Passwort-Credentials
+muessen `secret_hash=NULL` besitzen; nur aktive Credentials duerfen einen
+nichtleeren Hash fuehren. Die App-Rolle darf die fuer das Laufzeitgate benoetigten
+Schema-, Seed- und Importmetadaten nur lesen und besitzt weiterhin weder
+Migrationsschreibrechte noch Leserecht auf Audit-Sicherheitskontexte.
+
+Persoenliche Favoriten und Startseiten bilden den bestehenden Zielvertrag nun
+verlustfrei ab. Neben einfachen Seiten-, Bewerbs-, Ranglisten-, EntryList-,
+Raster- und Hallenzeitenzielen koennen sie Overlays, Round-Robin-Ziele samt
+optionalem Paarungslayout sowie Navigatorseiten mit Profilcode typisiert
+speichern. Constraints verhindern unpassende Kombinationen von Seitenschluessel,
+Overlay, Bewerb, Hallenraster, Layout und Navigatorprofil. Diese Korrektur ist
+Bestandteil des noch nicht eingefrorenen Initialschemas.
+Ein eigener `identity.user_preference_states`-Datensatz bewahrt Revision und
+Aenderungszeitpunkt unabhaengig von den Zielzeilen. Dadurch bleibt auch eine
+leere Favoritenliste konfliktgeschuetzt revisioniert. Die Zielmatrix umfasst
+zusaetzlich die bewerbsuebergreifende Gesamthistorie.
+
+Frontend-Diagnoseeinstellungen speichern alle vom bestehenden Policyvertrag
+benoetigten Felder typisiert: Aktivierung, Mindestlevel, anonyme Teilnahme,
+Sampling, Batchgroesse, Flushintervall und Standardziel. Die globale
+Zielrevision liegt bei den Einstellungen; einzelne Zielzeilen referenzieren die
+Zielperson und den anlegenden Administrator. Die Retention bleibt durch
+Constraints fest auf 14 beziehungsweise 7 Tage begrenzt.
+
+Der erste PostgreSQL-Fachwrite fuer den Spielbetrieb bindet EntryList-Zeile,
+kontrolliertes Messagingereignis, Idempotenzantwort und Auditabschluss an
+dieselbe serielle Transaktion. Ein wiederholter identischer Request liefert die
+gespeicherte kontrollierte Antwort; ein abweichender Request mit derselben
+Operation-ID wird abgelehnt. Alte Passwort-Credentials verlieren ihren Hash in
+derselben Transaktion, in der Auth-Revision und Sessionwiderruf wirksam werden.
+
+Die acht bestehenden Tabellenprojektionen `players`, `bewerbe`, `bewerbsart`,
+`matchtyp`, `matches1`, `rlPlatzierung`, `navigator` und `entryList` werden aus
+den typisierten Relationen rekonstruiert und koennen den bisherigen atomaren
+Initialload ohne Polling ersetzen. Personenprojektionen enthalten dabei keinen
+Passwort- oder Credentialhash; Authentifizierung liest Credentials nur ueber den
+eng begrenzten Identity-Repositorypfad. Datums-, Wiener Zeitpunkt-,
+Teilnehmermarker- und Ergebnisprojektionen bleiben kompatibel zu den bestehenden
+HTTP-/WebSocket-Vertraegen.
+
+Der getrennte Worker verwendet einen eigenen Pool mit hoechstens zwei
+Verbindungen. Jobs und Outbox-Eintraege werden ueber `FOR UPDATE SKIP LOCKED`
+zeitlich geleast. Erfolg, Retry, dauerhafter Fehler und unbekannter externer
+Ausgang besitzen getrennte Statuspfade; Payloads erscheinen nicht in
+Betriebslogs. App und Worker duerfen die fuer ihr Laufzeitgate erforderlichen
+Schema-, Seed- und Importmetadaten nur lesen.
+
+Messaging-Ereignisse bewahren fuer die Bewerbshistorie kontrollierte Quellen-,
+Akteur-, Summary-, Detail- und Ergebnis-Snapshots. Der Importer uebernimmt diese
+Felder aus `messaging.sqlite`, statt sie nach der Transformation zu verlieren.
+Kommentare bewahren sichtbaren beziehungsweise `under_review`-Status,
+Bearbeitungs- und Moderationszeit sowie den Moderator; Loeschungen bleiben
+datensparsame Tombstones. Pro Person ist je Ereignis oder Kommentar genau eine
+Reaktion erlaubt. `messaging.history_revision` bildet den globalen
+Interaktionsstand ab. Kommentare, Moderation, Reaktionen und
+Inboxquittierungen committen gemeinsam mit typisierter Idempotenz und erzeugen
+bei einer Aenderung eine dauerhafte Outbox-Invalidierung.
+
+Der PostgreSQL-Auditadapter normalisiert bestehende Aktionsnamen auf feste
+Aktionscodes und akzeptiert ausschliesslich registrierte Projektionsfelder mit
+kontrollierten Skalartypen. Personen-, Kontakt-, Adress- und Loginwerte aus
+Normalisierungsvorgaengen werden nicht in die PostgreSQL-Auditprojektion
+uebernommen, sondern durch `geaendert` ersetzt. HTTP- und WebSocket-Pfade warten
+Auditstart und terminalen Abschluss ab; ein Abschlussfehler nach einem
+Fachwrite bleibt dadurch als unklarer Ausgang sichtbar.
+
+Monitorgeraete bewahren den kanonischen Zielpfad, die letzte Navigationskommando-
+ID und deren Ausgabezeit direkt am Geraet. `venue.monitor_commands` trennt
+Navigation und Scrollen schemaerzwungen, bindet Operation-ID, Zielrevision,
+Stream-ID, Sequenz, Delta, Ablauf, ACK-Status und kontrollierten Fehlercode. Ein
+Reconnect kann dadurch das aktuelle Navigationsziel erneut senden; Scroll-ACKs
+und Terminalzustaende sind nicht mehr ausschliesslich Prozessspeicher.
+
+Court-Zuweisungen unterscheiden relational zwischen Match- und manueller
+Zuweisung. Matchzuweisungen referenzieren Bewerb und Matchformat; manuelle
+Zuweisungen bleiben ohne kuenstliches Match moeglich. Beide Varianten verwenden
+`venue.court_assignment_participants` mit Seite, Position, Personenreferenz und
+Namenssnapshot. Zuweisungswechsel, Scorebaseline, Aktivstatus, Revision und
+Court-State-Event werden gemeinsam gesperrt und transaktional geschrieben.
+
+Dieser Stand ist noch kein freigegebener PostgreSQL-Anwendungsmodus. Die
+bestehenden Fachservices, HTTP-/WebSocket-Pfade, Readiness und Shutdownfolge
+verwenden bis zu ihrer vollstaendigen gemeinsamen Umstellung weiterhin den
+Legacybetrieb. Ein domaenenweiser Mischbetrieb oder ein PostgreSQL-Fallback auf
+Sheets beziehungsweise SQLite bleibt ausgeschlossen.
 
 
 ================================================================================

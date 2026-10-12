@@ -68,7 +68,9 @@ async function grantSchemaPrivileges(client, names) {
   await client.query(`GRANT SELECT ON ALL TABLES IN SCHEMA core, identity, play, venue, messaging TO ${worker}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE ON ops.idempotency_operations, ops.jobs, ops.outbox, ops.audit_operations, ops.audit_transitions TO ${app}`);
   await client.query(`GRANT INSERT, UPDATE ON ops.audit_security_context TO ${app}`);
+  await client.query(`GRANT SELECT ON ops.schema_migrations, ops.seed_runs, ops.import_runs TO ${app}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE ON ops.jobs, ops.outbox TO ${worker}`);
+  await client.query(`GRANT SELECT ON ops.schema_migrations, ops.seed_runs, ops.import_runs TO ${worker}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE ON messaging.deliveries TO ${worker}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ops.import_runs, ops.import_findings, ops.seed_runs TO ${refresh}`);
   await client.query(`GRANT SELECT ON ops.schema_migrations, ops.seed_runs TO ${monitor}`);
@@ -131,9 +133,15 @@ async function verifyBootstrap({ adminConnectionConfig, prefix, database }) {
         has_database_privilege($1, current_database(), 'CONNECT') AS app_connect,
         has_schema_privilege($1, 'identity', 'USAGE') AS app_identity_usage,
         has_table_privilege($1, 'identity.people', 'SELECT,INSERT,UPDATE,DELETE') AS app_people_write,
+        has_table_privilege($1, 'ops.schema_migrations', 'SELECT')
+          AND has_table_privilege($1, 'ops.seed_runs', 'SELECT')
+          AND has_table_privilege($1, 'ops.import_runs', 'SELECT') AS app_runtime_metadata_read,
         NOT has_table_privilege($1, 'ops.schema_migrations', 'UPDATE') AS app_no_migration_write,
         NOT has_table_privilege($1, 'ops.audit_security_context', 'SELECT') AS app_no_security_context_read,
         has_table_privilege($2, 'ops.jobs', 'SELECT,INSERT,UPDATE') AS worker_jobs,
+        has_table_privilege($2, 'ops.schema_migrations', 'SELECT')
+          AND has_table_privilege($2, 'ops.seed_runs', 'SELECT')
+          AND has_table_privilege($2, 'ops.import_runs', 'SELECT') AS worker_runtime_metadata_read,
         NOT has_table_privilege($2, 'identity.people', 'UPDATE') AS worker_no_people_write,
         has_table_privilege($3, 'ops.schema_migrations', 'SELECT') AS monitor_migrations,
         NOT has_table_privilege($3, 'identity.people', 'SELECT') AS monitor_no_people,

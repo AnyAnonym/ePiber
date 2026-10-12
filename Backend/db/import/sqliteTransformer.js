@@ -25,7 +25,7 @@ function cutoff(exportStartedAt, months) {
 function sqliteTables() {
   return Object.fromEntries([
     "sites", "courts", "score_sources", "court_live_state", "score_events", "monitor_devices", "idempotency_operations",
-    "frontend_logging_settings", "events", "event_participants", "event_recipients", "receipts", "deliveries", "comments", "reactions", "user_revisions",
+    "frontend_logging_settings", "events", "event_participants", "event_recipients", "receipts", "deliveries", "comments", "reactions", "user_revisions", "history_revision",
     "audit_operations", "audit_security_context", "audit_transitions",
   ].map((name) => [name, []]));
 }
@@ -128,7 +128,22 @@ function transformMessaging(database, tables, refs, findings, exportStartedAt) {
     if (!actor) fail("MESSAGE_ACTOR_REFERENCE_MISSING", "messaging.sqlite:competition_events", "actor_id");
     const eventType = String(row.event_type).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "_");
     if (!/^[a-z][a-z0-9_.-]{1,126}$/.test(eventType)) fail("MESSAGE_EVENT_TYPE_INVALID", "messaging.sqlite:competition_events", "event_type");
-    tables.events.push({ id, tenant_id: TENANT_ID, contract_id: contractId(row.event_id, "messaging.sqlite:competition_events"), event_type: eventType, template_key: `legacy.${eventType}`, template_version: 1, template_parameters: {}, competition_id: competition, match_id: null, match_result_history_id: null, source_operation_id: uuid(row.source_id, "message-source"), created_at: instant(row.created_at, "messaging.sqlite:competition_events", "created_at", { unixMs: true, optional: false }) });
+    const sourceType = String(row.source ?? "").trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "_") || null;
+    if (sourceType && !/^[a-z][a-z0-9_.-]{0,62}$/.test(sourceType)) fail("MESSAGE_SOURCE_TYPE_INVALID", "messaging.sqlite:competition_events", "source");
+    const sourceContractId = text(row.source_id, { max: 160, source: "messaging.sqlite:competition_events", projection: "source_id" });
+    const match = sourceType === "match" ? refs.matches.get(String(row.source_id)) || null : null;
+    tables.events.push({
+      id, tenant_id: TENANT_ID, contract_id: contractId(row.event_id, "messaging.sqlite:competition_events"), event_type: eventType,
+      template_key: `legacy.${eventType}`, template_version: 1, template_parameters: {}, competition_id: competition,
+      match_id: match, match_result_history_id: null, source_type: sourceType, source_contract_id: sourceContractId,
+      actor_person_id: actor, actor_contract_id_snapshot: String(row.actor_id),
+      actor_name_snapshot: text(row.actor_name, { max: 200, source: "messaging.sqlite:competition_events", projection: "actor_name" }),
+      summary_snapshot: text(row.summary, { max: 2000, source: "messaging.sqlite:competition_events", projection: "summary" }),
+      detail_snapshot: text(row.detail, { max: 16000, source: "messaging.sqlite:competition_events", projection: "detail" }),
+      result_snapshot: text(row.result, { max: 500, source: "messaging.sqlite:competition_events", projection: "result" }),
+      source_operation_id: uuid(row.source_id, "message-source"),
+      created_at: instant(row.created_at, "messaging.sqlite:competition_events", "created_at", { unixMs: true, optional: false }),
+    });
     eventRefs.set(String(row.event_id), { id, actor, actorName: String(row.actor_name), subject: String(row.summary), body: String(row.detail) });
   }
   const messageCutoff = cutoff(exportStartedAt, 24);
@@ -159,7 +174,21 @@ function transformMessaging(database, tables, refs, findings, exportStartedAt) {
     const event = eventRefs.get(String(row.event_id)), author = refs.people.get(String(row.author_id));
     if (!event || !author) fail("MESSAGE_COMMENT_REFERENCE_MISSING", "messaging.sqlite:event_comments", "reference");
     const id = uuid(row.comment_id, "comment"), display = String(row.author_name ?? "").trim().split(/\s+/);
-    tables.comments.push({ id, event_id: event.id, author_person_id: author, author_contract_id_snapshot: String(row.author_id), author_first_name_snapshot: display.length > 1 ? display.slice(0, -1).join(" ") : null, author_last_name_snapshot: display.at(-1) || null, body: String(row.body), created_at: instant(row.created_at, "messaging.sqlite:event_comments", "created_at", { unixMs: true, optional: false }), revision: 1 });
+    const status = String(row.status);
+    if (!new Set(["visible", "under_review"]).has(status)) fail("MESSAGE_COMMENT_STATUS_INVALID", "messaging.sqlite:event_comments", "status");
+    const moderatedBy = row.moderated_by === null || row.moderated_by === undefined ? null : refs.people.get(String(row.moderated_by));
+    if (row.moderated_by !== null && row.moderated_by !== undefined && !moderatedBy) fail("MESSAGE_MODERATOR_REFERENCE_MISSING", "messaging.sqlite:event_comments", "moderated_by");
+    tables.comments.push({
+      id, event_id: event.id, author_person_id: author, author_contract_id_snapshot: String(row.author_id),
+      author_first_name_snapshot: display.length > 1 ? display.slice(0, -1).join(" ") : null,
+      author_last_name_snapshot: display.at(-1) || null, body: String(row.body),
+      created_at: instant(row.created_at, "messaging.sqlite:event_comments", "created_at", { unixMs: true, optional: false }),
+      updated_at: instant(row.updated_at, "messaging.sqlite:event_comments", "updated_at", { unixMs: true }),
+      moderation_status: status,
+      moderated_at: instant(row.moderated_at, "messaging.sqlite:event_comments", "moderated_at", { unixMs: true }),
+      moderated_by_person_id: moderatedBy,
+      revision: 1,
+    });
     commentRefs.set(String(row.comment_id), id);
   }
   for (const [table, target] of [["comment_reactions", "comment"], ["event_reactions", "event"]]) for (const row of rows(database, table)) {
@@ -178,6 +207,7 @@ function transformMessaging(database, tables, refs, findings, exportStartedAt) {
   }
   const revisionRows = rows(database, "competition_history_revision");
   if (revisionRows.length !== 1 || Number(revisionRows[0].singleton) !== 1) fail("MESSAGE_REVISION_INVALID", "messaging.sqlite:competition_history_revision", "singleton");
+  tables.history_revision.push({ singleton: true, revision: integer(revisionRows[0].revision, "messaging.sqlite:competition_history_revision", "revision", { min: 0 }) });
 }
 
 function transformAudit(database, tables, refs, findings, exportStartedAt) {

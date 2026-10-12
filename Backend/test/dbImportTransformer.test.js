@@ -18,6 +18,23 @@ test("synthetisches Quellpaket wird deterministisch, typisiert und datensparsam 
   assert.equal(first.plan.tables.idempotency_operations.length, 1);
   assert.equal(first.plan.tables.score_events.length, 1);
   assert.equal(first.plan.tables.events.length, 1);
+  assert.deepEqual({
+    sourceType: first.plan.tables.events[0].source_type,
+    sourceId: first.plan.tables.events[0].source_contract_id,
+    actorId: first.plan.tables.events[0].actor_contract_id_snapshot,
+    actorName: first.plan.tables.events[0].actor_name_snapshot,
+    summary: first.plan.tables.events[0].summary_snapshot,
+    detail: first.plan.tables.events[0].detail_snapshot,
+  }, {
+    sourceType: "match",
+    sourceId: "source-1",
+    actorId: "1",
+    actorName: "Ada Import",
+    summary: "Forderung",
+    detail: "Details",
+  });
+  assert.equal(first.plan.tables.comments[0].moderation_status, "visible");
+  assert.deepEqual(first.plan.tables.history_revision, [{ singleton: true, revision: 1 }]);
   assert.equal(first.plan.tables.audit_operations.length, 1);
   assert.deepEqual(first.findings, []);
 });

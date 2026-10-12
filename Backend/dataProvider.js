@@ -814,10 +814,10 @@ function withdrawnRankingPlayers(competitionId) {
   };
 }
 
-function writeAudit({ eventId, principal, endpoint, params, result = {}, internal = null, outcome, error = null }) {
+async function writeAudit({ eventId, principal, endpoint, params, result = {}, internal = null, outcome, error = null }) {
   if (!dependencies.auditLogRepository || !shouldAudit(endpoint)) return;
   const projection = auditProjection(endpoint, params, result, internal);
-  dependencies.auditLogRepository.record({
+  await dependencies.auditLogRepository.record({
     eventId,
     actorType: principal.type,
     actorId: principal.id,
@@ -836,11 +836,11 @@ function writeAudit({ eventId, principal, endpoint, params, result = {}, interna
   });
 }
 
-function writeRejectedEndpointAudit({ eventId, principal, endpoint, error, startedAt }) {
+async function writeRejectedEndpointAudit({ eventId, principal, endpoint, error, startedAt }) {
   if (!HISTORY_INTERACTION_WRITES.has(endpoint) && !HALL_TIME_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages") return;
   try {
-    writeAudit({ eventId, principal, endpoint, params: {}, outcome: "started" });
-    writeAudit({ eventId, principal, endpoint, params: {}, outcome: "failed", error });
+    await writeAudit({ eventId, principal, endpoint, params: {}, outcome: "started" });
+    await writeAudit({ eventId, principal, endpoint, params: {}, outcome: "failed", error });
   } catch (auditError) {
     logger.log("error", "audit_record_failed", { supportId: eventId, action: endpoint, error: auditError });
   }
@@ -992,15 +992,25 @@ function filterByField(values, fieldName, fieldValue) {
 }
 
 function playerNameMap() {
-  return new Map(dependencies.authService.parsePeople().map((person) => [person.id, [person.firstName, person.lastName].filter(Boolean).join(" ")]));
+  const values = dataStore.get("players");
+  const header = headerOf(values);
+  const indexes = { id: headerIndex(header, "id"), firstName: headerIndex(header, "vorname"), lastName: headerIndex(header, "nachname") };
+  return new Map(values.slice(1).map((row) => {
+    const id = String(row[indexes.id] || "").trim();
+    return [id, [row[indexes.firstName], row[indexes.lastName]].map((value) => String(value || "").trim()).filter(Boolean).join(" ")];
+  }).filter(([id]) => id));
 }
 
 function hallTimePlayerMap() {
-  return new Map(dependencies.authService.parsePeople().map((person) => {
-    const firstName = String(person.firstName || "").trim();
-    const lastName = String(person.lastName || "").trim();
-    return [person.id, { firstName, lastName, name: [lastName, firstName].filter(Boolean).join(" ") || person.id }];
-  }));
+  const values = dataStore.get("players");
+  const header = headerOf(values);
+  const indexes = { id: headerIndex(header, "id"), firstName: headerIndex(header, "vorname"), lastName: headerIndex(header, "nachname") };
+  return new Map(values.slice(1).map((row) => {
+    const id = String(row[indexes.id] || "").trim();
+    const firstName = String(row[indexes.firstName] || "").trim();
+    const lastName = String(row[indexes.lastName] || "").trim();
+    return [id, { firstName, lastName, name: [lastName, firstName].filter(Boolean).join(" ") || id }];
+  }).filter(([id]) => id));
 }
 
 function projectHallTimePlayerNames(result) {
@@ -1091,13 +1101,13 @@ function scoreboardScores(scoreSnapshot = courtPoller.getLastData()) {
   });
 }
 
-function scoreboardSnapshot() {
+async function scoreboardSnapshot() {
   for (const table of ["players", "bewerbe", "matches1"]) {
     if (!dataStore.isTableCurrent(table)) throw new AppError("DATA_NOT_READY", "Scoreboard-Daten sind nicht aktuell", 503);
   }
   return {
     success: true,
-    playersValues: dependencies.authService.publicPlayersTable(),
+    playersValues: await dependencies.authService.publicPlayersTable(),
     bewerbValues: publicTable("bewerbe"),
     matchesValues: publicTable("matches1", filterIgnored(dataStore.get("matches1"))),
     courts: stateStore.getScoreboardCourts(),
@@ -1223,17 +1233,17 @@ function resolveCourtAssignment(params) {
 const endpoints = {
   players: {
     access: "public",
-    handler: () => {
+    handler: async () => {
       requireCurrentTables("players");
-      return { success: true, values: dependencies.authService.publicPlayersTable() };
+      return { success: true, values: await dependencies.authService.publicPlayersTable() };
     },
   },
   publicProfile: {
     access: "authenticated",
-    handler: (params, context) => {
+    handler: async (params, context) => {
       requireCurrentTables("players");
       const id = idValue(params?.id, "id");
-      const profile = dependencies.authService.memberProfile(id, { includeAdminFields: hasRole(context.principal, "admin") });
+      const profile = await dependencies.authService.memberProfile(id, { includeAdminFields: hasRole(context.principal, "admin") });
       return { success: true, profile: {
         ...profile,
         rankings: profileRankings(id, context.principal),
@@ -1303,7 +1313,7 @@ const endpoints = {
 
   memberDirectory: {
     access: "authenticated",
-    handler: () => ({ success: true, values: dependencies.authService.memberDirectoryTable() }),
+    handler: async () => ({ success: true, values: await dependencies.authService.memberDirectoryTable() }),
   },
   adminPeopleNormalization: {
     access: ["admin"],
@@ -1433,8 +1443,8 @@ const endpoints = {
   myFavorites: {
     access: "authenticated",
     sessionAccessOnDevice: true,
-    handler: (_params, context) => {
-      const snapshot = dependencies.repository.getUserFavorites(context.principal.id);
+    handler: async (_params, context) => {
+      const snapshot = await dependencies.repository.getUserFavorites(context.principal.id);
       try {
         const favorites = validateFavoriteTargets(snapshot.favorites.map(({ targetId, ...target }) => target))
           .filter((favorite) => favorite.page !== "hallzeiten" || dependencies.hallTimeService.canView(context.principal, favorite.params?.id));
@@ -1447,8 +1457,8 @@ const endpoints = {
   myStartPage: {
     access: "authenticated",
     sessionAccessOnDevice: true,
-    handler: (_params, context) => {
-      const snapshot = dependencies.repository.getUserStartPage(context.principal.id);
+    handler: async (_params, context) => {
+      const snapshot = await dependencies.repository.getUserStartPage(context.principal.id);
       try {
         const target = validateStartTarget(snapshot.target);
         return {
@@ -1586,9 +1596,9 @@ const endpoints = {
   },
   operationStatus: {
     access: "authenticated",
-    handler: (params, context) => ({
+    handler: async (params, context) => ({
       success: true,
-      operation: dependencies.repository.getOperationStatus(
+      operation: await dependencies.repository.getOperationStatus(
         `${context.principal.type}:${context.principal.id}`,
         params.operationId,
       ),
@@ -1676,7 +1686,7 @@ const endpoints = {
   addEntryList: {
     access: "authenticated",
     write: true,
-    handler: (params, context) => dependencies.sheetService.addEntry(context.principal, {
+    handler: (params, context) => dependencies.competitionService.addEntry(context.principal, {
       operationId: operationId(params?.operationId),
       bewerbId: idValue(params?.bewerbId, "bewerbId"),
     }),
@@ -1684,7 +1694,7 @@ const endpoints = {
   removeEntryList: {
     access: "authenticated",
     write: true,
-    handler: (params, context) => dependencies.sheetService.removeEntry(context.principal, {
+    handler: (params, context) => dependencies.competitionService.removeEntry(context.principal, {
       operationId: operationId(params?.operationId),
       bewerbId: idValue(params?.bewerbId, "bewerbId"),
     }),
@@ -1771,7 +1781,7 @@ const endpoints = {
       return result;
     },
   },
-  monitorList: { access: ["operator", "admin"], handler: () => ({ success: true, monitors: dependencies.monitorBroker.listMonitors() }) },
+  monitorList: { access: ["operator", "admin"], handler: async () => ({ success: true, monitors: await dependencies.monitorBroker.listMonitors() }) },
   monitorNavigate: {
     access: ["operator", "admin"],
     write: true,
@@ -1802,7 +1812,7 @@ const endpoints = {
   },
   monitorTarget: {
     access: "device",
-    handler: (_params, context) => ({ success: true, target: stateStore.getNavigatorTarget(context.principal.id) }),
+    handler: async (_params, context) => ({ success: true, target: await dependencies.monitorBroker.target(context.principal.id) }),
   },
   monitorAck: {
     access: "device",
@@ -1810,16 +1820,16 @@ const endpoints = {
   },
 };
 
-function refreshPrincipal(info) {
+async function refreshPrincipal(info) {
   if (info.principal?.type === "device") {
-    const device = dependencies.repository.authenticateMonitor(info.monitorToken);
+    const device = await dependencies.repository.authenticateMonitor(info.monitorToken);
     if (!device) throw new AppError("DEVICE_REVOKED", "Monitor-Geraet ist nicht mehr gueltig", 401);
     info.principal = { type: "device", id: device.monitorId, role: "device", name: device.label };
     info.user = null;
     return { principal: info.principal, auth: null };
   }
   if (info.sessionToken) {
-    const auth = dependencies.authService.getUserForToken(info.sessionToken);
+    const auth = await dependencies.authService.getUserForToken(info.sessionToken);
     if (auth) {
       info.principal = auth.principal;
       info.user = auth.user;
@@ -1918,38 +1928,44 @@ function completeRequest(info, {
 function publish(topic, data) {
   for (const info of clients.values()) {
     if (!info.handshake || !info.subscriptions.has(topic)) continue;
-    try {
-      if (!PUBLIC_TOPICS.has(topic)) refreshPrincipal(info);
-      if (!canSubscribe(info, topic)) {
-        info.subscriptions.delete(topic);
-        continue;
-      }
+    if (PUBLIC_TOPICS.has(topic)) {
       send(info, { type: "event", topic, data });
-    } catch (error) {
-      if (error.code === "DEVICE_REVOKED") {
-        info.subscriptions.delete(topic);
-        info.ws.close(4003, "Geraetetoken widerrufen");
-      }
+      continue;
     }
+    Promise.resolve().then(async () => {
+      try {
+        await refreshPrincipal(info);
+        if (!canSubscribe(info, topic)) {
+          info.subscriptions.delete(topic);
+          return;
+        }
+        send(info, { type: "event", topic, data });
+      } catch (error) {
+        if (error.code === "DEVICE_REVOKED") {
+          info.subscriptions.delete(topic);
+          info.ws.close(4003, "Geraetetoken widerrufen");
+        }
+      }
+    }).catch(() => {});
   }
 }
 
-function sendSubscriptionSnapshot(info, topic) {
+async function sendSubscriptionSnapshot(info, topic) {
   if (topic === "scores") send(info, { type: "event", topic, data: scoreboardScores() });
   if (topic === "scoreboard-state") send(info, { type: "event", topic, data: { courts: stateStore.getScoreboardCourts() } });
-  if (topic === "monitors") send(info, { type: "event", topic, data: { monitors: dependencies.monitorBroker.listMonitors() } });
+  if (topic === "monitors") send(info, { type: "event", topic, data: { monitors: await dependencies.monitorBroker.listMonitors() } });
   if (topic.startsWith("messages:") && canSubscribe(info, topic)) {
-    const { revision, unreadCount } = dependencies.messagingService.summary(info.principal);
+    const { revision, unreadCount } = await dependencies.messagingService.summary(info.principal);
     send(info, { type: "event", topic, data: { revision, unreadCount } });
   }
   if (topic === "competition-history" && canSubscribe(info, topic)) {
-    send(info, { type: "event", topic, data: { revision: dependencies.messagingService.repository.historyInteractionRevision() } });
+    send(info, { type: "event", topic, data: { revision: await dependencies.messagingService.repository.historyInteractionRevision() } });
   }
   const tableTopics = { matches: "matches1", players: "players", bewerbe: "bewerbe", bewerbsart: "bewerbsart", matchtyp: "matchtyp", entryList: "entryList", ranking: "rlPlatzierung", navigator: "navigator" };
   if (tableTopics[topic]) send(info, { type: "event", topic, data: { table: tableTopics[topic], ...dataStore.getMeta(tableTopics[topic]) } });
   if (topic.startsWith("monitor-status:")) {
     const monitorId = topic.slice("monitor-status:".length);
-    const monitor = dependencies.monitorBroker.listMonitors().find((entry) => entry.monitorId === monitorId);
+    const monitor = (await dependencies.monitorBroker.listMonitors()).find((entry) => entry.monitorId === monitorId);
     if (monitor) send(info, { type: "event", topic, data: monitor });
   }
 }
@@ -1960,17 +1976,17 @@ async function handleRequest(info, message, supportId) {
   const endpoint = endpoints[message.endpoint];
   if (!endpoint || !Object.hasOwn(endpoints, message.endpoint)) throw new AppError("ENDPOINT_NOT_FOUND", "Unbekannter Endpoint", 404);
   if (info.inflight >= WS_MAX_INFLIGHT) throw new AppError("TOO_MANY_REQUESTS", "Zu viele parallele Requests", 429);
-  const connectionAuthContext = refreshPrincipal(info);
+  const connectionAuthContext = await refreshPrincipal(info);
   let authContext = connectionAuthContext;
   if (endpoint.sessionAccessOnDevice && connectionAuthContext.principal?.type === "device" && info.sessionToken) {
-    const sessionAuth = dependencies.authService.getUserForToken(info.sessionToken);
+    const sessionAuth = await dependencies.authService.getUserForToken(info.sessionToken);
     if (sessionAuth) authContext = { principal: sessionAuth.principal, auth: sessionAuth };
   }
   try {
     authorize(endpoint, authContext);
   } catch (error) {
     logPreferenceCompletion(message.endpoint, authContext.principal, message.params, {}, error);
-    writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
+    await writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
   let params;
@@ -1978,7 +1994,7 @@ async function handleRequest(info, message, supportId) {
     params = validateEndpointRequest(message.endpoint, message.params);
   } catch (error) {
     logPreferenceCompletion(message.endpoint, authContext.principal, message.params, {}, error);
-    writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
+    await writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
     throw error;
   }
   if (endpoint.write) {
@@ -1988,12 +2004,12 @@ async function handleRequest(info, message, supportId) {
     if (!writeLimiter.take(principalKey, writeCost) || !writeLimiter.take(ipKey, writeCost)) {
       const error = new AppError("WRITE_RATE_LIMIT", "Zu viele Schreiboperationen", 429);
       logPreferenceCompletion(message.endpoint, authContext.principal, params, {}, error);
-      writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
+      await writeRejectedEndpointAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, error, startedAt: historyInteractionStartedAt });
       throw error;
     }
   }
   if (endpoint.write && endpoint.audit !== false) {
-    writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, outcome: "started" });
+    await writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, outcome: "started" });
   }
   info.inflight++;
   let actionCompleted = false;
@@ -2005,7 +2021,7 @@ async function handleRequest(info, message, supportId) {
     if (publicData && typeof publicData === "object") delete publicData._audit;
     const data = validateEndpointResponse(message.endpoint, publicData);
     if (endpoint.write && endpoint.audit !== false) {
-      writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, internal, outcome: "success" });
+      await writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, internal, outcome: "success" });
     }
     logPreferenceCompletion(message.endpoint, authContext.principal, params, data);
     logHistoryInteractionCompletion({ supportId, principal: authContext.principal, endpoint: message.endpoint, params, result: data, outcome: "success", startedAt: historyInteractionStartedAt });
@@ -2015,7 +2031,7 @@ async function handleRequest(info, message, supportId) {
     let responseError = error;
     if (endpoint.write && endpoint.audit !== false) {
       try {
-        writeAudit({
+        await writeAudit({
           eventId: supportId,
           principal: authContext.principal,
           endpoint: message.endpoint,
@@ -2083,10 +2099,10 @@ async function handleMessage(info, raw) {
       return;
     }
     if (pageType === "monitor" && info.monitorToken) {
-      const device = dependencies.repository.authenticateMonitor(info.monitorToken);
+      const device = await dependencies.repository.authenticateMonitor(info.monitorToken);
       if (device) info.principal = { type: "device", id: device.monitorId, role: "device", name: device.label };
     }
-    const context = refreshPrincipal(info);
+    const context = await refreshPrincipal(info);
     clearTimeout(info.handshakeTimer);
     info.handshake = true;
     info.clientId = clientId;
@@ -2123,14 +2139,14 @@ async function handleMessage(info, raw) {
   if (message.type === "subscribe") {
     const topics = Array.isArray(message.topics) ? message.topics : [];
     const accepted = [];
-    refreshPrincipal(info);
+    await refreshPrincipal(info);
     for (const rawTopic of topics.slice(0, 20)) {
       const topic = stringValue(rawTopic, "topic", { max: 100 });
       if (!canSubscribe(info, topic)) continue;
       if (!info.subscriptions.has(topic) && info.subscriptions.size >= WS_MAX_SUBSCRIPTIONS) break;
       info.subscriptions.add(topic);
       accepted.push(topic);
-      sendSubscriptionSnapshot(info, topic);
+      await sendSubscriptionSnapshot(info, topic);
     }
     send(info, { type: "subscribed", topics: accepted });
     return;
@@ -2204,6 +2220,7 @@ function rejectUpgrade(socket, status, message) {
 
 function init(server, options) {
   dependencies = { ...options, canonicalizeMonitorPath: options.canonicalizeMonitorPath };
+  dependencies.competitionService ||= options.sheetService;
   shuttingDown = false;
   wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD_BYTES, perMessageDeflate: false });
 

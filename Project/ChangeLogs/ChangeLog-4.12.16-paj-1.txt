@@ -6,3 +6,119 @@ Commit: 4.12.16-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-1` gesetzt.
+
+[4.12.16-paj-1-2] - 2026-10-12
+Commit: 4.12.16-paj-1-2 | PostgreSQL-Laufzeitdienste und persistente Fachoperationen ergänzt
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-1-x` gesetzt.
+  - [Dokumentation] PostgreSQL-Migrationsfahrplan an die bereits aufgebaute
+    Development-Grundlage und die abgeschlossenen synthetischen Import- und
+    Transformationswerkzeuge angeglichen; den noch ausstehenden realen
+    Legacy-Exporter eindeutig Phase 5A zugeordnet.
+  - [Datenbank] Gemeinsame asynchrone PostgreSQL-Laufzeit mit maximal fuenf
+    App-Verbindungen, UTC- und Schemaverifikation, Tenant-/Sektionsgate,
+    vollstaendiger Pflichtdomaenenregistrierung und kontrolliertem Shutdown
+    begonnen.
+  - [Sicherheit] App-Rolle ausschliesslich lesenden Zugriff auf die fuer das
+    Laufzeitgate erforderlichen Schema-, Seed- und Importmetadaten erhalten;
+    Migrationswrites und Audit-Sicherheitskontexte bleiben weiterhin gesperrt.
+  - [Backend] Typisierte PostgreSQL-Repositories fuer Core, Identity/Auth,
+    Spielbetrieb und Operations mit parametrisierten Abfragen und gemeinsamen
+    Transaktionsgrenzen aufgenommen; der unvollstaendige PostgreSQL-Servermodus
+    bleibt bis zur Registrierung aller Domaenen deaktiviert.
+  - [Backend] PostgreSQL-Repositories fuer Venue, Courts, dauerhafte Scores,
+    Hallenzeiten und Messaging ergaenzt und alle sechs Pflichtdomaenen in einer
+    gemeinsamen Runtime-Factory registriert.
+  - [Court] Scoreereignis und sichtbarer Live-State werden unter Court-Lock in
+    derselben PostgreSQL-Transaktion fortgeschrieben; Wiederholungen werden
+    inhaltsgebunden dedupliziert und abweichende Event-IDs abgelehnt.
+  - [Messaging] Typisierte Inbox-, Zusammenfassungs-, idempotente Quittierungs-
+    und kontrollierte Ereignispfade mit geschlossenen Templateparametern
+    aufgenommen.
+  - [Authentifizierung] PostgreSQL-only Authservice fuer HMAC-gebundene
+    Loginlimits, Credentialpruefung und -upgrade, revisionsgebundene Sessions,
+    Passwortrotation, Adminsetzung und einmalige 24-Stunden-Freigaben umgesetzt.
+  - [Spielbetrieb] EntryList-An- und Abmeldung als erste vollstaendige
+    PostgreSQL-Fachtransaktion mit gemeinsamem Messaging-, Idempotenz- und
+    Auditabschluss umgesetzt.
+  - [Worker] Getrennte PostgreSQL-Worker-Runtime mit Zwei-Verbindungs-Pool,
+    `SKIP LOCKED`-Leases, Retry, Dead-/Unknown-Pfaden und geschlossenen
+    versionierten Job-/Outbox-Handlern aufgenommen.
+  - [Backend] HTTP- und WebSocket-Authentifizierung sowie mehrere
+    Repository-Lesepfade auf synchrone oder asynchrone Provider vorbereitet,
+    ohne den aktiven Legacybetrieb umzuschalten.
+  - [Datenbank] Favoriten und Startseiten um typisierte Overlay-,
+    Round-Robin-Layout-, Raster- und Navigatorprofilziele ergaenzt, damit der
+    bestehende sichtbare Zielvertrag verlustfrei nach PostgreSQL migriert.
+  - [Backend] Alle acht bisherigen Tabellenvertraege aus den typisierten
+    PostgreSQL-Relationen rekonstruiert und ueber einen atomaren, nicht pollenden
+    Projektionsloader fuer bestehende Fachregeln bereitgestellt; Credentialhashes
+    bleiben aus diesem allgemeinen Cache ausgeschlossen.
+  - [Backend] PostgreSQL-Teilservices zentral fail-closed komponiert und noch
+    fehlende Serverfaehigkeiten explizit ausgewiesen, sodass kein unvollstaendiger
+    PostgreSQL-Modus gestartet werden kann.
+  - [Backend] Favoriten und Startseiten atomar und idempotent an PostgreSQL
+    angeschlossen; eigenstaendige Revisionsstaende erhalten auch leere Listen
+    und die bestehende Zielmatrix verlustfrei.
+  - [Diagnose] Frontend-Logging-Policy, globale Einstellungen und temporaere
+    Zielpersonen typisiert und revisioniert in PostgreSQL umgesetzt, ohne freie
+    Browserpayloads zu persistieren.
+  - [Messaging] Inboxquittierungen, Bewerbshistorie, Kommentare, Moderation und
+    Reaktionen mit globaler Revision, typisierter Idempotenz und dauerhafter
+    Outbox-Invalidierung auf PostgreSQL umgesetzt.
+  - [Import] Quellen-, Akteur-, Summary-, Detail- und Ergebnissnapshots der
+    Bewerbshistorie sowie Kommentar-Moderationsfelder werden verlustfrei aus
+    SQLite uebernommen.
+  - [Worker] Eigenen Prozessstart mit Tenant-/Schemagate, registrierten
+    Handlern, LISTEN/NOTIFY-Wake-up und kontrolliertem Shutdown ergaenzt.
+  - [Betrieb] `PERSISTENCE_MODE=postgres` als expliziten, bis zum vollstaendigen
+    Cutover mit `POSTGRES_SERVER_MODE_INCOMPLETE` gesperrten Modus aufgenommen.
+  - [Arbeitsablauf] Autonome Auftraege duerfen nicht mehr an Verifikations-,
+    Zwischenstands- oder Phasengrenzen beendet werden; eine Abschlussantwort ist
+    erst bei Gesamterledigung oder einem konkret userabhaengigen Gate zulaessig.
+  - [Audit] Bestehende HTTP-/WebSocket-Aktionen ueber einen asynchronen
+    PostgreSQL-Adapter an registrierte Auditvertraege gebunden; private
+    Normalisierungswerte werden vor der Persistenz durch Aenderungsmarker
+    ersetzt und Auditabschluesse von den Requestpfaden abgewartet.
+  - [Monitor] Provisionierung, Tokenrotation, Widerruf, Navigationsziele,
+    Scrollsequenzen und ACK-Zustaende mit transaktionaler Idempotenz und
+    Reconnect-Resync auf PostgreSQL umgestellt.
+  - [Court] Match- und manuelle Zuweisungen relational getrennt, Teilnehmer
+    typisiert persistiert und Zuweisungs-, Scorebaseline-, Aktivstatus-,
+    Revisions- sowie Eventwrites transaktional gebunden.
+  - [Authentifizierung] PostgreSQL-Personen-, Konto-, Session- und
+    Credentialpfade einschliesslich Auth-Revision, Sessionwiderruf und atomarem
+    Passworttausch vorbereitet.
+  - [Datenbank] Widerrufene Passwort-Credentials entfernen den bisherigen Hash
+    nun schemaerzwungen, waehrend nur aktive Credentials einen nichtleeren Hash
+    besitzen duerfen.
+  - [Audit] PostgreSQL-Auditstart, terminaler Abschluss und Fachwrite koennen mit
+    kontrollierten Projektionen in den festgelegten Transaktionsgrenzen
+    ausgefuehrt werden; unklare Commit-Ausgaenge bleiben explizit `unknown`.
+  - [Observability] Strukturierte datensparsame Abschlusslogs fuer
+    PostgreSQL-Start, Transaktionen, Audit und Shutdown mit Ergebnis, Fehlercode,
+    Versuch und Dauer aufgenommen.
+
+  Tests
+  - [Backend] 503 Backendtests erfolgreich; neue PostgreSQL-Laufzeittests decken
+    Startgates, Core-/Identity-/Play-Projektionen, Session- und Credentialwechsel,
+    Rollback sowie Auditstart und atomaren Abschluss gegen kurzlebige
+    PostgreSQL-18-Cluster ab.
+  - [Backend] PostgreSQL-Laufzeittests zusaetzlich um alle Pflichtdomaenen,
+    Court-Scorepersistenz, Hallenzeitenprojektion, Messaging-Inbox,
+    idempotente Quittierung und kontrollierte Ereigniserzeugung erweitert.
+  - [Backend] PostgreSQL-Auth-, Idempotenz-, EntryList-Gesamttransaktions- und
+    Worker-Leasepfade sowie die vollstaendige Favoriten-Zielmatrix gegen
+    kurzlebige PostgreSQL-18-Cluster abgesichert.
+  - [Backend] Tabellenprojektionsparitaet, credentialfreie Personenprojektion,
+    atomarer Projektionsload und fail-closed Komponentenkomposition geprueft.
+  - [Backend] Revisionsstabile Praeferenzen, Frontend-Diagnosepersistenz,
+    Messagingimport-Paritaet, moderierbare Interaktionen, Inbox-Idempotenz,
+    Outbox-Wake-up und Worker-Prozesslebenszyklus gegen kurzlebige
+    PostgreSQL-18-Cluster geprueft.
+  - [Backend] PostgreSQL-Auditadapter, Aktionsnormalisierung, terminaler Abschluss
+    und datensparsame Entfernung privater Projektionswerte geprueft.
+  - [Backend] Persistente Monitorziele, Offline-/Online-Navigation,
+    Scrollsequenzen sowie Navigations- und Scroll-ACKs im PostgreSQL-
+    Komponentenlauf geprueft.

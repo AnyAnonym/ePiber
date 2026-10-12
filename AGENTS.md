@@ -76,6 +76,17 @@ moeglichst wenigen Datei- und Suchzugriffen.
     dafuer `root:PiberDevel` und `2775`; Grafana uebernimmt die Datei automatisch.
     Diese Freigabe gilt nicht fuer Live, Backend-Neustarts oder andere
     Observability-Konfigurationen.
+15. Bei einem ausdruecklich autonomen Arbeitsauftrag wird ohne Abschlussantwort
+    weitergearbeitet, bis der Gesamtauftrag vollstaendig erledigt ist oder ein
+    konkret benanntes Gate erreicht wird, das zwingend eine Entscheidung,
+    Freigabe, geheime Eingabe oder nicht bereits autorisierte Infrastrukturaktion
+    des Users erfordert. Eine erfolgreiche Verifikation, ein sauberer
+    Zwischenstand, der Umfang der Restarbeit, ein Phasenwechsel oder ein guenstig
+    erscheinender Antwortpunkt sind kein Unterbrechungsgrund. Solche Meilensteine
+    werden hoechstens knapp im Commentary gemeldet; sie duerfen weder eine
+    Abschlusszusammenfassung noch eine Rueckfrage ausloesen. Ist nach einem
+    Teilblock ohne Useraktion weitere Arbeit moeglich, muss sie im selben
+    Arbeitslauf unmittelbar fortgesetzt werden.
 
 ## Projekt
 
