@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { approveWarnings, transformSource } = require("../db/import/importRunner");
 const { ensureHistoricalPerson, normalizePlayTimes, validateLegacyCompletion } = require("../db/import/sheetTransformer");
+const { dateOrInstant } = require("../db/import/transformCommon");
 const { createImportTestPackage } = require("./importTestPackage");
 
 test("synthetisches Quellpaket wird deterministisch, typisiert und datensparsam transformiert", (t) => {
@@ -45,6 +46,10 @@ test("nichtpositive historische Matchdauer behaelt den Start ohne ein Ende zu er
   assert.match(value.playStartedAt, /^2026-10-01T08:00:00/);
   assert.equal(value.playEndedAt, null);
   assert.equal([...findings.values()][0].code, "MATCH_NONPOSITIVE_DURATION_END_DISCARDED");
+});
+
+test("sechsstelliges Legacy-Bewerbsdatum verwendet dieselbe 2000er-Konvention wie Legacy-Zeitstempel", () => {
+  assert.deepEqual(dateOrInstant("260923", "Bewerb:12", "Bewerbsende"), { date: "2026-09-23", instant: null });
 });
 
 test("verwaiste numerische Matchpersonen werden ohne erfundene Identitaet inaktiv erhalten", () => {

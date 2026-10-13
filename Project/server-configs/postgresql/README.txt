@@ -12,9 +12,11 @@ Status:
   kleine Anwendung duerfen aufgrund einer ausdruecklich akzeptierten
   Risikoausnahme voruebergehend ohne Sicherung betrieben werden. Vollstaendiger
   Verlust ihres Zwischenstands ist akzeptiert.
-- Reale ePiber-Migrationsdaten, produktive Datenkopien und nicht rekonstruierbare
-  ePiber-Daten bleiben bis zum erfolgreichen pgBackRest-/Off-site- und
-  Restore-Nachweis ausgeschlossen.
+- Fuer `epiber_devel` ist eine eng begrenzte Ausnahme freigegeben: Eine exakte,
+  credentialbereinigte Live-Fachdatenkopie darf ohne vorherigen Backup-/Restore-
+  Nachweis betrieben werden. Ihr vollstaendiger Verlust ist akzeptiert; Live
+  bleibt autoritativ. Die Ausnahme ist keine Wiederherstellungszusage und gilt
+  fuer kein anderes System.
 - Der erste vollstaendige Hostneustart mit lokaler LUKS-Schluesseldatei wurde am
   13.10.2026 erfolgreich nachgewiesen: Cryptsetup-Unit und Mount wurden ohne
   Passworteingabe aktiv, danach starteten PostgreSQL, Gitea, M365-Konnektor,
@@ -257,10 +259,114 @@ Off-site-Sicherung oder Restoretest. Bis zu deren spaeterer Einrichtung gilt:
 - Gitea und die kleine Development-Anwendung duerfen betrieben werden;
 - ihr vollstaendiger Datenverlust ist bewusst akzeptiert;
 - lokale Dateien oder Datenbankexports gelten nicht als zugesichertes Backup;
-- ePiber bleibt bei synthetischem, rekonstruierbarem technischem Zustand;
+- `epiber_devel` darf aufgrund der ausdruecklichen PAJ-Ausnahme eine jederzeit
+  aus Live neu erzeugbare, credentialbereinigte Echtdatenkopie enthalten;
 - reale ePiber-Migrationsproben verwenden keinen gemeinsamen Cluster;
-- vor realen ePiber-Daten oder geschaeftskritischer Nutzung bleibt der
-  Backup-/Restore-Nachweis verpflichtend.
+- vor Live, geschaeftskritischer Nutzung oder einer Wiederherstellungszusage
+  bleibt der Backup-/Restore-Nachweis verpflichtend.
 
-Diese Ausnahme ist kein Praezedenzfall fuer Live, reale ePiber-Daten oder
-spaetere produktive Plattformdienste.
+Diese Ausnahme ist kein Praezedenzfall fuer Live oder spaetere produktive
+Plattformdienste. Die PAJ-Kopie bleibt personenbezogen und ist trotz ersetzter
+Zugangsdaten entsprechend zu schuetzen.
+
+
+8. Credentialbereinigter Live-zu-PAJ-Refresh
+================================================================================
+
+Der wiederholbare Refresh besteht aus den versionierten Skripten
+`epiber-paj-refresh-credential-set`, `epiber-paj-refresh-run` und den intern
+verwendeten `epiber-migration-staging-run` sowie
+`Backend/scripts/db-paj-refresh-swap.js`. Die Shellwerkzeuge werden root-owned mit Modus 0755
+nach `/usr/local/sbin/` installiert. Die Ausfuehrung ist kein normaler
+Deployment-Schritt und benoetigt fuer jeden Lauf eine neue ausdrueckliche
+Freigabe.
+
+Das Testpasswort wird niemals als Argument, in Git, Dokumentation oder Chat
+uebergeben. Ein Administrator setzt es interaktiv mit:
+
+  epiber-paj-refresh-credential-set
+
+Das Werkzeug verlangt mindestens 10 Zeichen sowie Gross-, Kleinbuchstaben,
+Ziffer und Sonderzeichen. Es schreibt ausschliesslich den clientseitigen
+SHA-256-Wert nach
+`/etc/epiber-devel/credentials/paj-refresh-password-hash` mit
+`root:root:0400`. Dieser Wert ist credentialaequivalent und wird wie ein
+Passwort geschuetzt.
+
+Vor jedem echten Lauf werden Verantwortlicher, UTC-Zeitfenster und eindeutige
+Lauf-ID festgelegt. Erst nach der gesonderten aktionsbezogenen Zustimmung wird
+dieselbe Lauf-ID einmalig und mit `root:root:0400` in
+`/etc/epiber-devel/paj-refresh-live-export-approved` geschrieben. Danach lautet
+der kontrollierte Aufruf:
+
+  epiber-paj-refresh-run /srv/http/ePiber/paj <lauf-id>
+
+Das Freigabefile wird vor dem ersten Livezugriff verbraucht. Der Ablauf stoppt
+den Legacy-Livedienst fuer den konsistenten SQLite-/Sheet-Doppelread, startet ihn
+unmittelbar danach wieder und fuehrt alle weiteren Schritte auf kurzlebigem,
+verschluesseltem Storage aus. Das Profil `paj-refresh-v1`:
+
+- ersetzt jeden Loginhash bereits beim CSV-Schreiben durch einen pro Konto
+  gesalzenen scrypt-Hash des gemeinsamen Testcredentials;
+- leert Passwortfreigaben, Sessions, Loginlimits und Legacy-Idempotenzstate;
+- ersetzt Monitorhashes und widerruft alle importierten Monitore;
+- deaktiviert produktive Court-Quellen und operative Court-Aktivzustaende bei
+  unveraenderter Uebernahme von Zuordnung, Teilnehmern, letztem Score und
+  Scorehistorie;
+- setzt externe E-Mail-/WhatsApp-Zustellungen auf `not_configured`;
+- uebernimmt keine produktiven Jobs, Outboxeintraege oder offenen Leases;
+- behaelt historische fachliche Meldungs-, Receipt- und Auditdaten unabhaengig
+  von den regulaeren Import-Retentiongrenzen;
+- bindet den Vertrag und seine kontrollierten Anzahlen in
+  `metadata/paj-refresh.json` und die Paketpruefsumme ein.
+
+Im produktiven Reiter `EntryList` existiert rechts neben den fuenf benannten
+Fachspalten ein unbenannter Nebenblock. Der Legacybetrieb ordnet ausschliesslich
+die benannten Spalten `ID`, `BewerbID`, `PersonenID`, `Entrydate` und
+`GebuehrBezahlt` dem EntryList-Vertrag zu. Der Export uebernimmt deshalb nur
+diese fuenf Spalten. Diese Ausnahme gilt ausschliesslich fuer `EntryList`; bei
+jedem anderen Pflichtreiter blockiert eine Datenzeile rechts der Kopfbreite den
+Export. Der Quellfingerprint umfasst weiterhin den vollstaendigen Google-Read
+einschliesslich des Nebenblocks und erkennt Aenderungen waehrend des Exports.
+
+Das produktive `messaging.sqlite` besitzt noch die Quellstruktur vor Einfuehrung
+des optionalen Feldes `event_participants.inbox_visible`. In dieser Struktur ist
+jeder gespeicherte Teilnehmer zugleich ein sichtbarer Inboxempfaenger und wird
+entsprechend importiert. Ist das Feld in einer neueren Quelle vorhanden, bleibt
+sein expliziter Wert massgeblich. Andere fehlende oder unbekannte SQLite-Felder
+blockieren weiterhin den Lauf.
+
+Fehlt im Live-State der fuer den PostgreSQL-Appstart verpflichtende globale
+Frontend-Diagnose-Datensatz, erzeugt ausschliesslich das PAJ-Refreshprofil einen
+sicheren technischen Default: Diagnose deaktiviert, Mindestlevel `error`, Info-
+und Debug-Sampling `0` sowie keine Zielpersonen. Ein vorhandener Live-Datensatz
+hat Vorrang und wird nicht ueberschrieben.
+
+Nach isoliertem Import, Replay und Sechs-Domaenen-Shadow-Read wird im gemeinsamen
+Cluster eine frische Datenbank `epiber_devel_refresh_<hash>` aufgebaut. Erst wenn
+Migrationen, technischer Seed, PAJ-Profil, Counts, Hashes, Sicherheitsinvarianten,
+Shadow Read, Runtime-Grants und beide persoenlichen DBeaver-Rollen erfolgreich
+geprueft sind, werden App und Worker gestoppt und die Kandidatendatenbank per
+Datenbankumbenennung aktiviert. Danach startet zuerst nur die App. Readiness,
+Importfingerprint, Sicherheitsinvarianten und DBeaver-Grants werden erneut
+geprueft, bevor der Worker startet. So bleiben importierte Live-Jobs vom danach
+regulaer neu erzeugten PAJ-Wartungsstate unterscheidbar. Bei einem Fehler
+waehrend dieses Fensters wird auf die bisherige Datenbank zurueckbenannt; bei
+einem frueheren Fehler bleibt sie unangetastet. Erst nach erfolgreicher
+Nachpruefung und aktivem Worker wird die alte Datenbank entfernt.
+
+Kann selbst der kataloggepruefte Rollback nicht eindeutig bestaetigt werden,
+endet der Lauf mit `result=unknown`, App und Worker bleiben gestoppt und keine
+der beteiligten Datenbanken wird automatisch geloescht. Dieser Zustand verlangt
+eine manuelle Katalogpruefung; ein automatisches Weiterlaufen ist verboten.
+
+Alle entschluesselten Pakete, die temporaere Datenbank und der kurzlebige
+Verschluesselungsschluessel werden bei Erfolg und Fehler entfernt. Unter
+`/var/lib/epiber-migration-results/<lauf-id>/` bleiben nur root-/PiberDevel-
+geschuetzte, datensparsame JSONL-/Pruefnachweise ohne Passwort, Token oder freie
+Fachpayloads. Produktive E-Mail-, WhatsApp-, Push-, Webhook-, Court- und
+Monitorzugriffe duerfen in PAJ weiterhin nicht konfiguriert oder aktiviert sein.
+
+Der erste reale Export und jede Ersetzung von `epiber_devel` bleiben trotz
+installierter Werkzeuge bis zur jeweils neuen ausdruecklichen Lauf-Freigabe
+gesperrt.

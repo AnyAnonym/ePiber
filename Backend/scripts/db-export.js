@@ -4,6 +4,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { exportLegacySource } = require("../db/export/legacyExporter");
+const { readSecret } = require("../db/connectionConfig");
+const { PROFILE: PAJ_REFRESH_PROFILE } = require("../db/export/pajRefreshProfile");
 
 function parseEnv(filename) {
   const values = {};
@@ -18,21 +20,31 @@ function parseArguments(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index], value = argv[index + 1];
-    if (!key?.startsWith("--") || value === undefined) throw Object.assign(new Error("Usage: db-export.js --output DIR --run-id ID --source-env FILE --credentials FILE"), { code: "EXPORT_ARGUMENT_INVALID" });
+    if (!key?.startsWith("--") || value === undefined) throw Object.assign(new Error("Usage: db-export.js --output DIR --run-id ID --source-env FILE --credentials FILE [--profile migration-v1|paj-refresh-v1 --test-password-hash-file FILE]"), { code: "EXPORT_ARGUMENT_INVALID" });
     options[key.slice(2)] = value;
   }
   for (const key of ["output", "run-id", "source-env", "credentials"]) if (!options[key]) throw Object.assign(new Error(`${key} fehlt`), { code: "EXPORT_ARGUMENT_INVALID" });
-  return Object.fromEntries(Object.entries(options).map(([key, value]) => [key, path.resolve(value)]).map(([key, value]) => [key === "run-id" ? "runId" : key.replace(/-([a-z])/g, (_, character) => character.toUpperCase()), key === "run-id" ? options[key] : value]));
+  const allowed = new Set(["output", "run-id", "source-env", "credentials", "profile", "test-password-hash-file"]);
+  if (Object.keys(options).some((key) => !allowed.has(key))) throw Object.assign(new Error("Unbekannte Exportoption"), { code: "EXPORT_ARGUMENT_INVALID" });
+  const profile = options.profile || "migration-v1";
+  if (!new Set(["migration-v1", PAJ_REFRESH_PROFILE]).has(profile) || profile === PAJ_REFRESH_PROFILE && !options["test-password-hash-file"]) throw Object.assign(new Error("Exportprofil ist unvollstaendig"), { code: "EXPORT_ARGUMENT_INVALID" });
+  return {
+    output: path.resolve(options.output), runId: options["run-id"], sourceEnv: path.resolve(options["source-env"]),
+    credentials: path.resolve(options.credentials), profile,
+    testPasswordHashFile: options["test-password-hash-file"] ? path.resolve(options["test-password-hash-file"]) : null,
+  };
 }
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   const env = parseEnv(options.sourceEnv);
-  console.log(JSON.stringify({ event: "legacy_export_started", exportRunId: options.runId, sourceMode: process.env.EPIBER_EXPORT_PRE_SNAPSHOTTED === "1" ? "prepared-snapshots" : "live-sqlite" }));
+  console.log(JSON.stringify({ event: "legacy_export_started", exportRunId: options.runId, profile: options.profile, sourceMode: process.env.EPIBER_EXPORT_PRE_SNAPSHOTTED === "1" ? "prepared-snapshots" : "live-sqlite" }));
   try {
     const result = await exportLegacySource({
       root: options.output, exportRunId: options.runId, spreadsheetId: env.SHEET_ID,
       credentialsFile: options.credentials,
+      profile: options.profile,
+      testPasswordHash: options.testPasswordHashFile ? readSecret(options.testPasswordHashFile) : null,
       preSnapshotted: process.env.EPIBER_EXPORT_PRE_SNAPSHOTTED === "1",
       sqliteFiles: {
         STATE_FILE: process.env.STATE_FILE || env.STATE_FILE || "/var/lib/epiber-paj/state.sqlite",

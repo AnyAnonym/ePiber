@@ -7,9 +7,11 @@ const { spawnSync } = require("node:child_process");
 const { google } = require("googleapis");
 const { SHEET_FIELDS } = require("../import/sheetInspector");
 const { writeSourceManifest, verifySourcePackage } = require("../import/sourcePackage");
+const { PROFILE: PAJ_REFRESH_PROFILE, sanitizePeopleRows, sanitizeSqlite, verifyPajRefreshPackage, writeProfileMetadata } = require("./pajRefreshProfile");
 
 const REQUIRED_SHEETS = Object.freeze(Object.keys(SHEET_FIELDS));
 const OPTIONAL_SHEETS = Object.freeze(["Logging", "ScoreLog"]);
+const TRAILING_DATA_ALLOWED = new Set(["EntryList"]);
 const SQLITE_SOURCES = Object.freeze({
   "state.sqlite": "STATE_FILE",
   "messaging.sqlite": "MESSAGING_FILE",
@@ -33,8 +35,9 @@ function rectangularRows(values, sheet) {
   const width = values[0]?.length || 0;
   if (!width) throw exporterError("EXPORT_SHEET_HEADER_MISSING", `Sheet ${sheet} besitzt keine Kopfzeile`);
   return values.map((row) => {
-    if (row.length > width) throw exporterError("EXPORT_SHEET_ROW_TOO_WIDE", `Sheet ${sheet} besitzt eine zu breite Zeile`);
-    return [...row, ...Array(width - row.length).fill("")];
+    if (row.length > width && !TRAILING_DATA_ALLOWED.has(sheet)) throw exporterError("EXPORT_SHEET_ROW_TOO_WIDE", `Sheet ${sheet} besitzt eine zu breite Zeile`);
+    const controlled = row.slice(0, width);
+    return [...controlled, ...Array(width - controlled.length).fill("")];
   });
 }
 
@@ -109,10 +112,17 @@ async function readSheetSnapshot(sheets, spreadsheetId) {
     fields: "spreadsheetId,properties(title),sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))",
   })).data;
   const available = new Map((spreadsheet.sheets || []).map(({ properties }) => [properties.title, properties.sheetId]));
-  const missing = REQUIRED_SHEETS.filter((name) => !available.has(name));
+  const availableFolded = new Map();
+  for (const title of available.keys()) {
+    const folded = title.toLocaleLowerCase("de-AT");
+    if (availableFolded.has(folded)) throw exporterError("EXPORT_SHEET_NAME_AMBIGUOUS", "Tabellenreiter unterscheiden sich nur durch Gross-/Kleinschreibung");
+    availableFolded.set(folded, title);
+  }
+  const actualTitle = (name) => availableFolded.get(name.toLocaleLowerCase("de-AT"));
+  const missing = REQUIRED_SHEETS.filter((name) => !actualTitle(name));
   if (missing.length) throw exporterError("EXPORT_SHEET_REQUIRED_MISSING", "Mindestens ein Pflicht-Sheet fehlt");
-  const selected = [...REQUIRED_SHEETS, ...OPTIONAL_SHEETS.filter((name) => available.has(name))];
-  const values = (await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: selected.map((name) => `'${name.replaceAll("'", "''")}'`), valueRenderOption: "FORMATTED_VALUE", majorDimension: "ROWS" })).data.valueRanges || [];
+  const selected = [...REQUIRED_SHEETS, ...OPTIONAL_SHEETS.filter((name) => actualTitle(name))];
+  const values = (await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges: selected.map((name) => `'${actualTitle(name).replaceAll("'", "''")}'`), valueRenderOption: "FORMATTED_VALUE", majorDimension: "ROWS" })).data.valueRanges || [];
   const byName = new Map(selected.map((name, index) => [name, values[index]?.values || []]));
   const dataFilters = [
     { developerMetadataLookup: { locationType: "SPREADSHEET" } },
@@ -136,9 +146,11 @@ function prepareRoot(root) {
   for (const directory of ["sheets", "sqlite", "metadata"]) fs.mkdirSync(path.join(root, directory), { mode: 0o700 });
 }
 
-async function exportLegacySource({ root, spreadsheetId, credentialsFile, sqliteFiles, exportRunId, sheetsClient = null, snapshotSqlite = sqliteSnapshot, preSnapshotted = false, now = () => new Date() }) {
+async function exportLegacySource({ root, spreadsheetId, credentialsFile, sqliteFiles, exportRunId, profile = "migration-v1", testPasswordHash = null, sheetsClient = null, snapshotSqlite = sqliteSnapshot, preSnapshotted = false, now = () => new Date() }) {
   if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(String(exportRunId || ""))) throw exporterError("EXPORT_RUN_ID_INVALID", "Exportlauf-ID ist ungueltig");
   if (!/^[A-Za-z0-9_-]{20,200}$/.test(String(spreadsheetId || ""))) throw exporterError("EXPORT_SHEET_ID_INVALID", "Spreadsheet-ID ist ungueltig");
+  if (!new Set(["migration-v1", PAJ_REFRESH_PROFILE]).has(profile)) throw exporterError("EXPORT_PROFILE_INVALID", "Exportprofil ist ungueltig");
+  if (profile === PAJ_REFRESH_PROFILE && !/^[0-9a-f]{64}$/i.test(String(testPasswordHash || "").trim())) throw exporterError("PAJ_REFRESH_PASSWORD_HASH_INVALID", "Testpasswort-Hash fehlt");
   let stage = "target_prepare";
   prepareRoot(root);
   const startedAt = now().toISOString();
@@ -148,14 +160,29 @@ async function exportLegacySource({ root, spreadsheetId, credentialsFile, sqlite
     stage = "sheet_snapshot_before";
     const before = await readSheetSnapshot(sheets, spreadsheetId);
     stage = "sheet_csv_write";
-    for (const name of before.selected) fs.writeFileSync(path.join(root, "sheets", `${name}.csv`), csv(rectangularRows(before.byName.get(name), name)), { mode: 0o600, flag: "wx" });
+    let credentialCount = 0;
+    for (const name of before.selected) {
+      let rows = rectangularRows(before.byName.get(name), name);
+      if (profile === PAJ_REFRESH_PROFILE && name === "Personen") {
+        const sanitized = sanitizePeopleRows(rows, { clientHash: testPasswordHash, exportRunId });
+        rows = sanitized.rows;
+        credentialCount = sanitized.credentialCount;
+      }
+      fs.writeFileSync(path.join(root, "sheets", `${name}.csv`), csv(rows), { mode: 0o600, flag: "wx" });
+    }
     const sqliteSummary = {};
+    const refreshSummary = { credentialCount, revokedMonitorCount: 0, disabledDeliveryCount: 0 };
     for (const [targetName, environmentName] of Object.entries(SQLITE_SOURCES)) {
       const source = sqliteFiles[environmentName];
       if (!source) throw exporterError("EXPORT_SQLITE_SOURCE_MISSING", `${environmentName} fehlt`);
       const target = path.join(root, "sqlite", targetName);
       stage = `sqlite_snapshot_${targetName.replaceAll(".", "_")}`;
       (preSnapshotted ? copySqliteSnapshot : snapshotSqlite)(source, target);
+      if (profile === PAJ_REFRESH_PROFILE) {
+        const sanitized = sanitizeSqlite(target, targetName, { exportRunId, exportStartedAt: startedAt });
+        refreshSummary.revokedMonitorCount += sanitized.revokedMonitors;
+        refreshSummary.disabledDeliveryCount += sanitized.disabledDeliveries;
+      }
       stage = `sqlite_metadata_${targetName.replaceAll(".", "_")}`;
       sqliteSummary[targetName] = sqliteMetadata(target);
     }
@@ -165,12 +192,13 @@ async function exportLegacySource({ root, spreadsheetId, credentialsFile, sqlite
     stage = "metadata_write";
     fs.writeFileSync(path.join(root, "metadata", "sheets.json"), `${JSON.stringify(before.metadata, null, 2)}\n`, { mode: 0o600, flag: "wx" });
     fs.writeFileSync(path.join(root, "metadata", "sqlite.json"), `${JSON.stringify(sqliteSummary, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+    if (profile === PAJ_REFRESH_PROFILE) writeProfileMetadata(root, refreshSummary);
     const completedAt = now().toISOString();
     stage = "manifest_write";
     writeSourceManifest(root, { exportRunId, exportStartedAt: startedAt, exportCompletedAt: completedAt });
     stage = "package_verify";
-    const verified = verifySourcePackage(root);
-    return { exportRunId, manifestSha256: verified.manifestSha256, fileCount: verified.manifest.files.length };
+    const verified = profile === PAJ_REFRESH_PROFILE ? verifyPajRefreshPackage(root) : verifySourcePackage(root);
+    return { exportRunId, profile, manifestSha256: verified.manifestSha256, fileCount: verified.manifest.files.length };
   } catch (error) {
     fs.rmSync(root, { recursive: true, force: true });
     if (error.code === "EACCES") throw exporterError(`EXPORT_${stage.toUpperCase()}_ACCESS_DENIED`, "Exportzugriff wurde verweigert");

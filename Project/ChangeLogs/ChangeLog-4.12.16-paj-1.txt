@@ -442,3 +442,73 @@ Commit: 4.12.16-paj-1-8 | PAJ-Autostart mit lokalem LUKS-Schlüssel aktiviert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-7-x` gesetzt.
+
+[4.12.16-paj-1-9] - 2026-10-13
+Commit: 4.12.16-paj-1-9 | Bereinigten Live-Datenbestand sicher nach PAJ übernommen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-8-x` gesetzt.
+  - [Migration] Geschlossenes Exportprofil `paj-refresh-v1` ergaenzt, das
+    produktive Credentials und Zugangsstate vor dem Schreiben des Quellpakets
+    entfernt, pro Konto gesalzene scrypt-Testcredentials erzeugt und den
+    Bereinigungsvertrag in das gehashte Manifest bindet.
+  - [Migration] Eindeutige Google-Sheet-Reiternamen werden beim Export
+    case-insensitiv auf die kanonischen Paketnamen abgebildet, damit der
+    produktive Reiter `MatchTyp` den Vertrag `Matchtyp` erfuellt; nur durch
+    Gross-/Kleinschreibung mehrdeutige Reiter blockieren weiterhin fail-closed.
+  - [Migration] Den produktiven unbenannten Nebenblock rechts der fuenf
+    `EntryList`-Vertragsspalten eng begrenzt vom Fachpaket ausgeschlossen; fuer
+    alle anderen Pflichtreiter bleiben breitere Datenzeilen blockierend und der
+    konsistente Quellfingerprint umfasst weiterhin den vollstaendigen Read.
+  - [Migration] Die produktive Messaging-Quellstruktur vor dem optionalen Feld
+    `event_participants.inbox_visible` als geschlossene Schemaalternative
+    aufgenommen; dort gilt jeder persistierte Teilnehmer gemaess Legacyvertrag
+    als sichtbar, waehrend alle anderen Feldabweichungen blockierend bleiben.
+  - [Migration] Sechsstellige reine Legacy-Bewerbsdaten im Format `YYMMDD`
+    verwenden nun dieselbe dokumentierte 2000er-Jahr-Konvention wie bestehende
+    kompakte Legacy-Zeitstempel; der reale Wert `260923` wird dadurch eindeutig
+    als `2026-09-23` importiert.
+  - [Datenbank] PAJ-Refresh-Import mit zusaetzlichen Sicherheitsinvarianten fuer
+    Credentials, Sessions, Passwortfreigaben, Loginlimits, Monitore, externe
+    Zustellungen, Jobs und Outbox sowie secretfreiem Abschlusslogging ergaenzt.
+  - [Datenbank] Refresh-Rolle um DML auf die historisch importierten
+    Idempotenz-/Auditrelationen und reines Lesen des Job-/Outbox-Sicherheitsgates
+    ergaenzt; die Bootstrap-Verifikation prueft diese Rechte explizit.
+  - [Datenbank] Der Refresh-Rolle exklusiv das fuer den kontrollierten
+    `setval`-Abschluss der importierten Personen-ID-Sequenz erforderliche
+    Sequenz-`UPDATE` samt Default Privileges erteilt und verifiziert.
+  - [Betrieb] Wiederholbaren fail-safe Live-zu-PAJ-Ablauf mit einmaligem
+    Freigabegate, verschluesseltem Kurzzeitpaket, isolierter Vorpruefung,
+    frischer Kandidatendatenbank, atomarer Aktivierung, automatischem Rollback
+    und kontrollierter Klartextbereinigung aufgenommen; reale Ausfuehrung bleibt
+    gesondert gesperrt.
+  - [Betrieb] Kandidatengrants an den tatsaechlichen PAJ-Rollensatz ohne die dort
+    nicht eingerichtete optionale Live-Abnahmerolle `app_readonly` gebunden;
+    Runtime-, Refresh-, Monitoring-, Backup- und persoenliche Rollen bleiben
+    vollstaendig verpflichtend.
+  - [Betrieb] Das aktive Import- und Sicherheitsgate wird nach Readiness, aber
+    vor dem ersten Workerstart ausgefuehrt, damit regulaer neu erzeugte lokale
+    PAJ-Wartungsjobs nicht als importierter Live-Jobstate gewertet werden.
+  - [Sicherheit] Interaktives Werkzeug fuer das starke gemeinsame
+    PAJ-Testpasswort ohne Passwortuebergabe in Argumenten, Git, Dokumentation
+    oder Chat aufgenommen; die freigegebene Mindestlaenge betraegt zehn Zeichen
+    bei weiterhin verpflichtenden Gross-/Kleinbuchstaben, Ziffern und
+    Sonderzeichen. Breite persoenliche DBeaver-Grants werden auf jedem Kandidaten
+    erneut angewendet und verifiziert.
+  - [Diagnose] Bei im Live-State fehlenden globalen Frontend-Logging-Settings
+    erzeugt nur das PAJ-Refreshprofil einen appstartfaehigen sicheren Default mit
+    deaktivierter Diagnose, Level `error`, Sampling `0` und ohne Zielpersonen;
+    vorhandene Quellsettings bleiben vorrangig.
+  - [Court] Produktive Court-Quellen und operative Aktivzustaende im PAJ-Refresh
+    deaktiviert und als Zielinvariante geprueft; Zuordnungen, Teilnehmer,
+    letzter Score und Scorehistorie bleiben fachlich erhalten.
+  - [Dokumentation] Personenbezogene PAJ-Echtdatenkopie als eng begrenzte
+    No-Backup-Ausnahme, Live als autoritative Quelle sowie Operator-, Cleanup-,
+    Credential- und externe Wirkungsgrenzen dokumentiert.
+
+  Tests
+  - [Backend] Synthetische Tests fuer Quellcredential-Sentinelentfernung,
+    gemeinsames Login ueber mehrere Rollen, Ablehnung alter Passwoerter,
+    Profilpflicht, deaktivierte externe Wirkungen, widerrufene Monitore,
+    Import-Replay, Zielhashes, Laufzeitgrants und einen realen PostgreSQL-Abbruch
+    zwischen beiden Aktivierungsumbenennungen samt Rollback ergaenzt.

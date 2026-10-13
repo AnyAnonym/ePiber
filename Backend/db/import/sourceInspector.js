@@ -10,6 +10,7 @@ const SQLITE_FILES = {
   "scorelog.sqlite": "sqlite/scorelog.sqlite",
   "audit.sqlite": "sqlite/audit.sqlite",
 };
+const OPTIONAL_FIELDS = Object.freeze({ "messaging.sqlite:event_participants": new Set(["inbox_visible"]) });
 
 function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
@@ -30,7 +31,9 @@ function inspectSqliteSchemas(root) {
       for (const table of expectedTables) {
         const actualFields = database.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all().map(({ name }) => name).sort();
         const expectedFields = Object.keys(matrix.sources[source][table].fields).sort();
-        if (JSON.stringify(actualFields) !== JSON.stringify(expectedFields)) {
+        const requiredFields = expectedFields.filter((field) => !OPTIONAL_FIELDS[`${source}:${table}`]?.has(field));
+        const unexpectedFields = actualFields.filter((field) => !expectedFields.includes(field));
+        if (requiredFields.some((field) => !actualFields.includes(field)) || unexpectedFields.length) {
           throw Object.assign(new Error(`SQLite-Felder weichen fuer ${source}.${table} ab`), { code: "SOURCE_SQLITE_FIELD_DRIFT", source, table });
         }
         fieldCount += actualFields.length;

@@ -75,14 +75,16 @@ function legacyBoolean(value, source, projection, { trueValues = ["1"], falseVal
 function dateOnly(value, source, projection, { optional = true } = {}) {
   const raw = String(value ?? "").trim();
   if (!raw && optional) return null;
-  const match = raw.match(/^(?:(\d{2})\.(\d{2})\.(\d{4})|(\d{4})-(\d{2})-(\d{2})|(\d{4})(\d{2})(\d{2}))$/);
+  const match = raw.match(/^(?:(\d{2})\.(\d{2})\.(\d{4})|(\d{4})-(\d{2})-(\d{2})|(\d{4})(\d{2})(\d{2})|(\d{2})(\d{2})(\d{2}))$/);
   if (!match) fail("SOURCE_DATE_INVALID", source, projection);
   try {
     return Temporal.PlainDate.from(match[1]
       ? { year: Number(match[3]), month: Number(match[2]), day: Number(match[1]) }
       : match[4]
         ? { year: Number(match[4]), month: Number(match[5]), day: Number(match[6]) }
-        : { year: Number(match[7]), month: Number(match[8]), day: Number(match[9]) }).toString();
+        : match[7]
+          ? { year: Number(match[7]), month: Number(match[8]), day: Number(match[9]) }
+          : { year: 2000 + Number(match[10]), month: Number(match[11]), day: Number(match[12]) }).toString();
   } catch { fail("SOURCE_DATE_INVALID", source, projection); }
 }
 
@@ -110,7 +112,7 @@ function instant(value, source, projection, { optional = true, unixMs = false } 
 function dateOrInstant(value, source, projection) {
   const raw = String(value ?? "").trim();
   if (!raw) return { date: null, instant: null };
-  if (/^(?:\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2}|\d{8})$/.test(raw)) return { date: dateOnly(raw, source, projection), instant: null };
+  if (/^(?:\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2}|\d{6}|\d{8})$/.test(raw)) return { date: dateOnly(raw, source, projection), instant: null };
   return { date: null, instant: instant(raw, source, projection, { optional: false }) };
 }
 

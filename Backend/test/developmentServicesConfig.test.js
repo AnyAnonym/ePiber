@@ -64,3 +64,13 @@ test("automatischer Boot bindet LUKS-Keydatei, Mount und Worker an die PostgreSQ
   const m365 = read("systemd/m365-connector-development-data.conf");
   assert.match(m365, /RequiresMountsFor=\/var\/lib\/development-data/);
 });
+
+test("PAJ-Refresh prueft den aktivierten Import vor dem ersten Workerstart", () => {
+  const script = read("bin/epiber-migration-staging-run");
+  const activation = script.indexOf('node "${backend}/scripts/db-paj-refresh-swap.js" activate');
+  const readiness = script.indexOf("http://127.0.0.1:8083/ready", activation);
+  const validation = script.indexOf('> "${result}/active-validation.jsonl"', activation);
+  const worker = script.indexOf("systemctl start epiber-devel-worker.service", activation);
+  const previousDrop = script.indexOf('dropdb --force', activation);
+  assert.ok(activation >= 0 && activation < readiness && readiness < validation && validation < worker && worker < previousDrop);
+});

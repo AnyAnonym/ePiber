@@ -14,9 +14,18 @@ if [[ ! "${run_id}" =~ ^[A-Za-z0-9_.:-]{1,128}$ ]]; then
 fi
 
 backend="${repo}/Backend"
-environment_file="${backend}/.env"
-credential_file="${backend}/epiberpaj-5032a34639bf.json"
-service="epiber-paj.service"
+source_backend="${EPIBER_MIGRATION_SOURCE_BACKEND:-${backend}}"
+environment_file="${EPIBER_MIGRATION_SOURCE_ENV:-${source_backend}/.env}"
+credential_file="${EPIBER_MIGRATION_SOURCE_CREDENTIAL:-${source_backend}/epiberpaj-5032a34639bf.json}"
+source_state_root="${EPIBER_MIGRATION_SOURCE_STATE_ROOT:-/var/lib/epiber-paj}"
+service="${EPIBER_MIGRATION_SOURCE_SERVICE:-epiber-paj.service}"
+export_profile="${EPIBER_MIGRATION_EXPORT_PROFILE:-migration-v1}"
+refresh_password_hash_file="${EPIBER_MIGRATION_REFRESH_PASSWORD_HASH_FILE:-}"
+import_script="${EPIBER_MIGRATION_IMPORT_SCRIPT:-${backend}/scripts/db-import.js}"
+candidate_database="${EPIBER_MIGRATION_CANDIDATE_DATABASE:-}"
+activate_candidate="${EPIBER_MIGRATION_ACTIVATE_CANDIDATE:-false}"
+completion_event=migration_staging_completed
+if [[ "${export_profile}" == "paj-refresh-v1" ]]; then completion_event=paj_refresh_completed; fi
 base="/var/lib/development-data/epiber-migration-staging"
 runtime="/run/epiber-migration/${run_id}"
 image="${base}/${run_id}.luks"
@@ -37,12 +46,25 @@ postgres_started=false
 mounted=false
 mapping_open=false
 loop_device=""
+candidate_created=false
+database_swap_started=false
+old_database=""
+shared_package=""
 
 log_failure() {
   local code="$1"
   install -d -m 0750 -o root -g PiberDevel "${result_root}"
   install -d -m 0750 -o root -g PiberDevel "${result}"
-  printf '{"event":"migration_staging_completed","result":"failed","errorCode":"%s","exportRunId":"%s"}\n' "${code}" "${run_id}" > "${result}/completion.json"
+  printf '{"event":"%s","result":"failed","errorCode":"%s","exportRunId":"%s"}\n' "${completion_event}" "${code}" "${run_id}" > "${result}/completion.json"
+  chmod 0640 "${result}/completion.json"
+  chown root:PiberDevel "${result}/completion.json"
+}
+
+log_unknown() {
+  local code="$1"
+  install -d -m 0750 -o root -g PiberDevel "${result_root}"
+  install -d -m 0750 -o root -g PiberDevel "${result}"
+  printf '{"event":"%s","result":"unknown","errorCode":"%s","exportRunId":"%s"}\n' "${completion_event}" "${code}" "${run_id}" > "${result}/completion.json"
   chmod 0640 "${result}/completion.json"
   chown root:PiberDevel "${result}/completion.json"
 }
@@ -50,6 +72,23 @@ log_failure() {
 cleanup() {
   local status=$?
   set +e
+  if [[ "${database_swap_started}" == true ]]; then
+    systemctl stop epiber-devel-worker.service epiber-devel.service
+    if runuser -u postgres-devel -- env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=postgres PGUSER=postgres \
+      node "${backend}/scripts/db-paj-refresh-swap.js" rollback "${candidate_database}" "${old_database}" >> "${result}/database-swap.log" 2>&1; then
+      candidate_created=true
+      systemctl start epiber-devel.service
+      systemctl start epiber-devel-worker.service
+    else
+      candidate_created=false
+      log_unknown "PAJ_REFRESH_ROLLBACK_OUTCOME_UNKNOWN"
+    fi
+    database_swap_started=false
+  fi
+  if [[ -n "${shared_package}" ]]; then rm -rf -- "${shared_package}"; fi
+  if [[ "${candidate_created}" == true ]]; then
+    runuser -u postgres-devel -- dropdb --if-exists --force -h /run/postgresql/devel -p 5433 -U postgres "${candidate_database}" >/dev/null
+  fi
   if [[ "${app_stopped}" == true && "${app_was_active}" == true ]]; then systemctl start "${service}"; fi
   if [[ "${postgres_started}" == true ]]; then runuser -u epiber-migration -- pg_ctl -D "${pgdata}" -m fast -w stop >/dev/null; fi
   if [[ "${mounted}" == true ]]; then umount "${mountpoint}"; fi
@@ -67,7 +106,14 @@ for command in age age-keygen cryptsetup initdb losetup mkfs.ext4 mount node pg_
   command -v "${command}" >/dev/null || { log_failure "TOOL_MISSING"; exit 1; }
 done
 [[ -f "${environment_file}" && -f "${credential_file}" ]] || { log_failure "SOURCE_CONFIG_MISSING"; exit 1; }
-for source in state messaging scorelog audit; do [[ -f "/var/lib/epiber-paj/${source}.sqlite" ]] || { log_failure "SQLITE_SOURCE_MISSING"; exit 1; }; done
+if [[ "${export_profile}" == "paj-refresh-v1" ]]; then
+  [[ -f "${refresh_password_hash_file}" ]] || { log_failure "REFRESH_PASSWORD_HASH_MISSING"; exit 1; }
+elif [[ "${export_profile}" != "migration-v1" ]]; then
+  log_failure "EXPORT_PROFILE_INVALID"; exit 1
+fi
+if [[ -n "${candidate_database}" ]] && [[ ! "${candidate_database}" =~ ^epiber_devel_refresh_[a-z0-9_]{8,32}$ ]]; then log_failure "CANDIDATE_DATABASE_INVALID"; exit 1; fi
+if [[ "${activate_candidate}" == true && -z "${candidate_database}" ]]; then log_failure "CANDIDATE_DATABASE_REQUIRED"; exit 1; fi
+for source in state messaging scorelog audit; do [[ -f "${source_state_root}/${source}.sqlite" ]] || { log_failure "SQLITE_SOURCE_MISSING"; exit 1; }; done
 
 if ! id epiber-migration >/dev/null 2>&1; then
   useradd --system --no-create-home --home-dir /nonexistent --shell /usr/bin/nologin epiber-migration
@@ -93,6 +139,9 @@ mounted=true
 chown epiber-migration:epiber-migration "${mountpoint}"
 install -d -m 0700 -o epiber-migration -g epiber-migration "${mountpoint}/source-snapshots"
 install -m 0400 -o epiber-migration -g epiber-migration "${credential_file}" "${mountpoint}/google-service-account.json"
+if [[ "${export_profile}" == "paj-refresh-v1" ]]; then
+  install -m 0400 -o epiber-migration -g epiber-migration "${refresh_password_hash_file}" "${mountpoint}/paj-refresh-password-hash"
+fi
 awk -F= '$1=="SHEET_ID" { print $0 }' "${environment_file}" > "${mountpoint}/export.env"
 chmod 0400 "${mountpoint}/export.env"
 chown epiber-migration:epiber-migration "${mountpoint}/export.env"
@@ -101,19 +150,21 @@ if systemctl is-active --quiet "${service}"; then app_was_active=true; fi
 systemctl stop "${service}"
 app_stopped=true
 for source in state messaging scorelog audit; do
-  sqlite3 "/var/lib/epiber-paj/${source}.sqlite" ".timeout 30000" ".backup '${mountpoint}/source-snapshots/${source}.sqlite'"
+  sqlite3 "${source_state_root}/${source}.sqlite" ".timeout 30000" ".backup '${mountpoint}/source-snapshots/${source}.sqlite'"
   chmod 0600 "${mountpoint}/source-snapshots/${source}.sqlite"
   chown epiber-migration:epiber-migration "${mountpoint}/source-snapshots/${source}.sqlite"
 done
 namei -l "${mountpoint}/source-snapshots/state.sqlite" > "${result}/source-permissions.log"
 if ! runuser -u epiber-migration -- test -r "${mountpoint}/source-snapshots/state.sqlite"; then log_failure "SOURCE_SNAPSHOT_NOT_READABLE"; exit 1; fi
+export_args=(--output "${package}" --run-id "${run_id}" --source-env "${mountpoint}/export.env" --credentials "${mountpoint}/google-service-account.json" --profile "${export_profile}")
+if [[ "${export_profile}" == "paj-refresh-v1" ]]; then export_args+=(--test-password-hash-file "${mountpoint}/paj-refresh-password-hash"); fi
 runuser -u epiber-migration -- env \
   STATE_FILE="${mountpoint}/source-snapshots/state.sqlite" \
   MESSAGING_FILE="${mountpoint}/source-snapshots/messaging.sqlite" \
   SCORELOG_FILE="${mountpoint}/source-snapshots/scorelog.sqlite" \
   AUDITLOG_FILE="${mountpoint}/source-snapshots/audit.sqlite" \
   EPIBER_EXPORT_PRE_SNAPSHOTTED=1 \
-  node "${backend}/scripts/db-export.js" --output "${package}" --run-id "${run_id}" --source-env "${mountpoint}/export.env" --credentials "${mountpoint}/google-service-account.json" \
+  node "${backend}/scripts/db-export.js" "${export_args[@]}" \
   > "${result}/export.jsonl" 2>&1
 if [[ "${app_was_active}" == true ]]; then systemctl start "${service}"; fi
 app_stopped=false
@@ -152,16 +203,61 @@ pg_env=(env PGHOST="${socket}" PGPORT=5432 PGDATABASE=epiber_staging PGUSER=stag
 runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-migrate.js" up --target-generation 6 > "${result}/migrations.jsonl" 2>&1
 as_of="$(node -e 'const value=require(process.argv[1]);process.stdout.write(value.exportStartedAt)' "${package}/manifest.json")"
 runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-seed.js" technical-minimal --as-of "${as_of}" > "${result}/seed.jsonl" 2>&1
-runuser -u epiber-migration -- node "${backend}/scripts/db-import.js" dry-run "${package}" > "${result}/dry-run.jsonl" 2>&1
-runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" apply "${package}" > "${result}/import.jsonl" 2>&1
-runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" validate "${package}" > "${result}/validation.jsonl" 2>&1
+runuser -u epiber-migration -- node "${import_script}" dry-run "${package}" > "${result}/dry-run.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${import_script}" apply "${package}" > "${result}/import.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${import_script}" validate "${package}" > "${result}/validation.jsonl" 2>&1
 runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-shadow-read.js" "${package}" > "${result}/shadow-read.jsonl" 2>&1
-runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-import.js" apply "${package}" > "${result}/replay.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${import_script}" apply "${package}" > "${result}/replay.jsonl" 2>&1
+
+if [[ -n "${candidate_database}" ]]; then
+  for command in createdb dropdb curl; do command -v "${command}" >/dev/null || { log_failure "TOOL_MISSING"; exit 1; }; done
+  if runuser -u postgres-devel -- psql -h /run/postgresql/devel -p 5433 -U postgres -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname='${candidate_database}'" | grep -qx 1; then
+    log_failure "CANDIDATE_DATABASE_EXISTS"; exit 1
+  fi
+  runuser -u postgres-devel -- createdb -h /run/postgresql/devel -p 5433 -U postgres -O epiber_devel_owner -T template0 "${candidate_database}"
+  candidate_created=true
+  shared_package="/run/epiber-migration/${run_id}-shared-package"
+  install -d -m 0700 -o postgres-devel -g postgres-devel "${shared_package}"
+  cp -a "${package}/." "${shared_package}/"
+  chown -R postgres-devel:postgres-devel "${shared_package}"
+  shared_admin=(env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE="${candidate_database}" PGUSER=postgres EPIBER_DB_ROLE=epiber_devel_owner)
+  runuser -u postgres-devel -- "${shared_admin[@]}" node "${backend}/scripts/db-migrate.js" up --target-generation 6 > "${result}/candidate-migrations.jsonl" 2>&1
+  as_of="$(node -e 'const value=require(process.argv[1]);process.stdout.write(value.exportStartedAt)' "${package}/manifest.json")"
+  runuser -u postgres-devel -- "${shared_admin[@]}" node "${backend}/scripts/db-seed.js" technical-minimal --as-of "${as_of}" > "${result}/candidate-seed.jsonl" 2>&1
+  bootstrap_env=(env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=postgres PGUSER=postgres EPIBER_DB_NAME="${candidate_database}" EPIBER_DB_ROLE_PREFIX=epiber_devel EPIBER_DB_ENABLE_READONLY=false)
+  runuser -u postgres-devel -- "${bootstrap_env[@]}" node "${backend}/scripts/db-bootstrap.js" grants > "${result}/candidate-bootstrap.jsonl" 2>&1
+  shared_refresh=(env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE="${candidate_database}" PGUSER=postgres EPIBER_DB_ROLE=epiber_devel_refresh)
+  runuser -u postgres-devel -- "${shared_refresh[@]}" node "${import_script}" apply "${shared_package}" > "${result}/candidate-import.jsonl" 2>&1
+  runuser -u postgres-devel -- "${shared_refresh[@]}" node "${import_script}" validate "${shared_package}" > "${result}/candidate-validation.jsonl" 2>&1
+  runuser -u postgres-devel -- "${shared_refresh[@]}" node "${backend}/scripts/db-shadow-read.js" "${shared_package}" > "${result}/candidate-shadow-read.jsonl" 2>&1
+  personal_env=(env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE="${candidate_database}" PGUSER=postgres EPIBER_DB_NAME="${candidate_database}" EPIBER_DB_OWNER_ROLE=epiber_devel_owner EPIBER_DB_PERSONAL_READER_ROLE=paj_devel_ro EPIBER_DB_PERSONAL_ADMIN_ROLE=paj_devel_admin)
+  runuser -u postgres-devel -- "${personal_env[@]}" node "${backend}/scripts/db-personal-access.js" apply > "${result}/candidate-personal-access.jsonl" 2>&1
+
+  if [[ "${activate_candidate}" == true ]]; then
+    old_database="epiber_devel_previous_$(date -u +%Y%m%d%H%M%S)"
+    systemctl stop epiber-devel-worker.service epiber-devel.service
+    database_swap_started=true
+    runuser -u postgres-devel -- env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=postgres PGUSER=postgres \
+      node "${backend}/scripts/db-paj-refresh-swap.js" activate "${candidate_database}" "${old_database}" > "${result}/database-swap.log" 2>&1
+    candidate_created=false
+    systemctl start epiber-devel.service
+    for _ in {1..30}; do curl --fail --silent --output /dev/null http://127.0.0.1:8083/ready && break; sleep 1; done
+    curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8083/ready
+    personal_env=(env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=epiber_devel PGUSER=postgres EPIBER_DB_NAME=epiber_devel EPIBER_DB_OWNER_ROLE=epiber_devel_owner EPIBER_DB_PERSONAL_READER_ROLE=paj_devel_ro EPIBER_DB_PERSONAL_ADMIN_ROLE=paj_devel_admin)
+    runuser -u postgres-devel -- "${personal_env[@]}" node "${backend}/scripts/db-personal-access.js" verify > "${result}/active-personal-access.jsonl" 2>&1
+    runuser -u postgres-devel -- env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=epiber_devel PGUSER=postgres EPIBER_DB_ROLE=epiber_devel_refresh \
+      node "${import_script}" validate "${shared_package}" > "${result}/active-validation.jsonl" 2>&1
+    systemctl start epiber-devel-worker.service
+    systemctl is-active --quiet epiber-devel.service epiber-devel-worker.service
+    runuser -u postgres-devel -- dropdb --force -h /run/postgresql/devel -p 5433 -U postgres "${old_database}"
+    database_swap_started=false
+  fi
+fi
 
 manifest_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).manifestSha256)' "${result}/package-verification.jsonl")"
 target_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).targetSha256)' "${result}/validation.jsonl")"
 shadow_sha256="$(node -e 'const fs=require("fs");const lines=fs.readFileSync(process.argv[1],"utf8").trim().split(/\n/);process.stdout.write(JSON.parse(lines.at(-1)).shadowSha256)' "${result}/shadow-read.jsonl")"
-printf '{"event":"migration_staging_completed","result":"success","exportRunId":"%s","manifestSha256":"%s","encryptedArchiveSha256":"%s","targetSha256":"%s","shadowSha256":"%s"}\n' \
-  "${run_id}" "${manifest_sha256}" "${archive_sha256}" "${target_sha256}" "${shadow_sha256}" > "${result}/completion.json"
+printf '{"event":"%s","result":"success","exportRunId":"%s","profile":"%s","manifestSha256":"%s","encryptedArchiveSha256":"%s","targetSha256":"%s","shadowSha256":"%s","candidateActivated":%s}\n' \
+  "${completion_event}" "${run_id}" "${export_profile}" "${manifest_sha256}" "${archive_sha256}" "${target_sha256}" "${shadow_sha256}" "${activate_candidate}" > "${result}/completion.json"
 chmod 0640 "${result}"/*
 chown -R root:PiberDevel "${result}"

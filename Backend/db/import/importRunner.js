@@ -109,13 +109,19 @@ function validatePlanUniqueness(tables) {
 function transformSource(root) {
   const inspection = inspectSource(root);
   try {
+    let retainHistorical = false;
+    const refreshMetadata = path.join(root, "metadata", "paj-refresh.json");
+    if (fs.existsSync(refreshMetadata)) {
+      const value = readMetadata(root, "paj-refresh.json");
+      retainHistorical = value.profile === "paj-refresh-v1" && value.historicalBusinessData === "retained";
+    }
     const sheets = transformSheets(root);
     for (const row of sheets.tables.match_result_history) if (!row.changed_at) row.changed_at = inspection.manifest.exportStartedAt;
     for (const row of sheets.tables.memberships) {
       row.valid_from = null;
       row.valid_until = row.active ? null : inspection.manifest.exportStartedAt;
     }
-    const sqlite = transformSqlite(root, sheets.refs, inspection.manifest);
+    const sqlite = transformSqlite(root, sheets.refs, inspection.manifest, { retainHistorical, ensureRuntimeDefaults: retainHistorical });
     const tables = { ...sheets.tables, ...sqlite.tables };
     validatePlanUniqueness(tables);
     const findings = [...sheets.findings, ...sqlite.findings].sort((a, b) => `${a.severity}:${a.code}:${a.source}`.localeCompare(`${b.severity}:${b.code}:${b.source}`));

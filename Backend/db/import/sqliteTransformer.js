@@ -296,7 +296,7 @@ function transformScore(database, tables, refs) {
   for (const [key, maximum] of maximums) if ((observed.get(key) || 0) !== maximum) fail("SCORE_SEQUENCE_MISMATCH", "scorelog.sqlite:score_log_sequence", "last_sequence");
 }
 
-function transformMessaging(database, tables, refs, findings, exportStartedAt) {
+function transformMessaging(database, tables, refs, findings, exportStartedAt, { retainHistorical = false } = {}) {
   const eventRefs = new Map(), recipientRefs = new Map(), commentRefs = new Map();
   for (const row of rows(database, "competition_events")) {
     const competitionContract = String(row.competition_id ?? "").trim(), competition = competitionContract ? refs.competitions.get(competitionContract)?.id : null;
@@ -330,7 +330,7 @@ function transformMessaging(database, tables, refs, findings, exportStartedAt) {
     const personRow = [...refs.people.entries()].find(([, id]) => id === person);
     const display = String(row.display_name ?? "").trim().split(/\s+/), recipientId = uuid(row.message_id, "message-recipient");
     tables.event_participants.push({ event_id: event.id, person_id: person, participant_role: String(row.participant_role).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "_"), contract_id_snapshot: personRow?.[0] || String(row.user_id), first_name_snapshot: display.length > 1 ? display.slice(0, -1).join(" ") : null, last_name_snapshot: display.at(-1) || "Unbekannt" });
-    const inboxVisible = legacyBoolean(row.inbox_visible, "messaging.sqlite:event_participants", "inbox_visible");
+    const inboxVisible = row.inbox_visible === undefined ? true : legacyBoolean(row.inbox_visible, "messaging.sqlite:event_participants", "inbox_visible");
     if (inboxVisible) {
       tables.event_recipients.push({ id: recipientId, event_id: event.id, person_id: person, template_key: `legacy.${String(row.projection_type).toLowerCase().replace(/[^a-z0-9_.-]/g, "_") || "message"}`, template_version: 1, template_parameters: {}, legacy_subject: String(row.subject), legacy_body: String(row.body), created_at: tables.events.find((item) => item.id === event.id).created_at });
       recipientRefs.set(`${row.event_id}:${row.user_id}`, recipientId);
@@ -340,10 +340,10 @@ function transformMessaging(database, tables, refs, findings, exportStartedAt) {
     const recipient = recipientRefs.get(`${row.event_id}:${row.user_id}`);
     if (!recipient) { addFinding(findings, "MESSAGE_HIDDEN_RECEIPT_DISCARDED", "messaging.sqlite", "info"); continue; }
     const acknowledged = instant(row.acknowledged_at, "messaging.sqlite:event_receipts", "acknowledged_at", { unixMs: true });
-    if (!acknowledged || Number(row.acknowledged_at) >= messageCutoff) tables.receipts.push({ recipient_id: recipient, read_at: acknowledged, acknowledged_at: acknowledged, revision: 1 });
+    if (retainHistorical || !acknowledged || Number(row.acknowledged_at) >= messageCutoff) tables.receipts.push({ recipient_id: recipient, read_at: acknowledged, acknowledged_at: acknowledged, revision: 1 });
   }
   for (const row of rows(database, "event_deliveries")) {
-    if (Number(row.updated_at) < messageCutoff) { addFinding(findings, "MESSAGE_DELIVERY_EXPIRED", "messaging.sqlite"); continue; }
+    if (!retainHistorical && Number(row.updated_at) < messageCutoff) { addFinding(findings, "MESSAGE_DELIVERY_EXPIRED", "messaging.sqlite"); continue; }
     if (row.channel === "Inbox") { addFinding(findings, "MESSAGE_INTERNAL_DELIVERY_DISCARDED", "messaging.sqlite", "info"); continue; }
     const recipient = recipientRefs.get(`${row.event_id}:${row.user_id}`);
     if (!recipient) { addFinding(findings, "MESSAGE_HIDDEN_DELIVERY_DISCARDED", "messaging.sqlite", "info"); continue; }
@@ -391,11 +391,11 @@ function transformMessaging(database, tables, refs, findings, exportStartedAt) {
   tables.history_revision.push({ singleton: true, revision: integer(revisionRows[0].revision, "messaging.sqlite:competition_history_revision", "revision", { min: 0 }) });
 }
 
-function transformAudit(database, tables, refs, findings, exportStartedAt) {
+function transformAudit(database, tables, refs, findings, exportStartedAt, { retainHistorical = false } = {}) {
   const auditCutoff = cutoff(exportStartedAt, 12);
   for (const row of rows(database, "audit_log")) {
     const occurredAt = instant(row.occurred_at, "audit.sqlite:audit_log", "occurred_at", { optional: false });
-    if (Temporal.Instant.from(occurredAt).epochMilliseconds < auditCutoff) { addFinding(findings, "AUDIT_EXPIRED", "audit.sqlite"); continue; }
+    if (!retainHistorical && Temporal.Instant.from(occurredAt).epochMilliseconds < auditCutoff) { addFinding(findings, "AUDIT_EXPIRED", "audit.sqlite"); continue; }
     const actorRaw = String(row.actor_id ?? "").trim(), actor = actorRaw ? refs.people.get(actorRaw) : null;
     if (actorRaw && !actor && row.actor_type === "user") fail("AUDIT_ACTOR_REFERENCE_MISSING", "audit.sqlite:audit_log", "actor_id");
     if (!["started", "success", "failed", "unknown"].includes(String(row.result))) fail("AUDIT_RESULT_INVALID", "audit.sqlite:audit_log", "result");
@@ -408,16 +408,32 @@ function transformAudit(database, tables, refs, findings, exportStartedAt) {
   }
 }
 
-function transformSqlite(root, refs, manifest) {
+function transformSqlite(root, refs, manifest, options = {}) {
   const tables = sqliteTables(), findings = new Map(), localRefs = { ...refs, courts: new Map(), site: null };
   for (const [source, relative] of Object.entries(SQLITE_FILES)) {
     const database = new DatabaseSync(path.join(root, ...relative.split("/")), { readOnly: true });
     try {
       if (source === "state.sqlite") transformState(database, tables, localRefs, findings, manifest.exportStartedAt);
       else if (source === "scorelog.sqlite") transformScore(database, tables, localRefs);
-      else if (source === "messaging.sqlite") transformMessaging(database, tables, localRefs, findings, manifest.exportStartedAt);
-      else transformAudit(database, tables, localRefs, findings, manifest.exportStartedAt);
+      else if (source === "messaging.sqlite") transformMessaging(database, tables, localRefs, findings, manifest.exportStartedAt, options);
+      else transformAudit(database, tables, localRefs, findings, manifest.exportStartedAt, options);
     } finally { database.close(); }
+  }
+  if (options.ensureRuntimeDefaults && tables.frontend_logging_settings.length === 0) {
+    tables.frontend_logging_settings.push({
+      tenant_id: TENANT_ID, minimum_level: "error", info_sample_rate: 0, debug_sample_rate: 0,
+      revision: 1, updated_at: manifest.exportStartedAt,
+    });
+    addFinding(findings, "FRONTEND_LOGGING_SAFE_DEFAULT_CREATED", "paj-refresh", "info");
+  }
+  if (options.ensureRuntimeDefaults) {
+    for (const source of tables.score_sources) source.active = false;
+    for (const court of tables.courts) court.active = false;
+    for (const state of tables.court_live_state) {
+      state.active = false;
+      state.awaiting_baseline = false;
+    }
+    addFinding(findings, "COURT_SOURCES_DISABLED_FOR_PAJ", "paj-refresh", "info", tables.score_sources.length);
   }
   return { tables, findings: [...findings.values()] };
 }

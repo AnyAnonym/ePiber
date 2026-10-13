@@ -6,7 +6,7 @@ const { Client } = require("pg");
 const { runMigrations } = require("../db/migrationRunner");
 const { applyFullDevelSeed, applyTechnicalSeed, validateFullDevelSeed } = require("../db/seedRunner");
 const { verifySchemaSnapshot } = require("../db/schemaSnapshot");
-const { applyBootstrap, verifyBootstrap } = require("../db/bootstrap");
+const { applyBootstrap, applyExistingDatabaseGrants, verifyBootstrap } = require("../db/bootstrap");
 const { applyPersonalAccess, verifyPersonalAccess } = require("../db/personalAccess");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
 
@@ -252,18 +252,17 @@ test("Bootstrap trennt Owner, Migration und Laufzeitrollen mit minimalen Grants"
   };
   await runMigrations({ connectionConfig: migrationConnection, command: "up", targetGeneration: 6, output: () => {} });
 
-  const granted = await applyBootstrap({
+  await applyExistingDatabaseGrants({
     adminConnectionConfig: cluster.connectionConfig,
     prefix,
     database,
-    passwords,
+    readOnly: true,
     output: () => {},
   });
-  assert.equal(granted.grantsApplied, true);
   const checks = await verifyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords });
   assert.ok(Object.values(checks).every(Boolean));
   const readOnlyPassword = passwords.app_readonly;
-  const readOnly = new Client({ ...cluster.connectionConfig, database, user: granted.names.app_readonly, password: readOnlyPassword });
+  const readOnly = new Client({ ...cluster.connectionConfig, database, user: prepared.names.app_readonly, password: readOnlyPassword });
   await readOnly.connect();
   assert.equal((await readOnly.query("SELECT count(*) FROM identity.people")).rows[0].count, "0");
   await assert.rejects(readOnly.query("INSERT INTO identity.people(tenant_id,contract_id,last_name) VALUES ('0199c800-0000-7000-8000-000000000001','readonly-test','Blocked')"), (error) => error.code === "42501");
@@ -281,7 +280,7 @@ test("persoenliche Devel-Rollen lesen alle Tabellen und nur Admin besitzt DML", 
   const ownerConnection = { ...cluster.connectionConfig, database, user: prepared.names.migrator, password: passwords.migrator, options: `-c role=${prepared.names.owner}` };
   await runMigrations({ connectionConfig: ownerConnection, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
-  await applyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords, output: () => {} });
+  await applyExistingDatabaseGrants({ adminConnectionConfig: cluster.connectionConfig, prefix, database, readOnly: false, output: () => {} });
 
   const readerRole = "personal_reader", adminRole = "personal_admin";
   const setup = new Client({ ...cluster.connectionConfig, database }); await setup.connect();

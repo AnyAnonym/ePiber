@@ -196,6 +196,31 @@ Die Arbeitsgrundlage wird fuer die Umsetzung in drei Klassen verwendet.
 - betriebliche Umbenennung von PAJ zu Devel erst beim vollstaendigen
   PostgreSQL-only-Devel-Cutover.
 
+**Am 13.10.2026 ausdruecklich freigegebene PAJ-Ausnahme:**
+
+- Der laufende PAJ-/Devel-Bestand darf als exakte Kopie der aktuellen
+  personenbezogenen und fachlichen Live-Daten betrieben und wiederholt erneuert
+  werden, obwohl der Backup-/Restore-/PITR-Nachweis noch fehlt. Der vollstaendige
+  Verlust dieser PAJ-Kopie ist akzeptiert; Live bleibt die autoritative Quelle.
+- Die Ausnahme gilt ausschliesslich fuer `epiber_devel`, nicht fuer Live, Gitea,
+  andere Plattformdienste oder eine Wiederherstellungszusage.
+- Quellpasswoerter, Credentialhistorien, Sessions, Passwortfreigaben,
+  Loginlimits, Monitor-/Geraetetokens, offene technische Leases sowie
+  produktive pending/retry Jobs, Outbox- und externe Zustellwirkungen werden
+  nicht uebernommen. Jede importierte Anmeldung erhaelt stattdessen dasselbe
+  starke, nur Administratoren bekannte PAJ-Testpasswort aus einer geschuetzten
+  lokalen Credentialdatei.
+- Kontakte, Aktivierungsstaende, Rollen, Meldungen, Auditdaten, Bewerbe,
+  Matches, Ergebnisse, Ranglisten, Scores und Hallenzeiten bleiben fachlich
+  erhalten. Der breite personenbezogene DBeaver-Zugriff bleibt als bewusstes
+  PAJ-Risiko auf die beiden persoenlichen Rollen und den SSH-Tunnel begrenzt.
+- Jeder Refresh verwendet ein einmaliges Freigabegate, ein kurzes benanntes
+  Live-Schreibstoppfenster, ein geschlossenes Bereinigungsprofil, eine frische
+  Kandidatendatenbank und eine Aktivierung erst nach Import-, Hash-, Count-,
+  Shadow-Read-, Sicherheits- und Grantpruefung. Fehler vor der Aktivierung lassen
+  `epiber_devel` unveraendert; Fehler waehrend der Aktivierung loesen den
+  kontrollierten Datenbank-Rollback aus.
+
 **Vor dem jeweiligen Umsetzungsblock ausdruecklich zu entscheiden:**
 
 - jede sichtbare oder bedienrelevante Funktionsaenderung;
