@@ -390,8 +390,55 @@ Commit: 4.12.16-paj-1-7 | DBeaver-Zugriffsrollen vollständig berechtigt
   - [Betrieb] Idempotenten Apply-/Verify-One-shot fuer aktuelle und zukuenftige
     Tabellen samt strukturierten Abschlusslogs und Rollen-/Grantpruefung
     ergaenzt.
+  - [Betrieb] PAJ-Standardstart auf den manuell entsperrten PostgreSQL-Stack
+    umgestellt: Startskript aktiviert Datenbank, Gitea, App und Worker in
+    gepruefter Reihenfolge, waehrend der deaktivierte Legacydienst nur noch als
+    ausdruecklicher manueller Worst-Case-Weg bestehen bleibt.
+  - [Betrieb] Stoppskript um den kontrollierten Drain von Worker und App vor
+    PostgreSQL und dem verschluesselten Volume sowie strukturierte
+    Abschlussereignisse erweitert; automatischer Legacy-Fallback ist
+    ausgeschlossen.
+  - [Dokumentation] Wiederkehrende PAJ-Ausfalldiagnose nach Hostneustarts in der
+    Agenten-Schnellreferenz und Serverdokumentation auf den LUKS-gebundenen
+    `development-services-start`-Ablauf gelenkt; manuellen Legacy-Rueckfall und
+    die Rueckkehr zum PostgreSQL-Standard mit exakten Stop-/Startbefehlen
+    dokumentiert.
+  - [Boot] Automatische Entschluesselung des Development-Volumes ueber eine
+    lokale root-only LUKS-Schluesseldatei und den anschliessenden systemd-Start
+    von PostgreSQL, Gitea, PAJ-App und Worker vorbereitet; bestehende Passphrase
+    und Startskript bleiben als manueller Recoveryweg erhalten.
+  - [Security] Schutzgrenze der lokalen Auto-Unlock-Loesung ausdruecklich auf ein
+    isoliert entwendetes Volume begrenzt und Root-Disk-/Gesamtsnapshots als nicht
+    durch diese LUKS-Schicht geschuetzt dokumentiert.
 
   Tests
   - [PostgreSQL] Vollstaendigen Lesezugriff beider Rollen, ausschliessliche
     Admin-DML-Rechte, sensible technische Tabellen, Default Privileges und
     negative DDL-/TRUNCATE-Pfade gegen einen kurzlebigen Cluster geprueft.
+  - [Systemd] Start-/Stop-Reihenfolge, lokale Readiness, Legacy-Ausschluss und
+    fail-closed Fehlerpfade der manuellen Stacksteuerung statisch geprueft.
+  - [Systemd] Auto-Unlock-Vorlagen ohne `noauto`, sichere Mountoptionen sowie die
+    Worker-Abhaengigkeit von PostgreSQL-App und Datenbank statisch geprueft.
+  - [Systemd] Stopppfad nach praktischem Befund auf die von systemd generierten
+    Mount- und Cryptsetup-Units umgestellt, damit das automatisch verwaltete
+    Mapping kontrolliert und ohne direkten Parallelzugriff geschlossen wird.
+  - [Systemd] Den ebenfalls auf `development-data` persistierenden
+    M365-Konnektor nach praktischem Holder-Befund in Mountabhaengigkeit,
+    Readiness sowie Start-/Stop-Reihenfolge des gemeinsamen Stacks aufgenommen.
+  - [Systemd] Praktischen Auto-Unlock-Zyklus um systemd-Detach-Fallback fuer ein
+    bereits inaktives Cryptsetup-Unit und den Host-gebundenen internen
+    M365-Readinessrequest korrigiert.
+  - [Betrieb] Development-Volume praktisch geschlossen und ohne Passworteingabe
+    allein ueber systemd und die lokale Schluesseldatei wieder geoeffnet;
+    PostgreSQL, Gitea, M365-Konnektor, PAJ-App und Worker danach ready geprueft.
+  - [Betrieb] Vollstaendigen Hostneustart am 13.10.2026 erfolgreich
+    nachgewiesen: LUKS-Mapping und Mount automatisch aktiv, alle vorgesehenen
+    Development-Dienste bootaktiv und erreichbar, Legacy deaktiviert und
+    inaktiv sowie keine Warnungen oder Fehler der beteiligten Units im
+    Bootjournal.
+
+[4.12.16-paj-1-8] - 2026-10-13
+Commit: 4.12.16-paj-1-8 | PAJ-Autostart mit lokalem LUKS-Schlüssel aktiviert
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-7-x` gesetzt.

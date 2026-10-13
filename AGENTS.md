@@ -132,24 +132,43 @@ Node Exporter, Grafana-Authentifizierung, Dashboards oder Alerts einbezogen.
 
 ## Development-Dienste starten und stoppen
 
-Der gemeinsame PostgreSQL-Development-Cluster und die interne Gitea-Instanz
-liegen auf dem manuell entsperrten LUKS-Volume `development-data` und sind nicht
-fuer den automatischen Bootstart aktiviert. Der schnelle kontrollierte Start als
-root lautet:
+Der gemeinsame PostgreSQL-Development-Cluster, die interne Gitea-Instanz sowie
+die PostgreSQL-basierte PAJ-App und ihr Worker liegen beziehungsweise haengen am
+LUKS-Volume `development-data`. Das Volume wird beim Boot ueber eine lokale
+root-only Schluesseldatei automatisch geoeffnet; PostgreSQL, Gitea,
+M365-Konnektor, App und Worker sind bootaktiviert. `epiber-paj.service` ist als Legacy-Worst-Case-Weg
+deaktiviert. Ist PAJ nach einem Hostneustart nicht erreichbar, sind zuerst Mount
+und Development-Dienste zu pruefen. Der kontrollierte manuelle Recovery-Start
+als root lautet:
 
 ```text
 development-services-start
 ```
 
-Das Skript fragt die LUKS-Passphrase interaktiv ab, mountet und prueft das Volume
-und startet danach PostgreSQL und Gitea in der richtigen Reihenfolge. Die
-Passphrase darf nie im Chat, in Git oder als Befehlsargument stehen.
+Das Skript fragt bei geschlossenem Volume die LUKS-Recovery-Passphrase interaktiv
+ab, mountet und prueft das Volume
+und startet danach PostgreSQL, Gitea, den M365-Konnektor, `epiber-devel.service` und
+`epiber-devel-worker.service` in der richtigen Reihenfolge. Es stoppt den
+Legacydienst und prueft die lokale PAJ-Readiness. Die Passphrase darf nie im
+Chat, in Git oder als Befehlsargument stehen.
 
 Kontrollierter Stop als root:
 
 ```text
 development-services-stop
 ```
+
+Manueller Worst-Case-Rueckfall auf PAJ-Legacy, nur nach ausdruecklichem Auftrag:
+
+```text
+systemctl stop epiber-devel-worker.service epiber-devel.service
+systemctl start epiber-paj.service
+```
+
+Rueckkehr von Legacy zum PostgreSQL-Standard erfolgt wieder mit
+`development-services-start`; das Skript stoppt Legacy kontrolliert. Es gibt
+keinen automatischen Fallback und `systemctl start epiber-paj.service` aktiviert
+den Legacydienst nicht fuer den naechsten Boot.
 
 Details, Fehlerpfade und installierte Pfade stehen in
 `Project/server-configs/postgresql/README.txt` und

@@ -93,25 +93,29 @@ Loopbackfreigabe erzwingt die interne Netzgrenze zusaetzlich zur
 Gitea-Listenerkonfiguration.
 
 
-5. Manueller Start und Stop
+5. Automatischer Boot und manueller Recoveryweg
 ================================================================================
 
-Nach einem Hostneustart bleiben Volume, PostgreSQL und Gitea absichtlich
-inaktiv. Root startet den Stack mit:
+Nach einem Hostneustart werden das Volume ueber die lokale root-only
+Schluesseldatei sowie PostgreSQL, Gitea, M365-Konnektor, PostgreSQL-ePiber-App
+und Worker automatisch gestartet. Der kontrollierte manuelle Recoveryweg lautet:
 
   /usr/local/sbin/development-services-start
 
-Das Skript fragt die LUKS-Passphrase interaktiv ab, mountet und prueft das
-Volume, startet PostgreSQL, wartet auf dessen Readiness und startet danach
-Gitea. Die Passphrase steht weder im Skript noch in der Shell-History.
+Das Skript fragt bei geschlossenem Volume die bestehende LUKS-Recovery-
+Passphrase interaktiv ab, mountet und prueft das Volume, startet PostgreSQL,
+wartet auf dessen Readiness, startet Gitea und M365-Konnektor und wechselt PAJ
+danach vom deaktivierten Legacydienst auf PostgreSQL-App und Worker. Die
+Passphrase steht weder im Skript noch in der Shell-History.
 
 Kontrollierter Stop:
 
   /usr/local/sbin/development-services-stop
 
-Das Stoppskript beendet Gitea vor PostgreSQL, leert Schreibpuffer, haengt das
-Volume aus und schliesst danach das LUKS-Mapping. Ein belegtes Volume fuehrt zum
-Abbruch statt zu einem erzwungenen Unmount.
+Das Stoppskript beendet zuerst ePiber-Worker, -App und M365-Konnektor, dann Gitea
+vor PostgreSQL, leert Schreibpuffer und stoppt danach die systemd-Mount- und
+Cryptsetup-Units. Ein belegtes Volume fuehrt zum Abbruch statt zu einem
+erzwungenen Detach.
 
 Die versionierten Skripte liegen unter `Project/server-configs/bin/` und werden
 root-owned mit Modus 0755 nach `/usr/local/sbin/` installiert.

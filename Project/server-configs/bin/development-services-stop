@@ -4,32 +4,53 @@ set -Eeuo pipefail
 
 readonly MAPPER="development-data"
 readonly MOUNT_POINT="/var/lib/development-data"
+readonly MOUNT_UNIT="$(systemd-escape --path --suffix=mount "$MOUNT_POINT")"
+readonly CRYPT_UNIT="systemd-cryptsetup@$(systemd-escape "$MAPPER").service"
 readonly POSTGRES_SERVICE="postgresql-devel.service"
 readonly GITEA_SERVICE="gitea-devel.service"
+readonly M365_SERVICE="m365-connector.service"
+readonly APP_SERVICE="epiber-devel.service"
+readonly WORKER_SERVICE="epiber-devel-worker.service"
 
 if (( EUID != 0 )); then
   echo "ERROR: Dieser Befehl muss als root ausgefuehrt werden." >&2
   exit 1
 fi
 
+echo '{"event":"development_services_stop_started","result":"started"}'
+systemctl stop "$WORKER_SERVICE" "$APP_SERVICE" "$M365_SERVICE"
 systemctl stop "$GITEA_SERVICE"
 systemctl stop "$POSTGRES_SERVICE"
 
-if systemctl is-active --quiet "$GITEA_SERVICE" || systemctl is-active --quiet "$POSTGRES_SERVICE"; then
+if systemctl is-active --quiet "$WORKER_SERVICE" || systemctl is-active --quiet "$APP_SERVICE" \
+  || systemctl is-active --quiet "$M365_SERVICE" \
+  || systemctl is-active --quiet "$GITEA_SERVICE" || systemctl is-active --quiet "$POSTGRES_SERVICE"; then
+  echo '{"event":"development_services_stop_completed","result":"failed","errorCode":"DEVELOPMENT_SERVICE_ACTIVE"}' >&2
   echo "ERROR: Mindestens ein Development-Dienst ist noch aktiv." >&2
   exit 1
 fi
 
 if mountpoint -q "$MOUNT_POINT"; then
   sync
-  if ! umount "$MOUNT_POINT"; then
+  if ! systemctl stop "$MOUNT_UNIT"; then
     echo "ERROR: $MOUNT_POINT ist noch belegt; LUKS bleibt geoeffnet." >&2
     exit 1
   fi
 fi
 
 if cryptsetup status "$MAPPER" >/dev/null 2>&1; then
-  cryptsetup close "$MAPPER"
+  if ! systemctl stop "$CRYPT_UNIT"; then
+    echo "ERROR: LUKS-Mapping $MAPPER konnte nicht geschlossen werden." >&2
+    exit 1
+  fi
+  if cryptsetup status "$MAPPER" >/dev/null 2>&1; then
+    systemd-cryptsetup detach "$MAPPER"
+  fi
+  if cryptsetup status "$MAPPER" >/dev/null 2>&1; then
+    echo "ERROR: LUKS-Mapping $MAPPER ist nach dem Stop noch aktiv." >&2
+    exit 1
+  fi
 fi
 
-echo "OK: Gitea, PostgreSQL und Development-Volume sind kontrolliert gestoppt."
+echo '{"event":"development_services_stop_completed","result":"success","app":"inactive","worker":"inactive","m365Connector":"inactive","gitea":"inactive","postgres":"inactive","volume":"closed"}'
+echo "OK: ePiber-App, Worker, M365-Konnektor, Gitea, PostgreSQL und Development-Volume sind kontrolliert gestoppt."

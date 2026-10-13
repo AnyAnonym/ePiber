@@ -1,7 +1,7 @@
 [Unit]
 Description=ePiber PostgreSQL development worker
-After=postgresql-devel.service
-Requires=postgresql-devel.service
+After=postgresql-devel.service epiber-devel.service
+Requires=postgresql-devel.service epiber-devel.service
 
 [Service]
 Type=simple

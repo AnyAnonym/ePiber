@@ -15,6 +15,13 @@ Status:
 - Reale ePiber-Migrationsdaten, produktive Datenkopien und nicht rekonstruierbare
   ePiber-Daten bleiben bis zum erfolgreichen pgBackRest-/Off-site- und
   Restore-Nachweis ausgeschlossen.
+- Der erste vollstaendige Hostneustart mit lokaler LUKS-Schluesseldatei wurde am
+  13.10.2026 erfolgreich nachgewiesen: Cryptsetup-Unit und Mount wurden ohne
+  Passworteingabe aktiv, danach starteten PostgreSQL, Gitea, M365-Konnektor,
+  PAJ-PostgreSQL-App und Worker automatisch. `epiber-paj.service` blieb
+  deaktiviert und inaktiv. PostgreSQL-Readiness sowie PAJ-, Gitea- und
+  M365-HTTP-Pruefungen waren erfolgreich; die beteiligten Units erzeugten im
+  Boot keine Warnung oder Fehlermeldung.
 
 
 1. Installierte Grundlage
@@ -35,8 +42,10 @@ Status:
   pgBackRest-Spool           /var/lib/development-data/postgresql/pgbackrest-spool
 
 Der Arch-Standarddienst `postgresql.service` ist deaktiviert und inaktiv. Der
-eigene Dienst ist bis zum vollstaendigen Backup- und Betriebsaufbau ebenfalls
-nicht fuer den automatischen Bootstart aktiviert.
+eigene PostgreSQL-Dienst, Gitea, der M365-Konnektor, PAJ-PostgreSQL-App und Worker sind fuer den
+automatischen Bootstart aktiviert und haengen vom automatisch entsperrten Mount
+ab. Der deaktivierte Legacydienst `epiber-paj.service` startet nur noch auf
+ausdruecklichen manuellen Auftrag.
 
 Der Cluster wurde mit `C.utf8`, UTF-8 und Datenseitenpruefsummen initialisiert.
 Das initiale Ressourcenprofil verwendet unter anderem 30 Verbindungen,
@@ -53,7 +62,7 @@ Das initiale Ressourcenprofil verwendet unter anderem 30 Verbindungen,
   LUKS-Mapping               development-data
   Dateisystem                ext4, Label development-data
   Mountpunkt                 /var/lib/development-data
-  Mountoptionen              noauto,nofail,noatime,nodev,nosuid,noexec
+  Mountoptionen              nofail,noatime,nodev,nosuid,noexec
   PostgreSQL-Bereich         /var/lib/development-data/postgresql
   Gitea-Dateibereich         /var/lib/development-data/gitea
 
@@ -63,14 +72,26 @@ Shell-History, Runbooks oder Konfigurationsdateien stehen.
 
 Aktiver `/etc/crypttab`-Eintrag:
 
-  development-data UUID=77e54240-7e46-43dc-a41a-3e1a778df078 none noauto,luks
+  development-data UUID=77e54240-7e46-43dc-a41a-3e1a778df078 /etc/cryptsetup-keys.d/development-data.key luks
 
 Aktiver `/etc/fstab`-Eintrag:
 
-  /dev/mapper/development-data /var/lib/development-data ext4 noauto,nofail,noatime,nodev,nosuid,noexec 0 2
+  /dev/mapper/development-data /var/lib/development-data ext4 nofail,noatime,nodev,nosuid,noexec,x-systemd.device-timeout=120s 0 2
 
-Nach jedem Hostneustart bleibt das Volume absichtlich geschlossen. Der
-kontrollierte manuelle Wiederanlauf lautet als root:
+Das Volume wird beim Boot durch eine lokale, ausschliesslich root-lesbare
+Schluesseldatei automatisch geoeffnet. Die bestehende Passphrase bleibt in einem
+getrennten LUKS-Keyslot als Recoveryweg erhalten. Die Schluesseldatei liegt unter
+`/etc/cryptsetup-keys.d/development-data.key` mit `root:root:0400`, darf niemals
+in Git, Chat, Shellargumente oder unverschluesselte Sicherungen gelangen und wird
+in dieser Dokumentation nicht ausgegeben.
+
+Die automatische lokale Entschluesselung schuetzt weiterhin ein isoliert
+entwendetes Development-Volume. Ein vollstaendiger Server- oder Root-Disk-
+Snapshot enthaelt jedoch auch die Schluesseldatei und ist dadurch kein durch
+diese LUKS-Schicht geschuetztes Szenario.
+
+Falls die automatische Aktivierung fehlschlaegt, lautet der kontrollierte
+manuelle Recoveryweg als root:
 
   cryptsetup open /dev/disk/by-id/scsi-0HC_Volume_106975159 development-data
   mount /var/lib/development-data
@@ -173,8 +194,25 @@ erfolgreich gemessene systemd-Securitywert der installierten Unit betrug 3.4
 Schutzmassnahmen.
 
 
-6. Manueller Development-Stack
+6. Automatischer Boot und manueller Recovery-Stack
 ================================================================================
+
+Nach einem regulaeren Hostneustart werden Volume, PostgreSQL, Gitea, der
+ebenfalls auf dem Volume persistierende M365-Konnektor,
+`epiber-devel.service` und `epiber-devel-worker.service` automatisch gestartet.
+Schnelldiagnose bei nicht erreichbarem PAJ:
+
+  findmnt /var/lib/development-data
+  systemctl is-active postgresql-devel.service
+  systemctl is-active epiber-devel.service
+  systemctl is-active epiber-devel-worker.service
+
+Fehlt der Mount oder ist einer der PostgreSQL-Dienste inaktiv, wird nicht
+einzeln improvisiert gestartet, sondern der vollstaendige kontrollierte
+Recoveryablauf verwendet. Er fragt bei geschlossenem Volume die bestehende
+Recovery-Passphrase interaktiv ab:
+
+  development-services-start
 
 Die versionierten Skripte unter `Project/server-configs/bin/` werden root-owned
 mit Modus 0755 nach `/usr/local/sbin/` installiert:
@@ -183,8 +221,31 @@ mit Modus 0755 nach `/usr/local/sbin/` installiert:
   development-services-stop
 
 Das Startskript entsperrt und prueft das Volume, startet PostgreSQL, wartet auf
-dessen Readiness und startet danach Gitea. Das Stoppskript beendet zuerst Gitea,
-dann PostgreSQL und schliesst das Volume nur nach erfolgreichem Unmount.
+dessen Readiness und startet danach Gitea sowie den M365-Konnektor. Anschliessend stoppt es den
+Legacydienst fail-closed, startet `epiber-devel.service`, prueft dessen lokale
+Readiness und startet erst danach `epiber-devel-worker.service`. Es gibt keinen
+automatischen Rueckfall auf Legacy.
+
+Das Stoppskript beendet zuerst Worker, App und M365-Konnektor, danach Gitea und PostgreSQL und
+schliesst das Volume nur nach erfolgreichem Unmount. Beide Skripte schreiben
+strukturierte Start-/Abschlussereignisse ohne Geheimnisse.
+
+Der manuelle Worst-Case-Rueckfall lautet, solange kein PostgreSQL-Fachwrite einen
+neueren autoritativen Stand erzeugt hat:
+
+  systemctl stop epiber-devel-worker.service epiber-devel.service
+  systemctl start epiber-paj.service
+
+`epiber-paj.service` bleibt dabei deaktiviert und wird durch diesen manuellen
+Start nicht wieder bootaktiviert.
+
+Rueckkehr vom manuell gestarteten Legacydienst zum PostgreSQL-Standard:
+
+  development-services-start
+
+Das Startskript stoppt `epiber-paj.service`, startet App und Worker und gibt erst
+nach erfolgreicher Readiness einen Erfolg aus. Einzelne Dienste sollen fuer
+diesen Standardwechsel nicht von Hand kombiniert werden.
 
 
 7. Bewusst akzeptierte Backup-Luecke

@@ -23,7 +23,8 @@ postgresql/*.conf           | Geheimnisfreie installierbare PostgreSQL-Vorlagen
 gitea/README.txt            | Interne, nur ueber SSH-Tunnel erreichbare
                             | Gitea-Development-Instanz und Betriebsvertrag
 gitea/app.ini               | Geheimnisfreie gehaertete Gitea-Basiskonfiguration
-bin/development-services-*  | Manueller LUKS-, PostgreSQL- und Gitea-Start/Stop
+bin/development-services-*  | Manueller LUKS-, PostgreSQL-, Gitea- und
+                             | PostgreSQL-ePiber-Start/Stop
 ROLLOUT-CHECKLIST.md        | Verbindliche Abnahme und aktuelle PAJ-Live-Promotion
 Caddyfile                   | Vorlage fuer /etc/caddy/Caddyfile
 caddy/README.txt            | Vertrag fuer den gemeinsam genutzten Caddy und
@@ -33,10 +34,15 @@ caddy/conf.d/               | Vollstaendige zusaetzliche Sites, derzeit M365
 caddy/epiber-live-routes/   | Pfadrouten vor dem Live-Frontend-Fallback, derzeit WC
 systemd/                    | Vorlagen fuer /etc/systemd/system/
   epiber-piber.service      | Live, User piber, Backend 127.0.0.1:8080
-  epiber-paj.service        | PAJ, User paj, Backend 127.0.0.1:8083
+  epiber-paj.service        | PAJ-Legacy, deaktivierter manueller Worst-Case-Weg
+  epiber-devel.service      | PAJ PostgreSQL-App, User paj, Backend 127.0.0.1:8083
+  epiber-devel-worker.      | PAJ PostgreSQL-Worker ohne HTTP-Listener
+    service                 |
   epiber-pk.service         | PK, User pk, Backend 127.0.0.1:8084
   postgresql-devel.service  | Gemeinsamer Development-Cluster, Loopback 5433
   gitea-devel.service       | Interne Gitea-Instanz, Loopback 3002
+  m365-connector-           | Mountabhaengigkeits-Drop-in fuer den auf dem
+    development-data.conf   | Development-Volume persistierenden Fremddienst
 journald/epiber.conf        | Persistente, groessen- und zeitbegrenzte Journalvorlage
 observability/              | Gemeinsame Grafana-/Prometheus-/Loki-/Alloy-
                             | Vorlagen, Dashboards, Alerts und Runbooks
@@ -64,6 +70,27 @@ Der gemeinsame PostgreSQL-Development-Cluster lauscht zusaetzlich nur auf
 `127.0.0.1:5433` und dem gruppengeschuetzten Unix-Socket
 `/run/postgresql/devel`. DBeaver erreicht ihn ausschliesslich ueber einen
 persoenlichen SSH-Tunnel. Der Arch-Standarddienst bleibt deaktiviert.
+
+PAJ verwendet im Normalbetrieb `epiber-devel.service` und
+`epiber-devel-worker.service` gegen `epiber_devel`. Das LUKS-Volume wird beim
+Hoststart ueber die lokale root-only Schluesseldatei automatisch geoeffnet;
+PostgreSQL, Gitea, PAJ-App und Worker sind bootaktiviert. Ist PAJ danach nicht
+erreichbar, lautet der kontrollierte Recoverybefehl als root:
+
+  development-services-start
+
+Er entsperrt und prueft das Volume, startet PostgreSQL und Gitea, stoppt den
+deaktivierten Legacydienst und startet anschliessend PostgreSQL-App und Worker
+mit Readiness-Pruefung.
+
+Nur fuer den ausdruecklichen manuellen Worst-Case-Rueckfall:
+
+  systemctl stop epiber-devel-worker.service epiber-devel.service
+  systemctl start epiber-paj.service
+
+Zur Rueckkehr auf PostgreSQL wird erneut `development-services-start` verwendet.
+Es existiert kein automatischer Legacy-Fallback; der manuelle Legacy-Start
+aktiviert den Dienst nicht fuer den naechsten Boot.
 
 Alle drei Browser-Systeme verwenden ausschliesslich HTTPS/WSS. Der Frontend-
 Client leitet die WebSocket-Adresse same-origin aus window.location und dem Pfad
