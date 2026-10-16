@@ -35,4 +35,4 @@ scrape_configs:
     file_sd_configs:
       - files:
           - targets/epiber/live.json
-          - targets/epiber/paj.json
+          - targets/epiber/devel.json

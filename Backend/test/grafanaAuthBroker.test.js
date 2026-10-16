@@ -5,7 +5,7 @@ const { createApplication, createHandler, selectRealms } = require("../grafanaAu
 const realms = [
   { name: "live", cookie: "live_session", url: "http://live/auth", userPrefix: "epiber-piber:" },
   { name: "pk", cookie: "pk_session", url: "http://pk/auth", userPrefix: "epiber-pk:" },
-  { name: "paj", cookie: "paj_session", url: "http://paj/auth", userPrefix: "epiber-paj:" },
+  { name: "devel", cookie: "devel_session", url: "http://devel/auth", userPrefix: "epiber-devel:" },
 ];
 
 function response(status, user = "", role = "") {
@@ -13,15 +13,15 @@ function response(status, user = "", role = "") {
 }
 
 test("Broker waehlt nur explizit konfigurierte Realms in kanonischer Prioritaet", () => {
-  assert.deepEqual(selectRealms("paj,live", realms).map((realm) => realm.name), ["live", "paj"]);
-  for (const value of [undefined, "", " ", "live,,paj", "live,live", "live,unknown", "LIVE,paj"]) {
+  assert.deepEqual(selectRealms("devel,live", realms).map((realm) => realm.name), ["live", "devel"]);
+  for (const value of [undefined, "", " ", "live,,devel", "live,live", "live,unknown", "LIVE,devel"]) {
     assert.throws(() => selectRealms(value, realms));
   }
 });
 
 test("Deaktiviertes PK-Realm wird auch mit vorhandenem Cookie nicht angefragt", async (context) => {
   const requests = [];
-  const activeRealms = selectRealms("live,paj", realms);
+  const activeRealms = selectRealms("live,devel", realms);
   const server = createApplication({
     realms: activeRealms,
     fetchImpl: async (url) => {
@@ -101,12 +101,12 @@ test("Broker verwendet bei mehreren Adminsessions die feste Realmprioritaet", as
     realms,
     fetchImpl: async (url) => url.includes("live")
       ? response(200, "epiber-piber:live-admin", "Admin")
-      : response(200, "epiber-paj:paj-admin", "Admin"),
+      : response(200, "epiber-devel:devel-admin", "Admin"),
     log: () => {},
   });
   context.after(() => server.close());
   const base = await listen(server);
-  const result = await fetch(`${base}/auth`, { headers: { Cookie: "paj_session=a; live_session=b" } });
+  const result = await fetch(`${base}/auth`, { headers: { Cookie: "devel_session=a; live_session=b" } });
   assert.equal(result.status, 200);
   assert.equal(result.headers.get("x-webauth-user"), "epiber-piber:live-admin");
 });
@@ -116,14 +116,14 @@ test("Broker akzeptiert eine gesunde Adminsession trotz Ausfall eines anderen Re
     realms,
     fetchImpl: async (url) => url.includes("live")
       ? response(503)
-      : response(200, "epiber-paj:p1", "Admin"),
+      : response(200, "epiber-devel:p1", "Admin"),
     log: () => {},
   });
   context.after(() => server.close());
   const base = await listen(server);
-  const result = await fetch(`${base}/auth`, { headers: { Cookie: "live_session=a; paj_session=b" } });
+  const result = await fetch(`${base}/auth`, { headers: { Cookie: "live_session=a; devel_session=b" } });
   assert.equal(result.status, 200);
-  assert.equal(result.headers.get("x-webauth-user"), "epiber-paj:p1");
+  assert.equal(result.headers.get("x-webauth-user"), "epiber-devel:p1");
 });
 
 test("Broker unterscheidet Rollenverbot und nicht pruefbare Identitaet", async () => {

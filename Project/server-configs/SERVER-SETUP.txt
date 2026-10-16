@@ -140,9 +140,11 @@ nicht in Git oder Serverdokumentation veroeffentlicht.
 Die interne Gitea-Instanz verwendet keine Caddy-, DNS- oder Firewallfreigabe.
 Windows erreicht sie ausschliesslich ueber den in
 `Project/server-configs/gitea/README.txt` dokumentierten SSH-Forward auf den
-lokalen Port 13002. PostgreSQL und Gitea werden nach manueller LUKS-Entsperrung
-gemeinsam mit `development-services-start` gestartet und mit
-`development-services-stop` kontrolliert beendet.
+lokalen Port 13002. Das Development-LUKS-Volume wird ueber eine lokale root-only
+Schluesseldatei automatisch entsperrt. PostgreSQL, Gitea, PAJ-PostgreSQL-App und
+Worker starten danach ueber systemd. `development-services-start` bleibt als
+manueller Recoveryweg mit Passphrase erhalten; `development-services-stop`
+beendet den gesamten Stack kontrolliert.
 
 Die expliziten Caddy-Adressen `https://epiber.at:8081` und
 `https://epiber.at:8082` garantieren auf diesen Ports keinen Redirect fuer
@@ -365,17 +367,40 @@ Die aktuelle Vorlage verwendet fuer jede Origin:
   - `connect-src` nur fuer die jeweilige HTTPS/WSS-Origin.
   - Proxy nur fuer `/ws`, `/api/*`, `/live`, `/ready`, `/health`, `/version`,
     `/status` auf den jeweiligen Loopback-Port.
+  - Vollstaendige Sites anderer Anwendungen aus `/etc/caddy/conf.d/*.caddy`.
+  - Live-Pfadrouten anderer Anwendungen aus
+    `/etc/caddy/epiber-live-routes/*.caddy` vor dem statischen Fallback.
   - Explizite 404-Antwort fuer `/internal/*` auf Live, PAJ und PK.
   - Statische Auslieferung aus dem systemspezifischen `Frontend/` mit no-cache.
 
-Als root installieren, vor Reload validieren und Zertifikate kontrollieren:
+Der Caddy-Prozess wird gemeinsam mit WC und dem internen M365-Konnektor genutzt.
+Ein ePiber-Rollout darf deshalb weder unbekannte installierte Fragmente loeschen
+noch die Hauptdatei ohne kontrollierte Diffpruefung ueberschreiben. Die
+versionierten bekannten Fragmente werden vor der Hauptdatei installiert; andere
+Dateien in den Zielverzeichnissen bleiben unveraendert. Als root:
 
-  install -o root -g root -m 0644 Project/server-configs/Caddyfile /etc/caddy/Caddyfile
+  diff -u /etc/caddy/Caddyfile Project/server-configs/Caddyfile
+  install -d -o root -g root -m 0755 /etc/caddy/conf.d /etc/caddy/epiber-live-routes
+  install -o root -g root -m 0644 Project/server-configs/caddy/conf.d/m365-connector.caddy /etc/caddy/conf.d/m365-connector.caddy
+  install -o root -g root -m 0644 Project/server-configs/caddy/epiber-live-routes/wc.caddy /etc/caddy/epiber-live-routes/wc.caddy
+  install -o root -g root -m 0644 Project/server-configs/Caddyfile /etc/caddy/Caddyfile.candidate
+  caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile.candidate
+  install -o root -g root -m 0644 /etc/caddy/Caddyfile.candidate /etc/caddy/Caddyfile
+  rm /etc/caddy/Caddyfile.candidate
   caddy validate --config /etc/caddy/Caddyfile
   systemctl enable --now caddy
   systemctl reload caddy
   systemctl status caddy
   journalctl -u caddy --since today
+  curl --fail --silent --show-error https://epiber.at/live
+  curl --fail --silent --show-error https://epiber.at/wc/ >/dev/null
+  curl --fail --silent --show-error https://m365-connector.pi-tec.at/health/ready
+
+Die Ausgabe von `diff` muss vor dem ersten `install` vollstaendig erklaert sein.
+Insbesondere duerfen keine anwendungsfremden Site- oder Pfadrouten verschwinden.
+Ein unerwarteter Unterschied beendet den Rollout bis zur geklaerten Uebernahme
+in ein eigenes Fragment. Details und Besitzgrenzen stehen in
+`caddy/README.txt`.
 
 Unbekannte Backendpfade duerfen nicht am Node-Prozess ankommen. Statische Pfade
 duerfen keine `.env`, Credentials, SQLite-Dateien oder Backendquellen ausliefern,
@@ -416,12 +441,19 @@ Vorlagen aus dem freigegebenen Commit mit Paketversion
 
   install -o root -g root -m 0644 Project/server-configs/systemd/epiber-piber.service /etc/systemd/system/
   install -o root -g root -m 0644 Project/server-configs/systemd/epiber-paj.service /etc/systemd/system/
+  install -o root -g root -m 0644 Project/server-configs/systemd/postgresql-devel.service /etc/systemd/system/
+  install -o root -g root -m 0644 Project/server-configs/systemd/gitea-devel.service /etc/systemd/system/
+  install -o root -g root -m 0644 Project/server-configs/systemd/epiber-devel.service /etc/systemd/system/
+  install -o root -g root -m 0644 Project/server-configs/systemd/epiber-devel-worker.service /etc/systemd/system/
+  install -d -o root -g root -m 0755 /etc/systemd/system/m365-connector.service.d
+  install -o root -g root -m 0644 Project/server-configs/systemd/m365-connector-development-data.conf /etc/systemd/system/m365-connector.service.d/10-development-data.conf
   install -o root -g root -m 0644 Project/server-configs/systemd/epiber-grafana-auth.service /etc/systemd/system/
   systemd-analyze verify /etc/systemd/system/epiber-piber.service
-  systemd-analyze verify /etc/systemd/system/epiber-paj.service
+  systemd-analyze verify /etc/systemd/system/postgresql-devel.service /etc/systemd/system/gitea-devel.service /etc/systemd/system/epiber-devel.service /etc/systemd/system/epiber-devel-worker.service
   systemd-analyze verify /etc/systemd/system/epiber-grafana-auth.service
   systemctl daemon-reload
-  systemctl enable epiber-piber epiber-paj epiber-grafana-auth
+  systemctl disable epiber-paj
+  systemctl enable epiber-piber postgresql-devel gitea-devel epiber-devel epiber-devel-worker epiber-grafana-auth
 
 Die PK-Unit wird im aktuellen Zwei-System-Release weder installiert, veraendert
 noch aktiviert. Ihre versionierte Vorlage bleibt ausschliesslich fuer einen

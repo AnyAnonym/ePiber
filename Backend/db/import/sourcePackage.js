@@ -12,7 +12,7 @@ const REQUIRED_PATHS = new Set([
   "sqlite/state.sqlite", "sqlite/messaging.sqlite", "sqlite/scorelog.sqlite", "sqlite/audit.sqlite",
   "metadata/sheets.json", "metadata/sqlite.json"
 ]);
-const OPTIONAL_PATHS = new Set(["sheets/Logging.csv", "sheets/ScoreLog.csv"]);
+const OPTIONAL_PATHS = new Set(["sheets/Logging.csv", "sheets/ScoreLog.csv", "metadata/paj-refresh.json"]);
 const ALL_PATHS = new Set([...REQUIRED_PATHS, ...OPTIONAL_PATHS]);
 
 function sha256File(filename) {

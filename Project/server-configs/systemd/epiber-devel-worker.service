@@ -1,0 +1,39 @@
+[Unit]
+Description=ePiber PostgreSQL development worker
+After=postgresql-devel.service epiber-devel.service
+Requires=postgresql-devel.service epiber-devel.service
+
+[Service]
+Type=simple
+User=paj
+SupplementaryGroups=postgres-devel-client
+WorkingDirectory=/srv/http/ePiber/paj/Backend
+SyslogIdentifier=epiber-devel-worker
+LoadCredential=database:/etc/epiber-devel/credentials/postgres-worker-password
+ExecStart=/usr/bin/env NODE_ENV=production TZ=UTC INSTANCE_ID=devel-worker PUBLIC_ORIGIN=https://epiber.at:8081 EPIBER_TENANT_CODE=devel-epiber PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=epiber_devel PGUSER=epiber_devel_worker EPIBER_DB_PASSWORD_FILE=%d/database /usr/bin/node worker.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=95
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

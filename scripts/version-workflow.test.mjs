@@ -556,9 +556,14 @@ test("renames require explicit approval of old and new paths", () => {
 test("release workflow creates and verifies a real merge commit", () => {
   const { base, repo } = createRepository({ remote: true });
   try {
+    fs.writeFileSync(path.join(repo, "old-release-name.txt"), "rename during release\n");
+    git(repo, "add", "old-release-name.txt");
+    git(repo, "commit", "-m", "1.2.3 | Release-Umbenennung vorbereitet");
+    git(repo, "push", "origin", "main");
     const mainSha = git(repo, "rev-parse", "main");
     workflow(repo, "branch-start", "--system", "paj", "--apply");
     fs.writeFileSync(path.join(repo, "feature.txt"), "released\n");
+    fs.renameSync(path.join(repo, "old-release-name.txt"), path.join(repo, "new-release-name.txt"));
     workflow(repo, "branch-finalize", "--subject", "Releasefunktion umgesetzt", "--apply");
     workflow(
       repo,
@@ -573,6 +578,10 @@ test("release workflow creates and verifies a real merge commit", () => {
       "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt",
       "--path",
       "feature.txt",
+      "--path",
+      "old-release-name.txt",
+      "--path",
+      "new-release-name.txt",
       "--apply",
     );
     const branchSha = git(repo, "rev-parse", "HEAD");
@@ -633,6 +642,10 @@ test("release workflow creates and verifies a real merge commit", () => {
         "Project/ChangeLogs/ChangeLog-1.2.3-paj-1.txt",
         "--path",
         "feature.txt",
+        "--path",
+        "old-release-name.txt",
+        "--path",
+        "new-release-name.txt",
         "--path",
         "bad.txt",
         "--apply",

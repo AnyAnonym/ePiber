@@ -93,6 +93,16 @@ test("Verbindungskonfiguration lehnt eine allgemein lesbare Passwortdatei ab", (
   }), /DB_PASSWORD_FILE_INSECURE/);
 });
 
+test("Verbindungskonfiguration akzeptiert systemd-Credentials read-only fuer die private Gruppe", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-systemd-credential-"));
+  const filename = path.join(directory, "password");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.writeFileSync(filename, "secret-value\n", { mode: 0o440 });
+  assert.equal(createConnectionConfig({ PGUSER: "tester", EPIBER_DB_PASSWORD_FILE: filename }).password, "secret-value");
+  fs.chmodSync(filename, 0o460);
+  assert.throws(() => createConnectionConfig({ PGUSER: "tester", EPIBER_DB_PASSWORD_FILE: filename }), /DB_PASSWORD_FILE_INSECURE/);
+});
+
 test("CLI verlangt explizite Zielgeneration fuer schreibenden Lauf", () => {
   assert.deepEqual(parseArguments(["plan", "--target-generation", "1"]), { command: "plan", targetGeneration: 1 });
   assert.throws(() => parseArguments(["up"]), (error) => error.code === "TARGET_GENERATION_REQUIRED");

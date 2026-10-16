@@ -1,0 +1,7 @@
+# Eigene interne Site des M365-Konnektors. Kein Access-Log: Querystrings und
+# Fachpfade duerfen ohne gesonderten Loggingvertrag nicht persistiert werden.
+m365-connector.pi-tec.at {
+	tls /etc/caddy/certs/m365-connector.pi-tec.at/https.0001000.0001.F98000198.external.flexsolution.eu.fullchain.pem /etc/caddy/certs/m365-connector.pi-tec.at/https.0001000.0001.F98000198.external.flexsolution.eu.key.pem
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+}

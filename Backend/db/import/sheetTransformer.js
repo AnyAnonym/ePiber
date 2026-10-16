@@ -2,8 +2,9 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { Temporal } = require("@js-temporal/polyfill");
 const { parseParticipantId, validateCompletion } = require("../../matchResultRules");
-const { SHEET_FIELDS, parseSemicolonCsv } = require("./sheetInspector");
+const { canonicalizeSheetHeader, parseSemicolonCsv } = require("./sheetInspector");
 const {
   SECTION_ID, TENANT_ID, contractId, dateOnly, dateOrInstant, email, fail, instant,
   integer, legacyBoolean, login, stableUuid, text,
@@ -18,12 +19,76 @@ function finding(findings, code, source, severity = "info", count = 1) {
   findings.set(key, current);
 }
 
+function validateLegacyCompletion(params, rules) {
+  const direct = validateCompletion(params, rules);
+  if (direct.valid || !["regular", "retirement"].includes(params.kind)) return { completion: direct, missingTiebreakDetails: 0, decidingSetOverride: null, setTargetOverride: null };
+  const tiebreakWinnerGames = rules.setTarget === 4 ? 4 : 7;
+  const tiebreakLoserGames = tiebreakWinnerGames - 1;
+  let missingTiebreakDetails = 0;
+  const normalized = String(params.result).split("/").map((token) => {
+    const match = token.match(/^(\d+)-(\d+)$/);
+    if (!match) return token;
+    const values = [Number(match[1]), Number(match[2])];
+    if (Math.max(...values) !== tiebreakWinnerGames || Math.min(...values) !== tiebreakLoserGames) return token;
+    missingTiebreakDetails++;
+    return `${token}(0)`;
+  }).join("/");
+  const normalizedParams = { ...params, result: normalized };
+  if (missingTiebreakDetails) {
+    const retried = validateCompletion(normalizedParams, rules);
+    if (retried.valid) return {
+      completion: { ...retried, result: params.result, sets: retried.sets.map((set) => set.tiebreakLoserPoints === 0 ? { ...set, tiebreakLoserPoints: null } : set) },
+      missingTiebreakDetails, decidingSetOverride: null, setTargetOverride: null,
+    };
+  }
+  if (rules.setTarget === 4) {
+    const retried = validateCompletion(normalizedParams, { ...rules, setTarget: 6 });
+    if (retried.valid) return {
+      completion: { ...retried, result: params.result, sets: retried.sets.map((set) => set.tiebreakLoserPoints === 0 ? { ...set, tiebreakLoserPoints: null } : set) },
+      missingTiebreakDetails, decidingSetOverride: null, setTargetOverride: 6,
+    };
+  }
+  const last = normalized.split("/").at(-1)?.match(/^(\d+)-(\d+)$/);
+  const high = last ? Math.max(Number(last[1]), Number(last[2])) : 0;
+  const decidingSetOverride = high >= 10 ? "MT10" : high >= 7 ? "MT7" : null;
+  if (rules.decidingSet !== "vollstaendiger Satz" || !decidingSetOverride) return { completion: direct, missingTiebreakDetails: 0, decidingSetOverride: null, setTargetOverride: null };
+  const retried = validateCompletion(normalizedParams, { ...rules, decidingSet: decidingSetOverride });
+  if (!retried.valid) return { completion: direct, missingTiebreakDetails: 0, decidingSetOverride: null, setTargetOverride: null };
+  return {
+    completion: { ...retried, result: params.result, sets: retried.sets.map((set) => set.tiebreakLoserPoints === 0 ? { ...set, tiebreakLoserPoints: null } : set) },
+    missingTiebreakDetails, decidingSetOverride, setTargetOverride: null,
+  };
+}
+
+function ensureHistoricalPerson(contract, source, result, refs, findings) {
+  if (refs.people.has(contract)) return refs.people.get(contract);
+  if (!/^[1-9]\d*$/.test(contract)) fail("MATCH_PERSON_REFERENCE_MISSING", source, "participant");
+  const id = stableUuid("person", contract);
+  result.people.push({ id, tenant_id: TENANT_ID, contract_id: contract, first_name: null, last_name: "Historischer Spieler", birth_date: null, gender_code: null, active: false });
+  refs.people.set(contract, id);
+  refs.peopleDetails?.set(contract, { id, firstName: null, lastName: "Historischer Spieler" });
+  finding(findings, "MATCH_PERSON_PLACEHOLDER_CREATED", "Matches1");
+  return id;
+}
+
+function normalizePlayTimes(startValue, endValue, source, findings) {
+  const playStartedAt = instant(startValue, source, "MatchStart"), parsedEnd = instant(endValue, source, "MatchEnde");
+  if (playStartedAt && parsedEnd && Temporal.Instant.compare(Temporal.Instant.from(parsedEnd), Temporal.Instant.from(playStartedAt)) <= 0) {
+    finding(findings, "MATCH_NONPOSITIVE_DURATION_END_DISCARDED", "Matches1");
+    return { playStartedAt, playEndedAt: null };
+  }
+  return { playStartedAt, playEndedAt: parsedEnd };
+}
+
 function loadRows(root, sheet) {
   const rows = parseSemicolonCsv(fs.readFileSync(path.join(root, "sheets", `${sheet}.csv`), "utf8"));
-  const header = rows[0].map((value) => value.trim());
+  const header = canonicalizeSheetHeader(sheet, rows[0]);
   return rows.slice(1).filter((row) => row.some((value) => String(value).trim())).map((row, index) => ({
     source: `${sheet}:${index + 2}`,
-    value: Object.fromEntries(header.map((field, fieldIndex) => [field, row[fieldIndex] ?? ""])),
+    value: header.reduce((result, field, fieldIndex) => {
+      if (field && !Object.hasOwn(result, field)) result[field] = row[fieldIndex] ?? "";
+      return result;
+    }, {}),
   }));
 }
 
@@ -72,6 +137,7 @@ function transformPeople(rows, result, refs, findings) {
     gender = gender ? integer(gender, source, "GeschlechtID", { min: 1, max: 3 }) : null;
     result.people.push({ id, tenant_id: TENANT_ID, contract_id: contract, first_name: firstName, last_name: lastName, birth_date: dateOnly(row.GeburtsDatum, source, "GeburtsDatum"), gender_code: gender, active });
     refs.people.set(contract, id);
+    refs.peopleDetails.set(contract, { id, firstName, lastName });
 
     const mail = email(row["E-Mail"]);
     if (String(row["E-Mail"] ?? "").trim() && !mail) finding(findings, "PERSON_EMAIL_DISCARDED", "Personen", "warning");
@@ -143,7 +209,7 @@ function transformMatchFormats(rows, result, refs) {
     const id = stableUuid("match-format", contract), versionId = stableUuid("match-format-version", contract);
     result.match_formats.push({ id, tenant_id: TENANT_ID, contract_id: contract, name: text(row.Bezeichnung, { required: true, source, projection: "Bezeichnung" }), active: true });
     result.match_format_versions.push({ id: versionId, match_format_id: id, version_no: 1, sets_to_win: sets, set_target_games: target, set_tiebreak_at_games: tie, deciding_set_type: deciding, no_ad: row.NoAd.trim() === "J" });
-    refs.matchFormats.set(contract, { id: versionId, rules: { winningSets: sets, setTarget: target, decidingSet: deciding === "full_set" ? "vollstaendiger Satz" : deciding.endsWith("10") ? "MT10" : "MT7" } });
+    refs.matchFormats.set(contract, { id: versionId, matchFormatId: id, setTiebreakAtGames: tie, noAd: row.NoAd.trim() === "J", rules: { winningSets: sets, setTarget: target, decidingSet: deciding === "full_set" ? "vollstaendiger Satz" : deciding.endsWith("10") ? "MT10" : "MT7" } });
   }
 }
 
@@ -205,20 +271,47 @@ function transformRankings(rows, result, refs) {
   }
 }
 
-function transformMatches(rows, result, refs) {
+function legacyFormatOverride(result, refs, format, { decidingSet, setTarget }) {
+  const rules = { ...format.rules, decidingSet: decidingSet || format.rules.decidingSet, setTarget: setTarget || format.rules.setTarget };
+  const key = `${format.id}:${rules.setTarget}:${rules.decidingSet}`;
+  if (refs.legacyDecidingFormats.has(key)) return refs.legacyDecidingFormats.get(key);
+  const id = stableUuid("match-format-version-legacy", key);
+  const versionNo = rules.setTarget === 6
+    ? ({ "vollstaendiger Satz": 4, MT10: 5, MT7: 6 }[rules.decidingSet])
+    : ({ MT10: 2, MT7: 3 }[rules.decidingSet]);
+  result.match_format_versions.push({
+    id, match_format_id: format.matchFormatId, version_no: versionNo,
+    sets_to_win: rules.winningSets, set_target_games: rules.setTarget,
+    set_tiebreak_at_games: rules.setTarget === 4 ? 3 : 6,
+    deciding_set_type: rules.decidingSet === "vollstaendiger Satz" ? "full_set" : rules.decidingSet === "MT10" ? "match_tiebreak_10" : "match_tiebreak_7", no_ad: format.noAd,
+  });
+  const value = { ...format, id, rules };
+  refs.legacyDecidingFormats.set(key, value);
+  return value;
+}
+
+function transformMatches(rows, result, refs, findings) {
   for (const { source, value: row } of rows) {
     const contract = contractId(row.ID, source), competition = refs.competitions.get(String(row.BewerbID).trim());
     if (!competition) fail("MATCH_COMPETITION_REFERENCE_MISSING", source, "BewerbID");
-    const override = String(row.MatchtypID ?? "").trim(), format = override ? refs.matchFormats.get(override) : competition.defaultFormat;
+    const override = String(row.MatchtypID ?? "").trim();
+    let format = override ? refs.matchFormats.get(override) : competition.defaultFormat;
     if (!format) fail("MATCH_FORMAT_REFERENCE_MISSING", source, "MatchtypID");
     const participants = [row.Spieler1ID, row.Spieler2ID, row.Spieler3ID, row.Spieler4ID].map(parseParticipantId);
     const markers = participants.map((item, index) => item.marker ? { marker: item.marker, side: index < 2 ? 1 : 2 } : null).filter(Boolean);
     if (markers.length > 1 || markers.some((marker) => marker.side === 1 && !participants[0].marker || marker.side === 2 && !participants[2].marker)) fail("MATCH_COMPLETION_MARKER_INVALID", source, "participants");
     const kind = markers[0]?.marker === "wo" ? "walkover" : markers[0]?.marker === "ret" ? "retirement" : String(row.Ergebnis ?? "").trim() ? "regular" : null;
-    const completion = kind ? validateCompletion({ kind, result: String(row.Ergebnis ?? "").trim(), losingSide: markers[0]?.side }, format.rules) : null;
+    const legacyCompletion = kind ? validateLegacyCompletion({ kind, result: String(row.Ergebnis ?? "").trim(), losingSide: markers[0]?.side }, format.rules) : null;
+    const completion = legacyCompletion?.completion || null;
+    if (legacyCompletion?.missingTiebreakDetails) finding(findings, "MATCH_TIEBREAK_DETAIL_MISSING", "Matches1", "info", legacyCompletion.missingTiebreakDetails);
+    if (legacyCompletion?.decidingSetOverride || legacyCompletion?.setTargetOverride) {
+      format = legacyFormatOverride(result, refs, format, { decidingSet: legacyCompletion.decidingSetOverride, setTarget: legacyCompletion.setTargetOverride });
+      if (legacyCompletion.decidingSetOverride) finding(findings, "MATCH_LEGACY_DECIDING_SET_OVERRIDE", "Matches1");
+      if (legacyCompletion.setTargetOverride) finding(findings, "MATCH_LEGACY_SET_TARGET_OVERRIDE", "Matches1");
+    }
     if (completion && !completion.valid) fail(`MATCH_RESULT_${completion.error}`, source, "Ergebnis");
     const id = stableUuid("match", contract), scheduled = instant(row.MatchDate, source, "MatchDate");
-    result.matches.push({ id, competition_id: competition.id, contract_id: contract, match_format_version_id: format.id, format_binding_source: override ? "match_override" : "competition_default", round_code: text(row.BewerbRunde, { max: 100, source, projection: "BewerbRunde" }), challenged_at: instant(row.ForderungDate, source, "ForderungDate"), scheduled_at: kind === "walkover" ? null : scheduled, reserved_duration_minutes: String(row.Dauer ?? "").trim() ? integer(row.Dauer, source, "Dauer", { min: 0 }) : null, is_ignored: legacyBoolean(row.Ignore, source, "Ignore"), legacy_ptn_rating: text(row["PTN-Wertung"], { max: 100, source, projection: "PTN-Wertung" }), note: text(row.Bemerkung, { max: 500, source, projection: "Bemerkung" }), current_result_id: completion ? stableUuid("match-result", contract) : null });
+    result.matches.push({ id, competition_id: competition.id, contract_id: contract, match_format_version_id: format.id, format_binding_source: override || legacyCompletion?.decidingSetOverride || legacyCompletion?.setTargetOverride ? "match_override" : "competition_default", round_code: text(row.BewerbRunde, { max: 100, source, projection: "BewerbRunde" }), challenged_at: instant(row.ForderungDate, source, "ForderungDate"), scheduled_at: kind === "walkover" ? null : scheduled, reserved_duration_minutes: String(row.Dauer ?? "").trim() ? integer(row.Dauer, source, "Dauer", { min: 0 }) : null, is_ignored: legacyBoolean(row.Ignore, source, "Ignore"), legacy_ptn_rating: text(row["PTN-Wertung"], { max: 100, source, projection: "PTN-Wertung" }), note: text(row.Bemerkung, { max: 500, source, projection: "Bemerkung" }), current_result_id: completion ? stableUuid("match-result", contract) : null });
     for (const sideNo of [1, 2]) {
       const sideId = stableUuid("match-side", `${contract}:${sideNo}`);
       result.match_sides.push({ id: sideId, match_id: id, side_no: sideNo });
@@ -227,18 +320,21 @@ function transformMatches(rows, result, refs) {
         if (!participant.id) continue;
         const special = participant.id === "PRE" ? "open_bracket" : participant.id === "BYE" ? "bye" : "person";
         if (special === "open_bracket" && positionNo !== 1) fail("MATCH_PARTICIPANT_INVALID", source, "PRE");
-        const person = special === "person" ? refs.people.get(participant.id) : null;
-        if (special === "person" && !person) fail("MATCH_PERSON_REFERENCE_MISSING", source, `Spieler${(sideNo - 1) * 2 + positionNo}ID`);
+        const person = special === "person" ? ensureHistoricalPerson(participant.id, source, result, refs, findings) : null;
         result.match_participants.push({ id: stableUuid("match-participant", `${contract}:${sideNo}:${positionNo}`), match_id: id, side_id: sideId, position_no: positionNo, participant_type: special, person_id: person });
       }
     }
     if (completion) {
       const resultId = stableUuid("match-result", contract);
-      result.match_results.push({ id: resultId, match_id: id, version_no: 1, completion_type: kind, winner_side_no: completion.winnerSide, play_started_at: instant(row.MatchStart, source, "MatchStart"), play_ended_at: instant(row.MatchEnde, source, "MatchEnde"), first_captured_at: instant(row.ErgebnisErfasstAm, source, "ErgebnisErfasstAm"), walkover_at: kind === "walkover" ? scheduled : null, side_one_rank_snapshot: String(row.Spieler1RangBeiErgebnis ?? "").trim() ? integer(row.Spieler1RangBeiErgebnis, source, "Spieler1RangBeiErgebnis", { min: 0 }) : null, side_two_rank_snapshot: String(row.Spieler3RangBeiErgebnis ?? "").trim() ? integer(row.Spieler3RangBeiErgebnis, source, "Spieler3RangBeiErgebnis", { min: 0 }) : null, provenance: "legacy_snapshot" });
+      const times = normalizePlayTimes(row.MatchStart, row.MatchEnde, source, findings);
+      result.match_results.push({ id: resultId, match_id: id, version_no: 1, completion_type: kind, winner_side_no: completion.winnerSide, play_started_at: times.playStartedAt, play_ended_at: times.playEndedAt, first_captured_at: instant(row.ErgebnisErfasstAm, source, "ErgebnisErfasstAm"), walkover_at: kind === "walkover" ? scheduled : null, side_one_rank_snapshot: String(row.Spieler1RangBeiErgebnis ?? "").trim() ? integer(row.Spieler1RangBeiErgebnis, source, "Spieler1RangBeiErgebnis", { min: 0 }) : null, side_two_rank_snapshot: String(row.Spieler3RangBeiErgebnis ?? "").trim() ? integer(row.Spieler3RangBeiErgebnis, source, "Spieler3RangBeiErgebnis", { min: 0 }) : null, provenance: "legacy_snapshot" });
       completion.sets.forEach((set, index) => result.match_result_sets.push({ result_id: resultId, set_no: index + 1, side_one_games: set.side1, side_two_games: set.side2, loser_tiebreak_points: set.tiebreakLoserPoints, incomplete: set.state === "partial" }));
-      result.match_result_history.push({ id: stableUuid("match-result-history", contract), match_id: id, operation_id: stableUuid("match-import-operation", contract), change_type: "legacy_snapshot", before_result_id: null, after_result_id: resultId, actor_person_id: null, administrative_reason: null, changed_at: instant(row.ErgebnisErfasstAm, source, "ErgebnisErfasstAm") || instant(row.MatchEnde, source, "MatchEnde") || scheduled });
+      const historyId = stableUuid("match-result-history", contract);
+      result.match_result_history.push({ id: historyId, match_id: id, operation_id: stableUuid("match-import-operation", contract), change_type: "legacy_snapshot", before_result_id: null, after_result_id: resultId, actor_person_id: null, administrative_reason: null, changed_at: instant(row.ErgebnisErfasstAm, source, "ErgebnisErfasstAm") || instant(row.MatchEnde, source, "MatchEnde") || scheduled });
+      refs.matchResultHistory.set(contract, historyId);
     }
     refs.matches.set(contract, id);
+    refs.matchDetails.set(contract, { id, competitionId: competition.id, formatId: format.id });
   }
 }
 
@@ -276,16 +372,16 @@ function emptyTables() {
 function transformSheets(root) {
   const rows = Object.fromEntries(ORDER.map((sheet) => [sheet, loadRows(root, sheet)]));
   const tables = emptyTables(), findings = new Map();
-  const refs = { people: new Map(), accounts: new Map(), competitionTypes: new Map(), matchFormats: new Map(), competitions: new Map(), matches: new Map() };
+  const refs = { people: new Map(), peopleDetails: new Map(), accounts: new Map(), competitionTypes: new Map(), matchFormats: new Map(), legacyDecidingFormats: new Map(), competitions: new Map(), matches: new Map(), matchDetails: new Map(), matchResultHistory: new Map() };
   transformPeople(rows.Personen, tables, refs, findings);
   transformCompetitionTypes(rows.Bewerbsart, tables, refs);
   transformMatchFormats(rows.Matchtyp, tables, refs);
   transformCompetitions(rows.Bewerb, tables, refs);
   transformEntries(rows.EntryList, tables, refs);
   transformRankings(rows["RL-Platzierung"], tables, refs);
-  transformMatches(rows.Matches1, tables, refs);
+  transformMatches(rows.Matches1, tables, refs, findings);
   transformNavigation(rows.Navigator, tables, refs, findings);
   return { tables, refs, findings: [...findings.values()], counts: Object.fromEntries(ORDER.map((sheet) => [sheet, rows[sheet].length])) };
 }
 
-module.exports = { ORDER, transformSheets };
+module.exports = { ORDER, ensureHistoricalPerson, normalizePlayTimes, transformSheets, validateLegacyCompletion };

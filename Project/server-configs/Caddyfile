@@ -12,6 +12,10 @@
 	}
 }
 
+# Vollstaendige Sites anderer Anwendungen werden als eigene Fragmente betrieben.
+# Die ePiber-Installation darf dieses Verzeichnis nicht leeren oder ersetzen.
+import /etc/caddy/conf.d/*.caddy
+
 epiber.at {
 	import security_headers
 	@live_application not path /grafana/*
@@ -37,43 +41,16 @@ epiber.at {
 		}
 	}
 
-	handle /api/admin/grafana-auth {
-		respond 404
-	}
-	handle /internal/* {
-		respond 404
-	}
-
-	@backend path /ws /api/* /live /ready /health /version /status
-	handle @backend {
-		reverse_proxy 127.0.0.1:8080
-		log_append request_id {rp.header.X-Request-ID}
-		log_append route backend
-	}
-
-	redir /grafana /grafana/ 308
-	handle /grafana/* {
-		forward_auth 127.0.0.1:8085 {
-			uri /auth?
-			copy_headers X-WEBAUTH-USER X-WEBAUTH-ROLE
-		}
-		reverse_proxy unix//run/epiber-observability/grafana.sock
-		log_append route grafana
-	}
-
-	handle {
-		log_append route static
-		root * /srv/http/ePiber/piber/Frontend
-		header Cache-Control "no-cache"
-		file_server
-	}
+	# Genau ein kontrollierter Live-Modus ist installiert: regulaer oder Wartung.
+	# Der Wechsel ersetzt nur dieses Fragment und niemals die gemeinsame Datei.
+	import /etc/caddy/epiber-live-mode.caddy
 }
 
 https://epiber.at:8081 {
 	import security_headers
 	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://epiber.at:8081 wss://epiber.at:8081; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
-	log paj_access {
-		output file /var/log/caddy/epiber-paj-access.json {
+	log devel_access {
+		output file /var/log/caddy/epiber-devel-access.json {
 			mode 0640
 			roll_size 20MiB
 			roll_at 00:00

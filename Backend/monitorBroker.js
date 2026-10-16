@@ -20,6 +20,8 @@ class MonitorBroker {
     this.close = close;
   }
 
+  target(monitorId) { return this.stateStore.getNavigatorTarget(monitorId); }
+
   listMonitors() {
     return this.repository.listMonitors().map((monitor) => ({
       ...monitor,

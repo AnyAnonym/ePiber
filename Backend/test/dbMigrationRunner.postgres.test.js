@@ -6,7 +6,8 @@ const { Client } = require("pg");
 const { runMigrations } = require("../db/migrationRunner");
 const { applyFullDevelSeed, applyTechnicalSeed, validateFullDevelSeed } = require("../db/seedRunner");
 const { verifySchemaSnapshot } = require("../db/schemaSnapshot");
-const { applyBootstrap, verifyBootstrap } = require("../db/bootstrap");
+const { applyBootstrap, applyExistingDatabaseGrants, verifyBootstrap } = require("../db/bootstrap");
+const { applyPersonalAccess, verifyPersonalAccess } = require("../db/personalAccess");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
 
 test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank", { timeout: 30_000 }, async (t) => {
@@ -193,6 +194,22 @@ test("Full-Devel-Seed verschiebt fachliche Zeitpunkte deterministisch mit as_of"
   } finally { await client.end(); }
 });
 
+test("technischer Seed bindet den spaeteren Live-Tenant ohne eigenes Schema", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
+  await applyTechnicalSeed({
+    connectionConfig: cluster.connectionConfig,
+    asOf: "2026-10-12T00:00:00.000Z",
+    tenantCode: "askoe-piberbach",
+    tenantName: "ASKOE Piberbach Tennis",
+    output: () => {},
+  });
+  const client = new Client(cluster.connectionConfig); await client.connect();
+  assert.deepEqual((await client.query("SELECT tenant_code,display_name FROM core.tenants")).rows, [{ tenant_code: "askoe-piberbach", display_name: "ASKOE Piberbach Tennis" }]);
+  await client.end();
+});
+
 test("zwei Full-Devel-Neuaufbauten erzeugen dieselbe kanonische Projektion", { timeout: 30_000 }, async (t) => {
   const checksums = [];
   for (let index = 0; index < 2; index += 1) {
@@ -214,7 +231,7 @@ test("Bootstrap trennt Owner, Migration und Laufzeitrollen mit minimalen Grants"
   const prefix = "epiber_test";
   const database = "epiber_role_test";
   const passwords = Object.fromEntries(
-    ["migrator", "app", "worker", "monitor", "backup", "refresh"].map((suffix) => [suffix, `test-${suffix}-password`]),
+    ["migrator", "app", "worker", "monitor", "backup", "refresh", "app_readonly"].map((suffix) => [suffix, `test-${suffix}-password`]),
   );
 
   const prepared = await applyBootstrap({
@@ -235,14 +252,65 @@ test("Bootstrap trennt Owner, Migration und Laufzeitrollen mit minimalen Grants"
   };
   await runMigrations({ connectionConfig: migrationConnection, command: "up", targetGeneration: 6, output: () => {} });
 
-  const granted = await applyBootstrap({
+  await applyExistingDatabaseGrants({
     adminConnectionConfig: cluster.connectionConfig,
     prefix,
     database,
-    passwords,
+    readOnly: true,
     output: () => {},
   });
-  assert.equal(granted.grantsApplied, true);
-  const checks = await verifyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database });
+  const checks = await verifyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords });
   assert.ok(Object.values(checks).every(Boolean));
+  const readOnlyPassword = passwords.app_readonly;
+  const readOnly = new Client({ ...cluster.connectionConfig, database, user: prepared.names.app_readonly, password: readOnlyPassword });
+  await readOnly.connect();
+  assert.equal((await readOnly.query("SELECT count(*) FROM identity.people")).rows[0].count, "0");
+  await assert.rejects(readOnly.query("INSERT INTO identity.people(tenant_id,contract_id,last_name) VALUES ('0199c800-0000-7000-8000-000000000001','readonly-test','Blocked')"), (error) => error.code === "42501");
+  await readOnly.end();
+});
+
+test("persoenliche Devel-Rollen lesen alle Tabellen und nur Admin besitzt DML", { timeout: 30_000 }, async (t) => {
+  const cluster = startPostgresTestCluster();
+  t.after(() => cluster.stop());
+  const prefix = "personal_access", database = "personal_access_test";
+  const passwords = Object.fromEntries(
+    ["migrator", "app", "worker", "monitor", "backup", "refresh"].map((suffix) => [suffix, `access-${suffix}`]),
+  );
+  const prepared = await applyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords, output: () => {} });
+  const ownerConnection = { ...cluster.connectionConfig, database, user: prepared.names.migrator, password: passwords.migrator, options: `-c role=${prepared.names.owner}` };
+  await runMigrations({ connectionConfig: ownerConnection, command: "up", targetGeneration: 6, output: () => {} });
+  await applyTechnicalSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await applyExistingDatabaseGrants({ adminConnectionConfig: cluster.connectionConfig, prefix, database, readOnly: false, output: () => {} });
+
+  const readerRole = "personal_reader", adminRole = "personal_admin";
+  const setup = new Client({ ...cluster.connectionConfig, database }); await setup.connect();
+  await setup.query(`CREATE ROLE ${readerRole} LOGIN PASSWORD 'reader-pass' CREATEDB CREATEROLE`);
+  await setup.query(`CREATE ROLE ${adminRole} LOGIN PASSWORD 'admin-pass' CREATEDB CREATEROLE`);
+  await setup.end();
+  const options = { adminConnectionConfig: cluster.connectionConfig, database, ownerRole: prepared.names.owner, readerRole, adminRole };
+  const applied = await applyPersonalAccess({ ...options, output: () => {} });
+  assert.ok(applied.tableCount > 0);
+
+  const future = new Client({ ...cluster.connectionConfig, database }); await future.connect();
+  await future.query(`SET ROLE ${prepared.names.owner}`);
+  await future.query("CREATE TABLE play.personal_access_future(id bigserial PRIMARY KEY, value text)");
+  await future.query("RESET ROLE");
+  await future.end();
+  const verified = await verifyPersonalAccess(options);
+  assert.ok(Object.entries(verified).every(([name, value]) => name.endsWith("Count") || value === true));
+
+  const reader = new Client({ ...cluster.connectionConfig, database, user: readerRole, password: "reader-pass" }); await reader.connect();
+  assert.equal((await reader.query("SELECT count(*) FROM identity.credentials")).rowCount, 1);
+  assert.equal((await reader.query("SELECT count(*) FROM ops.audit_security_context")).rowCount, 1);
+  assert.equal((await reader.query("SELECT count(*) FROM play.personal_access_future")).rowCount, 1);
+  await assert.rejects(reader.query("UPDATE core.tenants SET display_name=display_name"), (error) => error.code === "42501");
+  await reader.end();
+
+  const admin = new Client({ ...cluster.connectionConfig, database, user: adminRole, password: "admin-pass" }); await admin.connect();
+  await admin.query("BEGIN");
+  assert.equal((await admin.query("UPDATE core.tenants SET display_name=display_name")).rowCount, 1);
+  await admin.query("ROLLBACK");
+  await assert.rejects(admin.query("CREATE TABLE play.personal_access_forbidden(id integer)"), (error) => error.code === "42501");
+  await assert.rejects(admin.query("TRUNCATE play.personal_access_future"), (error) => error.code === "42501");
+  await admin.end();
 });

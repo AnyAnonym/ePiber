@@ -44,3 +44,18 @@ test("Gesamtimport ist atomar, validierbar und ohne Dubletten wiederholbar", { t
   await changed.end();
   await assert.rejects(validateImport({ root, connectionConfig: cluster.connectionConfig }), (error) => error.code === "IMPORT_TARGET_FINGERPRINT_MISMATCH");
 });
+
+test("Gesamtimport uebernimmt revisionierte Court-, Hallenzeit-, Praeferenz- und Rangprovenienz relational", { timeout: 60_000 }, async (t) => {
+  const root = createImportTestPackage(t, { withLegacyState: true }), cluster = await target(t);
+  const applied = await applyImport({ root, connectionConfig: cluster.connectionConfig });
+  assert.equal(applied.counts.court_assignments, 1);
+  assert.equal(applied.counts.court_assignment_participants, 2);
+  assert.equal(applied.counts.hall_time_grids, 1);
+  assert.equal(applied.counts.hall_time_allocations, 1);
+  assert.equal(applied.counts.hall_time_history, 1);
+  assert.equal(applied.counts.user_favorites, 2);
+  assert.equal(applied.counts.user_start_pages, 1);
+  assert.equal(applied.counts.match_ranking_effects, 1);
+  const validated = await validateImport({ root, connectionConfig: cluster.connectionConfig });
+  assert.equal(validated.targetSha256, applied.targetSha256);
+});

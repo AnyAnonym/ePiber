@@ -1,0 +1,43 @@
+[Unit]
+Description=ePiber PostgreSQL live application read-only acceptance
+Wants=network-online.target
+After=network-online.target postgresql-live.service
+Requires=postgresql-live.service
+Conflicts=epiber-piber.service epiber-live.service
+
+[Service]
+Type=simple
+User=piber
+SupplementaryGroups=postgres-live-client
+WorkingDirectory=/srv/http/ePiber/piber/Backend
+SyslogIdentifier=epiber-live-readonly
+EnvironmentFile=/etc/epiber-live/app.env
+EnvironmentFile=-/etc/epiber-observability/messaging-api.env
+LoadCredential=database:/etc/epiber-live/credentials/postgres-app-readonly-password
+LoadCredential=rate-limit-key:/etc/epiber-live/credentials/auth-rate-limit-secret
+ExecStart=/usr/bin/env NODE_ENV=production TZ=Europe/Vienna INSTANCE_ID=piber LISTEN_HOST=127.0.0.1 PERSISTENCE_MODE=postgres EPIBER_WRITE_MODE=read_only MESSAGING_REPORT_DEPLOYMENT=live EPIBER_TENANT_CODE=askoe-piberbach PGHOST=/run/postgresql/epiber-live PGPORT=5432 PGDATABASE=epiber_askoe PGUSER=epiber_live_app_readonly EPIBER_DB_PASSWORD_FILE=%d/database EPIBER_AUTH_RATE_LIMIT_SECRET_FILE=%d/rate-limit-key /usr/bin/node server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=95
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallArchitectures=native

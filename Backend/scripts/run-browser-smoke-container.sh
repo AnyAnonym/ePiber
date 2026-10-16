@@ -14,7 +14,7 @@ if [[ "${has_profile}" == "false" ]]; then
   ')
   failures=()
   for profile in "${profiles[@]}"; do
-    if ! "$0" "$@" --profile "${profile}"; then failures+=("${profile}"); fi
+    if ! bash "$0" "$@" --profile "${profile}"; then failures+=("${profile}"); fi
   done
   if (( ${#failures[@]} )); then
     echo "Browser-Smoke fehlgeschlagen: ${failures[*]}" >&2

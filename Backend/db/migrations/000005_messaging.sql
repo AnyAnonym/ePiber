@@ -9,6 +9,14 @@ CREATE TABLE messaging.events (
   competition_id uuid REFERENCES play.competitions(id) ON DELETE RESTRICT,
   match_id uuid REFERENCES play.matches(id) ON DELETE RESTRICT,
   match_result_history_id uuid REFERENCES play.match_result_history(id) ON DELETE RESTRICT,
+  source_type text CHECK (source_type IS NULL OR source_type ~ '^[a-z][a-z0-9_.-]{0,62}$'),
+  source_contract_id text CHECK (source_contract_id IS NULL OR length(source_contract_id) BETWEEN 1 AND 160),
+  actor_person_id uuid REFERENCES identity.people(id) ON DELETE SET NULL,
+  actor_contract_id_snapshot text,
+  actor_name_snapshot text,
+  summary_snapshot text,
+  detail_snapshot text,
+  result_snapshot text,
   source_operation_id uuid NOT NULL,
   created_at timestamptz(3) NOT NULL,
   UNIQUE (tenant_id, contract_id),
@@ -71,12 +79,18 @@ CREATE TABLE messaging.comments (
   author_last_name_snapshot text,
   body text,
   created_at timestamptz(3) NOT NULL,
+  updated_at timestamptz(3),
+  moderation_status text NOT NULL DEFAULT 'visible' CHECK (moderation_status IN ('visible', 'under_review')),
+  moderated_at timestamptz(3),
+  moderated_by_person_id uuid REFERENCES identity.people(id) ON DELETE SET NULL,
   deleted_at timestamptz(3),
   deletion_status text CHECK (deletion_status IN ('deleted_by_author', 'deleted_by_admin')),
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   CHECK ((deleted_at IS NULL AND deletion_status IS NULL AND body IS NOT NULL)
       OR (deleted_at IS NOT NULL AND deletion_status IS NOT NULL AND body IS NULL
-          AND author_contract_id_snapshot IS NULL AND author_first_name_snapshot IS NULL AND author_last_name_snapshot IS NULL))
+          AND author_contract_id_snapshot IS NULL AND author_first_name_snapshot IS NULL AND author_last_name_snapshot IS NULL)),
+  CHECK (updated_at IS NULL OR updated_at >= created_at),
+  CHECK (moderated_at IS NULL OR moderated_at >= created_at)
 );
 CREATE INDEX comments_event_time ON messaging.comments (event_id, created_at DESC, id DESC);
 
@@ -89,11 +103,17 @@ CREATE TABLE messaging.reactions (
   created_at timestamptz(3) NOT NULL,
   CHECK ((event_id IS NULL) <> (comment_id IS NULL))
 );
-CREATE UNIQUE INDEX reactions_event_person_key ON messaging.reactions (event_id, person_id, reaction_key) WHERE event_id IS NOT NULL;
-CREATE UNIQUE INDEX reactions_comment_person_key ON messaging.reactions (comment_id, person_id, reaction_key) WHERE comment_id IS NOT NULL;
+CREATE UNIQUE INDEX reactions_event_person ON messaging.reactions (event_id, person_id) WHERE event_id IS NOT NULL;
+CREATE UNIQUE INDEX reactions_comment_person ON messaging.reactions (comment_id, person_id) WHERE comment_id IS NOT NULL;
 
 CREATE TABLE messaging.user_revisions (
   person_id uuid PRIMARY KEY REFERENCES identity.people(id) ON DELETE CASCADE,
+  revision bigint NOT NULL DEFAULT 0 CHECK (revision >= 0),
+  updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE TABLE messaging.history_revision (
+  singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
   revision bigint NOT NULL DEFAULT 0 CHECK (revision >= 0),
   updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp()
 );

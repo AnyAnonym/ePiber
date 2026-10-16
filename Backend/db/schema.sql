@@ -135,16 +135,15 @@ CREATE TABLE identity.credentials (
     account_id uuid NOT NULL,
     credential_type text NOT NULL,
     credential_schema text NOT NULL,
-    secret_hash text NOT NULL,
+    secret_hash text,
     active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
     revoked_at timestamp with time zone,
     revoked_reason text,
-    CONSTRAINT credentials_check CHECK (((active AND (revoked_at IS NULL) AND (revoked_reason IS NULL)) OR ((NOT active) AND (revoked_at IS NOT NULL)))),
-    CONSTRAINT credentials_check1 CHECK (((credential_schema <> 'legacy_sha256'::text) OR (secret_hash ~ '^[0-9a-fA-F]{64}$'::text))),
+    CONSTRAINT credentials_check CHECK (((active AND (revoked_at IS NULL) AND (revoked_reason IS NULL) AND (secret_hash IS NOT NULL) AND (secret_hash <> ''::text)) OR ((NOT active) AND (revoked_at IS NOT NULL) AND (secret_hash IS NULL)))),
+    CONSTRAINT credentials_check1 CHECK (((credential_schema <> 'legacy_sha256'::text) OR (NOT active) OR (secret_hash ~ '^[0-9a-fA-F]{64}$'::text))),
     CONSTRAINT credentials_credential_schema_check CHECK ((credential_schema = ANY (ARRAY['scrypt_v1'::text, 'legacy_sha256'::text]))),
-    CONSTRAINT credentials_credential_type_check CHECK ((credential_type = 'password'::text)),
-    CONSTRAINT credentials_secret_hash_check CHECK ((secret_hash <> ''::text))
+    CONSTRAINT credentials_credential_type_check CHECK ((credential_type = 'password'::text))
 );
 
 --
@@ -153,19 +152,31 @@ CREATE TABLE identity.credentials (
 
 CREATE TABLE identity.frontend_logging_settings (
     tenant_id uuid NOT NULL,
+    enabled boolean DEFAULT false NOT NULL,
     minimum_level text NOT NULL,
+    include_anonymous boolean DEFAULT false NOT NULL,
     info_sample_rate numeric(5,4) NOT NULL,
     debug_sample_rate numeric(5,4) NOT NULL,
+    batch_size smallint DEFAULT 10 NOT NULL,
+    flush_interval_ms integer DEFAULT 5000 NOT NULL,
+    default_target_level text DEFAULT 'debug'::text NOT NULL,
+    default_target_duration_minutes smallint DEFAULT 120 CONSTRAINT frontend_logging_settings_default_target_duration_minu_not_null NOT NULL,
     info_retention_days smallint DEFAULT 14 NOT NULL,
     debug_retention_days smallint DEFAULT 7 NOT NULL,
+    targets_revision bigint DEFAULT 0 NOT NULL,
     revision bigint DEFAULT 1 NOT NULL,
     updated_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT frontend_logging_settings_batch_size_check CHECK (((batch_size >= 1) AND (batch_size <= 20))),
     CONSTRAINT frontend_logging_settings_debug_retention_days_check CHECK ((debug_retention_days = 7)),
     CONSTRAINT frontend_logging_settings_debug_sample_rate_check CHECK (((debug_sample_rate >= (0)::numeric) AND (debug_sample_rate <= (1)::numeric))),
+    CONSTRAINT frontend_logging_settings_default_target_duration_minutes_check CHECK (((default_target_duration_minutes >= 15) AND (default_target_duration_minutes <= 1440))),
+    CONSTRAINT frontend_logging_settings_default_target_level_check CHECK ((default_target_level = ANY (ARRAY['error'::text, 'warn'::text, 'info'::text, 'debug'::text]))),
+    CONSTRAINT frontend_logging_settings_flush_interval_ms_check CHECK (((flush_interval_ms >= 1000) AND (flush_interval_ms <= 30000))),
     CONSTRAINT frontend_logging_settings_info_retention_days_check CHECK ((info_retention_days = 14)),
     CONSTRAINT frontend_logging_settings_info_sample_rate_check CHECK (((info_sample_rate >= (0)::numeric) AND (info_sample_rate <= (1)::numeric))),
     CONSTRAINT frontend_logging_settings_minimum_level_check CHECK ((minimum_level = ANY (ARRAY['error'::text, 'warn'::text, 'info'::text, 'debug'::text]))),
-    CONSTRAINT frontend_logging_settings_revision_check CHECK ((revision > 0))
+    CONSTRAINT frontend_logging_settings_revision_check CHECK ((revision > 0)),
+    CONSTRAINT frontend_logging_settings_targets_revision_check CHECK ((targets_revision >= 0))
 );
 
 --
@@ -177,6 +188,7 @@ CREATE TABLE identity.frontend_logging_targets (
     person_id uuid NOT NULL,
     minimum_level text NOT NULL,
     expires_at timestamp(3) with time zone NOT NULL,
+    created_by_person_id uuid NOT NULL,
     revision bigint DEFAULT 1 NOT NULL,
     created_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
     CONSTRAINT frontend_logging_targets_minimum_level_check CHECK ((minimum_level = ANY (ARRAY['error'::text, 'warn'::text, 'info'::text, 'debug'::text]))),
@@ -395,13 +407,34 @@ CREATE TABLE identity.user_favorites (
     "position" smallint NOT NULL,
     target_type text NOT NULL,
     page_key text,
+    overlay_key text,
     competition_id uuid,
     hall_time_grid_id uuid,
+    round_robin_layout smallint,
+    navigator_profile_code text,
     revision bigint NOT NULL,
-    CONSTRAINT user_favorites_check CHECK ((((target_type = 'page'::text) AND (page_key IS NOT NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = ANY (ARRAY['competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text])) AND (page_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = 'hall_time_grid'::text) AND (page_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NOT NULL)))),
+    CONSTRAINT user_favorites_check CHECK ((((target_type = 'page'::text) AND (page_key IS NOT NULL) AND (overlay_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND ((navigator_profile_code IS NULL) OR (page_key = 'navigator'::text))) OR ((target_type = 'overlay'::text) AND (page_key IS NULL) AND (overlay_key IS NOT NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = 'competition_history_all'::text) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = ANY (ARRAY['competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'bracket'::text])) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = 'round_robin'::text) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = 'hall_time_grid'::text) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NOT NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)))),
+    CONSTRAINT user_favorites_navigator_profile_code_check CHECK (((navigator_profile_code IS NULL) OR ((navigator_profile_code = btrim(navigator_profile_code)) AND (navigator_profile_code <> ''::text)))),
     CONSTRAINT user_favorites_position_check CHECK ((("position" >= 1) AND ("position" <= 32))),
     CONSTRAINT user_favorites_revision_check CHECK ((revision > 0)),
-    CONSTRAINT user_favorites_target_type_check CHECK ((target_type = ANY (ARRAY['page'::text, 'competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'hall_time_grid'::text])))
+    CONSTRAINT user_favorites_round_robin_layout_check CHECK (((round_robin_layout >= 0) AND (round_robin_layout <= 5))),
+    CONSTRAINT user_favorites_target_type_check CHECK ((target_type = ANY (ARRAY['page'::text, 'overlay'::text, 'competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'competition_history_all'::text, 'bracket'::text, 'round_robin'::text, 'hall_time_grid'::text])))
+);
+
+--
+-- Name: user_preference_states; Type: TABLE; Schema: identity; Owner: -
+--
+
+CREATE TABLE identity.user_preference_states (
+    account_id uuid NOT NULL,
+    favorites_revision bigint DEFAULT 0 NOT NULL,
+    favorites_updated_at timestamp with time zone,
+    start_page_revision bigint DEFAULT 0 NOT NULL,
+    start_page_updated_at timestamp with time zone,
+    CONSTRAINT user_preference_states_check CHECK (((favorites_revision = 0) = (favorites_updated_at IS NULL))),
+    CONSTRAINT user_preference_states_check1 CHECK (((start_page_revision = 0) = (start_page_updated_at IS NULL))),
+    CONSTRAINT user_preference_states_favorites_revision_check CHECK ((favorites_revision >= 0)),
+    CONSTRAINT user_preference_states_start_page_revision_check CHECK ((start_page_revision >= 0))
 );
 
 --
@@ -412,13 +445,18 @@ CREATE TABLE identity.user_start_pages (
     account_id uuid NOT NULL,
     target_type text NOT NULL,
     page_key text,
+    overlay_key text,
     competition_id uuid,
     hall_time_grid_id uuid,
+    round_robin_layout smallint,
+    navigator_profile_code text,
     revision bigint NOT NULL,
     updated_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
-    CONSTRAINT user_start_pages_check CHECK ((((target_type = 'page'::text) AND (page_key IS NOT NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = ANY (ARRAY['competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text])) AND (page_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = 'hall_time_grid'::text) AND (page_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NOT NULL)))),
+    CONSTRAINT user_start_pages_check CHECK ((((target_type = 'page'::text) AND (page_key IS NOT NULL) AND (overlay_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND ((navigator_profile_code IS NULL) OR (page_key = 'navigator'::text))) OR ((target_type = 'overlay'::text) AND (page_key IS NULL) AND (overlay_key IS NOT NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = 'competition_history_all'::text) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = ANY (ARRAY['competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'bracket'::text])) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = 'round_robin'::text) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL) AND (navigator_profile_code IS NULL)) OR ((target_type = 'hall_time_grid'::text) AND (page_key IS NULL) AND (overlay_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NOT NULL) AND (round_robin_layout IS NULL) AND (navigator_profile_code IS NULL)))),
+    CONSTRAINT user_start_pages_navigator_profile_code_check CHECK (((navigator_profile_code IS NULL) OR ((navigator_profile_code = btrim(navigator_profile_code)) AND (navigator_profile_code <> ''::text)))),
     CONSTRAINT user_start_pages_revision_check CHECK ((revision > 0)),
-    CONSTRAINT user_start_pages_target_type_check CHECK ((target_type = ANY (ARRAY['page'::text, 'competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'hall_time_grid'::text])))
+    CONSTRAINT user_start_pages_round_robin_layout_check CHECK (((round_robin_layout >= 0) AND (round_robin_layout <= 5))),
+    CONSTRAINT user_start_pages_target_type_check CHECK ((target_type = ANY (ARRAY['page'::text, 'overlay'::text, 'competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'competition_history_all'::text, 'bracket'::text, 'round_robin'::text, 'hall_time_grid'::text])))
 );
 
 --
@@ -434,11 +472,18 @@ CREATE TABLE messaging.comments (
     author_last_name_snapshot text,
     body text,
     created_at timestamp(3) with time zone NOT NULL,
+    updated_at timestamp(3) with time zone,
+    moderation_status text DEFAULT 'visible'::text NOT NULL,
+    moderated_at timestamp(3) with time zone,
+    moderated_by_person_id uuid,
     deleted_at timestamp(3) with time zone,
     deletion_status text,
     revision bigint DEFAULT 1 NOT NULL,
     CONSTRAINT comments_check CHECK ((((deleted_at IS NULL) AND (deletion_status IS NULL) AND (body IS NOT NULL)) OR ((deleted_at IS NOT NULL) AND (deletion_status IS NOT NULL) AND (body IS NULL) AND (author_contract_id_snapshot IS NULL) AND (author_first_name_snapshot IS NULL) AND (author_last_name_snapshot IS NULL)))),
+    CONSTRAINT comments_check1 CHECK (((updated_at IS NULL) OR (updated_at >= created_at))),
+    CONSTRAINT comments_check2 CHECK (((moderated_at IS NULL) OR (moderated_at >= created_at))),
     CONSTRAINT comments_deletion_status_check CHECK ((deletion_status = ANY (ARRAY['deleted_by_author'::text, 'deleted_by_admin'::text]))),
+    CONSTRAINT comments_moderation_status_check CHECK ((moderation_status = ANY (ARRAY['visible'::text, 'under_review'::text]))),
     CONSTRAINT comments_revision_check CHECK ((revision > 0))
 );
 
@@ -508,13 +553,35 @@ CREATE TABLE messaging.events (
     competition_id uuid,
     match_id uuid,
     match_result_history_id uuid,
+    source_type text,
+    source_contract_id text,
+    actor_person_id uuid,
+    actor_contract_id_snapshot text,
+    actor_name_snapshot text,
+    summary_snapshot text,
+    detail_snapshot text,
+    result_snapshot text,
     source_operation_id uuid NOT NULL,
     created_at timestamp(3) with time zone NOT NULL,
     CONSTRAINT events_contract_id_check CHECK ((contract_id ~ '^[A-Za-z0-9_.:-]{1,64}$'::text)),
     CONSTRAINT events_event_type_check CHECK ((event_type ~ '^[a-z][a-z0-9_.-]{1,126}$'::text)),
+    CONSTRAINT events_source_contract_id_check CHECK (((source_contract_id IS NULL) OR ((length(source_contract_id) >= 1) AND (length(source_contract_id) <= 160)))),
+    CONSTRAINT events_source_type_check CHECK (((source_type IS NULL) OR (source_type ~ '^[a-z][a-z0-9_.-]{0,62}$'::text))),
     CONSTRAINT events_template_key_check CHECK ((template_key ~ '^[a-z][a-z0-9_.-]{1,126}$'::text)),
     CONSTRAINT events_template_parameters_check CHECK ((jsonb_typeof(template_parameters) = 'object'::text)),
     CONSTRAINT events_template_version_check CHECK ((template_version > 0))
+);
+
+--
+-- Name: history_revision; Type: TABLE; Schema: messaging; Owner: -
+--
+
+CREATE TABLE messaging.history_revision (
+    singleton boolean DEFAULT true NOT NULL,
+    revision bigint DEFAULT 0 NOT NULL,
+    updated_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT history_revision_revision_check CHECK ((revision >= 0)),
+    CONSTRAINT history_revision_singleton_check CHECK (singleton)
 );
 
 --
@@ -1152,18 +1219,43 @@ CREATE TABLE play.ranking_entries (
 );
 
 --
+-- Name: court_assignment_participants; Type: TABLE; Schema: venue; Owner: -
+--
+
+CREATE TABLE venue.court_assignment_participants (
+    assignment_id uuid NOT NULL,
+    side_no smallint NOT NULL,
+    position_no smallint NOT NULL,
+    person_id uuid NOT NULL,
+    first_name_snapshot text,
+    last_name_snapshot text NOT NULL,
+    CONSTRAINT court_assignment_participants_position_no_check CHECK ((position_no = ANY (ARRAY[1, 2]))),
+    CONSTRAINT court_assignment_participants_side_no_check CHECK ((side_no = ANY (ARRAY[1, 2])))
+);
+
+--
 -- Name: court_assignments; Type: TABLE; Schema: venue; Owner: -
 --
 
 CREATE TABLE venue.court_assignments (
     id uuid DEFAULT uuidv7() NOT NULL,
     court_id uuid NOT NULL,
-    match_id uuid NOT NULL,
+    assignment_type text DEFAULT 'match'::text NOT NULL,
+    match_id uuid,
+    competition_id uuid,
+    match_format_version_id uuid,
+    competition_name_snapshot text,
+    round_code_snapshot text,
+    scheduled_at_snapshot timestamp(3) with time zone,
+    automation_status text,
     assigned_at timestamp(3) with time zone NOT NULL,
     assigned_by_person_id uuid,
     released_at timestamp(3) with time zone,
     released_by_person_id uuid,
-    CONSTRAINT court_assignments_check CHECK (((released_at IS NULL) OR (released_at >= assigned_at)))
+    CONSTRAINT court_assignments_assignment_type_check CHECK ((assignment_type = ANY (ARRAY['match'::text, 'manual'::text]))),
+    CONSTRAINT court_assignments_automation_status_check CHECK ((automation_status = ANY (ARRAY['pending'::text, 'activated'::text, 'finished'::text, 'expired'::text, 'unscheduled'::text]))),
+    CONSTRAINT court_assignments_check CHECK (((released_at IS NULL) OR (released_at >= assigned_at))),
+    CONSTRAINT court_assignments_check1 CHECK ((((assignment_type = 'match'::text) AND (match_id IS NOT NULL) AND (competition_id IS NOT NULL) AND (match_format_version_id IS NOT NULL)) OR ((assignment_type = 'manual'::text) AND (match_id IS NULL))))
 );
 
 --
@@ -1290,13 +1382,21 @@ CREATE TABLE venue.hall_time_grids (
     waiting_list_enabled boolean DEFAULT false NOT NULL,
     waiting_limit_per_person smallint,
     fair_use_enabled boolean DEFAULT false NOT NULL,
+    fair_use_base integer DEFAULT 0 NOT NULL,
+    fair_use_extended_days integer DEFAULT 1 NOT NULL,
+    fair_use_percent integer DEFAULT 0 NOT NULL,
     fair_use_open_days integer,
     revision bigint DEFAULT 1 NOT NULL,
     projection_revision bigint DEFAULT 1 NOT NULL,
+    created_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
+    updated_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
     CONSTRAINT hall_time_grids_capacity_check CHECK ((capacity > 0)),
     CONSTRAINT hall_time_grids_check CHECK ((waiting_list_enabled OR (waiting_limit_per_person IS NULL))),
     CONSTRAINT hall_time_grids_contract_id_check CHECK ((contract_id ~ '^[A-Za-z0-9_.:-]{1,64}$'::text)),
+    CONSTRAINT hall_time_grids_fair_use_base_check CHECK ((fair_use_base >= 0)),
+    CONSTRAINT hall_time_grids_fair_use_extended_days_check CHECK ((fair_use_extended_days > 0)),
     CONSTRAINT hall_time_grids_fair_use_open_days_check CHECK ((fair_use_open_days >= 0)),
+    CONSTRAINT hall_time_grids_fair_use_percent_check CHECK ((fair_use_percent >= 0)),
     CONSTRAINT hall_time_grids_mode_check CHECK ((mode = ANY (ARRAY['reservation'::text, 'allocation'::text]))),
     CONSTRAINT hall_time_grids_name_check CHECK (((name = btrim(name)) AND (name <> ''::text))),
     CONSTRAINT hall_time_grids_projection_revision_check CHECK ((projection_revision > 0)),
@@ -1316,7 +1416,20 @@ CREATE TABLE venue.hall_time_history (
     actor_person_id uuid,
     occurred_at timestamp(3) with time zone NOT NULL,
     item_count integer NOT NULL,
-    CONSTRAINT hall_time_history_item_count_check CHECK ((item_count > 0))
+    detail text,
+    unavailable_count integer,
+    avoid_count integer,
+    assigned_count integer,
+    removed_count integer,
+    promoted_count integer,
+    unchanged_count integer,
+    CONSTRAINT hall_time_history_assigned_count_check CHECK (((assigned_count IS NULL) OR (assigned_count >= 0))),
+    CONSTRAINT hall_time_history_avoid_count_check CHECK (((avoid_count IS NULL) OR (avoid_count >= 0))),
+    CONSTRAINT hall_time_history_item_count_check CHECK ((item_count >= 0)),
+    CONSTRAINT hall_time_history_promoted_count_check CHECK (((promoted_count IS NULL) OR (promoted_count >= 0))),
+    CONSTRAINT hall_time_history_removed_count_check CHECK (((removed_count IS NULL) OR (removed_count >= 0))),
+    CONSTRAINT hall_time_history_unavailable_count_check CHECK (((unavailable_count IS NULL) OR (unavailable_count >= 0))),
+    CONSTRAINT hall_time_history_unchanged_count_check CHECK (((unchanged_count IS NULL) OR (unchanged_count >= 0)))
 );
 
 --
@@ -1330,12 +1443,11 @@ CREATE TABLE venue.hall_time_history_items (
     person_id uuid,
     before_status text,
     after_status text,
-    slot_starts_at_snapshot timestamp(3) with time zone NOT NULL,
+    slot_starts_at_snapshot timestamp(3) with time zone,
     person_contract_id_snapshot text,
     person_name_snapshot text,
     CONSTRAINT hall_time_history_items_after_status_check CHECK ((after_status = ANY (ARRAY['confirmed'::text, 'waiting'::text]))),
     CONSTRAINT hall_time_history_items_before_status_check CHECK ((before_status = ANY (ARRAY['confirmed'::text, 'waiting'::text]))),
-    CONSTRAINT hall_time_history_items_check CHECK (((before_status IS NOT NULL) OR (after_status IS NOT NULL))),
     CONSTRAINT hall_time_history_items_item_no_check CHECK ((item_no > 0))
 );
 
@@ -1365,13 +1477,27 @@ CREATE TABLE venue.monitor_commands (
     monitor_id uuid NOT NULL,
     command_id uuid NOT NULL,
     command_type text NOT NULL,
+    operation_id uuid,
     target_revision bigint,
+    target_path text,
+    stream_id uuid,
+    stream_sequence bigint,
+    delta_y integer,
+    status text DEFAULT 'queued'::text NOT NULL,
+    error_code text,
     created_at timestamp(3) with time zone NOT NULL,
+    updated_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
     acknowledged_at timestamp(3) with time zone,
     expires_at timestamp(3) with time zone NOT NULL,
     CONSTRAINT monitor_commands_check CHECK ((expires_at > created_at)),
     CONSTRAINT monitor_commands_check1 CHECK (((acknowledged_at IS NULL) OR (acknowledged_at >= created_at))),
+    CONSTRAINT monitor_commands_check2 CHECK ((((command_type = 'navigate'::text) AND (target_revision IS NOT NULL) AND (target_path IS NOT NULL) AND (stream_id IS NULL) AND (stream_sequence IS NULL) AND (delta_y IS NULL)) OR ((command_type = 'scroll'::text) AND (target_revision IS NULL) AND (target_path IS NULL) AND (stream_id IS NOT NULL) AND (stream_sequence IS NOT NULL) AND (delta_y IS NOT NULL)) OR ((command_type = 'reload'::text) AND (target_revision IS NOT NULL) AND (target_path IS NULL) AND (stream_id IS NULL) AND (stream_sequence IS NULL) AND (delta_y IS NULL)))),
     CONSTRAINT monitor_commands_command_type_check CHECK ((command_type = ANY (ARRAY['navigate'::text, 'scroll'::text, 'reload'::text]))),
+    CONSTRAINT monitor_commands_delta_y_check CHECK (((delta_y IS NULL) OR (delta_y = ANY (ARRAY['-300'::integer, 300])))),
+    CONSTRAINT monitor_commands_error_code_check CHECK (((error_code IS NULL) OR (error_code ~ '^[A-Z][A-Z0-9_]{0,63}$'::text))),
+    CONSTRAINT monitor_commands_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'received'::text, 'loading'::text, 'loaded'::text, 'applied'::text, 'failed'::text, 'offline'::text]))),
+    CONSTRAINT monitor_commands_stream_sequence_check CHECK (((stream_sequence IS NULL) OR (stream_sequence > 0))),
+    CONSTRAINT monitor_commands_target_path_check CHECK (((target_path IS NULL) OR (((length(target_path) >= 2) AND (length(target_path) <= 500)) AND (target_path ~ '^/[A-Za-z0-9_./?&=:%+-]+$'::text)))),
     CONSTRAINT monitor_commands_target_revision_check CHECK ((target_revision > 0))
 );
 
@@ -1389,15 +1515,20 @@ CREATE TABLE venue.monitor_devices (
     page_key text,
     competition_id uuid,
     hall_time_grid_id uuid,
+    target_path text DEFAULT '/index.html'::text NOT NULL,
+    target_command_id uuid,
+    target_issued_at timestamp(3) with time zone,
     revision bigint DEFAULT 1 NOT NULL,
     created_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
     updated_at timestamp(3) with time zone DEFAULT clock_timestamp() NOT NULL,
     revoked_at timestamp with time zone,
     last_seen_at timestamp with time zone,
-    CONSTRAINT monitor_devices_check CHECK ((((target_type = 'page'::text) AND (page_key IS NOT NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = ANY (ARRAY['competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text])) AND (page_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = 'hall_time_grid'::text) AND (page_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NOT NULL)))),
+    CONSTRAINT monitor_devices_check CHECK (((target_command_id IS NULL) = (target_issued_at IS NULL))),
+    CONSTRAINT monitor_devices_check1 CHECK ((((target_type = 'page'::text) AND (page_key IS NOT NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = ANY (ARRAY['competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text])) AND (page_key IS NULL) AND (competition_id IS NOT NULL) AND (hall_time_grid_id IS NULL)) OR ((target_type = 'hall_time_grid'::text) AND (page_key IS NULL) AND (competition_id IS NULL) AND (hall_time_grid_id IS NOT NULL)))),
     CONSTRAINT monitor_devices_contract_id_check CHECK ((contract_id ~ '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$'::text)),
     CONSTRAINT monitor_devices_label_check CHECK (((label = btrim(label)) AND (label <> ''::text))),
     CONSTRAINT monitor_devices_revision_check CHECK ((revision > 0)),
+    CONSTRAINT monitor_devices_target_path_check CHECK ((((length(target_path) >= 2) AND (length(target_path) <= 500)) AND (target_path ~ '^/[A-Za-z0-9_./?&=:%+-]+$'::text))),
     CONSTRAINT monitor_devices_target_type_check CHECK ((target_type = ANY (ARRAY['page'::text, 'competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'hall_time_grid'::text]))),
     CONSTRAINT monitor_devices_token_hash_check CHECK ((octet_length(token_hash) = 32))
 );
@@ -1690,6 +1821,13 @@ ALTER TABLE ONLY identity.user_favorites
     ADD CONSTRAINT user_favorites_pkey PRIMARY KEY (account_id, "position");
 
 --
+-- Name: user_preference_states user_preference_states_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.user_preference_states
+    ADD CONSTRAINT user_preference_states_pkey PRIMARY KEY (account_id);
+
+--
 -- Name: user_start_pages user_start_pages_pkey; Type: CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -1765,6 +1903,13 @@ ALTER TABLE ONLY messaging.events
 
 ALTER TABLE ONLY messaging.events
     ADD CONSTRAINT events_tenant_id_source_operation_id_event_type_key UNIQUE (tenant_id, source_operation_id, event_type);
+
+--
+-- Name: history_revision history_revision_pkey; Type: CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.history_revision
+    ADD CONSTRAINT history_revision_pkey PRIMARY KEY (singleton);
 
 --
 -- Name: notification_preferences notification_preferences_pkey; Type: CONSTRAINT; Schema: messaging; Owner: -
@@ -2187,6 +2332,20 @@ ALTER TABLE ONLY play.ranking_entries
     ADD CONSTRAINT ranking_entries_pkey PRIMARY KEY (id);
 
 --
+-- Name: court_assignment_participants court_assignment_participants_assignment_id_person_id_key; Type: CONSTRAINT; Schema: venue; Owner: -
+--
+
+ALTER TABLE ONLY venue.court_assignment_participants
+    ADD CONSTRAINT court_assignment_participants_assignment_id_person_id_key UNIQUE (assignment_id, person_id);
+
+--
+-- Name: court_assignment_participants court_assignment_participants_pkey; Type: CONSTRAINT; Schema: venue; Owner: -
+--
+
+ALTER TABLE ONLY venue.court_assignment_participants
+    ADD CONSTRAINT court_assignment_participants_pkey PRIMARY KEY (assignment_id, side_no, position_no);
+
+--
 -- Name: court_assignments court_assignments_id_court_id_key; Type: CONSTRAINT; Schema: venue; Owner: -
 --
 
@@ -2332,6 +2491,13 @@ ALTER TABLE ONLY venue.hall_time_slots
 
 ALTER TABLE ONLY venue.monitor_commands
     ADD CONSTRAINT monitor_commands_monitor_id_command_id_key UNIQUE (monitor_id, command_id);
+
+--
+-- Name: monitor_commands monitor_commands_monitor_id_operation_id_key; Type: CONSTRAINT; Schema: venue; Owner: -
+--
+
+ALTER TABLE ONLY venue.monitor_commands
+    ADD CONSTRAINT monitor_commands_monitor_id_operation_id_key UNIQUE (monitor_id, operation_id);
 
 --
 -- Name: monitor_commands monitor_commands_pkey; Type: CONSTRAINT; Schema: venue; Owner: -
@@ -2523,16 +2689,16 @@ CREATE INDEX event_recipients_person_time ON messaging.event_recipients USING bt
 CREATE INDEX messaging_events_competition_time ON messaging.events USING btree (competition_id, created_at DESC, id);
 
 --
--- Name: reactions_comment_person_key; Type: INDEX; Schema: messaging; Owner: -
+-- Name: reactions_comment_person; Type: INDEX; Schema: messaging; Owner: -
 --
 
-CREATE UNIQUE INDEX reactions_comment_person_key ON messaging.reactions USING btree (comment_id, person_id, reaction_key) WHERE (comment_id IS NOT NULL);
+CREATE UNIQUE INDEX reactions_comment_person ON messaging.reactions USING btree (comment_id, person_id) WHERE (comment_id IS NOT NULL);
 
 --
--- Name: reactions_event_person_key; Type: INDEX; Schema: messaging; Owner: -
+-- Name: reactions_event_person; Type: INDEX; Schema: messaging; Owner: -
 --
 
-CREATE UNIQUE INDEX reactions_event_person_key ON messaging.reactions USING btree (event_id, person_id, reaction_key) WHERE (event_id IS NOT NULL);
+CREATE UNIQUE INDEX reactions_event_person ON messaging.reactions USING btree (event_id, person_id) WHERE (event_id IS NOT NULL);
 
 --
 -- Name: audit_operations_retention; Type: INDEX; Schema: ops; Owner: -
@@ -2670,6 +2836,13 @@ ALTER TABLE ONLY identity.credentials
 
 ALTER TABLE ONLY identity.frontend_logging_settings
     ADD CONSTRAINT frontend_logging_settings_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES core.tenants(id) ON DELETE RESTRICT;
+
+--
+-- Name: frontend_logging_targets frontend_logging_targets_created_by_person_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.frontend_logging_targets
+    ADD CONSTRAINT frontend_logging_targets_created_by_person_id_fkey FOREIGN KEY (created_by_person_id) REFERENCES identity.people(id) ON DELETE RESTRICT;
 
 --
 -- Name: frontend_logging_targets frontend_logging_targets_person_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
@@ -2819,6 +2992,13 @@ ALTER TABLE ONLY identity.user_favorites
     ADD CONSTRAINT user_favorites_hall_time_grid_id_fkey FOREIGN KEY (hall_time_grid_id) REFERENCES venue.hall_time_grids(id) ON DELETE CASCADE;
 
 --
+-- Name: user_preference_states user_preference_states_account_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
+--
+
+ALTER TABLE ONLY identity.user_preference_states
+    ADD CONSTRAINT user_preference_states_account_id_fkey FOREIGN KEY (account_id) REFERENCES identity.user_accounts(id) ON DELETE CASCADE;
+
+--
 -- Name: user_start_pages user_start_pages_account_id_fkey; Type: FK CONSTRAINT; Schema: identity; Owner: -
 --
 
@@ -2854,6 +3034,13 @@ ALTER TABLE ONLY messaging.comments
     ADD CONSTRAINT comments_event_id_fkey FOREIGN KEY (event_id) REFERENCES messaging.events(id) ON DELETE CASCADE;
 
 --
+-- Name: comments comments_moderated_by_person_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.comments
+    ADD CONSTRAINT comments_moderated_by_person_id_fkey FOREIGN KEY (moderated_by_person_id) REFERENCES identity.people(id) ON DELETE SET NULL;
+
+--
 -- Name: deliveries deliveries_recipient_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -
 --
 
@@ -2887,6 +3074,13 @@ ALTER TABLE ONLY messaging.event_recipients
 
 ALTER TABLE ONLY messaging.event_recipients
     ADD CONSTRAINT event_recipients_person_id_fkey FOREIGN KEY (person_id) REFERENCES identity.people(id) ON DELETE CASCADE;
+
+--
+-- Name: events events_actor_person_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.events
+    ADD CONSTRAINT events_actor_person_id_fkey FOREIGN KEY (actor_person_id) REFERENCES identity.people(id) ON DELETE SET NULL;
 
 --
 -- Name: events events_competition_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -
@@ -3274,6 +3468,20 @@ ALTER TABLE ONLY play.ranking_entries
     ADD CONSTRAINT ranking_entries_person_id_fkey FOREIGN KEY (person_id) REFERENCES identity.people(id) ON DELETE RESTRICT;
 
 --
+-- Name: court_assignment_participants court_assignment_participants_assignment_id_fkey; Type: FK CONSTRAINT; Schema: venue; Owner: -
+--
+
+ALTER TABLE ONLY venue.court_assignment_participants
+    ADD CONSTRAINT court_assignment_participants_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES venue.court_assignments(id) ON DELETE CASCADE;
+
+--
+-- Name: court_assignment_participants court_assignment_participants_person_id_fkey; Type: FK CONSTRAINT; Schema: venue; Owner: -
+--
+
+ALTER TABLE ONLY venue.court_assignment_participants
+    ADD CONSTRAINT court_assignment_participants_person_id_fkey FOREIGN KEY (person_id) REFERENCES identity.people(id) ON DELETE RESTRICT;
+
+--
 -- Name: court_assignments court_assignments_assigned_by_person_id_fkey; Type: FK CONSTRAINT; Schema: venue; Owner: -
 --
 
@@ -3281,11 +3489,25 @@ ALTER TABLE ONLY venue.court_assignments
     ADD CONSTRAINT court_assignments_assigned_by_person_id_fkey FOREIGN KEY (assigned_by_person_id) REFERENCES identity.people(id) ON DELETE RESTRICT;
 
 --
+-- Name: court_assignments court_assignments_competition_id_fkey; Type: FK CONSTRAINT; Schema: venue; Owner: -
+--
+
+ALTER TABLE ONLY venue.court_assignments
+    ADD CONSTRAINT court_assignments_competition_id_fkey FOREIGN KEY (competition_id) REFERENCES play.competitions(id) ON DELETE RESTRICT;
+
+--
 -- Name: court_assignments court_assignments_court_id_fkey; Type: FK CONSTRAINT; Schema: venue; Owner: -
 --
 
 ALTER TABLE ONLY venue.court_assignments
     ADD CONSTRAINT court_assignments_court_id_fkey FOREIGN KEY (court_id) REFERENCES venue.courts(id) ON DELETE RESTRICT;
+
+--
+-- Name: court_assignments court_assignments_match_format_version_id_fkey; Type: FK CONSTRAINT; Schema: venue; Owner: -
+--
+
+ALTER TABLE ONLY venue.court_assignments
+    ADD CONSTRAINT court_assignments_match_format_version_id_fkey FOREIGN KEY (match_format_version_id) REFERENCES play.match_format_versions(id) ON DELETE RESTRICT;
 
 --
 -- Name: court_assignments court_assignments_match_id_fkey; Type: FK CONSTRAINT; Schema: venue; Owner: -

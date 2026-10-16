@@ -4,8 +4,8 @@ const { parseCookies } = require("./security.js");
 
 const DEFAULT_REALMS = Object.freeze([
   Object.freeze({ name: "live", cookie: "epiber_piber_session", url: "http://127.0.0.1:8080/api/admin/grafana-auth", userPrefix: "epiber-piber:" }),
+  Object.freeze({ name: "devel", cookie: "epiber_devel_session", url: "http://127.0.0.1:8083/api/admin/grafana-auth", userPrefix: "epiber-devel:" }),
   Object.freeze({ name: "pk", cookie: "epiber_pk_session", url: "http://127.0.0.1:8084/api/admin/grafana-auth", userPrefix: "epiber-pk:" }),
-  Object.freeze({ name: "paj", cookie: "epiber_paj_session", url: "http://127.0.0.1:8083/api/admin/grafana-auth", userPrefix: "epiber-paj:" }),
 ]);
 
 function selectRealms(value, realms = DEFAULT_REALMS) {

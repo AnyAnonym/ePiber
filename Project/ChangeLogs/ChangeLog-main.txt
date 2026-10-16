@@ -1,12 +1,496 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.16
+Stand: 4.12.17
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[4.12.17] - 2026-10-16
+Commit: 4.12.17 | PostgreSQL-PAJ-Laufzeit und sichere Echtdatenmigration abgeschlossen
+Quelle: 4.12.16-paj-1
+
+  Changed
+  - [Dokumentation] PostgreSQL-Migrationsfahrplan an die bereits aufgebaute
+    Development-Grundlage und die abgeschlossenen synthetischen Import- und
+    Transformationswerkzeuge angeglichen; den noch ausstehenden realen
+    Legacy-Exporter eindeutig Phase 5A zugeordnet.
+  - [Datenbank] Gemeinsame asynchrone PostgreSQL-Laufzeit mit maximal fuenf
+    App-Verbindungen, UTC- und Schemaverifikation, Tenant-/Sektionsgate,
+    vollstaendiger Pflichtdomaenenregistrierung und kontrolliertem Shutdown
+    begonnen.
+  - [Sicherheit] App-Rolle ausschliesslich lesenden Zugriff auf die fuer das
+    Laufzeitgate erforderlichen Schema-, Seed- und Importmetadaten erhalten;
+    Migrationswrites und Audit-Sicherheitskontexte bleiben weiterhin gesperrt.
+  - [Backend] Typisierte PostgreSQL-Repositories fuer Core, Identity/Auth,
+    Spielbetrieb und Operations mit parametrisierten Abfragen und gemeinsamen
+    Transaktionsgrenzen aufgenommen; der unvollstaendige PostgreSQL-Servermodus
+    bleibt bis zur Registrierung aller Domaenen deaktiviert.
+  - [Backend] PostgreSQL-Repositories fuer Venue, Courts, dauerhafte Scores,
+    Hallenzeiten und Messaging ergaenzt und alle sechs Pflichtdomaenen in einer
+    gemeinsamen Runtime-Factory registriert.
+  - [Court] Scoreereignis und sichtbarer Live-State werden unter Court-Lock in
+    derselben PostgreSQL-Transaktion fortgeschrieben; Wiederholungen werden
+    inhaltsgebunden dedupliziert und abweichende Event-IDs abgelehnt.
+  - [Messaging] Typisierte Inbox-, Zusammenfassungs-, idempotente Quittierungs-
+    und kontrollierte Ereignispfade mit geschlossenen Templateparametern
+    aufgenommen.
+  - [Authentifizierung] PostgreSQL-only Authservice fuer HMAC-gebundene
+    Loginlimits, Credentialpruefung und -upgrade, revisionsgebundene Sessions,
+    Passwortrotation, Adminsetzung und einmalige 24-Stunden-Freigaben umgesetzt.
+  - [Spielbetrieb] EntryList-An- und Abmeldung als erste vollstaendige
+    PostgreSQL-Fachtransaktion mit gemeinsamem Messaging-, Idempotenz- und
+    Auditabschluss umgesetzt.
+  - [Worker] Getrennte PostgreSQL-Worker-Runtime mit Zwei-Verbindungs-Pool,
+    `SKIP LOCKED`-Leases, Retry, Dead-/Unknown-Pfaden und geschlossenen
+    versionierten Job-/Outbox-Handlern aufgenommen.
+  - [Backend] HTTP- und WebSocket-Authentifizierung sowie mehrere
+    Repository-Lesepfade auf synchrone oder asynchrone Provider vorbereitet,
+    ohne den aktiven Legacybetrieb umzuschalten.
+  - [Datenbank] Favoriten und Startseiten um typisierte Overlay-,
+    Round-Robin-Layout-, Raster- und Navigatorprofilziele ergaenzt, damit der
+    bestehende sichtbare Zielvertrag verlustfrei nach PostgreSQL migriert.
+  - [Backend] Alle acht bisherigen Tabellenvertraege aus den typisierten
+    PostgreSQL-Relationen rekonstruiert und ueber einen atomaren, nicht pollenden
+    Projektionsloader fuer bestehende Fachregeln bereitgestellt; Credentialhashes
+    bleiben aus diesem allgemeinen Cache ausgeschlossen.
+  - [Backend] PostgreSQL-Teilservices zentral fail-closed komponiert und noch
+    fehlende Serverfaehigkeiten explizit ausgewiesen, sodass kein unvollstaendiger
+    PostgreSQL-Modus gestartet werden kann.
+  - [Backend] Favoriten und Startseiten atomar und idempotent an PostgreSQL
+    angeschlossen; eigenstaendige Revisionsstaende erhalten auch leere Listen
+    und die bestehende Zielmatrix verlustfrei.
+  - [Diagnose] Frontend-Logging-Policy, globale Einstellungen und temporaere
+    Zielpersonen typisiert und revisioniert in PostgreSQL umgesetzt, ohne freie
+    Browserpayloads zu persistieren.
+  - [Messaging] Inboxquittierungen, Bewerbshistorie, Kommentare, Moderation und
+    Reaktionen mit globaler Revision, typisierter Idempotenz und dauerhafter
+    Outbox-Invalidierung auf PostgreSQL umgesetzt.
+  - [Import] Quellen-, Akteur-, Summary-, Detail- und Ergebnissnapshots der
+    Bewerbshistorie sowie Kommentar-Moderationsfelder werden verlustfrei aus
+    SQLite uebernommen.
+  - [Worker] Eigenen Prozessstart mit Tenant-/Schemagate, registrierten
+    Handlern, LISTEN/NOTIFY-Wake-up und kontrolliertem Shutdown ergaenzt.
+  - [Betrieb] `PERSISTENCE_MODE=postgres` als expliziten, bis zum vollstaendigen
+    Cutover mit `POSTGRES_SERVER_MODE_INCOMPLETE` gesperrten Modus aufgenommen.
+  - [Arbeitsablauf] Autonome Auftraege duerfen nicht mehr an Verifikations-,
+    Zwischenstands- oder Phasengrenzen beendet werden; eine Abschlussantwort ist
+    erst bei Gesamterledigung oder einem konkret userabhaengigen Gate zulaessig.
+  - [Audit] Bestehende HTTP-/WebSocket-Aktionen ueber einen asynchronen
+    PostgreSQL-Adapter an registrierte Auditvertraege gebunden; private
+    Normalisierungswerte werden vor der Persistenz durch Aenderungsmarker
+    ersetzt und Auditabschluesse von den Requestpfaden abgewartet.
+  - [Monitor] Provisionierung, Tokenrotation, Widerruf, Navigationsziele,
+    Scrollsequenzen und ACK-Zustaende mit transaktionaler Idempotenz und
+    Reconnect-Resync auf PostgreSQL umgestellt.
+  - [Court] Match- und manuelle Zuweisungen relational getrennt, Teilnehmer
+    typisiert persistiert und Zuweisungs-, Scorebaseline-, Aktivstatus-,
+    Revisions- sowie Eventwrites transaktional gebunden.
+  - [Authentifizierung] PostgreSQL-Personen-, Konto-, Session- und
+    Credentialpfade einschliesslich Auth-Revision, Sessionwiderruf und atomarem
+    Passworttausch vorbereitet.
+  - [Datenbank] Widerrufene Passwort-Credentials entfernen den bisherigen Hash
+    nun schemaerzwungen, waehrend nur aktive Credentials einen nichtleeren Hash
+    besitzen duerfen.
+  - [Audit] PostgreSQL-Auditstart, terminaler Abschluss und Fachwrite koennen mit
+    kontrollierten Projektionen in den festgelegten Transaktionsgrenzen
+    ausgefuehrt werden; unklare Commit-Ausgaenge bleiben explizit `unknown`.
+  - [Observability] Strukturierte datensparsame Abschlusslogs fuer
+    PostgreSQL-Start, Transaktionen, Audit und Shutdown mit Ergebnis, Fehlercode,
+    Versuch und Dauer aufgenommen.
+  - [Persistenz] PostgreSQL-Court-State, Scorebaseline, Automatisierung,
+    Zuweisungen und Aktivierung an die produktiven HTTP-/WebSocket-Pfade
+    angebunden und den SQLite-State aus diesem Modus entfernt.
+  - [Hallenzeiten] Raster, Mitgliedschaften, Buchungen, Wartelisten,
+    Nachruecken, Fair-Use, Verhinderungen, Verteilung, Historie und Reporting
+    relational und transaktional umgesetzt.
+  - [Spielbetrieb] Forderungen, Termine, Ergebnisse, Spielerkorrekturen,
+    administrative Ruecknahmen, Rangverschiebungen, Rueckzug und KO-
+    Fortschreibung auf PostgreSQL umgestellt.
+  - [Personen] Normalisierung sowie ClubDesk-Neuanlage, Verknuepfung,
+    Aktualisierung und geschuetzte Deaktivierung relational umgesetzt.
+  - [Messaging] PostgreSQL-Reporting sowie typisierte Fachereignisse fuer
+    Forderungen, Termine, Ergebnisse, Ranglisten- und Hallenzeitenablaeufe
+    ergaenzt.
+  - [Worker] Versionierte Kurzzeit-, Stunden-, Tages- und
+    Hallenwartelisten-Retentionjobs mit Tenantgrenzen und begrenzten Batches
+    registriert.
+  - [Betrieb] PostgreSQL-only Serverkomposition, Readiness,
+    Invalidation-Listener, kontrollierter Shutdown und eigene
+    Rate-Limit-Geheimniskonfiguration aktiviert; das
+    `POSTGRES_SERVER_MODE_INCOMPLETE`-Startgate entfernt.
+  - [Migration] Kontrollierten Nur-Lese-Legacy-Exporter fuer einen gebuendelten
+    Sheet-Snapshot, Developer Metadata, konsistente SQLite-Backups,
+    Vorher-/Nachherfingerprint und manifestgebundenes Quellpaket aufgenommen.
+  - [Migration] Datensparsame Realanalyse um Quell-/Zielzaehler, Befundcodes,
+    Transformationshash und eine ereignis- sowie quellsequenzgebundene
+    Score-Dublettenpruefung ergaenzt; Scoretext bleibt ausdruecklich keine
+    Ereignisidentitaet.
+  - [Import] In der Realanalyse beobachtete rein technische Legacy-
+    Headerabweichungen als geschlossene Kanonisierung aufgenommen: bekannte
+    Gross-/Kleinschreibungsvarianten, dokumentierte ungenutzte Zusatzspalten,
+    optional fehlende Altspalten und die bestehende doppelte Matchtyp-
+    Spaltenbezeichnung; unbekannte Spalten bleiben blockierend.
+  - [Import] Reale `inbox_visible`-Provenienz der Messagingteilnehmer in den
+    Quellvertrag aufgenommen und Empfaengerprojektionen nur fuer historisch
+    tatsaechlich sichtbare Inboxeintraege erzeugt.
+  - [Import] Verwaiste Quittierungs- und Zustelldetails historisch unsichtbarer
+    Messagingteilnehmer kontrolliert verworfen, waehrend neutrales Ereignis und
+    Teilnehmerhistorie erhalten bleiben.
+  - [Import] Redundante Legacy-Deliveryzeilen des internen Kanals `Inbox`
+    kontrolliert verworfen; Sichtbarkeit und Quittierung werden aus ihren
+    eigenen relationalen Projektionen uebernommen.
+  - [Import] Fehlende echte Legacy-Operation-IDs bei Messagingereignissen nicht
+    mehr aus wiederverwendbaren Fachquellkennungen abgeleitet, sondern als
+    eindeutige importgebundene Operation aus der Ereignis-ID erzeugt;
+    Fachquellkennung und Ereignisidentitaet bleiben getrennt erhalten.
+  - [Import] Real beobachtete Legacy-Booleanwerte geschlossen als leer/`0`
+    fuer falsch und `1` fuer wahr kanonisiert; alle anderen Werte bleiben
+    blockierend.
+  - [Import] Kompakte reale Bewerbsgrenzen im eindeutig validierten
+    `YYYYMMDD`-Legacyformat zusaetzlich zu ISO- und Punktformaten unterstuetzt.
+  - [Import] Reale Bewerbszeitpunkte im eindeutigen
+    `YYYYMMDD-HHmm`-Legacyformat kontrolliert als Wiener Lokalzeit interpretiert.
+  - [Import] Historische `7-6`-/`6-7`-Saetze ohne gespeicherten Tie-Break-
+    Verliererpunkt nur im Legacyimport als vollstaendigen Satz akzeptiert, ohne
+    einen unbekannten Detailwert zu erfinden; neue Ergebniseingaben bleiben
+    unveraendert streng.
+  - [Import] Verwaiste numerische Personenreferenzen historischer Matches als
+    inaktive technische Platzhalter ohne erfundene Kontakt-, Rollen- oder
+    Identitaetsdaten erhalten; nichtnumerische Fremdreferenzen bleiben
+    blockierend.
+  - [Import] Historische Match-Tie-Break-Entscheidungssaetze bei heute als
+    Vollsatz definierten Matchtypen ueber eine matchgebundene immutable
+    Altversion erhalten, ohne den aktuellen Bewerbsstandard umzuschreiben.
+  - [Import] Historische Langsatzergebnisse bei heute als Kurzsatz definierten
+    Matchtypen ebenfalls ueber eine matchgebundene immutable Altversion
+    erhalten.
+  - [Import] Paketgebundene Staging-Freigabepolicy fuer den einzigen bekannten
+    Realwarncode `NAVIGATION_TARGET_INVALID` aufgenommen; solche Ziele bleiben
+    deaktiviert und mit Problemcode erhalten, jede unbekannte Warnung blockiert.
+  - [Import] Fehlende Austrittszeitpunkte bereits inaktiver
+    Legacy-Mitgliedschaften deterministisch mit dem Exportbeginn als spaetestem
+    sicher bekannten Stichtag belegt; aktive Mitgliedschaften bleiben offen.
+  - [Import] Nichtpositive historische Matchdauern ohne erfundene Dauer
+    uebernommen: Spielbeginn und Ergebnis bleiben erhalten, der ungueltige
+    Endzeitpunkt wird mit Info-Befund verworfen.
+  - [Import] Legacy-Auditakteurstyp `device` geschlossen auf den PostgreSQL-
+    Begriff `monitor` abgebildet; unbekannte Akteurstypen bleiben blockierend.
+  - [Betrieb] Root-orchestrierten Phase-5A-Staginglauf mit eigenem
+    `epiber-migration`-Benutzer, kurzlebigem LUKS2-Container, Age-
+    Verschluesselungs-/Entschluesselungstest, lokalem PostgreSQL-Cluster ohne
+    TCP, kontrolliertem PAJ-Quellsnapshot sowie garantiertem Cleanup ergaenzt.
+  - [Migration] Reale Stagingprobe um einen zweiten identischen Importlauf
+    erweitert, der ausschliesslich als idempotenter Replay mit unveraendertem
+    Zielhash erfolgreich sein darf.
+  - [Betrieb] Gehaertete PostgreSQL-only systemd-Vorlagen fuer getrennte Devel-
+    App und Worker mit Socketgruppe, systemd-Credentials, Loopbackbegrenzung und
+    Konfliktschutz zum PAJ-Legacydienst vorbereitet.
+  - [Betrieb] Geheimnisfreie Devel-Umgebungsvorlage fuer Port, Origin,
+    Secure-Cookie und lokale HTTPS-Court-Testgegenstelle ergaenzt.
+  - [Sicherheit] Loginlimit-Geheimnis alternativ aus einer restriktiven
+    Credentialdatei lesbar gemacht, damit es nicht als Klartext-Environment
+    installiert werden muss.
+  - [Datenbank] Bootstrap-Rollencredentials vom optionalen Admin-
+    Verbindungscredential getrennt, damit lokales Peer-Bootstrap kein
+    nicht vorhandenes gemeinsames `postgres-password` voraussetzt.
+  - [Sicherheit] Secretdateileser fuer das von systemd-Credentials verwendete
+    read-only `0440` freigegeben; Gruppen-Schreib-/Ausfuehrrechte und saemtliche
+    Rechte fuer andere Benutzer bleiben verboten.
+  - [Sicherheit] Neutrale systemd-Credential-IDs fuer Datenbank und Loginlimit
+    verwendet; installierte Quelldateipfade und restriktive Rechte bleiben
+    unveraendert.
+  - [Fehlerpfad] Abweichende Payloads unter einer bereits verwendeten
+    PostgreSQL-Operation-ID werden an HTTP/WebSocket kontrolliert als
+    `IDEMPOTENCY_CONFLICT` mit Status 409 statt als interner Fehler projiziert.
+  - [Frontend] Fehlende Uhrinitialisierung auf den Adminseiten fuer Logging,
+    Personennormalisierung, Mitgliederabgleich, Servicebereich und
+    Hallenzeitenverwaltung vor dem gemeinsamen Footer ergaenzt.
+  - [Reconnect] Sichere Lese-RPCs nach einem WebSocket-Verbindungsverlust auf
+    der wiederhergestellten Verbindung begrenzt wiederholt; mutierende Requests
+    bleiben von automatischen Wiederholungen ausgeschlossen.
+  - [Tests] Achtprofil-Browserwrapper startet seine nicht-ausfuehrbare
+    versionierte Shellvorlage rekursiv explizit ueber `bash`.
+  - [Worker] PostgreSQL-Devel-Worker erhaelt die verpflichtende HTTPS-
+    `PUBLIC_ORIGIN` sowie einen eindeutigen Journalbezeichner; App und Worker
+    sind in Loki getrennt filterbar und der Worker startet ohne Restartschleife.
+  - [Worker] Minimal notwendige DELETE-/INSERT-/UPDATE-Rechte fuer Retention und
+    Hallenwartelistenablauf ergaenzt und in die Bootstrap-Verifikation gebunden.
+  - [Observability] Aktive Testprojektion von `paj` auf `devel` umgestellt:
+    Prometheusziel, Alloy-Journal und Caddylog, Node-Exporter-Units,
+    Grafana-Auth-Realm, Messagingreport, Dashboards und PostgreSQL-taugliche
+    Alerts; historische `paj`-Zeitreihen und -Logs bleiben unveraendert.
+  - [Betrieb] Gemeinsam genutzte Caddy-Konfiguration auf getrennte Fragmente
+    fuer vollstaendige Fremdsites und Live-Pfadrouten umgestellt; WC und der
+    interne M365-Konnektor bleiben dadurch bei ePiber-Rollouts erhalten.
+  - [Dokumentation] Caddy-Besitzgrenzen, verpflichtende Diffpruefung,
+    nichtdestruktive Fragmentinstallation und anwendungsuebergreifende Smokes
+    in Server-Setup, Rollout-Checkliste und Fragmentvertrag festgehalten.
+  - [Migration] Datensparsamen Shadow-Read fuer Identity, Spielbetrieb, Venue,
+    Messaging, Praeferenzen und Operations an Counts und SHA-256-Projektionen
+    gebunden; Passwoerter, Tokens, Kontakte, freie Texte und Auditpayloads werden
+    nicht in die Vergleichsprojektion oder den Bericht uebernommen.
+  - [Betrieb] Geschuetzten Real-Staginglauf um den blockierenden Shadow-Read und
+    dessen paketgebundene Gesamtpruefsumme erweitert.
+  - [Cutover] PostgreSQL-Read-only-Modus fuer die interne Live-Abnahme
+    vorbereitet: HTTP- und WebSocket-Writes werden vor Auth-, Audit- und
+    Fachlogik kontrolliert mit `READ_ONLY_MODE` abgelehnt, Court-Automation und
+    periodische Cleanup-Writes bleiben gestoppt.
+  - [Datenbank] Optionale getrennte `app_readonly`-Rolle mit ausschliesslich
+    kontrollierten Projektions- und Laufzeitmetadatenreads in Bootstrap und
+    Grantverifikation aufgenommen; Fach-, Session-, Audit-, Idempotenz-, Job-
+    und Outboxwrites bleiben datenbankseitig verboten.
+  - [Datenbank] Technischen Minimal-Seed ohne Schemaabweichung an einen
+    kontrollierten Umgebungs-Tenantcode und Anzeigenamen bindbar gemacht; Devel
+    behaelt seine bisherigen Standardwerte, Live verwendet `askoe-piberbach`.
+  - [Cutover] Atomar wechselbare Caddy-Fragmente fuer regulaeren Livebetrieb und
+    vollstaendige Wartung vorbereitet; im Wartungsmodus bleiben Grafana und die
+    statische neutrale Statusseite erreichbar, waehrend Fach-HTTP, WebSocket und
+    WC kontrolliert mit 503 gesperrt sind.
+  - [Live-Vorbereitung] Getrennte, noch nicht installierte PostgreSQL-Live-
+    Konfiguration fuer Socket, HBA/Ident, Datenpfad und systemd sowie gehaertete
+    App-Units fuer Read-only-Abnahme, Read-write-Betrieb und Worker vorbereitet.
+    WAL-Archivierung bleibt in der Vorlage bis zum Phase-7B-Gate explizit aus.
+  - [Cutover] Rein technischen Ops-Smoke fuer atomaren Commit,
+    Idempotenzstatus, gueltige Outboxverarbeitung durch den Worker und
+    privilegiert-exakte Bereinigung vorbereitet; Fachobjekte werden nicht
+    erzeugt, Fehler und unklarer Cleanup werden strukturiert unterschieden.
+  - [Cutover] Root-gebundenen, validierenden und bei Aktivierungsfehlern
+    rueckrollenden Caddy-Moduswechsel sowie eine erst durch lokale
+    aktionsbezogene Freigabedatei startbare Ops-Smoke-One-shot-Unit vorbereitet.
+  - [Planung] Aktuelle Infrastruktur ausdruecklich fuer kontrollierte Tests
+    eingeordnet; 8 GiB RAM bleiben eine erste Empfehlung und kein fixer
+    Mindestwert. Die dauerhafte Zielkapazitaet wird vor Phase 7B und Live anhand
+    erneuter Last-, Backup- und Restoremessungen festgelegt.
+  - [Datenbank] Persoenliche DBeaver-Rollen fuer `epiber_devel` versioniert:
+    `paj_devel_ro` liest alle ePiber-Tabellen und -Spalten,
+    `paj_devel_admin` besitzt denselben Lesezugriff plus DML und
+    Sequenznutzung; DDL, TRUNCATE, Triggerrechte, Rollenmitgliedschaften und
+    globale PostgreSQL-Privilegien bleiben ausgeschlossen.
+  - [Betrieb] Idempotenten Apply-/Verify-One-shot fuer aktuelle und zukuenftige
+    Tabellen samt strukturierten Abschlusslogs und Rollen-/Grantpruefung
+    ergaenzt.
+  - [Betrieb] PAJ-Standardstart auf den manuell entsperrten PostgreSQL-Stack
+    umgestellt: Startskript aktiviert Datenbank, Gitea, App und Worker in
+    gepruefter Reihenfolge, waehrend der deaktivierte Legacydienst nur noch als
+    ausdruecklicher manueller Worst-Case-Weg bestehen bleibt.
+  - [Betrieb] Stoppskript um den kontrollierten Drain von Worker und App vor
+    PostgreSQL und dem verschluesselten Volume sowie strukturierte
+    Abschlussereignisse erweitert; automatischer Legacy-Fallback ist
+    ausgeschlossen.
+  - [Dokumentation] Wiederkehrende PAJ-Ausfalldiagnose nach Hostneustarts in der
+    Agenten-Schnellreferenz und Serverdokumentation auf den LUKS-gebundenen
+    `development-services-start`-Ablauf gelenkt; manuellen Legacy-Rueckfall und
+    die Rueckkehr zum PostgreSQL-Standard mit exakten Stop-/Startbefehlen
+    dokumentiert.
+  - [Boot] Automatische Entschluesselung des Development-Volumes ueber eine
+    lokale root-only LUKS-Schluesseldatei und den anschliessenden systemd-Start
+    von PostgreSQL, Gitea, PAJ-App und Worker vorbereitet; bestehende Passphrase
+    und Startskript bleiben als manueller Recoveryweg erhalten.
+  - [Security] Schutzgrenze der lokalen Auto-Unlock-Loesung ausdruecklich auf ein
+    isoliert entwendetes Volume begrenzt und Root-Disk-/Gesamtsnapshots als nicht
+    durch diese LUKS-Schicht geschuetzt dokumentiert.
+  - [Migration] Geschlossenes Exportprofil `paj-refresh-v1` ergaenzt, das
+    produktive Credentials und Zugangsstate vor dem Schreiben des Quellpakets
+    entfernt, pro Konto gesalzene scrypt-Testcredentials erzeugt und den
+    Bereinigungsvertrag in das gehashte Manifest bindet.
+  - [Migration] Eindeutige Google-Sheet-Reiternamen werden beim Export
+    case-insensitiv auf die kanonischen Paketnamen abgebildet, damit der
+    produktive Reiter `MatchTyp` den Vertrag `Matchtyp` erfuellt; nur durch
+    Gross-/Kleinschreibung mehrdeutige Reiter blockieren weiterhin fail-closed.
+  - [Migration] Den produktiven unbenannten Nebenblock rechts der fuenf
+    `EntryList`-Vertragsspalten eng begrenzt vom Fachpaket ausgeschlossen; fuer
+    alle anderen Pflichtreiter bleiben breitere Datenzeilen blockierend und der
+    konsistente Quellfingerprint umfasst weiterhin den vollstaendigen Read.
+  - [Migration] Die produktive Messaging-Quellstruktur vor dem optionalen Feld
+    `event_participants.inbox_visible` als geschlossene Schemaalternative
+    aufgenommen; dort gilt jeder persistierte Teilnehmer gemaess Legacyvertrag
+    als sichtbar, waehrend alle anderen Feldabweichungen blockierend bleiben.
+  - [Migration] Sechsstellige reine Legacy-Bewerbsdaten im Format `YYMMDD`
+    verwenden nun dieselbe dokumentierte 2000er-Jahr-Konvention wie bestehende
+    kompakte Legacy-Zeitstempel; der reale Wert `260923` wird dadurch eindeutig
+    als `2026-09-23` importiert.
+  - [Datenbank] PAJ-Refresh-Import mit zusaetzlichen Sicherheitsinvarianten fuer
+    Credentials, Sessions, Passwortfreigaben, Loginlimits, Monitore, externe
+    Zustellungen, Jobs und Outbox sowie secretfreiem Abschlusslogging ergaenzt.
+  - [Datenbank] Refresh-Rolle um DML auf die historisch importierten
+    Idempotenz-/Auditrelationen und reines Lesen des Job-/Outbox-Sicherheitsgates
+    ergaenzt; die Bootstrap-Verifikation prueft diese Rechte explizit.
+  - [Datenbank] Der Refresh-Rolle exklusiv das fuer den kontrollierten
+    `setval`-Abschluss der importierten Personen-ID-Sequenz erforderliche
+    Sequenz-`UPDATE` samt Default Privileges erteilt und verifiziert.
+  - [Betrieb] Wiederholbaren fail-safe Live-zu-PAJ-Ablauf mit einmaligem
+    Freigabegate, verschluesseltem Kurzzeitpaket, isolierter Vorpruefung,
+    frischer Kandidatendatenbank, atomarer Aktivierung, automatischem Rollback
+    und kontrollierter Klartextbereinigung aufgenommen; reale Ausfuehrung bleibt
+    gesondert gesperrt.
+  - [Betrieb] Kandidatengrants an den tatsaechlichen PAJ-Rollensatz ohne die dort
+    nicht eingerichtete optionale Live-Abnahmerolle `app_readonly` gebunden;
+    Runtime-, Refresh-, Monitoring-, Backup- und persoenliche Rollen bleiben
+    vollstaendig verpflichtend.
+  - [Betrieb] Das aktive Import- und Sicherheitsgate wird nach Readiness, aber
+    vor dem ersten Workerstart ausgefuehrt, damit regulaer neu erzeugte lokale
+    PAJ-Wartungsjobs nicht als importierter Live-Jobstate gewertet werden.
+  - [Sicherheit] Interaktives Werkzeug fuer das starke gemeinsame
+    PAJ-Testpasswort ohne Passwortuebergabe in Argumenten, Git, Dokumentation
+    oder Chat aufgenommen; die freigegebene Mindestlaenge betraegt zehn Zeichen
+    bei weiterhin verpflichtenden Gross-/Kleinbuchstaben, Ziffern und
+    Sonderzeichen. Breite persoenliche DBeaver-Grants werden auf jedem Kandidaten
+    erneut angewendet und verifiziert.
+  - [Diagnose] Bei im Live-State fehlenden globalen Frontend-Logging-Settings
+    erzeugt nur das PAJ-Refreshprofil einen appstartfaehigen sicheren Default mit
+    deaktivierter Diagnose, Level `error`, Sampling `0` und ohne Zielpersonen;
+    vorhandene Quellsettings bleiben vorrangig.
+  - [Court] Produktive Court-Quellen und operative Aktivzustaende im PAJ-Refresh
+    deaktiviert und als Zielinvariante geprueft; Zuordnungen, Teilnehmer,
+    letzter Score und Scorehistorie bleiben fachlich erhalten.
+  - [Dokumentation] Personenbezogene PAJ-Echtdatenkopie als eng begrenzte
+    No-Backup-Ausnahme, Live als autoritative Quelle sowie Operator-, Cleanup-,
+    Credential- und externe Wirkungsgrenzen dokumentiert.
+  - [Authentifizierung] Interaktives root-only PAJ-Werkzeug zur atomaren
+    Rotation des gemeinsamen Testpassworts fuer alle Loginkonten ergaenzt;
+    individuell gesalzene scrypt-Credentials, Authrevisionen, Sitzungswiderruf,
+    offene Passwortfreigaben und Loginlimits werden gemeinsam behandelt.
+  - [Audit] PAJ-Massenrotation mit kontrolliertem System-Audit fuer Start,
+    Erfolg, Ablehnung und unklaren Ausgang sowie ausschliesslich aggregierten
+    Anzahlprojektionen und secretfreien Abschlusslogs versehen.
+  - [Betrieb] Erfolgreiche Rotation synchronisiert den root-only
+    Refresh-Credentialwert, damit ein spaeterer Live-zu-PAJ-Refresh dasselbe neue
+    Testpasswort verwendet; ein vergessenes bisheriges Passwort ist fuer die
+    administrative Rotation nicht erforderlich.
+  - [Datenbank] Refresh-Rolle um den lesenden Zugriff auf die
+    Schemamigrationsmetadaten ergaenzt, damit das gemeinsame PostgreSQL-
+    Laufzeitgate der Passwortrotation unter der eingeschraenkten Rolle startet;
+    die Bootstrap-Verifikation prueft den vollstaendigen Metadatenzugriff.
+  - [Workflow] Release-Staging fuer im offenen Merge bereits vorgestagte
+    Umbenennungen robust gemacht, ohne den nicht mehr vorhandenen Altpfad erneut
+    als Arbeitsbaumpfad zu behandeln.
+
+  Tests
+  - [Workflow] Release-Staging behandelt im bereits offenen Merge vorgestagte
+    Umbenennungen ohne erneuten Zugriff auf den nicht mehr vorhandenen Altpfad;
+    der reale Zwei-Eltern-Releaseworkflow deckt diesen Fall mit altem und neuem
+    Pfad ab.
+  - [Backend] 503 Backendtests erfolgreich; neue PostgreSQL-Laufzeittests decken
+    Startgates, Core-/Identity-/Play-Projektionen, Session- und Credentialwechsel,
+    Rollback sowie Auditstart und atomaren Abschluss gegen kurzlebige
+    PostgreSQL-18-Cluster ab.
+  - [Backend] PostgreSQL-Laufzeittests zusaetzlich um alle Pflichtdomaenen,
+    Court-Scorepersistenz, Hallenzeitenprojektion, Messaging-Inbox,
+    idempotente Quittierung und kontrollierte Ereigniserzeugung erweitert.
+  - [Backend] PostgreSQL-Auth-, Idempotenz-, EntryList-Gesamttransaktions- und
+    Worker-Leasepfade sowie die vollstaendige Favoriten-Zielmatrix gegen
+    kurzlebige PostgreSQL-18-Cluster abgesichert.
+  - [Backend] Tabellenprojektionsparitaet, credentialfreie Personenprojektion,
+    atomarer Projektionsload und fail-closed Komponentenkomposition geprueft.
+  - [Backend] Revisionsstabile Praeferenzen, Frontend-Diagnosepersistenz,
+    Messagingimport-Paritaet, moderierbare Interaktionen, Inbox-Idempotenz,
+    Outbox-Wake-up und Worker-Prozesslebenszyklus gegen kurzlebige
+    PostgreSQL-18-Cluster geprueft.
+  - [Backend] PostgreSQL-Auditadapter, Aktionsnormalisierung, terminaler Abschluss
+    und datensparsame Entfernung privater Projektionswerte geprueft.
+  - [Backend] Persistente Monitorziele, Offline-/Online-Navigation,
+    Scrollsequenzen sowie Navigations- und Scroll-ACKs im PostgreSQL-
+    Komponentenlauf geprueft.
+  - [Backend] Court-, Hallenzeiten-, Match-, Ranglisten-, Personen-,
+    Messaging-, Worker- und Outboxpfade gegen kurzlebige PostgreSQL-18-Cluster
+    geprueft.
+  - [Backend] PostgreSQL-only Serverstart, Readiness, HTTP-Login,
+    authentifizierter WebSocket-Request, Automationsdrain und Pool-/Listener-
+    Shutdown integriert geprueft.
+  - [Backend] Legacy-Exporter auf geschlossene CSV-Kodierung,
+    Metadatensparsamkeit, SQLite-Pruefung, Paketverifikation und Verwerfen bei
+    waehrend des Exports geaenderter Quelle geprueft.
+  - [Backend] Realanalyse auf ausschliesslich kontrollierte Zaehler, Hashes,
+    Befundcodes und die festgelegte Score-Dublettenregel geprueft.
+  - [Backend] Synthetische Regressionen fuer reale Header-, Boolean-, Datums-,
+    Matchtyp-, Ergebnis-, Personenreferenz-, Messaging-, Court-, Hallenzeit-,
+    Praeferenz- und Rangprovenienz-Sonderfaelle aufgenommen.
+  - [Migration] Geschuetzter Realexport, LUKS2-/Age-Staging, sechs Migrationen,
+    technischer Seed, Dry-Run, vollstaendiger Import, Zielvalidierung und
+    idempotenter Replay erfolgreich; Manifest-, Transformations-, Archiv- und
+    Zielhash sind im rootgeschuetzten Bericht `real-paj-20261012-35` gebunden.
+  - [Betrieb] Gemeinsamen synthetischen `epiber_devel`-Bestand mit sechs
+    Migrationen, technischem und vollem Seed, getrennten Rollen, Grants,
+    systemd-Credentials sowie praktisch gepruefter App- und Workerkomposition
+    aufgebaut und als aktiven PostgreSQL-only-Testbetrieb freigegeben.
+  - [Betrieb] Drei identische saubere Neuaufbauten und einen weiteren Neuaufbau
+    nach absichtlichem atomarem Importabbruch mit `as_of`
+    `2026-10-12T10:00:00.000Z` und Projektionspruefsumme
+    `b982925fa03eb60631b791ed42848d7eea660a8529955d880e4b8a5c91fcdaa1`
+    nachgewiesen.
+  - [Betrieb] App-, Worker- und PostgreSQL-Restart, SIGTERM-Drain mit
+    WebSocket-Close 1012, abgelaufene Workerlease, alle vier Wartungsjobklassen
+    sowie Outbox-Recovery praktisch geprueft.
+  - [Last] 500 parallele HTTPS-Sessionreads mit p99 190 ms und 160
+    WebSocket-Reads mit p99 108 ms fehlerfrei gegen die aktive Test-Origin
+    ausgefuehrt; Upgrade-Rate-Limit lehnte den absichtlichen Burst oberhalb der
+    konfigurierten Grenze mit HTTP 429 ab.
+  - [Browser] 18 reale Seiten der aktiven PostgreSQL-Devel-Origin in allen acht
+    Zielprofilen ohne Seiten-, Server- oder terminale WebSocketfehler geladen;
+    zusaetzlich 22 Fixture-Kernablaeufe je Profil und die vollstaendige
+    Chromium-Suite mit 58 Ablaeufen erfolgreich.
+  - [Court] Lokale HTTPS-Testgegenstelle ausschliesslich auf Loopback mit
+    kurzlebiger eigener CA betrieben, aktiven Poll ohne Fehler nachgewiesen und
+    eine externe Scoreaenderung relational als neues Court-Scoreevent
+    persistiert; Gegenstelle, Schluessel und Testevent anschliessend entfernt.
+  - [Observability] Aktive Live-/Devel-Ziele in Prometheus, App-/Caddy-Streams in
+    Loki, systemd-Metriken fuer App und Worker, geschuetzten Devel-
+    Messagingreport sowie Devel-Grafana-Adminsession praktisch geprueft.
+  - [Backend] 520 Backendtests und 17 Workflowtests sowie das vollstaendige
+    Achtprofil-Browserprofil im diffgebundenen Nachweis erfolgreich.
+  - [Backend] Importreihenfolge, Loopbackziele und datensparsamer M365-
+    Loggingvertrag der gemeinsamen Caddy-Fragmente statisch abgesichert.
+  - [Betrieb] Zusammengesetzte installierte Caddy-Konfiguration validiert und
+    Live, Devel, WC samt Health sowie M365-Readiness nach dem Reload erfolgreich
+    geprueft.
+  - [Backend] 523 Backendtests und 17 Workflowtests im diffgebundenen
+    Buildprofil erfolgreich.
+  - [PostgreSQL] Vollstaendige Shadow-Paritaet sowie absichtliche, ohne
+    Fachwertausgabe erkannte Projektionsdrift gegen kurzlebige Cluster geprueft.
+  - [Backend] Read-only-Start mit weiterhin verfuegbaren Projektionen und
+    schreibfreien HTTP-/WebSocket-Ablehnungen gegen PostgreSQL geprueft.
+  - [PostgreSQL] Vollstaendigen Lesezugriff beider Rollen, ausschliessliche
+    Admin-DML-Rechte, sensible technische Tabellen, Default Privileges und
+    negative DDL-/TRUNCATE-Pfade gegen einen kurzlebigen Cluster geprueft.
+  - [Systemd] Start-/Stop-Reihenfolge, lokale Readiness, Legacy-Ausschluss und
+    fail-closed Fehlerpfade der manuellen Stacksteuerung statisch geprueft.
+  - [Systemd] Auto-Unlock-Vorlagen ohne `noauto`, sichere Mountoptionen sowie die
+    Worker-Abhaengigkeit von PostgreSQL-App und Datenbank statisch geprueft.
+  - [Systemd] Stopppfad nach praktischem Befund auf die von systemd generierten
+    Mount- und Cryptsetup-Units umgestellt, damit das automatisch verwaltete
+    Mapping kontrolliert und ohne direkten Parallelzugriff geschlossen wird.
+  - [Systemd] Den ebenfalls auf `development-data` persistierenden
+    M365-Konnektor nach praktischem Holder-Befund in Mountabhaengigkeit,
+    Readiness sowie Start-/Stop-Reihenfolge des gemeinsamen Stacks aufgenommen.
+  - [Systemd] Praktischen Auto-Unlock-Zyklus um systemd-Detach-Fallback fuer ein
+    bereits inaktives Cryptsetup-Unit und den Host-gebundenen internen
+    M365-Readinessrequest korrigiert.
+  - [Betrieb] Development-Volume praktisch geschlossen und ohne Passworteingabe
+    allein ueber systemd und die lokale Schluesseldatei wieder geoeffnet;
+    PostgreSQL, Gitea, M365-Konnektor, PAJ-App und Worker danach ready geprueft.
+  - [Betrieb] Vollstaendigen Hostneustart am 13.10.2026 erfolgreich
+    nachgewiesen: LUKS-Mapping und Mount automatisch aktiv, alle vorgesehenen
+    Development-Dienste bootaktiv und erreichbar, Legacy deaktiviert und
+    inaktiv sowie keine Warnungen oder Fehler der beteiligten Units im
+    Bootjournal.
+  - [Backend] Synthetische Tests fuer Quellcredential-Sentinelentfernung,
+    gemeinsames Login ueber mehrere Rollen, Ablehnung alter Passwoerter,
+    Profilpflicht, deaktivierte externe Wirkungen, widerrufene Monitore,
+    Import-Replay, Zielhashes, Laufzeitgrants und einen realen PostgreSQL-Abbruch
+    zwischen beiden Aktivierungsumbenennungen samt Rollback ergaenzt.
+  - [PostgreSQL] Vollstaendige Rotation, neue und abgelehnte Credentials,
+    Authrevisionen, Sitzungs-/Freigabewiderruf, Loginlimitbereinigung,
+    kontrolliertes Audit und transaktionalen Rollback gegen einen kurzlebigen
+    PostgreSQL-18-Cluster unter der echten eingeschraenkten Refresh-Rolle
+    geprueft.
+  - [Security] Interaktive Bestaetigung und ausschliessliche Hashuebergabe ueber
+    stdin ohne Passwort in Argumenten oder Umgebung statisch geprueft.
+
+  Removed
+  - [Repository] Temporaeres Branch-Changelog des integrierten Seitenbranches entfernt und Paket- sowie Lockfileversion auf `4.12.17` gesetzt.
 
 [4.12.16] - 2026-10-10
 Commit: 4.12.16 | Spielunterbrechung und Fortsetzung konzipiert

@@ -1,0 +1,34 @@
+handle /api/admin/grafana-auth {
+	respond 404
+}
+handle /internal/* {
+	respond 404
+}
+
+@backend path /ws /api/* /live /ready /health /version /status
+handle @backend {
+	reverse_proxy 127.0.0.1:8080
+	log_append request_id {rp.header.X-Request-ID}
+	log_append route backend
+}
+
+redir /grafana /grafana/ 308
+handle /grafana/* {
+	forward_auth 127.0.0.1:8085 {
+		uri /auth?
+		copy_headers X-WEBAUTH-USER X-WEBAUTH-ROLE
+	}
+	reverse_proxy unix//run/epiber-observability/grafana.sock
+	log_append route grafana
+}
+
+# Pfadrouten anderer Anwendungen muessen vor dem statischen ePiber-Fallback
+# liegen und werden unabhaengig von der ePiber-Hauptdatei installiert.
+import /etc/caddy/epiber-live-routes/*.caddy
+
+handle {
+	log_append route static
+	root * /srv/http/ePiber/piber/Frontend
+	header Cache-Control "no-cache"
+	file_server
+}

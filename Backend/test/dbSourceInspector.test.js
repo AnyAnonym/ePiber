@@ -36,3 +36,11 @@ test("SQLite-Inspektor akzeptiert nur die vollstaendig bekannte Quellstruktur", 
   database.close();
   assert.throws(() => inspectSqliteSchemas(root), (error) => error.code === "SOURCE_SQLITE_FIELD_DRIFT");
 });
+
+test("SQLite-Inspektor akzeptiert das produktive Messaging-Schema vor inbox_visible", (t) => {
+  const root = createSyntheticSqliteSources(t);
+  const database = new DatabaseSync(path.join(root, "sqlite", "messaging.sqlite"));
+  database.exec("ALTER TABLE event_participants DROP COLUMN inbox_visible");
+  database.close();
+  assert.equal(inspectSqliteSchemas(root)["messaging.sqlite"].tableCount > 0, true);
+});

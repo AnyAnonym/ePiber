@@ -196,6 +196,31 @@ Die Arbeitsgrundlage wird fuer die Umsetzung in drei Klassen verwendet.
 - betriebliche Umbenennung von PAJ zu Devel erst beim vollstaendigen
   PostgreSQL-only-Devel-Cutover.
 
+**Am 13.10.2026 ausdruecklich freigegebene PAJ-Ausnahme:**
+
+- Der laufende PAJ-/Devel-Bestand darf als exakte Kopie der aktuellen
+  personenbezogenen und fachlichen Live-Daten betrieben und wiederholt erneuert
+  werden, obwohl der Backup-/Restore-/PITR-Nachweis noch fehlt. Der vollstaendige
+  Verlust dieser PAJ-Kopie ist akzeptiert; Live bleibt die autoritative Quelle.
+- Die Ausnahme gilt ausschliesslich fuer `epiber_devel`, nicht fuer Live, Gitea,
+  andere Plattformdienste oder eine Wiederherstellungszusage.
+- Quellpasswoerter, Credentialhistorien, Sessions, Passwortfreigaben,
+  Loginlimits, Monitor-/Geraetetokens, offene technische Leases sowie
+  produktive pending/retry Jobs, Outbox- und externe Zustellwirkungen werden
+  nicht uebernommen. Jede importierte Anmeldung erhaelt stattdessen dasselbe
+  starke, nur Administratoren bekannte PAJ-Testpasswort aus einer geschuetzten
+  lokalen Credentialdatei.
+- Kontakte, Aktivierungsstaende, Rollen, Meldungen, Auditdaten, Bewerbe,
+  Matches, Ergebnisse, Ranglisten, Scores und Hallenzeiten bleiben fachlich
+  erhalten. Der breite personenbezogene DBeaver-Zugriff bleibt als bewusstes
+  PAJ-Risiko auf die beiden persoenlichen Rollen und den SSH-Tunnel begrenzt.
+- Jeder Refresh verwendet ein einmaliges Freigabegate, ein kurzes benanntes
+  Live-Schreibstoppfenster, ein geschlossenes Bereinigungsprofil, eine frische
+  Kandidatendatenbank und eine Aktivierung erst nach Import-, Hash-, Count-,
+  Shadow-Read-, Sicherheits- und Grantpruefung. Fehler vor der Aktivierung lassen
+  `epiber_devel` unveraendert; Fehler waehrend der Aktivierung loesen den
+  kontrollierten Datenbank-Rollback aus.
+
 **Vor dem jeweiligen Umsetzungsblock ausdruecklich zu entscheiden:**
 
 - jede sichtbare oder bedienrelevante Funktionsaenderung;
@@ -379,23 +404,28 @@ logische Migration auf einen anderen Server verschoben werden; ein physischer
 Restore nur einer enthaltenen Datenbank wird nicht behauptet.
 
 Der Livebetrieb bleibt waehrenddessen mit seinem bisherigen Legacyrelease und
-seinen bisherigen Persistenzquellen unveraendert. Vor dem Aufbau der spaeteren
-PostgreSQL-Live-Instanz ist ein verpflichtendes Kapazitaets- und Isolationsgate
-vorgesehen. Zu diesem Zeitpunkt wird anhand gemessener Last entschieden:
+seinen bisherigen Persistenzquellen unveraendert. Vor dem dauerhaften Aufbau der
+spaeteren PostgreSQL-Live-Instanz ist ein verpflichtendes Kapazitaets- und
+Isolationsgate vorgesehen. Die aktuelle Infrastruktur darf bis dahin fuer
+kontrollierte, nicht dauerhafte Tests der getrennten Instanz verwendet werden.
+Zu diesem Zeitpunkt wird anhand gemessener Last entschieden:
 
-1. bestehender Host mit mindestens 8 GiB RAM, bevorzugt 16 GiB, fuer zwei
-   getrennte PostgreSQL-Instanzen erweitern; oder
+1. bestehenden Host fuer zwei getrennte PostgreSQL-Instanzen erweitern; als
+   erste Planungsempfehlung gelten 8 GiB RAM, bevorzugt 16 GiB, jedoch nicht als
+   vorab festgelegter harter Mindestwert; oder
 2. `epiber_devel` auf den Engineering-/Testserver verlagern und
    `epiber_askoe` auf dem Produktionshost aufbauen.
 
 Am 25.09.2026 besitzt der bestehende Host drei CPU-Kerne, 3,7 GiB RAM, bereits
 genutzten Swap und rund 34 GiB freien Primaerspeicher. Dieser Stand ist fuer den
 ersten sparsam konfigurierten Development-Cluster mit den zunaechst kleinen
-Datenbanken voraussichtlich ausreichend, aber nicht fuer den dauerhaften
-Parallelbetrieb einer zusaetzlichen PostgreSQL-Live-Instanz samt Anwendungen und
-Observability freigegeben. Nachdem Gitea und die kleine Anwendung eingerichtet
-sind, werden CPU, RAM, Swap, I/O, freier Speicher, Verbindungen, Backup- und
-Restorelast erneut gemessen, bevor ePiber seinen dauerhaften Bestand aufnimmt.
+Datenbanken und fuer kontrollierte Migrationstests voraussichtlich ausreichend.
+Er ist damit noch nicht fuer den dauerhaften Parallelbetrieb einer zusaetzlichen
+PostgreSQL-Live-Instanz samt Anwendungen und Observability freigegeben. Nachdem
+Gitea und die kleine Anwendung eingerichtet sind, werden CPU, RAM, Swap, I/O,
+freier Speicher, Verbindungen, Backup- und Restorelast erneut gemessen. Erst aus
+diesen Messungen wird die notwendige Zielkapazitaet abgeleitet, bevor ePiber
+seinen dauerhaften Bestand aufnimmt.
 
 Werden Development und Live spaeter auf demselben Host betrieben, erhalten die
 beiden Instanzen trotzdem getrennte:
@@ -2771,6 +2801,15 @@ getrennt verwahrtes erhoehtes Credential fuer ausdruecklich beabsichtigte
 administrative Arbeiten. Auch die erhoehte Verbindung ersetzt nicht den
 Migration Runner als regulaeren DDL-Weg.
 
+In `epiber_devel` lesen beide Rollen alle Tabellen und Spalten der sechs ePiber-
+Schemas einschliesslich technischer Credential-, Session- und Auditbereiche.
+Nur die Adminrolle besitzt zusaetzlich INSERT, UPDATE, DELETE und
+Sequenznutzung. Beide bleiben ohne Schema-CREATE, TRUNCATE, TRIGGER,
+Eigentuemerrollen-Mitgliedschaft, Superuser, CREATEDB, CREATEROLE, Replication
+und BYPASSRLS. Der weitreichende Zugriff ist auf persoenliche Development-
+Administration ueber den SSH-Tunnel begrenzt und wird nicht auf fremde
+Anwendungsdatenbanken oder Live uebertragen.
+
 Bootstrap, Migration Runner, Backup, Restore und weitere kontrollierte One-shots
 behalten unabhaengig davon ihre strukturierten Start-/Abschlusslogs. Freies
 manuelles Produktions-DML und manuell eingegebenes DDL sind kein regulaerer
@@ -3779,12 +3818,76 @@ fokussiert gegen kurzlebige, ausschliesslich synthetische PostgreSQL-Cluster
 geprueft; es gibt keine fachlich freigegebene Teilwelle und keinen Rueckfall auf
 Sheets oder SQLite innerhalb des neuen Modus.
 
-Die Anwendung verwendet bis zum spaeteren Gesamtcutover weiterhin unveraendert
-Google Sheets und SQLite. Paket 2 aktiviert keinen PostgreSQL-Laufzeitpfad. Der
-Zugriff auf reale ePiber-Daten, die geschuetzte Realanalyse aus Phase 5A, ein
-dauerhafter gemeinsamer Development-Bestand, privilegierter Bootstrap sowie
-Backup-/Restore- und Cutover-Schritte bleiben ihren ausdruecklichen Gates und
-Freigaben vorbehalten.
+#### Umsetzungsstand Phase 5 nach vollstaendiger Serverkomposition
+
+Stand 12.10.2026 ist die gemeinsame asynchrone PostgreSQL-only Serverlaufzeit
+mit vollstaendiger Registrierung aller sechs Pflichtdomaenen hergestellt.
+Umgesetzt sind:
+
+- auf fuenf Verbindungen begrenzter App-Pool mit UTC-, Schema-, Tenant-,
+  Sektions- und Seed-/Importgate;
+- gemeinsame Transaktionsgrenzen mit kontrollierten Retries, Rollback,
+  unbekanntem Commit-Ausgang und datensparsamen Abschlusslogs;
+- typisierte Repositories fuer Core, Identity/Auth, Spielbetrieb, Venue,
+  Messaging und Operations;
+- PostgreSQL-Readprojektionen fuer Personen, Bewerbe, Matches,
+  Ranglisten, Courts, Hallenzeiten und Inbox;
+- atomare Session-, Credential-, Score-, Messagingquittierungs-, Ereignis- und
+  Auditpfade mit fokussierten Tests gegen kurzlebige PostgreSQL-18-Cluster;
+- Schemaerzwungene Entfernung alter Passwort-Hashes bei Credentialwiderruf und
+  minimale App-Leserechte fuer Laufzeitmetadaten;
+- PostgreSQL-only Authservice mit HMAC-gebundenen Loginlimits,
+  `auth_revision`-Sessionpruefung, Hashupgrade, Passwortrotation und
+  einmaliger 24-Stunden-Passwortfreigabe;
+- integrierte Spielbetriebswrites fuer EntryList, Forderungen, Termine,
+  Ergebnisse, Korrekturen, Rangwirkungen, Rueckzug und KO-Fortschreibung mit
+  Messaging, Idempotenz, Audit und Outbox;
+- separater Worker-Repository- und Servicevertrag fuer Jobs und Outbox mit
+  Lease, `SKIP LOCKED`, Retry, Dead- und Unknown-Pfad;
+- verlustfreie Favoriten-/Startseitenstruktur fuer Overlays, Round-Robin-Layout
+  und Navigatorprofile;
+- asynchrone PostgreSQL-Provider fuer HTTP und WebSocket bei unveraenderten
+  externen Vertraegen;
+- atomare PostgreSQL-Erzeugung aller acht bisherigen Tabellenprojektionen ohne
+  Credentialhashes und ein nicht pollender Projektionsloader als Ersatz fuer den
+  spaeter entfallenden Sheet-Initialload;
+- vollstaendige PostgreSQL-only Serverkomposition mit Readiness, Invalidation,
+  Restart und kontrolliertem Shutdown;
+- atomare und idempotente PostgreSQL-Favoriten-/Startseitenwrites mit
+  verlustfreier Zielmatrix und revisionsstabilen leeren Listen;
+- PostgreSQL-Frontenddiagnose fuer globale Policy und temporaere Zielpersonen;
+- Inboxquittierung sowie Bewerbshistorien-Kommentare, Moderation und Reaktionen
+  mit globaler Revision und Outbox-Invalidierung;
+- verlustfreie Importprojektion fuer Messagingquelle, Akteur, Summary, Detail,
+  Ergebnis und Kommentar-Moderationsstatus;
+- echter Worker-Prozesseinstieg mit kontrolliertem Start, Wake-up, Shutdown und
+  registrierten Retentionhandlern;
+- aktivierbarer `PERSISTENCE_MODE=postgres`, der keine Legacyvariablen verlangt
+  und einen Teil-Cutover ohne Fallback verhindert;
+- asynchroner PostgreSQL-Auditadapter fuer bestehende HTTP-/WebSocket-Aktionen
+  mit registrierten Feldern und Entfernung privater Normalisierungswerte;
+- PostgreSQL-Monitorbroker fuer Provisionierung, Rotation, Widerruf,
+  Navigationsziel, Scrollsequenz, ACK und Reconnect-Resync;
+- relationale Match- und manuelle Court-Zuweisungen samt Teilnehmern,
+  Scorebaseline, Automation und Audit;
+- relationale Hallenzeiten inklusive Fair-Use, Warteliste, Verteilung, Historie
+  und Reporting;
+- relationale Personennormalisierung und ClubDesk-Neuanlage, -Verknuepfung,
+  -Aktualisierung und geschuetzte Deaktivierung;
+- PostgreSQL-Messagingreporting und typisierte Fachereignisse fuer Spielbetrieb
+  und Hallenzeiten.
+
+Die Implementierungsgates fuer Court, Hallenzeiten, Spielbetrieb, Personen,
+Messaging, Jobs/Outbox und Serverkomposition sind geschlossen. Der synthetische
+Gesamtstand ist gegen kurzlebige PostgreSQL-18-Cluster, HTTP, WebSocket,
+Neustart, Shutdown und die Drei-Engine-Core-Smokesuite geprueft. Ein
+domaenenweiser Mischbetrieb bleibt ausgeschlossen.
+
+Der aktuell installierte PAJ-Dienst wird durch diese Codefertigstellung nicht
+automatisch umgestellt. Zugriff auf reale ePiber-Daten, geschuetzte Realanalyse,
+dauerhafter gemeinsamer Development-Bestand, privilegierter Bootstrap,
+Credentialinstallation, Dienststart sowie Backup-/Restore- und Cutover-Schritte
+bleiben ihren ausdruecklichen Gates und Freigaben vorbehalten.
 
 ### Phase 5: Anwendungsumbau
 
@@ -4039,6 +4142,14 @@ definierten Phase-3-Exit verlangten Artefakte lautet:
 4. **Abgeschlossen:** Erfolgreicher Leeraufbau in einem kurzlebigen PostgreSQL-Cluster,
    Schema-/Grantverifikation und generierter kanonischer
    `pg_dump --schema-only`-Snapshot ohne Drift.
+5. **Abgeschlossen:** Die gemeinsame PostgreSQL-/Gitea-Development-Grundlage mit
+   LUKS-/Swapabsicherung, systemd-Units, produktneutralem Socket sowie getrennten
+   Rollen und HBA-Regeln ist aufgebaut und technisch verifiziert.
+6. **Abgeschlossen fuer synthetische Quellpakete:** Import-CLI, geschlossene
+   Quellpaketpruefung, deterministische Sheet-/SQLite-Transformationen,
+   PostgreSQL-Gesamtimport und synthetische Transformationspruefungen liegen vor.
+   Der kontrollierte Export realer Legacyquellen bleibt Teil der geschuetzten
+   Realanalyse in Phase 5A.
 
 Damit ist der statisch-synthetische Phase-3-Exit erreicht. Der Erstentwurf bleibt
 gemaess Abschnitt 17 bis zum ersten offiziellen gemeinsamen `epiber_devel`-Aufbau
@@ -4046,17 +4157,15 @@ veraenderbar; Realanalysebefunde werden als neue synthetische Regressionen und
 gegebenenfalls korrigierte, noch nicht eingefrorene Initialmigrationen
 uebernommen.
 
-Die bereits fachlich entschiedenen, aber erst mit ihrer Umsetzungsphase zu
-erzeugenden Betriebsartefakte bleiben davon getrennt:
+Die bereits fachlich entschiedenen, aber erst mit ihrer spaeteren
+Umsetzungsphase zu erzeugenden Betriebsartefakte bleiben davon getrennt:
 
-- Phase 1: systemd-Units, LUKS-/Swap-/Socketkonfiguration und Rollen/HBA;
-- Phase 5A nach synthetischem Anwendungsumbau: isolierte Realanalyse,
-  Score-Dublettenregel und datensparsamer Abgleichbericht;
+- Phase 5A nach synthetischem Anwendungsumbau: kontrollierter Legacy-Exporter,
+  isolierte Realanalyse, Score-Dublettenregel und datensparsamer Abgleichbericht;
 - Phase 7B nach Anwendungsumbau, Realanalyse sowie vollstaendiger synthetischer
   Funktions- und Betriebsabnahme, jedoch vor dauerhaftem Realimport und Live:
   pgBackRest-/Scaleway-PoC, praktischer Restore, PITR, postgres_exporter,
   notwendige Dashboards und Alarmregeln;
-- Phase 2/4: Import-/Export-CLI und synthetische Transformationspruefungen;
 - Phase 6/7: gemessene Last-, Pool-, Import-, Backup- und Restorewerte sowie
   Devel-/Live-Runbooks;
 - nach Live: kontrollierter Loeschlauf fuer das 370-Tage-Compliance-Archiv.

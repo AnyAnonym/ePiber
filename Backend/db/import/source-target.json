@@ -130,13 +130,13 @@
           "competition_id": "messaging.events.competition_id:resolve_nullable",
           "created_at": "messaging.events.created_at:unix_ms_to_timestamptz3",
           "event_type": "messaging.events.event_type",
-          "source": "messaging.events.template_key:map_legacy_source",
-          "source_id": "messaging.events.source_operation_id:resolve_or_provenance",
-          "actor_id": "messaging.event_participants.person_id:actor",
-          "actor_name": "messaging.event_participants:name_snapshot",
-          "summary": "messaging.event_recipients.legacy_subject",
-          "detail": "messaging.event_recipients.legacy_body",
-          "result": "messaging.events.template_parameters:controlled_result",
+          "source": "messaging.events.source_type",
+          "source_id": "messaging.events.source_contract_id|source_operation_id:resolve_or_provenance",
+          "actor_id": "messaging.events.actor_person_id:resolve|actor_contract_id_snapshot",
+          "actor_name": "messaging.events.actor_name_snapshot",
+          "summary": "messaging.events.summary_snapshot",
+          "detail": "messaging.events.detail_snapshot",
+          "result": "messaging.events.result_snapshot",
           "inserted_at": "import_provenance:unix_ms"
         }
       },
@@ -150,7 +150,8 @@
           "message_id": "messaging.event_recipients.id:parse_uuid_or_provenance",
           "projection_type": "messaging.event_recipients.template_key:map_projection",
           "subject": "messaging.event_recipients.legacy_subject",
-          "body": "messaging.event_recipients.legacy_body"
+          "body": "messaging.event_recipients.legacy_body",
+          "inbox_visible": "messaging.event_recipients:include_when_true"
         }
       },
       "event_receipts": {
@@ -202,11 +203,11 @@
           "author_id": "messaging.comments.author_person_id:resolve",
           "author_name": "messaging.comments.author_name_snapshot",
           "body": "messaging.comments.body",
-          "status": "messaging.comments.revision:validate_legacy_status",
+          "status": "messaging.comments.moderation_status",
           "created_at": "messaging.comments.created_at:unix_ms_to_timestamptz3",
-          "updated_at": "import_provenance:unix_ms_nullable",
-          "moderated_at": "import_provenance:unix_ms_nullable",
-          "moderated_by": "import_provenance:person_reference_nullable"
+          "updated_at": "messaging.comments.updated_at:unix_ms_to_timestamptz3_nullable",
+          "moderated_at": "messaging.comments.moderated_at:unix_ms_to_timestamptz3_nullable",
+          "moderated_by": "messaging.comments.moderated_by_person_id:resolve_nullable"
         }
       },
       "comment_reactions": {

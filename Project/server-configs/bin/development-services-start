@@ -7,11 +7,17 @@ readonly MAPPER="development-data"
 readonly MOUNT_POINT="/var/lib/development-data"
 readonly POSTGRES_SERVICE="postgresql-devel.service"
 readonly GITEA_SERVICE="gitea-devel.service"
+readonly M365_SERVICE="m365-connector.service"
+readonly LEGACY_SERVICE="epiber-paj.service"
+readonly APP_SERVICE="epiber-devel.service"
+readonly WORKER_SERVICE="epiber-devel-worker.service"
 
 if (( EUID != 0 )); then
   echo "ERROR: Dieser Befehl muss als root ausgefuehrt werden." >&2
   exit 1
 fi
+
+echo '{"event":"development_services_start_started","result":"started"}'
 
 if [[ ! -b "$DEVICE" ]]; then
   echo "ERROR: Development-Volume fehlt: $DEVICE" >&2
@@ -77,6 +83,44 @@ if ! curl --fail --silent --show-error --output /dev/null http://127.0.0.1:3002/
   exit 1
 fi
 
+systemctl start "$M365_SERVICE"
+for _ in {1..30}; do
+  if curl --fail --silent --header 'Host: m365-connector.pi-tec.at' --output /dev/null http://127.0.0.1:3000/health/ready; then
+    break
+  fi
+  sleep 1
+done
+
+if ! curl --fail --silent --show-error --header 'Host: m365-connector.pi-tec.at' --output /dev/null http://127.0.0.1:3000/health/ready; then
+  echo '{"event":"development_services_start_completed","result":"failed","errorCode":"M365_CONNECTOR_NOT_READY"}' >&2
+  exit 1
+fi
+
+systemctl stop "$LEGACY_SERVICE"
+systemctl start "$APP_SERVICE"
+for _ in {1..30}; do
+  if curl --fail --silent --output /dev/null http://127.0.0.1:8083/ready; then
+    break
+  fi
+  sleep 1
+done
+
+if ! curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8083/ready; then
+  systemctl stop "$APP_SERVICE"
+  echo '{"event":"development_services_start_completed","result":"failed","errorCode":"EPIBER_DEVEL_NOT_READY"}' >&2
+  exit 1
+fi
+
+systemctl start "$WORKER_SERVICE"
+
 systemctl is-active --quiet "$POSTGRES_SERVICE"
 systemctl is-active --quiet "$GITEA_SERVICE"
-echo "OK: Development-Volume, PostgreSQL und Gitea sind bereit."
+systemctl is-active --quiet "$M365_SERVICE"
+systemctl is-active --quiet "$APP_SERVICE"
+systemctl is-active --quiet "$WORKER_SERVICE"
+systemctl is-active --quiet "$LEGACY_SERVICE" && {
+  echo '{"event":"development_services_start_completed","result":"failed","errorCode":"LEGACY_SERVICE_ACTIVE"}' >&2
+  exit 1
+}
+echo '{"event":"development_services_start_completed","result":"success","postgres":"active","gitea":"active","m365Connector":"active","app":"active","worker":"active","legacy":"inactive"}'
+echo "OK: Development-Volume, PostgreSQL, Gitea, M365-Konnektor, ePiber-App und Worker sind bereit."

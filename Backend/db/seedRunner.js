@@ -68,6 +68,8 @@ const FULL_DEVEL_TECHNICAL_TIME_COLUMNS = {
   "identity.frontend_logging_settings": ["updated_at"],
   "identity.frontend_logging_targets": ["created_at"],
   "identity.user_start_pages": ["updated_at"],
+  "identity.user_preference_states": ["favorites_updated_at", "start_page_updated_at"],
+  "messaging.history_revision": ["updated_at"],
   "play.competition_types": ["created_at"],
   "play.competition_type_versions": ["created_at"],
   "play.match_formats": ["created_at"],
@@ -122,13 +124,16 @@ async function validateFullDevelSeed(client, expected) {
   return { counts: actual, checksum: seedChecksum(JSON.stringify(projection)) };
 }
 
-async function applyTechnicalSeed({ connectionConfig, asOf, output = console.log }) {
+async function applyTechnicalSeed({ connectionConfig, asOf, tenantCode = "devel-epiber", tenantName = "ePiber Development", output = console.log }) {
   const parsedAsOf = new Date(asOf);
   if (!asOf || Number.isNaN(parsedAsOf.getTime()) || parsedAsOf.toISOString() !== asOf) {
     throw Object.assign(new Error("Seed as_of muss ein kanonischer ISO-Zeitpunkt sein"), { code: "SEED_AS_OF_INVALID" });
   }
+  if (!/^[a-z0-9][a-z0-9_.-]{2,63}$/.test(tenantCode) || typeof tenantName !== "string" || !tenantName.trim() || tenantName.length > 160) {
+    throw Object.assign(new Error("Seed-Tenant ist ungueltig"), { code: "SEED_TENANT_INVALID" });
+  }
   const sql = fs.readFileSync(TECHNICAL_SEED, "utf8");
-  const checksum = seedChecksum(sql);
+  const checksum = seedChecksum(`${sql}\n${JSON.stringify({ tenantCode, tenantName })}`);
   const client = new Client(connectionConfig);
   await client.connect();
   output(JSON.stringify({ event: "db_seed_started", seed: "technical-minimal", asOf }));
@@ -143,6 +148,7 @@ async function applyTechnicalSeed({ connectionConfig, asOf, output = console.log
     await client.query("BEGIN");
     try {
       await client.query(sql);
+      await client.query("UPDATE core.tenants SET tenant_code=$1,display_name=$2 WHERE id='0199c800-0000-7000-8000-000000000001'", [tenantCode, tenantName]);
       await client.query(`
         INSERT INTO ops.seed_runs
           (tenant_id, seed_name, seed_version, as_of, checksum, started_at, completed_at, result)

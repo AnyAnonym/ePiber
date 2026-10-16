@@ -14,7 +14,14 @@ function parseArguments(argv) {
 async function main() {
   const { seed, asOf } = parseArguments(process.argv.slice(2));
   const apply = seed === "technical-minimal" ? applyTechnicalSeed : applyFullDevelSeed;
-  await apply({ connectionConfig: createConnectionConfig(), asOf });
+  await apply({
+    connectionConfig: createConnectionConfig(),
+    asOf,
+    ...(seed === "technical-minimal" ? {
+      tenantCode: process.env.EPIBER_TENANT_CODE || "devel-epiber",
+      tenantName: process.env.EPIBER_TENANT_NAME || "ePiber Development",
+    } : {}),
+  });
 }
 
 if (require.main === module) {

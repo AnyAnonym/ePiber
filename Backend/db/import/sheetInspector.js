@@ -14,6 +14,31 @@ const SHEET_FIELDS = {
   EntryList: ["ID", "BewerbID", "PersonenID", "Entrydate", "GebuehrBezahlt"]
 };
 
+const OPTIONAL_FIELDS = Object.freeze({ Personen: new Set(["Geschlecht"]), "RL-Platzierung": new Set(["ID"]) });
+const IGNORED_FIELDS = Object.freeze({ Personen: new Set(["ptn", "avatar"]), Bewerbsart: new Set(["bemerkung"]), "RL-Platzierung": new Set(["bemerkung"]) });
+const ALLOWED_DUPLICATES = Object.freeze({ Matchtyp: new Set(["Satztiebreak"]) });
+
+function canonicalizeSheetHeader(sheet, values) {
+  const fields = SHEET_FIELDS[sheet];
+  if (!fields) throw Object.assign(new Error("Sheetvertrag fehlt"), { code: "SOURCE_CSV_HEADER_INVALID", sheet });
+  const canonical = new Map(fields.map((field) => [field.toLowerCase(), field]));
+  const mapped = [], counts = new Map();
+  for (const raw of values) {
+    const normalized = String(raw).trim(), field = canonical.get(normalized.toLowerCase());
+    if (!field) {
+      if (IGNORED_FIELDS[sheet]?.has(normalized.toLowerCase())) { mapped.push(null); continue; }
+      throw Object.assign(new Error("CSV-Kopfzeile enthaelt eine unbekannte Spalte"), { code: "SOURCE_CSV_HEADER_DRIFT", sheet });
+    }
+    const count = (counts.get(field) || 0) + 1;
+    if (count > 1 && !ALLOWED_DUPLICATES[sheet]?.has(field)) throw Object.assign(new Error("CSV-Kopfzeile enthaelt eine doppelte Spalte"), { code: "SOURCE_CSV_HEADER_DRIFT", sheet });
+    if (count > 2) throw Object.assign(new Error("CSV-Kopfzeile enthaelt zu viele Spaltenwiederholungen"), { code: "SOURCE_CSV_HEADER_DRIFT", sheet });
+    counts.set(field, count); mapped.push(field);
+  }
+  const missing = fields.filter((field) => !counts.has(field) && !OPTIONAL_FIELDS[sheet]?.has(field));
+  if (missing.length) throw Object.assign(new Error("CSV-Kopfzeile ist unvollstaendig"), { code: "SOURCE_CSV_HEADER_DRIFT", sheet });
+  return mapped;
+}
+
 function parseSemicolonCsv(text) {
   const rows = [];
   let row = [], field = "", quoted = false;
@@ -42,13 +67,11 @@ function inspectSheetCsv(root) {
     const rows = parseSemicolonCsv(fs.readFileSync(filename, "utf8"));
     if (!rows.length) throw Object.assign(new Error("CSV besitzt keine Kopfzeile"), { code: "SOURCE_CSV_HEADER_INVALID", sheet });
     const header = rows[0].map((value) => value.trim());
-    if (new Set(header).size !== header.length || JSON.stringify(header.slice().sort()) !== JSON.stringify(fields.slice().sort())) {
-      throw Object.assign(new Error("CSV-Kopfzeile weicht vom Vertrag ab"), { code: "SOURCE_CSV_HEADER_DRIFT", sheet });
-    }
+    canonicalizeSheetHeader(sheet, header);
     if (rows.some((row) => row.length !== header.length)) throw Object.assign(new Error("CSV-Zeilenbreite ist ungueltig"), { code: "SOURCE_CSV_ROW_INVALID", sheet });
     summary[sheet] = { rowCount: rows.length - 1, columnCount: header.length };
   }
   return summary;
 }
 
-module.exports = { SHEET_FIELDS, inspectSheetCsv, parseSemicolonCsv };
+module.exports = { SHEET_FIELDS, canonicalizeSheetHeader, inspectSheetCsv, parseSemicolonCsv };

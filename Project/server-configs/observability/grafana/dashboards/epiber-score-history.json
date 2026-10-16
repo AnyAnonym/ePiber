@@ -38,9 +38,9 @@
         "name": "deployment",
         "options": [
           { "selected": true, "text": "Live", "value": "live" },
-          { "selected": false, "text": "PAJ", "value": "paj" }
+          { "selected": false, "text": "Devel", "value": "devel" }
         ],
-        "query": "live,paj",
+        "query": "live,devel",
         "skipUrlSync": false,
         "type": "custom"
       },

@@ -6,6 +6,7 @@ const { version: APP_VERSION } = require("./package.json");
 const {
   ALLOWED_ORIGINS,
   AUDIT_ACTIONS,
+  AUTH_RATE_LIMIT_SECRET,
   AUDITLOG_FILE,
   AUDIT_LOG_JOURNAL,
   COOKIE_SECURE,
@@ -21,11 +22,15 @@ const {
   MESSAGING_REPORT_TOKEN,
   MONITOR_COOKIE,
   PORT,
+  PERSISTENCE_MODE,
   SESSION_COOKIE,
+  SESSION_MAX_PER_USER,
+  SESSION_REFRESH_INTERVAL_MS,
   SESSION_TTL_MS,
   SCORELOG_FILE,
   SHUTDOWN_GRACE_MS,
   STATE_FILE,
+  WRITE_MODE,
   validateRuntimeConfig,
 } = require("./config.js");
 const dataPoller = require("./dataPoller.js");
@@ -34,6 +39,9 @@ const dataStore = require("./dataStore.js");
 const courtPoller = require("./courtPoller.js");
 const stateStore = require("./stateStore.js");
 const { CourtAutomation } = require("./courtAutomation.js");
+const { PostgresCourtAutomation } = require("./postgresCourtAutomation.js");
+const { createPostgresComponents } = require("./createPostgresComponents.js");
+const { createConnectionConfig } = require("./db/connectionConfig.js");
 const { AuthService } = require("./authService.js");
 const { AppError, errorData } = require("./errors.js");
 const { FrontendLoggingService } = require("./frontendLoggingService.js");
@@ -79,6 +87,11 @@ const EMOJI_ASSETS = new Map([
   ["/api/emoji-picker/database.js", emojiAsset(path.join(EMOJI_PICKER_ROOT, "database.js"), "text/javascript; charset=utf-8")],
   ["/api/emoji-picker/i18n/de.js", emojiAsset(path.join(EMOJI_PICKER_ROOT, "i18n", "de.js"), "text/javascript; charset=utf-8")],
   ["/api/emoji-picker/data/de.json", emojiAsset(path.join(EMOJI_DATA_ROOT, "de", "cldr-native", "data.json"), "application/json; charset=utf-8")],
+]);
+const HTTP_WRITE_PATHS = new Set([
+  "/api/frontend-events", "/api/session", "/api/password", "/api/admin/frontend-logging",
+  "/api/admin/frontend-logging/targets", "/api/password-setup", "/api/admin/password-setup",
+  "/api/admin/password", "/api/monitor/session",
 ]);
 
 function sendJson(response, status, body, headers = {}) {
@@ -130,30 +143,30 @@ function authIdentifier(body, passwordField) {
   return loginValue(matches(canonical) ? body.login : body.email);
 }
 
-function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, initialized, shuttingDown }) {
+function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, dataPollerService = dataPoller, courtService = null, runtime = null, persistenceMode = "legacy", writeMode = "read_write", initialized, shuttingDown }) {
   const data = dataStore.getReadiness();
-  const refresh = dataPoller.getStatus();
+  const refresh = dataPollerService.getStatus();
   const court = courtPoller.getStatus();
   const courtSource = courtPoller.getLastData().source;
-  const courtState = stateStore.getStatus();
+  const courtState = courtService?.status?.() || stateStore.getStatus();
   const unresolvedActiveRules = (courtState.displayRulesMigration?.unresolved || []).filter(
     (entry) => courtState.courts?.[entry.court]?.aktiv === 1,
   );
   const activeCourt = court.courtActive["1"] || court.courtActive["2"];
   const courtReady = !activeCourt || !courtSource.stale;
   const displayRulesReady = unresolvedActiveRules.length === 0;
-  const state = repository.status();
+  const state = runtime?.status?.() || repository.status?.() || { ready: true, open: true };
   const scoreLog = scoreLogRepository?.status?.() || null;
   const auditLog = auditLogRepository?.status?.() || null;
   const messaging = messagingRepository?.status?.() || null;
   const components = {
     initialized: Boolean(initialized),
     accepting_requests: !shuttingDown,
-    state_sqlite: Boolean(state.open && state.ready),
-    scorelog_sqlite: !scoreLog || Boolean(scoreLog.open && scoreLog.ready),
-    auditlog_sqlite: !auditLog || Boolean(auditLog.open && auditLog.ready),
-    messaging_sqlite: !messaging || Boolean(messaging.open && messaging.ready),
-    sheet_data: Boolean(data.ready),
+    [persistenceMode === "postgres" ? "postgres_runtime" : "state_sqlite"]: persistenceMode === "postgres" ? Boolean(state.ready) : Boolean(state.open && state.ready),
+    [persistenceMode === "postgres" ? "postgres_score_state" : "scorelog_sqlite"]: !scoreLog || Boolean(scoreLog.ready || scoreLog.open && scoreLog.ready),
+    [persistenceMode === "postgres" ? "postgres_audit" : "auditlog_sqlite"]: !auditLog || Boolean(auditLog.ready || auditLog.open && auditLog.ready),
+    [persistenceMode === "postgres" ? "postgres_messaging" : "messaging_sqlite"]: persistenceMode === "postgres" ? Boolean(state.ready) : !messaging || Boolean(messaging.open && messaging.ready),
+    [persistenceMode === "postgres" ? "postgres_projections" : "sheet_data"]: Boolean(data.ready),
     court_source: Boolean(courtReady),
     court_display_rules: Boolean(displayRulesReady),
   };
@@ -161,6 +174,7 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
   const ready = Object.values(components).every(Boolean);
   return {
     ready,
+    writeMode,
     initialized,
     shuttingDown,
     components,
@@ -177,8 +191,12 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
 }
 
 function createApplication(overrides = {}) {
+  const persistenceMode = overrides.persistenceMode || "legacy";
+  const postgresMode = persistenceMode === "postgres";
+  const writeMode = overrides.writeMode || "read_write";
+  const dataPollerService = overrides.dataPoller || dataPoller;
   const repository = overrides.repository || new StateRepository(STATE_FILE);
-  repository.init();
+  repository.init?.();
   const scoreLogRepository = overrides.scoreLogRepository || new ScoreLogRepository(SCORELOG_FILE, { instanceId: INSTANCE_ID });
   const auditLogRepository = overrides.auditLogRepository || new AuditLogRepository(AUDITLOG_FILE, {
     instanceId: INSTANCE_ID,
@@ -190,8 +208,9 @@ function createApplication(overrides = {}) {
   scoreLogRepository.init?.();
   auditLogRepository.init?.();
   messagingRepository.init?.();
-  stateStore.init(repository);
-  courtPoller.configure({ scoreLog: scoreLogRepository, courtContext: (court) => stateStore.getCourt(court) });
+  if (!postgresMode) stateStore.init(repository);
+  const courtService = overrides.courtService || null;
+  courtPoller.configure({ scoreLog: scoreLogRepository, courtContext: (court) => courtService?.getCourtCached?.(court) || stateStore.getCourt(court) });
   const messagingService = overrides.messagingService || new MessagingService({
     repository: messagingRepository,
     emailAdapter: new EmailMessagingAdapter(),
@@ -210,6 +229,7 @@ function createApplication(overrides = {}) {
     token: String(MESSAGING_REPORT_TOKEN),
   };
   const sheetService = overrides.sheetService || new SheetService({ repository, messagingService });
+  const competitionService = overrides.competitionService || sheetService;
   const courtAutomation = overrides.courtAutomation || new CourtAutomation({
     stateStore,
     dataStore,
@@ -224,12 +244,15 @@ function createApplication(overrides = {}) {
     appVersion: APP_VERSION,
   });
   const monitorBroker = overrides.monitorBroker || new MonitorBroker({ repository, stateStore, dataStore });
+  const runtime = overrides.runtime || null;
+  let stopInvalidationListener = null;
   let initialized = false;
   let shuttingDown = false;
   let activeRequests = 0;
   let cleanupTimer = null;
   let initializePromise = null;
   let normalizationMetricsCache = { revision: null, summary: null };
+  const currentReadiness = () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, courtService, runtime, persistenceMode, writeMode, initialized, shuttingDown });
   const httpWriteLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 6, idleMs: 900000 });
   const frontendLoggingAdminLimiter = new TokenBucketLimiter({ rate: 1, burst: 20, idleMs: 900000 });
   const deviceLoginLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 10, idleMs: 900000 });
@@ -272,7 +295,7 @@ function createApplication(overrides = {}) {
     let httpAudit = null;
     let httpActionCompleted = false;
     let route = "invalid";
-    const beginAudit = ({ action, principal = null, targetType = "", targetId = "", before = null, sourceIp = "", attemptedLogin = "" }) => {
+    const beginAudit = async ({ action, principal = null, targetType = "", targetId = "", before = null, sourceIp = "", attemptedLogin = "" }) => {
       if (!(AUDIT_ACTIONS.has("*") || AUDIT_ACTIONS.has(action))) return;
       httpAudit = {
         eventId: supportId,
@@ -289,9 +312,9 @@ function createApplication(overrides = {}) {
         sourceIp,
         attemptedLogin,
       };
-      auditLogRepository.record(httpAudit);
+      await auditLogRepository.record(httpAudit);
     };
-    const finishAudit = ({ principal = null, targetType, targetId, after = null, result = "success", errorCode = null } = {}) => {
+    const finishAudit = async ({ principal = null, targetType, targetId, after = null, result = "success", errorCode = null } = {}) => {
       if (!httpAudit) return;
       if (result === "success") httpActionCompleted = true;
       const completedAudit = {
@@ -304,7 +327,7 @@ function createApplication(overrides = {}) {
         errorCode,
         finished: true,
       };
-      auditLogRepository.record(completedAudit);
+      await auditLogRepository.record(completedAudit);
       httpAudit = completedAudit;
     };
     const publicResult = (result) => {
@@ -350,20 +373,20 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/ready" || pathname === "/health") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown });
+        const status = currentReadiness();
         return sendJson(response, status.ready ? 200 : 503, { status: status.ready ? "ready" : "not-ready", version: APP_VERSION });
       }
 
       if (pathname === "/metrics") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const status = readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown });
+        const status = currentReadiness();
         return sendText(response, 200, metrics.render({
           appVersion: APP_VERSION,
           processStartedAt: PROCESS_STARTED_AT,
           activeHttpRequests: activeRequests,
           readiness: status,
           ws: dataProvider.getMetricsStatus(),
-          sheetPoller: dataPoller.getStatus(),
+          sheetPoller: dataPollerService.getStatus(),
           court: courtPoller.getStatus(),
           state: status.state,
           sheets: status.sheets,
@@ -374,6 +397,10 @@ function createApplication(overrides = {}) {
 
       if (shuttingDown) {
         throw new AppError("SHUTTING_DOWN", "Server wird beendet", 503);
+      }
+
+      if (writeMode === "read_only" && HTTP_WRITE_PATHS.has(pathname) && new Set(["POST", "DELETE"]).has(request.method)) {
+        throw new AppError("READ_ONLY_MODE", "Schreiboperationen sind waehrend der Abnahme gesperrt", 503);
       }
 
       if (EMOJI_ASSETS.has(pathname)) {
@@ -406,8 +433,8 @@ function createApplication(overrides = {}) {
         for (const key of url.searchParams.keys()) if (!allowedParameters.has(key) || url.searchParams.getAll(key).length !== 1) throw new AppError("VALIDATION_ERROR", "Reporting-Parameter sind ungueltig", 400);
         if (url.searchParams.get("view") === "options") {
           if ([...url.searchParams.keys()].some((key) => key !== "view")) throw new AppError("VALIDATION_ERROR", "Reporting-Parameter sind ungueltig", 400);
-          const hallTimes = hallTimeService.reportingSnapshot(0, 0);
-          return sendJson(response, 200, messagingService.messagingReportOptions({ deployment: messagingReporting.deployment, hallTimes, logCompletion: true }));
+          const hallTimes = await hallTimeService.reportingSnapshot(0, 0);
+          return sendJson(response, 200, await messagingService.messagingReportOptions({ deployment: messagingReporting.deployment, hallTimes, logCompletion: true }));
         }
         if (url.searchParams.has("view")) throw new AppError("VALIDATION_ERROR", "Reporting-Ansicht ist ungueltig", 400);
         if (!["from", "to"].every((key) => url.searchParams.has(key))) throw new AppError("VALIDATION_ERROR", "Reporting-Zeitraum fehlt", 400);
@@ -417,9 +444,9 @@ function createApplication(overrides = {}) {
         if (toMs - fromMs > 31 * 24 * 60 * 60 * 1000) throw new AppError("REPORTING_RANGE_TOO_LARGE", "Reporting-Zeitraum darf hoechstens 31 Tage umfassen", 400);
         const selection = url.searchParams.has("selection") ? url.searchParams.get("selection").split(",") : ["personal"];
         if (selection.length > 100 || selection.some((value) => !value || value.length > 160)) throw new AppError("REPORTING_SELECTION_INVALID", "Meldungsauswahl ist ungueltig", 400);
-        const people = messagingService.reportingPeople();
-        const hallTimes = hallTimeService.reportingSnapshot(fromMs, toMs, people);
-        return sendJson(response, 200, messagingService.messagingReport({ fromMs, toMs, deployment: messagingReporting.deployment, selection, hallTimes }));
+        const people = await messagingService.reportingPeople();
+        const hallTimes = await hallTimeService.reportingSnapshot(fromMs, toMs, people);
+        return sendJson(response, 200, await messagingService.messagingReport({ fromMs, toMs, deployment: messagingReporting.deployment, selection, hallTimes }));
       }
 
       const cookies = parseCookies(request.headers.cookie);
@@ -430,7 +457,7 @@ function createApplication(overrides = {}) {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
         return sendJson(response, 200, {
           success: true,
-          frontendLogging: frontendLoggingService.getPolicy(diagnosticIdentity()?.id || null),
+          frontendLogging: await frontendLoggingService.getPolicy((await diagnosticIdentity())?.id || null),
         });
       }
 
@@ -438,9 +465,9 @@ function createApplication(overrides = {}) {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
         const body = await readJsonBody(request, HTTP_BODY_LIMIT_BYTES);
-        const result = frontendLoggingService.recordBatch({
+        const result = await frontendLoggingService.recordBatch({
           body,
-          identity: diagnosticIdentity(),
+          identity: await diagnosticIdentity(),
           sourceIp: getRequestIp(request),
         });
         return sendJson(response, 200, result);
@@ -448,26 +475,26 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/status") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const statusAuth = authService.requireRole(sessionToken, ["admin"], { allowLastKnownGoodRole: true });
+        const statusAuth = await authService.requireRole(sessionToken, ["admin"], { allowLastKnownGoodRole: true });
         return sendJson(response, 200, {
           authorization: {
             role: statusAuth.principal.role,
             roleSource: statusAuth.principal.roleSource || "current",
           },
-          status: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }),
+          status: currentReadiness(),
           provider: dataProvider.getStatus(),
           monitor: monitorBroker.status(),
           sheets: sheetService.status(),
           scoreLog: scoreLogRepository.status(),
           auditLog: auditLogRepository.status(),
-          messaging: messagingRepository.status(),
-          state: stateStore.getStatus(),
+          messaging: messagingRepository.status?.() || { ready: true, backend: persistenceMode },
+          state: courtService?.status?.() || stateStore.getStatus(),
         });
       }
 
       if (pathname === "/api/admin/grafana-auth") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         return sendJson(response, 200, { success: true }, {
           "X-WEBAUTH-USER": `epiber-${INSTANCE_ID}:${auth.principal.id}`,
           "X-WEBAUTH-ROLE": "Admin",
@@ -476,14 +503,14 @@ function createApplication(overrides = {}) {
 
       if (pathname === "/api/session") {
         if (request.method === "GET") {
-          const auth = authService.getUserForToken(sessionToken, { refreshSession: true });
+          const auth = await authService.getUserForToken(sessionToken, { refreshSession: writeMode !== "read_only" });
           return sendJson(response, 200, {
             success: true,
             authenticated: !!auth,
             user: auth?.user || null,
             expiresAt: auth?.session.expiresAt || null,
             serverTime: Date.now(),
-            frontendLogging: frontendLoggingService.getPolicy(auth?.principal.id || null),
+            frontendLogging: await frontendLoggingService.getPolicy(auth?.principal.id || null),
           }, auth?.session.refreshed ? {
             "Set-Cookie": serializeCookie(SESSION_COOKIE, sessionToken, { maxAge: SESSION_TTL_MS / 1000, secure: COOKIE_SECURE }),
           } : {});
@@ -497,12 +524,12 @@ function createApplication(overrides = {}) {
           try {
             attemptedLogin = authIdentifier(body, "passwordHash");
           } catch (error) {
-            beginAudit({ action: "login", targetType: "session", sourceIp, before: { identifierValid: false } });
+             await beginAudit({ action: "login", targetType: "session", sourceIp, before: { identifierValid: false } });
             throw error;
           }
-          beginAudit({ action: "login", targetType: "session", sourceIp, attemptedLogin, before: { identifierValid: true } });
+          await beginAudit({ action: "login", targetType: "session", sourceIp, attemptedLogin, before: { identifierValid: true } });
           const result = await authService.login({ login: attemptedLogin, passwordHash: body.passwordHash, ip: sourceIp });
-          finishAudit({
+          await finishAudit({
             principal: {
               type: "user",
               id: result.user.id,
@@ -518,18 +545,18 @@ function createApplication(overrides = {}) {
             user: result.user,
             expiresAt: result.session.expiresAt,
             serverTime: Date.now(),
-            frontendLogging: frontendLoggingService.getPolicy(result.user.id),
+            frontendLogging: await frontendLoggingService.getPolicy(result.user.id),
           }, { "Set-Cookie": cookie });
         }
         if (request.method === "DELETE") {
           assertAllowedOrigin(request, ALLOWED_ORIGINS);
-          const auth = authService.getUserForToken(sessionToken);
-          beginAudit({ action: "logout", principal: auth?.principal, targetType: "session", targetId: auth?.principal.id || "" });
-          authService.logout(sessionToken);
-          finishAudit();
+          const auth = await authService.getUserForToken(sessionToken);
+          await beginAudit({ action: "logout", principal: auth?.principal, targetType: "session", targetId: auth?.principal.id || "" });
+          await authService.logout(sessionToken);
+          await finishAudit();
           return sendJson(response, 200, {
             success: true,
-            frontendLogging: frontendLoggingService.getPolicy(null),
+            frontendLogging: await frontendLoggingService.getPolicy(null),
           }, { "Set-Cookie": clearCookie(SESSION_COOKIE, COOKIE_SECURE) });
         }
         return methodNotAllowed(response, ["GET", "POST", "DELETE"], supportId);
@@ -538,8 +565,8 @@ function createApplication(overrides = {}) {
       if (pathname === "/api/password") {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireUser(sessionToken);
-        beginAudit({ action: "passwordChange", principal: auth.principal, targetType: "user", targetId: auth.principal.id });
+        const auth = await authService.requireUser(sessionToken);
+        await beginAudit({ action: "passwordChange", principal: auth.principal, targetType: "user", targetId: auth.principal.id });
         limitHttpWrite(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
         const result = await authService.changeOwnPassword(
@@ -547,37 +574,37 @@ function createApplication(overrides = {}) {
           passwordHashValue(body.currentPasswordHash, "currentPasswordHash"),
           passwordHashValue(body.newPasswordHash, "newPasswordHash"),
         );
-        finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
+        await finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
         const cookie = serializeCookie(SESSION_COOKIE, result.session.token, { maxAge: SESSION_TTL_MS / 1000, secure: COOKIE_SECURE });
         return sendJson(response, 200, {
           success: true,
           user: result.user,
           expiresAt: result.session.expiresAt,
           serverTime: Date.now(),
-          frontendLogging: frontendLoggingService.getPolicy(result.user.id),
+          frontendLogging: await frontendLoggingService.getPolicy(result.user.id),
         }, { "Set-Cookie": cookie });
       }
 
       if (pathname === "/api/admin/frontend-logging") {
         if (request.method === "GET") {
-          authService.requireRole(sessionToken, ["admin"]);
-          return sendJson(response, 200, frontendLoggingService.adminView());
+          await authService.requireRole(sessionToken, ["admin"]);
+          return sendJson(response, 200, await frontendLoggingService.adminView());
         }
         if (request.method === "POST") {
           assertAllowedOrigin(request, ALLOWED_ORIGINS);
-          const auth = authService.requireRole(sessionToken, ["admin"]);
+          const auth = await authService.requireRole(sessionToken, ["admin"]);
           limitFrontendLoggingAdmin(request, auth.principal.id);
           const body = await readJsonBody(request, Math.min(4096, HTTP_BODY_LIMIT_BYTES));
-          const before = frontendLoggingService.settingsSnapshot();
-          beginAudit({
+          const before = await frontendLoggingService.settingsSnapshot();
+          await beginAudit({
             action: "frontendLoggingSettings",
             principal: auth.principal,
             targetType: "frontend-logging",
             targetId: "global",
             before,
           });
-          const stored = frontendLoggingService.updateSettings(body);
-          finishAudit({ after: { ...stored.value, revision: stored.revision } });
+          const stored = await frontendLoggingService.updateSettings(body);
+          await finishAudit({ after: { ...stored.value, revision: stored.revision } });
           return sendJson(response, 200, { success: true, settings: { ...stored.value, revision: stored.revision } });
         }
         return methodNotAllowed(response, ["GET", "POST"], supportId);
@@ -586,12 +613,12 @@ function createApplication(overrides = {}) {
       if (pathname === "/api/admin/frontend-logging/targets") {
         if (!["POST", "DELETE"].includes(request.method)) return methodNotAllowed(response, ["POST", "DELETE"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         limitFrontendLoggingAdmin(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
         const personId = idValue(body.personId, "personId");
-        const before = frontendLoggingService.targetsSnapshot().value[personId] || null;
-        beginAudit({
+        const before = (await frontendLoggingService.targetsSnapshot()).value[personId] || null;
+        await beginAudit({
           action: request.method === "POST" ? "frontendLoggingTargetSet" : "frontendLoggingTargetRemove",
           principal: auth.principal,
           targetType: "user",
@@ -599,9 +626,9 @@ function createApplication(overrides = {}) {
           before,
         });
         const result = request.method === "POST"
-          ? frontendLoggingService.setTarget(body, auth.principal)
-          : frontendLoggingService.removeTarget(body);
-        finishAudit({ after: request.method === "POST" ? result.target : { removed: result.removed } });
+          ? await frontendLoggingService.setTarget(body, auth.principal)
+          : await frontendLoggingService.removeTarget(body);
+        await finishAudit({ after: request.method === "POST" ? result.target : { removed: result.removed } });
         return sendJson(response, 200, { success: true, ...result });
       }
 
@@ -615,53 +642,53 @@ function createApplication(overrides = {}) {
         try {
           attemptedLogin = authIdentifier(body, "newPasswordHash");
         } catch (error) {
-          beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, before: { identifierValid: false } });
+          await beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, before: { identifierValid: false } });
           throw error;
         }
-        beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, attemptedLogin, before: { identifierValid: true } });
+        await beginAudit({ action: "passwordSetup", targetType: "user", sourceIp: ip, attemptedLogin, before: { identifierValid: true } });
         const result = await authService.setupPassword(
           attemptedLogin,
           passwordHashValue(body.newPasswordHash, "newPasswordHash"),
         );
-        finishAudit({ targetId: result._audit?.personId || "", after: { credentialChanged: true, sessionsRevoked: true } });
+        await finishAudit({ targetId: result._audit?.personId || "", after: { credentialChanged: true, sessionsRevoked: true } });
         return sendJson(response, 200, publicResult(result));
       }
 
       if (pathname === "/api/admin/password-setup") {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         limitHttpWrite(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-        beginAudit({ action: "adminPasswordSetup", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
+        await beginAudit({ action: "adminPasswordSetup", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
         const result = await authService.setPasswordSetupAllowed(
           sessionToken,
           idValue(body.personId, "personId"),
           booleanValue(body.allowed, "allowed"),
         );
-        finishAudit({ after: { allowed: result.allowed } });
+        await finishAudit({ after: { allowed: result.allowed } });
         return sendJson(response, 200, result);
       }
 
       if (pathname === "/api/admin/password") {
         if (request.method !== "POST") return methodNotAllowed(response, ["POST"], supportId);
         assertAllowedOrigin(request, ALLOWED_ORIGINS);
-        const auth = authService.requireRole(sessionToken, ["admin"]);
+        const auth = await authService.requireRole(sessionToken, ["admin"]);
         limitHttpWrite(request, auth.principal.id);
         const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-        beginAudit({ action: "adminPasswordSet", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
+        await beginAudit({ action: "adminPasswordSet", principal: auth.principal, targetType: "user", targetId: String(body.personId || "") });
         const result = await authService.setPasswordAsAdmin(
           sessionToken,
           idValue(body.personId, "personId"),
           passwordHashValue(body.newPasswordHash, "newPasswordHash"),
         );
-        finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
+        await finishAudit({ after: { credentialChanged: true, sessionsRevoked: true } });
         return sendJson(response, 200, result);
       }
 
       if (pathname === "/api/monitor/session") {
         if (request.method === "GET") {
-          const device = repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
+          const device = await repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
           return sendJson(response, 200, { success: true, authenticated: !!device, monitor: device ? { id: device.monitorId, label: device.label } : null });
         }
         if (request.method === "POST") {
@@ -670,19 +697,19 @@ function createApplication(overrides = {}) {
             throw new AppError("DEVICE_LOGIN_RATE_LIMIT", "Zu viele Geraete-Anmeldeversuche", 429);
           }
           const body = await readJsonBody(request, Math.min(2048, HTTP_BODY_LIMIT_BYTES));
-          beginAudit({ action: "monitorEnroll", targetType: "monitor" });
+          await beginAudit({ action: "monitorEnroll", targetType: "monitor" });
           const token = stringValue(body.token, "token", { min: 32, max: 128 });
-          const device = repository.authenticateMonitor(token);
+          const device = await repository.authenticateMonitor(token);
           if (!device) throw new AppError("DEVICE_LOGIN_FAILED", "Geraetetoken ist ungueltig", 401);
-          finishAudit({ principal: { type: "device", id: device.monitorId, role: "device" }, targetId: device.monitorId });
+          await finishAudit({ principal: { type: "device", id: device.monitorId, role: "device" }, targetId: device.monitorId });
           const cookie = serializeCookie(MONITOR_COOKIE, token, { maxAge: 31536000, secure: COOKIE_SECURE });
           return sendJson(response, 200, { success: true, monitor: { id: device.monitorId, label: device.label } }, { "Set-Cookie": cookie });
         }
         if (request.method === "DELETE") {
           assertAllowedOrigin(request, ALLOWED_ORIGINS);
-          const device = repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
-          beginAudit({ action: "monitorLogout", principal: device ? { type: "device", id: device.monitorId, role: "device" } : null, targetType: "monitor", targetId: device?.monitorId || "" });
-          finishAudit();
+          const device = await repository.authenticateMonitor(cookies[MONITOR_COOKIE]);
+          await beginAudit({ action: "monitorLogout", principal: device ? { type: "device", id: device.monitorId, role: "device" } : null, targetType: "monitor", targetId: device?.monitorId || "" });
+          await finishAudit();
           return sendJson(response, 200, { success: true }, { "Set-Cookie": clearCookie(MONITOR_COOKIE, COOKIE_SECURE) });
         }
         return methodNotAllowed(response, ["GET", "POST", "DELETE"], supportId);
@@ -696,7 +723,7 @@ function createApplication(overrides = {}) {
       let responseError = error;
       if (httpAudit && !httpAudit.finished) {
         try {
-          finishAudit({ result: httpActionCompleted || error.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : "failed", errorCode: error.code || "INTERNAL_ERROR" });
+          await finishAudit({ result: httpActionCompleted || error.code === "WRITE_OUTCOME_UNKNOWN" ? "unknown" : "failed", errorCode: error.code || "INTERNAL_ERROR" });
         } catch (auditError) {
           logger.log("error", "audit_record_failed", { supportId, action: httpAudit.action, error: auditError });
         }
@@ -762,33 +789,37 @@ function createApplication(overrides = {}) {
     repository,
     scoreLogRepository,
     sheetService,
+    competitionService,
+    courtService,
+    writeMode,
   });
 
   function initialize() {
     if (initializePromise) return initializePromise;
     const startedAt = Date.now();
     initializePromise = (async () => {
-      const result = await dataPoller.initialLoad();
+      const result = await dataPollerService.initialLoad();
       if (shuttingDown) return { ...result, aborted: true };
       messagingService.enrichLegacyCompetitionAssignments?.();
-      stateStore.migrateLegacyCourtDisplayRules(dataStore.get("matchtyp"));
-      dataPoller.start(result);
-      const courts = stateStore.getScoreboardCourts();
+      if (!postgresMode) stateStore.migrateLegacyCourtDisplayRules(dataStore.get("matchtyp"));
+      dataPollerService.start(result);
+      const courts = courtService ? await courtService.getScoreboardCourts() : stateStore.getScoreboardCourts();
       courtPoller.setCourtActive(
-        { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
+        writeMode === "read_only" ? { "1": false, "2": false } : { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
         { initial: true },
       );
-      courtAutomation.start();
+      if (writeMode !== "read_only") courtAutomation.start();
+      if (overrides.startInvalidationListener) stopInvalidationListener = await overrides.startInvalidationListener();
       for (const court of ["1", "2"]) courtPoller.logCourtSnapshot(court, "startup");
       initialized = true;
-      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }).ready, durationMs: Date.now() - startedAt });
-      cleanupTimer = setInterval(() => {
-        repository.cleanup();
-        try { hallTimeService.cleanupExpired(); } catch (error) {
-          logger.log("warn", "hall_time_expiration_failed", { errorCode: error.code || "HALL_TIME_EXPIRATION_FAILED" });
-        }
-      }, 300000);
-      cleanupTimer.unref?.();
+      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: currentReadiness().ready, persistenceMode, durationMs: Date.now() - startedAt });
+      if (writeMode !== "read_only") {
+        cleanupTimer = setInterval(() => {
+          repository.cleanup?.();
+          Promise.resolve(hallTimeService.cleanupExpired()).catch((error) => logger.log("warn", "hall_time_expiration_failed", { errorCode: error.code || "HALL_TIME_EXPIRATION_FAILED" }));
+        }, 300000);
+        cleanupTimer.unref?.();
+      }
       return result;
     })();
     return initializePromise;
@@ -807,10 +838,11 @@ function createApplication(overrides = {}) {
       : Promise.resolve();
     const drains = (async () => {
       const results = await Promise.allSettled([
-        dataPoller.stop(),
+        dataPollerService.stop(),
         Promise.resolve(courtAutomation.stop()),
         courtPoller.stop(),
         dataProvider.shutdown(server),
+        Promise.resolve(stopInvalidationListener?.()),
         initializePromise || Promise.resolve(),
       ]);
       const rejected = results.find((result) => result.status === "rejected");
@@ -837,7 +869,8 @@ function createApplication(overrides = {}) {
       auditLogRepository.close?.();
       scoreLogRepository.close?.();
       messagingRepository.close?.();
-      repository.close();
+      repository.close?.();
+      await runtime?.close?.();
       logger.log("info", "server_shutdown_completed", { signal, durationMs: Date.now() - startedAt });
     } catch (error) {
       server.closeAllConnections();
@@ -845,7 +878,8 @@ function createApplication(overrides = {}) {
         auditLogRepository.close?.();
         scoreLogRepository.close?.();
         messagingRepository.close?.();
-        repository.close();
+        repository.close?.();
+        runtime?.close?.().catch?.(() => {});
       });
       throw error;
     } finally {
@@ -868,13 +902,13 @@ function createApplication(overrides = {}) {
     server,
     sheetService,
     shutdown,
-    status: () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, initialized, shuttingDown }),
+    status: currentReadiness,
   };
 }
 
 async function start() {
   validateRuntimeConfig();
-  const app = createApplication();
+  const app = PERSISTENCE_MODE === "postgres" ? await createPostgresApplication({ writeMode: WRITE_MODE }) : createApplication({ writeMode: WRITE_MODE });
   await new Promise((resolve, reject) => {
     const onStartupError = (error) => reject(error);
     app.server.once("error", onStartupError);
@@ -919,6 +953,50 @@ async function start() {
   return app;
 }
 
+async function createPostgresApplication({ env = process.env, connectionConfig = null, writeMode = WRITE_MODE } = {}) {
+  const components = await createPostgresComponents({
+    connectionConfig: connectionConfig || createConnectionConfig({ ...env, PGAPPNAME: env.PGAPPNAME || `epiber-${INSTANCE_ID}-app` }),
+    expectedTenantCode: String(env.EPIBER_TENANT_CODE || "").trim(),
+    sourceInstance: INSTANCE_ID,
+    rateLimitSecret: Buffer.from(String(env.EPIBER_AUTH_RATE_LIMIT_SECRET || AUTH_RATE_LIMIT_SECRET), "base64url"),
+    sessionTtlMs: SESSION_TTL_MS,
+    sessionRefreshIntervalMs: SESSION_REFRESH_INTERVAL_MS,
+    sessionMaxPerUser: SESSION_MAX_PER_USER,
+    appVersion: APP_VERSION,
+    publish: (topic, value) => dataProvider.publish(topic, value),
+    log: logger.log,
+  });
+  const courtAutomation = new PostgresCourtAutomation({
+    courtService: components.courtService, dataStore, courtPoller,
+    auditLogRepository: components.auditLogRepository, log: logger.log,
+  });
+  try {
+    return createApplication({
+      persistenceMode: "postgres",
+      writeMode,
+      runtime: components.runtime,
+      repository: components.stateAdapter,
+      scoreLogRepository: components.scoreLogRepository,
+      auditLogRepository: components.auditLogRepository,
+      messagingRepository: components.repositories.messaging,
+      messagingService: components.messagingService,
+      hallTimeService: components.hallTimeService,
+      sheetService: components.sheetService,
+      competitionService: components.competitionService,
+      authService: components.authService,
+      frontendLoggingService: components.frontendLoggingService,
+      monitorBroker: components.monitorBroker,
+      courtService: components.courtService,
+      courtAutomation,
+      dataPoller: components.dataPoller,
+      startInvalidationListener: components.startInvalidationListener,
+    });
+  } catch (error) {
+    await components.runtime.close().catch(() => {});
+    throw error;
+  }
+}
+
 if (require.main === module) {
   start().catch((error) => {
     logger.log("error", "server_start_failed", { error });
@@ -926,4 +1004,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createApplication, readiness, start };
+module.exports = { createApplication, createPostgresApplication, readiness, start };

@@ -32,16 +32,36 @@ CREATE TABLE venue.score_sources (
 CREATE TABLE venue.court_assignments (
   id uuid PRIMARY KEY DEFAULT uuidv7(),
   court_id uuid NOT NULL REFERENCES venue.courts(id) ON DELETE RESTRICT,
-  match_id uuid NOT NULL REFERENCES play.matches(id) ON DELETE RESTRICT,
+  assignment_type text NOT NULL DEFAULT 'match' CHECK (assignment_type IN ('match','manual')),
+  match_id uuid REFERENCES play.matches(id) ON DELETE RESTRICT,
+  competition_id uuid REFERENCES play.competitions(id) ON DELETE RESTRICT,
+  match_format_version_id uuid REFERENCES play.match_format_versions(id) ON DELETE RESTRICT,
+  competition_name_snapshot text,
+  round_code_snapshot text,
+  scheduled_at_snapshot timestamptz(3),
+  automation_status text CHECK (automation_status IN ('pending','activated','finished','expired','unscheduled')),
   assigned_at timestamptz(3) NOT NULL,
   assigned_by_person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
   released_at timestamptz(3),
   released_by_person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
   CHECK (released_at IS NULL OR released_at >= assigned_at),
+  CHECK ((assignment_type='match' AND match_id IS NOT NULL AND competition_id IS NOT NULL AND match_format_version_id IS NOT NULL)
+      OR (assignment_type='manual' AND match_id IS NULL)),
   UNIQUE (id, court_id)
 );
 CREATE UNIQUE INDEX court_assignments_open_court ON venue.court_assignments (court_id) WHERE released_at IS NULL;
 CREATE UNIQUE INDEX court_assignments_open_match ON venue.court_assignments (match_id) WHERE released_at IS NULL;
+
+CREATE TABLE venue.court_assignment_participants (
+  assignment_id uuid NOT NULL REFERENCES venue.court_assignments(id) ON DELETE CASCADE,
+  side_no smallint NOT NULL CHECK (side_no IN (1,2)),
+  position_no smallint NOT NULL CHECK (position_no IN (1,2)),
+  person_id uuid NOT NULL REFERENCES identity.people(id) ON DELETE RESTRICT,
+  first_name_snapshot text,
+  last_name_snapshot text NOT NULL,
+  PRIMARY KEY (assignment_id,side_no,position_no),
+  UNIQUE (assignment_id,person_id)
+);
 
 CREATE TABLE venue.court_live_state (
   court_id uuid PRIMARY KEY REFERENCES venue.courts(id) ON DELETE CASCADE,
@@ -118,12 +138,16 @@ CREATE TABLE venue.monitor_devices (
   page_key text,
   competition_id uuid REFERENCES play.competitions(id) ON DELETE RESTRICT,
   hall_time_grid_id uuid,
+  target_path text NOT NULL DEFAULT '/index.html' CHECK (length(target_path) BETWEEN 2 AND 500 AND target_path ~ '^/[A-Za-z0-9_./?&=:%+-]+$'),
+  target_command_id uuid,
+  target_issued_at timestamptz(3),
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   created_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
   revoked_at timestamptz,
   last_seen_at timestamptz,
   UNIQUE (tenant_id, contract_id),
+  CHECK ((target_command_id IS NULL) = (target_issued_at IS NULL)),
   CHECK ((target_type = 'page' AND page_key IS NOT NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL)
       OR (target_type IN ('competition', 'ranking', 'entry_list', 'competition_history') AND page_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL)
       OR (target_type = 'hall_time_grid' AND page_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NOT NULL))
@@ -134,13 +158,25 @@ CREATE TABLE venue.monitor_commands (
   monitor_id uuid NOT NULL REFERENCES venue.monitor_devices(id) ON DELETE CASCADE,
   command_id uuid NOT NULL,
   command_type text NOT NULL CHECK (command_type IN ('navigate', 'scroll', 'reload')),
+  operation_id uuid,
   target_revision bigint CHECK (target_revision > 0),
+  target_path text CHECK (target_path IS NULL OR (length(target_path) BETWEEN 2 AND 500 AND target_path ~ '^/[A-Za-z0-9_./?&=:%+-]+$')),
+  stream_id uuid,
+  stream_sequence bigint CHECK (stream_sequence IS NULL OR stream_sequence > 0),
+  delta_y integer CHECK (delta_y IS NULL OR delta_y IN (-300,300)),
+  status text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','received','loading','loaded','applied','failed','offline')),
+  error_code text CHECK (error_code IS NULL OR error_code ~ '^[A-Z][A-Z0-9_]{0,63}$'),
   created_at timestamptz(3) NOT NULL,
+  updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
   acknowledged_at timestamptz(3),
   expires_at timestamptz(3) NOT NULL,
   UNIQUE (monitor_id, command_id),
+  UNIQUE (monitor_id, operation_id),
   CHECK (expires_at > created_at),
-  CHECK (acknowledged_at IS NULL OR acknowledged_at >= created_at)
+  CHECK (acknowledged_at IS NULL OR acknowledged_at >= created_at),
+  CHECK ((command_type='navigate' AND target_revision IS NOT NULL AND target_path IS NOT NULL AND stream_id IS NULL AND stream_sequence IS NULL AND delta_y IS NULL)
+      OR (command_type='scroll' AND target_revision IS NULL AND target_path IS NULL AND stream_id IS NOT NULL AND stream_sequence IS NOT NULL AND delta_y IS NOT NULL)
+      OR (command_type='reload' AND target_revision IS NOT NULL AND target_path IS NULL AND stream_id IS NULL AND stream_sequence IS NULL AND delta_y IS NULL))
 );
 CREATE INDEX monitor_commands_pending ON venue.monitor_commands (monitor_id, created_at) WHERE acknowledged_at IS NULL;
 
@@ -176,9 +212,14 @@ CREATE TABLE venue.hall_time_grids (
   waiting_list_enabled boolean NOT NULL DEFAULT false,
   waiting_limit_per_person smallint CHECK (waiting_limit_per_person > 0),
   fair_use_enabled boolean NOT NULL DEFAULT false,
+  fair_use_base integer NOT NULL DEFAULT 0 CHECK (fair_use_base >= 0),
+  fair_use_extended_days integer NOT NULL DEFAULT 1 CHECK (fair_use_extended_days > 0),
+  fair_use_percent integer NOT NULL DEFAULT 0 CHECK (fair_use_percent >= 0),
   fair_use_open_days integer CHECK (fair_use_open_days >= 0),
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   projection_revision bigint NOT NULL DEFAULT 1 CHECK (projection_revision > 0),
+  created_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
+  updated_at timestamptz(3) NOT NULL DEFAULT clock_timestamp(),
   UNIQUE (section_id, contract_id),
   UNIQUE (id, section_id),
   CHECK (waiting_list_enabled OR waiting_limit_per_person IS NULL)
@@ -242,7 +283,14 @@ CREATE TABLE venue.hall_time_history (
   action_code text NOT NULL,
   actor_person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
   occurred_at timestamptz(3) NOT NULL,
-  item_count integer NOT NULL CHECK (item_count > 0)
+  item_count integer NOT NULL CHECK (item_count >= 0),
+  detail text,
+  unavailable_count integer CHECK (unavailable_count IS NULL OR unavailable_count >= 0),
+  avoid_count integer CHECK (avoid_count IS NULL OR avoid_count >= 0),
+  assigned_count integer CHECK (assigned_count IS NULL OR assigned_count >= 0),
+  removed_count integer CHECK (removed_count IS NULL OR removed_count >= 0),
+  promoted_count integer CHECK (promoted_count IS NULL OR promoted_count >= 0),
+  unchanged_count integer CHECK (unchanged_count IS NULL OR unchanged_count >= 0)
 );
 CREATE INDEX hall_time_history_retention ON venue.hall_time_history (grid_id, occurred_at, id);
 
@@ -253,36 +301,59 @@ CREATE TABLE venue.hall_time_history_items (
   person_id uuid REFERENCES identity.people(id) ON DELETE RESTRICT,
   before_status text CHECK (before_status IN ('confirmed', 'waiting')),
   after_status text CHECK (after_status IN ('confirmed', 'waiting')),
-  slot_starts_at_snapshot timestamptz(3) NOT NULL,
+  slot_starts_at_snapshot timestamptz(3),
   person_contract_id_snapshot text,
   person_name_snapshot text,
-  PRIMARY KEY (history_id, item_no),
-  CHECK (before_status IS NOT NULL OR after_status IS NOT NULL)
+  PRIMARY KEY (history_id, item_no)
 );
 
 CREATE TABLE identity.user_favorites (
   account_id uuid NOT NULL REFERENCES identity.user_accounts(id) ON DELETE CASCADE,
   position smallint NOT NULL CHECK (position BETWEEN 1 AND 32),
-  target_type text NOT NULL CHECK (target_type IN ('page', 'competition', 'ranking', 'entry_list', 'competition_history', 'hall_time_grid')),
+  target_type text NOT NULL CHECK (target_type IN ('page', 'overlay', 'competition', 'ranking', 'entry_list', 'competition_history', 'competition_history_all', 'bracket', 'round_robin', 'hall_time_grid')),
   page_key text,
+  overlay_key text,
   competition_id uuid REFERENCES play.competitions(id) ON DELETE CASCADE,
   hall_time_grid_id uuid REFERENCES venue.hall_time_grids(id) ON DELETE CASCADE,
+  round_robin_layout smallint CHECK (round_robin_layout BETWEEN 0 AND 5),
+  navigator_profile_code text CHECK (navigator_profile_code IS NULL OR (navigator_profile_code=btrim(navigator_profile_code) AND navigator_profile_code<>'')),
   revision bigint NOT NULL CHECK (revision > 0),
   PRIMARY KEY (account_id, position),
-  CHECK ((target_type = 'page' AND page_key IS NOT NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL)
-      OR (target_type IN ('competition', 'ranking', 'entry_list', 'competition_history') AND page_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL)
-      OR (target_type = 'hall_time_grid' AND page_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NOT NULL))
+  CHECK ((target_type = 'page' AND page_key IS NOT NULL AND overlay_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL
+          AND (navigator_profile_code IS NULL OR page_key='navigator'))
+      OR (target_type = 'overlay' AND page_key IS NULL AND overlay_key IS NOT NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type = 'competition_history_all' AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type IN ('competition', 'ranking', 'entry_list', 'competition_history', 'bracket') AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type = 'round_robin' AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type = 'hall_time_grid' AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NOT NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL))
 );
 
 CREATE TABLE identity.user_start_pages (
   account_id uuid PRIMARY KEY REFERENCES identity.user_accounts(id) ON DELETE CASCADE,
-  target_type text NOT NULL CHECK (target_type IN ('page', 'competition', 'ranking', 'entry_list', 'competition_history', 'hall_time_grid')),
+  target_type text NOT NULL CHECK (target_type IN ('page', 'overlay', 'competition', 'ranking', 'entry_list', 'competition_history', 'competition_history_all', 'bracket', 'round_robin', 'hall_time_grid')),
   page_key text,
+  overlay_key text,
   competition_id uuid REFERENCES play.competitions(id) ON DELETE CASCADE,
   hall_time_grid_id uuid REFERENCES venue.hall_time_grids(id) ON DELETE CASCADE,
+  round_robin_layout smallint CHECK (round_robin_layout BETWEEN 0 AND 5),
+  navigator_profile_code text CHECK (navigator_profile_code IS NULL OR (navigator_profile_code=btrim(navigator_profile_code) AND navigator_profile_code<>'')),
   revision bigint NOT NULL CHECK (revision > 0),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  CHECK ((target_type = 'page' AND page_key IS NOT NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL)
-      OR (target_type IN ('competition', 'ranking', 'entry_list', 'competition_history') AND page_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL)
-      OR (target_type = 'hall_time_grid' AND page_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NOT NULL))
+  CHECK ((target_type = 'page' AND page_key IS NOT NULL AND overlay_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL
+          AND (navigator_profile_code IS NULL OR page_key='navigator'))
+      OR (target_type = 'overlay' AND page_key IS NULL AND overlay_key IS NOT NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type = 'competition_history_all' AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type IN ('competition', 'ranking', 'entry_list', 'competition_history', 'bracket') AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type = 'round_robin' AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NOT NULL AND hall_time_grid_id IS NULL AND navigator_profile_code IS NULL)
+      OR (target_type = 'hall_time_grid' AND page_key IS NULL AND overlay_key IS NULL AND competition_id IS NULL AND hall_time_grid_id IS NOT NULL AND round_robin_layout IS NULL AND navigator_profile_code IS NULL))
+);
+
+CREATE TABLE identity.user_preference_states (
+  account_id uuid PRIMARY KEY REFERENCES identity.user_accounts(id) ON DELETE CASCADE,
+  favorites_revision bigint NOT NULL DEFAULT 0 CHECK (favorites_revision >= 0),
+  favorites_updated_at timestamptz,
+  start_page_revision bigint NOT NULL DEFAULT 0 CHECK (start_page_revision >= 0),
+  start_page_updated_at timestamptz,
+  CHECK ((favorites_revision = 0) = (favorites_updated_at IS NULL)),
+  CHECK ((start_page_revision = 0) = (start_page_updated_at IS NULL))
 );

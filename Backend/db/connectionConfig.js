@@ -4,7 +4,7 @@ const fs = require("fs");
 
 function readSecret(filename) {
   const stat = fs.statSync(filename);
-  if (!stat.isFile() || (stat.mode & 0o077) !== 0) throw new Error("DB_PASSWORD_FILE_INSECURE");
+  if (!stat.isFile() || (stat.mode & 0o037) !== 0) throw new Error("DB_PASSWORD_FILE_INSECURE");
   const value = fs.readFileSync(filename, "utf8").trim();
   if (!value) throw new Error("DB_PASSWORD_FILE_EMPTY");
   return value;

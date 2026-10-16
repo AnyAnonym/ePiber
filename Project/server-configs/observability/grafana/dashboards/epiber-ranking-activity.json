@@ -85,7 +85,7 @@
   "tags": ["epiber", "ranking", "challenge", "audit"],
   "templating": {
     "list": [
-      { "current": { "text": "live", "value": "live" }, "hide": 0, "includeAll": false, "label": "Deployment", "multi": false, "name": "deployment", "options": [{ "selected": true, "text": "live", "value": "live" }, { "selected": false, "text": "paj", "value": "paj" }], "query": "live,paj", "skipUrlSync": false, "type": "custom" },
+      { "current": { "text": "live", "value": "live" }, "hide": 0, "includeAll": false, "label": "Deployment", "multi": false, "name": "deployment", "options": [{ "selected": true, "text": "live", "value": "live" }, { "selected": false, "text": "devel", "value": "devel" }], "query": "live,devel", "skipUrlSync": false, "type": "custom" },
       { "current": { "text": ".*", "value": ".*" }, "hide": 0, "label": "Bewerb-ID (Regex)", "name": "bewerb", "options": [], "query": ".*", "skipUrlSync": false, "type": "textbox" }
     ]
   },

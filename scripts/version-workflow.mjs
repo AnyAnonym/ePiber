@@ -475,21 +475,28 @@ function stageAllowed(allowed, { rejectPreStaged = false, mandatory = [] } = {})
   const gitDirectory = path.resolve(root, gitText(["rev-parse", "--git-dir"]));
   const realIndex = path.join(gitDirectory, "index");
   const temporaryIndex = path.join(gitDirectory, `index.version-workflow-${process.pid}`);
-  const temporaryGit = (args) => run("git", args, {
+  const temporaryGit = (args, runOptions = {}) => run("git", args, {
+    ...runOptions,
     cwd: root,
     env: { ...process.env, GIT_INDEX_FILE: temporaryIndex },
   });
 
   try {
     if (fs.existsSync(realIndex)) fs.copyFileSync(realIndex, temporaryIndex);
+    const addablePaths = (files) => files.filter((file) => {
+      if (fs.existsSync(path.join(root, file))) return true;
+      return temporaryGit(["ls-files", "--error-unmatch", "--", file], { allowFailure: true }).status === 0;
+    });
     const deletedPaths = git(["diff", "--name-only", "--diff-filter=D", "-z"]).stdout.split("\0").filter(Boolean);
     if (deletedPaths.length) {
-      temporaryGit(["add", "-A", "--", ...new Set([...allowed, ...deletedPaths])]);
+      const analysisPaths = addablePaths([...new Set([...allowed, ...deletedPaths])]);
+      if (analysisPaths.length) temporaryGit(["add", "-A", "--", ...analysisPaths]);
       const analysisRenames = temporaryGit(["diff", "--cached", "--name-status", "-z", "-M"]).stdout;
       assertRenamePairsAllowed(analysisRenames, allowed);
       fs.copyFileSync(realIndex, temporaryIndex);
     }
-    temporaryGit(["add", "-A", "--", ...allowed]);
+    const addable = addablePaths(allowed);
+    if (addable.length) temporaryGit(["add", "-A", "--", ...addable]);
     const staged = temporaryGit(["diff", "--cached", "--name-only", "-z"]).stdout.split("\0").filter(Boolean);
     if (!staged.length) fail("Keine Aenderungen zum Committen gestaged");
     const outside = staged.find((file) => !isAllowed(file, allowed));

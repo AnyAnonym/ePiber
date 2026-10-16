@@ -1,0 +1,23 @@
+redir /grafana /grafana/ 308
+handle /grafana/* {
+	forward_auth 127.0.0.1:8085 {
+		uri /auth?
+		copy_headers X-WEBAUTH-USER X-WEBAUTH-ROLE
+	}
+	reverse_proxy unix//run/epiber-observability/grafana.sock
+	log_append route grafana
+}
+
+@application path /ws /api/* /live /ready /health /version /status /wc /wc/*
+handle @application {
+	log_append route maintenance-blocked
+	respond "Wartungsarbeiten" 503
+}
+
+handle {
+	log_append route maintenance
+	root * /srv/http/ePiber/maintenance
+	rewrite * /index.html
+	header Cache-Control "no-store"
+	file_server
+}

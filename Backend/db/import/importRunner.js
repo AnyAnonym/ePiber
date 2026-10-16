@@ -20,12 +20,15 @@ const TABLES = {
   match_format_versions: "play.match_format_versions", competitions: "play.competitions", competition_gender_eligibility: "play.competition_gender_eligibility",
   competition_entries: "play.competition_entries", ranking_entries: "play.ranking_entries", matches: "play.matches", match_sides: "play.match_sides",
   match_participants: "play.match_participants", match_results: "play.match_results", match_result_sets: "play.match_result_sets",
-  match_result_history: "play.match_result_history", sites: "venue.sites", courts: "venue.courts", score_sources: "venue.score_sources",
-  court_live_state: "venue.court_live_state", score_events: "venue.score_events", monitor_devices: "venue.monitor_devices",
+  match_result_history: "play.match_result_history", ranking_changes: "play.ranking_changes", ranking_change_items: "play.ranking_change_items", match_ranking_effects: "play.match_ranking_effects",
+  sites: "venue.sites", courts: "venue.courts", score_sources: "venue.score_sources", court_assignments: "venue.court_assignments", court_assignment_participants: "venue.court_assignment_participants",
+  court_live_state: "venue.court_live_state", score_events: "venue.score_events",
+  hall_time_grids: "venue.hall_time_grids", hall_time_grid_participants: "venue.hall_time_grid_participants", hall_time_slots: "venue.hall_time_slots", hall_time_allocations: "venue.hall_time_allocations", hall_time_constraints: "venue.hall_time_constraints", hall_time_history: "venue.hall_time_history", hall_time_history_items: "venue.hall_time_history_items",
+  monitor_devices: "venue.monitor_devices", user_favorites: "identity.user_favorites", user_start_pages: "identity.user_start_pages", user_preference_states: "identity.user_preference_states",
   navigation_presets: "venue.navigation_presets", frontend_logging_settings: "identity.frontend_logging_settings",
   idempotency_operations: "ops.idempotency_operations", events: "messaging.events", event_participants: "messaging.event_participants",
   event_recipients: "messaging.event_recipients", receipts: "messaging.receipts", deliveries: "messaging.deliveries", comments: "messaging.comments",
-  reactions: "messaging.reactions", user_revisions: "messaging.user_revisions", audit_operations: "ops.audit_operations",
+  reactions: "messaging.reactions", user_revisions: "messaging.user_revisions", history_revision: "messaging.history_revision", audit_operations: "ops.audit_operations",
   audit_security_context: "ops.audit_security_context", audit_transitions: "ops.audit_transitions",
 };
 
@@ -76,8 +79,12 @@ const UNIQUE_PROJECTIONS = {
   matches: [["id"], ["competition_id", "contract_id"]], match_sides: [["id"], ["match_id", "side_no"]],
   match_participants: [["id"], ["side_id", "position_no"], ["match_id", "person_id"]], match_results: [["id"], ["match_id", "version_no"]],
   match_result_sets: [["result_id", "set_no"]], match_result_history: [["id"], ["operation_id"]],
+  ranking_changes: [["id"], ["match_result_history_id"]], ranking_change_items: [["ranking_change_id", "person_id"]], match_ranking_effects: [["match_result_history_id"], ["ranking_change_id"]],
   sites: [["id"], ["section_id", "site_code"]], courts: [["id"], ["site_id", "court_code"]], score_sources: [["id"], ["source_type", "source_key"]],
+  court_assignments: [["id"]], court_assignment_participants: [["assignment_id", "side_no", "position_no"], ["assignment_id", "person_id"]],
   score_events: [["id"], ["event_id"], ["court_id", "court_sequence"]], monitor_devices: [["id"], ["tenant_id", "contract_id"], ["token_hash"]],
+  hall_time_grids: [["id"], ["section_id", "contract_id"]], hall_time_grid_participants: [["grid_id", "person_id"]], hall_time_slots: [["id"], ["grid_id", "starts_at"]], hall_time_allocations: [["id"], ["slot_id", "person_id"]], hall_time_constraints: [["id"], ["grid_id", "person_id", "slot_id", "constraint_type"]], hall_time_history: [["id"], ["operation_id"]], hall_time_history_items: [["history_id", "item_no"]],
+  user_favorites: [["account_id", "position"]], user_start_pages: [["account_id"]], user_preference_states: [["account_id"]],
   navigation_presets: [["id"], ["tenant_id", "profile_code", "label"]], idempotency_operations: [["id"], ["tenant_id", "operation_id"]],
   events: [["id"], ["tenant_id", "contract_id"], ["tenant_id", "source_operation_id", "event_type"]],
   event_participants: [["event_id", "participant_role", "contract_id_snapshot"]], event_recipients: [["id"], ["event_id", "person_id"]],
@@ -102,9 +109,19 @@ function validatePlanUniqueness(tables) {
 function transformSource(root) {
   const inspection = inspectSource(root);
   try {
+    let retainHistorical = false;
+    const refreshMetadata = path.join(root, "metadata", "paj-refresh.json");
+    if (fs.existsSync(refreshMetadata)) {
+      const value = readMetadata(root, "paj-refresh.json");
+      retainHistorical = value.profile === "paj-refresh-v1" && value.historicalBusinessData === "retained";
+    }
     const sheets = transformSheets(root);
     for (const row of sheets.tables.match_result_history) if (!row.changed_at) row.changed_at = inspection.manifest.exportStartedAt;
-    const sqlite = transformSqlite(root, sheets.refs, inspection.manifest);
+    for (const row of sheets.tables.memberships) {
+      row.valid_from = null;
+      row.valid_until = row.active ? null : inspection.manifest.exportStartedAt;
+    }
+    const sqlite = transformSqlite(root, sheets.refs, inspection.manifest, { retainHistorical, ensureRuntimeDefaults: retainHistorical });
     const tables = { ...sheets.tables, ...sqlite.tables };
     validatePlanUniqueness(tables);
     const findings = [...sheets.findings, ...sqlite.findings].sort((a, b) => `${a.severity}:${a.code}:${a.source}`.localeCompare(`${b.severity}:${b.code}:${b.source}`));
@@ -175,7 +192,11 @@ async function insertRows(client, tableName, rows, { omit = [] } = {}) {
       return value;
     });
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
-    await client.query(`INSERT INTO ${tableName} (${columns.map(sqlIdentifier).join(", ")}) VALUES (${placeholders})`, values);
+    try {
+      await client.query(`INSERT INTO ${tableName} (${columns.map(sqlIdentifier).join(", ")}) VALUES (${placeholders})`, values);
+    } catch (error) {
+      throw Object.assign(error, { targetTable: tableName, targetConstraint: error.constraint || null });
+    }
     count++;
   }
   return count;
@@ -268,7 +289,7 @@ async function applyImport({ root, connectionConfig, output = () => {}, failAfte
       throw error;
     }
   } catch (error) {
-    if (!error.completionLogged) output(JSON.stringify({ event: "db_import_completed", command: "apply", result: error.outcome || "failed", errorCode: error.code || "DB_IMPORT_FAILED" }));
+    if (!error.completionLogged) output(JSON.stringify({ event: "db_import_completed", command: "apply", result: error.outcome || "failed", errorCode: error.code || "DB_IMPORT_FAILED", ...(error.targetTable ? { targetTable: error.targetTable } : {}), ...(error.targetConstraint ? { targetConstraint: error.targetConstraint } : {}) }));
     throw error;
   } finally { await client.end(); }
 }
