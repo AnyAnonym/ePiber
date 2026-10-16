@@ -6,18 +6,18 @@ const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const { canonicalizeSheetHeader, parseSemicolonCsv } = require("../import/sheetInspector");
 const { verifySourcePackage } = require("../import/sourcePackage");
+const { deriveScryptCredential } = require("../passwordCredential");
 
 const PROFILE = "paj-refresh-v1";
-const SCRYPT = Object.freeze({ N: 16384, r: 8, p: 1, length: 32 });
 
 function profileError(code, message) { return Object.assign(new Error(message), { code }); }
 
 function deriveCredential(clientHash, exportRunId, personId) {
-  const value = String(clientHash || "").trim().toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(value)) throw profileError("PAJ_REFRESH_PASSWORD_HASH_INVALID", "Testpasswort-Hash ist ungueltig");
-  const salt = crypto.createHash("sha256").update(`${PROFILE}\0${exportRunId}\0${personId}`).digest().subarray(0, 16);
-  const derived = crypto.scryptSync(value, salt, SCRYPT.length, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, maxmem: 64 * 1024 * 1024 });
-  return `scrypt$v1$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString("base64url")}$${derived.toString("base64url")}`;
+  try { return deriveScryptCredential(clientHash, `${PROFILE}\0${exportRunId}`, personId); }
+  catch (error) {
+    if (error.code === "PAJ_PASSWORD_HASH_INVALID") throw profileError("PAJ_REFRESH_PASSWORD_HASH_INVALID", "Testpasswort-Hash ist ungueltig");
+    throw error;
+  }
 }
 
 function sanitizePeopleRows(rows, { clientHash, exportRunId }) {

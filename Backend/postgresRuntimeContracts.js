@@ -1,6 +1,10 @@
 "use strict";
 
 const AUDIT_CONTRACTS = Object.freeze({
+  "paj.password.rotate_all": Object.freeze({
+    before: Object.freeze({ scope: "status" }),
+    after: Object.freeze({ accountCount: "count", credentialCount: "count", sessionsRevoked: "count", authorizationsRevoked: "count", loginLimitsCleared: "count" }),
+  }),
   "competition.entry.add": Object.freeze({
     before: Object.freeze({ competitionId: "id", personId: "id" }),
     after: Object.freeze({ competitionId: "id", personId: "id", entryId: "id", alreadyPresent: "boolean" }),

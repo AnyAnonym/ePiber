@@ -273,8 +273,9 @@ Zugangsdaten entsprechend zu schuetzen.
 8. Credentialbereinigter Live-zu-PAJ-Refresh
 ================================================================================
 
-Der wiederholbare Refresh besteht aus den versionierten Skripten
-`epiber-paj-refresh-credential-set`, `epiber-paj-refresh-run` und den intern
+Der wiederholbare Refresh und die PAJ-Passwortpflege bestehen aus den
+versionierten Skripten `epiber-paj-refresh-credential-set`,
+`epiber-paj-password-rotate-all`, `epiber-paj-refresh-run` und den intern
 verwendeten `epiber-migration-staging-run` sowie
 `Backend/scripts/db-paj-refresh-swap.js`. Die Shellwerkzeuge werden root-owned mit Modus 0755
 nach `/usr/local/sbin/` installiert. Die Ausfuehrung ist kein normaler
@@ -292,6 +293,37 @@ SHA-256-Wert nach
 `/etc/epiber-devel/credentials/paj-refresh-password-hash` mit
 `root:root:0400`. Dieser Wert ist credentialaequivalent und wird wie ein
 Passwort geschuetzt.
+
+Das nur vorbereitende `epiber-paj-refresh-credential-set` aendert keine bereits
+aktiven PAJ-Konten. Soll das gemeinsame Testpasswort des laufenden PAJ-Bestands
+sofort fuer alle Konten mit Login ersetzt werden, lautet der interaktive
+root-Aufruf:
+
+  sudo epiber-paj-password-rotate-all
+
+Das Werkzeug verlangt dieselbe Passwortstaerke und Wiederholung sowie die
+ausdrueckliche Eingabe `ROTIEREN`. Das bisherige Testpasswort wird dafuer nicht
+benoetigt. Damit kann ein vergessenes gemeinsames PAJ-Testpasswort jederzeit
+durch ein neues ersetzt werden, sofern administrativer Root-Zugriff auf den
+PAJ-Server besteht. Live und seine Credentials bleiben unberuehrt.
+
+Die Rotation ersetzt in einer serialisierbaren PostgreSQL-Transaktion alle
+aktiven Passwortcredentials der PAJ-Konten mit Login durch individuell
+gesalzene scrypt-Credentials, erhoeht deren Authrevision und widerruft alle
+aktiven Sitzungen sowie offenen Passwortfreigaben. Loginlimits werden geleert,
+damit das neue Passwort unmittelbar verwendet werden kann. Andere Fachdaten
+werden nicht geaendert. Start, Erfolg, Ablehnung und unklarer Commit-Ausgang
+werden ohne Login- oder Credentialwerte strukturiert protokolliert; der
+Fachwrite besitzt einen kontrollierten System-Auditdatensatz mit ausschliesslich
+Anzahlfeldern.
+
+Erst nach erfolgreichem Datenbankcommit wird derselbe credentialaequivalente
+SHA-256-Wert root-only nach
+`/etc/epiber-devel/credentials/paj-refresh-password-hash` uebernommen. Dadurch
+verwendet auch ein spaeterer Live-zu-PAJ-Refresh das neue Testpasswort. Meldet
+die anschliessende Dateisynchronisierung ausnahmsweise `result=unknown`, wird
+der Befehl mit demselben neuen Passwort wiederholt; die Wiederholung erzeugt
+erneut konsistente Credentials und synchronisiert die Datei.
 
 Vor jedem echten Lauf werden Verantwortlicher, UTC-Zeitfenster und eindeutige
 Lauf-ID festgelegt. Erst nach der gesonderten aktionsbezogenen Zustimmung wird

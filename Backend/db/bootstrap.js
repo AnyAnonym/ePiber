@@ -86,7 +86,7 @@ async function grantSchemaPrivileges(client, names, { readOnly = false } = {}) {
   await client.query(`GRANT SELECT, INSERT, UPDATE ON messaging.deliveries TO ${worker}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ops.import_runs, ops.import_findings, ops.seed_runs TO ${refresh}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ops.idempotency_operations, ops.audit_operations, ops.audit_security_context, ops.audit_transitions TO ${refresh}`);
-  await client.query(`GRANT SELECT ON ops.jobs, ops.outbox TO ${refresh}`);
+  await client.query(`GRANT SELECT ON ops.schema_migrations, ops.jobs, ops.outbox TO ${refresh}`);
   await client.query(`GRANT SELECT ON ops.schema_migrations, ops.seed_runs TO ${monitor}`);
 
   if (readOnly) {
@@ -211,6 +211,9 @@ async function verifyBootstrap({ adminConnectionConfig, prefix, database, passwo
           AND has_table_privilege($6, 'ops.audit_transitions', 'SELECT,INSERT,UPDATE,DELETE') AS refresh_import_ops_write,
         has_table_privilege($6, 'ops.jobs', 'SELECT')
           AND has_table_privilege($6, 'ops.outbox', 'SELECT') AS refresh_effect_state_read,
+        has_table_privilege($6, 'ops.schema_migrations', 'SELECT')
+          AND has_table_privilege($6, 'ops.seed_runs', 'SELECT')
+          AND has_table_privilege($6, 'ops.import_runs', 'SELECT') AS refresh_runtime_metadata_read,
         has_sequence_privilege($6, 'identity.person_contract_id_seq', 'USAGE,SELECT,UPDATE') AS refresh_person_sequence_repair
     `, [names.app, names.worker, names.monitor, names.migrator, names.owner, names.refresh]);
     const checks = result.rows[0];

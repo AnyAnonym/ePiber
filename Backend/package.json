@@ -1,6 +1,6 @@
 {
   "name": "epiber-backend",
-  "version": "4.12.16-paj-1-9",
+  "version": "4.12.16-paj-1-10",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + PostgreSQL/Legacy)",
   "main": "server.js",
   "scripts": {
@@ -15,6 +15,7 @@
     "db:migrate": "node scripts/db-migrate.js",
     "db:ops-smoke": "node scripts/db-ops-smoke.js",
     "db:personal-access": "node scripts/db-personal-access.js",
+    "db:paj-password-rotate": "node scripts/db-paj-password-rotate.js",
     "db:paj-refresh": "node scripts/db-paj-refresh.js",
     "db:paj-refresh-swap": "node scripts/db-paj-refresh-swap.js",
     "db:schema": "node scripts/db-schema-snapshot.js",

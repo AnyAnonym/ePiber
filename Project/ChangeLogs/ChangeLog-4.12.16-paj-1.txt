@@ -512,3 +512,33 @@ Commit: 4.12.16-paj-1-9 | Bereinigten Live-Datenbestand sicher nach PAJ übernom
     Profilpflicht, deaktivierte externe Wirkungen, widerrufene Monitore,
     Import-Replay, Zielhashes, Laufzeitgrants und einen realen PostgreSQL-Abbruch
     zwischen beiden Aktivierungsumbenennungen samt Rollback ergaenzt.
+
+[4.12.16-paj-1-10] - 2026-10-16
+Commit: 4.12.16-paj-1-10 | PAJ-Testpasswort für alle Konten rotierbar gemacht
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-9-x` gesetzt.
+  - [Authentifizierung] Interaktives root-only PAJ-Werkzeug zur atomaren
+    Rotation des gemeinsamen Testpassworts fuer alle Loginkonten ergaenzt;
+    individuell gesalzene scrypt-Credentials, Authrevisionen, Sitzungswiderruf,
+    offene Passwortfreigaben und Loginlimits werden gemeinsam behandelt.
+  - [Audit] PAJ-Massenrotation mit kontrolliertem System-Audit fuer Start,
+    Erfolg, Ablehnung und unklaren Ausgang sowie ausschliesslich aggregierten
+    Anzahlprojektionen und secretfreien Abschlusslogs versehen.
+  - [Betrieb] Erfolgreiche Rotation synchronisiert den root-only
+    Refresh-Credentialwert, damit ein spaeterer Live-zu-PAJ-Refresh dasselbe neue
+    Testpasswort verwendet; ein vergessenes bisheriges Passwort ist fuer die
+    administrative Rotation nicht erforderlich.
+  - [Datenbank] Refresh-Rolle um den lesenden Zugriff auf die
+    Schemamigrationsmetadaten ergaenzt, damit das gemeinsame PostgreSQL-
+    Laufzeitgate der Passwortrotation unter der eingeschraenkten Rolle startet;
+    die Bootstrap-Verifikation prueft den vollstaendigen Metadatenzugriff.
+
+  Tests
+  - [PostgreSQL] Vollstaendige Rotation, neue und abgelehnte Credentials,
+    Authrevisionen, Sitzungs-/Freigabewiderruf, Loginlimitbereinigung,
+    kontrolliertes Audit und transaktionalen Rollback gegen einen kurzlebigen
+    PostgreSQL-18-Cluster unter der echten eingeschraenkten Refresh-Rolle
+    geprueft.
+  - [Security] Interaktive Bestaetigung und ausschliessliche Hashuebergabe ueber
+    stdin ohne Passwort in Argumenten oder Umgebung statisch geprueft.
