@@ -542,3 +542,9 @@ Commit: 4.12.16-paj-1-10 | PAJ-Testpasswort für alle Konten rotierbar gemacht
     geprueft.
   - [Security] Interaktive Bestaetigung und ausschliessliche Hashuebergabe ueber
     stdin ohne Passwort in Argumenten oder Umgebung statisch geprueft.
+
+[4.12.16-paj-1-11] - 2026-10-16
+Commit: 4.12.16-paj-1-11 | PostgreSQL-PAJ-Migration vollständig abgeschlossen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.16-paj-1-10-x` gesetzt.
