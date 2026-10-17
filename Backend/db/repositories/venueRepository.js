@@ -532,6 +532,20 @@ class VenueRepository {
   }
   revokeMonitor(monitorId) { return this.revokeMonitorOn(this.database, monitorId); }
 
+  async deleteMonitorOn(target, monitorId) {
+    const id = publicId(monitorId, "monitor_id");
+    const current = await target.query(`
+      SELECT revoked_at FROM venue.monitor_devices
+       WHERE tenant_id=$1::uuid AND contract_id=$2 FOR UPDATE
+    `, [this.context.tenantId, id]);
+    if (!current.rowCount) throw Object.assign(new Error("MONITOR_NOT_FOUND"), { code: "MONITOR_NOT_FOUND" });
+    if (current.rows[0].revoked_at === null) throw Object.assign(new Error("MONITOR_NOT_REVOKED"), { code: "MONITOR_NOT_REVOKED" });
+    await target.query(`
+      DELETE FROM venue.monitor_devices WHERE tenant_id=$1::uuid AND contract_id=$2 AND revoked_at IS NOT NULL
+    `, [this.context.tenantId, id]);
+    return { monitorId: id, deleted: true };
+  }
+
   async navigationPresets(profileCode = "1") {
     const profile = profileCode === null ? null : String(profileCode || "").trim();
     if (profile !== null && (!profile || profile.length > 64)) throw Object.assign(new Error("PROFILE_CODE_INVALID"), { code: "PROFILE_CODE_INVALID" });

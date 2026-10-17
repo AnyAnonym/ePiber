@@ -6,3 +6,12 @@ Commit: 4.12.17-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-1` gesetzt.
+
+[4.12.17-paj-1-2] - 2026-10-17
+Commit: 4.12.17-paj-1-2 | Widerrufene Monitorgeraete dauerhaft loeschen
+
+  Added
+  - [Monitorsteuerung] Admins koennen widerrufene Monitorgeraete nach Sicherheitsabfrage dauerhaft loeschen; aktive Geraete bleiben serverseitig geschuetzt. PostgreSQL und Legacy entfernen Geraet und Ziel-/Kommandostate mit idempotenter Operation, Listenaktualisierung und Auditvertrag.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-1-x` gesetzt.

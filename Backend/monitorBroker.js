@@ -95,6 +95,27 @@ class MonitorBroker {
     return outcome.response;
   }
 
+  delete(principal, rawParams) {
+    const params = requireObject(rawParams);
+    const id = idValue(params.monitorId, "monitorId");
+    const opId = operationId(params.operationId);
+    const actorKey = `${principal.type}:${principal.id}`;
+    const payload = { monitorId: id };
+    const outcome = this.repository.transaction(() => {
+      const existing = this.repository.getOperation(actorKey, opId, "monitorDelete", payload);
+      if (existing) return { response: { ...existing, repeated: true }, changed: false };
+      const response = { success: true, ...this.repository.deleteMonitor(id) };
+      this.repository.saveOperation(actorKey, opId, "monitorDelete", payload, response);
+      return { response, changed: true };
+    });
+    if (outcome.changed) {
+      this.disconnect(id, 4003, "Geraet geloescht");
+      this.commandStatus.delete(id);
+      this.publishMonitorList();
+    }
+    return outcome.response;
+  }
+
   register(info) {
     const monitorId = info.principal.id;
     this.disconnect(monitorId, 4009, "Neue Monitorverbindung");

@@ -45,12 +45,12 @@ function contentType(filePath) {
   return "application/octet-stream";
 }
 
-function startServer() {
+function startServer({ role = "operator", data = dataStub } = {}) {
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     const stubs = {
-      "/JS/authClient.js": authStub,
-      "/JS/dataClient.js": dataStub,
+      "/JS/authClient.js": authStub.replace('role: "operator"', `role: "${role}"`),
+      "/JS/dataClient.js": data,
       "/JS/diagnostics.js": diagnosticsStub,
       "/JS/favorites.js": "",
       "/JS/navigatorScroll.js": "",
@@ -92,6 +92,69 @@ test("Navigator zeigt den automatischen Courtstart responsiv", {
     assert.equal(await buttons.nth(0).textContent(), "Platz 1: inaktivAutomatischer Start: 18:00");
     assert.equal(await buttons.nth(1).textContent(), "Platz 2: inaktivNach Ergebnis deaktiviert");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Navigator loescht nur widerrufene Monitore nach Bestaetigung und erhaelt neue Tokens", {
+  skip: !process.env.PLAYWRIGHT_PROFILE && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 60000,
+}, async () => {
+  const data = dataStub.replace('if (endpoint === "monitorList") return { data: { success: true, monitors: [] } };', `
+    if (endpoint === "monitorList") return { data: { success: true, monitors: structuredClone(window.testMonitors) } };
+    if (endpoint === "monitorProvision") {
+      const monitor = { monitorId: "new-monitor", label: params.label, revokedAt: null, token: "test-token" };
+      window.testMonitors.push(monitor);
+      return { data: { success: true, monitor } };
+    }
+    if (endpoint === "monitorDelete") {
+      window.deleteCalls.push(params);
+      if (window.failDelete) return { data: { success: false, error: { code: "MONITOR_NOT_REVOKED", message: "Monitor muss vor dem Loeschen widerrufen werden" } } };
+      window.testMonitors = window.testMonitors.filter(({ monitorId }) => monitorId !== params.monitorId);
+      return { data: { success: true, monitorId: params.monitorId, deleted: true } };
+    }
+  `).replace("return async () =>", "return async (params = {}) =>");
+  const server = await startServer({ role: "admin", data });
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser);
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript(() => {
+      window.testMonitors = [
+        { monitorId: "veranda", label: "Veranda", revokedAt: 1 },
+        { monitorId: "active-monitor", label: "Aktiver Monitor", revokedAt: null },
+      ];
+      window.deleteCalls = [];
+      window.failDelete = false;
+    });
+    await page.goto(`http://127.0.0.1:${server.address().port}/navigator.html`, { waitUntil: "domcontentloaded" });
+    const veranda = page.locator(".admin-monitor-row").filter({ hasText: "Veranda" });
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await page.locator(".admin-monitor-row").filter({ hasText: "Aktiver Monitor" }).getByRole("button", { name: "Löschen", exact: true }).count(), 0);
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).click();
+    assert.equal(await page.evaluate(() => window.deleteCalls.length), 0);
+    await page.getByLabel("Bezeichnung", { exact: true }).fill("Neuer Monitor");
+    await page.getByRole("button", { name: "Monitor anlegen", exact: true }).click();
+    await page.locator("#monitor-token-panel").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#monitor-token").textContent(), "test-token");
+    await page.evaluate(() => { window.failDelete = true; });
+    page.once("dialog", (dialog) => dialog.accept());
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("#admin-monitor-status").dataset.type === "error");
+    assert.equal(await veranda.count(), 1);
+    await page.evaluate(() => { window.failDelete = false; });
+    page.once("dialog", (dialog) => dialog.accept());
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).click();
+    await veranda.waitFor({ state: "detached" });
+    assert.equal(await page.locator(".admin-monitor-row").count(), 2);
+    assert.equal(await page.locator("#monitor-token-panel").isVisible(), true);
+    assert.equal(await page.locator("#monitor-token").textContent(), "test-token");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+    assert.deepEqual(errors, []);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

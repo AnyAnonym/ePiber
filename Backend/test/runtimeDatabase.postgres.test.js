@@ -304,6 +304,20 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.equal(sent.some(({ data }) => data.kind === "navigate"), true);
   assert.equal(sent.some(({ data }) => data.kind === "scroll"), true);
   components.monitorBroker.unregister(deviceInfo);
+  const deleteParams = { operationId: "0199c800-0000-7000-8000-00000000fc05", monitorId: provisioned.monitor.monitorId };
+  await assert.rejects(components.monitorBroker.delete(principal, deleteParams), { code: "MONITOR_NOT_REVOKED", status: 409 });
+  assert.equal((await components.repositories.venue.listMonitors()).some(({ monitorId }) => monitorId === deleteParams.monitorId), true);
+  await components.monitorBroker.revoke(principal, { ...deleteParams, operationId: "0199c800-0000-7000-8000-00000000fc06" });
+  assert.equal((await components.monitorBroker.delete(principal, deleteParams)).deleted, true);
+  assert.equal((await components.monitorBroker.delete(principal, deleteParams)).repeated, true);
+  assert.equal(components.monitorBroker.listMonitors().some(({ monitorId }) => monitorId === deleteParams.monitorId), false);
+  assert.equal(components.monitorBroker.commandStatus.has(deleteParams.monitorId), false);
+  await components.monitorBroker.refresh();
+  assert.equal(components.monitorBroker.listMonitors().some(({ monitorId }) => monitorId === deleteParams.monitorId), false);
+  assert.equal(await components.repositories.venue.monitorByToken(provisioned.monitor.token), null);
+  const commands = await components.repositories.venue.database.query("SELECT count(*)::integer AS count FROM venue.monitor_commands WHERE command_id=$1::uuid", [navigated.commandId]);
+  assert.equal(commands.rows[0].count, 0);
+  await assert.rejects(components.monitorBroker.delete(principal, { ...deleteParams, operationId: "0199c800-0000-7000-8000-00000000fc07" }), { code: "MONITOR_NOT_FOUND" });
 });
 
 test("Venue-Repository liest Courts und Hallenzeiten und persistiert Scores atomar", { timeout: 30_000 }, async (t) => {

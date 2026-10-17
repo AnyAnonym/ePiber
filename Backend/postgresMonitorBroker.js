@@ -49,6 +49,7 @@ class PostgresMonitorBroker {
 
   mapError(error) {
     if (error.code === "MONITOR_NOT_FOUND") return new AppError("MONITOR_NOT_FOUND", "Monitor wurde nicht gefunden", 404);
+    if (error.code === "MONITOR_NOT_REVOKED") return new AppError("MONITOR_NOT_REVOKED", "Monitor muss vor dem Loeschen widerrufen werden", 409);
     if (error.code === "IDEMPOTENCY_CONFLICT") return new AppError("IDEMPOTENCY_CONFLICT", "Operation-ID wurde mit anderen Daten verwendet", 409);
     if (error.code === "STALE_COMMAND") return new AppError("STALE_COMMAND", "Kommando ist nicht mehr aktuell", 409);
     return error;
@@ -111,6 +112,19 @@ class PostgresMonitorBroker {
       this.monitors.set(monitorId, { ...this.monitors.get(monitorId), ...result.monitor });
       this.publishMonitorList();
     }
+    return result;
+  }
+
+  async delete(principal, rawParams) {
+    const params = requireObject(rawParams), monitorId = idValue(params.monitorId, "monitorId"), opId = operationId(params.operationId);
+    const result = await this.execute(principal, opId, "monitor.delete", { monitorId }, async (transaction) => {
+      const deleted = await this.venue.deleteMonitorOn(transaction, monitorId);
+      return { response: { success: true, ...deleted } };
+    });
+    this.disconnect(monitorId, 4003, "Geraet geloescht");
+    this.monitors.delete(monitorId);
+    this.commandStatus.delete(monitorId);
+    this.publishMonitorList();
     return result;
   }
 

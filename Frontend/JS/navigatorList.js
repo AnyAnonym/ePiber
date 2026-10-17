@@ -19,6 +19,7 @@ const navigateMonitor = createEndpoint("monitorNavigate");
 const provisionMonitor = createEndpoint("monitorProvision");
 const rotateMonitor = createEndpoint("monitorRotate");
 const revokeMonitor = createEndpoint("monitorRevoke");
+const deleteMonitor = createEndpoint("monitorDelete");
 const assignCourt = createEndpoint("courtAssign");
 const setCourtActive = createEndpoint("courtSetActive");
 const readScoreboardCourts = createEndpoint("getScoreboardCourts");
@@ -684,6 +685,26 @@ async function revokeMonitorDevice(monitor) {
   }
 }
 
+async function deleteMonitorDevice(monitor) {
+  if (!admin || !connectionSnapshot.connected || !monitor.revokedAt) return;
+  if (!window.confirm(`Monitor "${monitor.label}" dauerhaft löschen? Das Gerät wird aus der Liste entfernt und kann nicht wiederhergestellt werden.`)) return;
+  setAdminStatus("Monitor wird gelöscht...");
+  const operationKey = `delete:${monitor.monitorId}`;
+  try {
+    await endpointData(deleteMonitor, {
+      monitorId: monitor.monitorId,
+      operationId: adminOperationId(operationKey),
+    }, "Monitor konnte nicht gelöscht werden");
+    clearAdminOperation(operationKey);
+    setAdminStatus("Monitor wurde dauerhaft gelöscht.", "success");
+    await loadMonitors();
+  } catch (error) {
+    clearAdminOperation(operationKey, error);
+    setAdminStatus(readableError(error), "error");
+    await loadMonitors();
+  }
+}
+
 function renderAdminMonitorList() {
   const list = document.getElementById("admin-monitor-list");
   if (!list || !admin) return;
@@ -710,7 +731,16 @@ function renderAdminMonitorList() {
     revokeButton.type = "button";
     revokeButton.disabled = !connectionSnapshot.connected || !!monitor.revokedAt;
     revokeButton.addEventListener("click", () => revokeMonitorDevice(monitor));
-    actions.append(rotateButton, revokeButton);
+    actions.appendChild(rotateButton);
+    if (monitor.revokedAt) {
+      const deleteButton = element("button", "navigator-danger-btn", "Löschen");
+      deleteButton.type = "button";
+      deleteButton.disabled = !connectionSnapshot.connected;
+      deleteButton.addEventListener("click", () => deleteMonitorDevice(monitor));
+      actions.appendChild(deleteButton);
+    } else {
+      actions.appendChild(revokeButton);
+    }
     row.append(details, actions);
     list.appendChild(row);
   }

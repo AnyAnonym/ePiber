@@ -232,3 +232,36 @@ test("Provisionierung und Rotation sind idempotent ohne Klartexttoken im Operati
   assert.ok(revoked.monitor.revokedAt);
   repository.close();
 });
+
+test("Nur widerrufene Monitore werden atomar und idempotent mit ihrem Ziel geloescht", () => {
+  const repository = new StateRepository(":memory:");
+  repository.init();
+  try {
+    const broker = new MonitorBroker({ repository, stateStore: fakeStateStore(repository) });
+    const published = [];
+    broker.setTransport({ publish: (topic, value) => published.push({ topic, value }) });
+    const admin = { type: "user", id: "admin-1" };
+    const monitor = repository.provisionMonitor("Veranda", "veranda");
+    const survivor = repository.provisionMonitor("Neuer Monitor", "new-monitor");
+    repository.setState("monitor-target:veranda", { path: "/scoreboard.html" });
+    const params = { monitorId: "veranda", operationId: "00000000-0000-4000-8000-000000000230" };
+    assert.throws(() => broker.delete(admin, params), { code: "MONITOR_NOT_REVOKED" });
+    assert.equal(repository.listMonitors().length, 2);
+    assert.equal(repository.getOperation("user:admin-1", params.operationId, "monitorDelete", { monitorId: "veranda" }), null);
+    repository.revokeMonitor("veranda");
+    broker.commandStatus.set("veranda", { kind: "navigate" });
+    assert.deepEqual(broker.delete(admin, params), { success: true, monitorId: "veranda", deleted: true });
+    assert.equal(repository.getState("monitor-target:veranda", {}).revision, 0);
+    assert.equal(broker.commandStatus.has("veranda"), false);
+    assert.deepEqual(broker.listMonitors().map(({ monitorId }) => monitorId), ["new-monitor"]);
+    assert.equal(repository.authenticateMonitor(monitor.token), null);
+    assert.equal(repository.authenticateMonitor(survivor.token).monitorId, "new-monitor");
+    assert.equal(published.at(-1).value.monitors.length, 1);
+    assert.equal(broker.delete(admin, params).repeated, true);
+    assert.throws(() => broker.delete(admin, { ...params, monitorId: "new-monitor" }), { code: "OPERATION_ID_CONFLICT" });
+    assert.throws(() => broker.delete(admin, { ...params, operationId: "00000000-0000-4000-8000-000000000231" }), { code: "MONITOR_NOT_FOUND" });
+    assert.throws(() => broker.rotate(admin, { ...params, operationId: "00000000-0000-4000-8000-000000000232" }), { code: "MONITOR_NOT_FOUND" });
+  } finally {
+    repository.close();
+  }
+});

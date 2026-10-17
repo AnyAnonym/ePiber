@@ -223,6 +223,8 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
     case "monitorRotate":
     case "monitorRevoke":
       return { targetType: "monitor", targetId: params.monitorId, after: { monitorId: params.monitorId } };
+    case "monitorDelete":
+      return { targetType: "monitor", targetId: params.monitorId, before: { monitorId: params.monitorId }, after: result.success ? { deleted: true, repeated: !!result.repeated } : null };
     case "normalizePerson":
       return {
         targetType: "person",
@@ -837,7 +839,7 @@ async function writeAudit({ eventId, principal, endpoint, params, result = {}, i
 }
 
 async function writeRejectedEndpointAudit({ eventId, principal, endpoint, error, startedAt }) {
-  if (!HISTORY_INTERACTION_WRITES.has(endpoint) && !HALL_TIME_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages") return;
+  if (!HISTORY_INTERACTION_WRITES.has(endpoint) && !HALL_TIME_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages" && endpoint !== "monitorDelete") return;
   try {
     await writeAudit({ eventId, principal, endpoint, params: {}, outcome: "started" });
     await writeAudit({ eventId, principal, endpoint, params: {}, outcome: "failed", error });
@@ -1788,6 +1790,11 @@ const endpoints = {
     access: ["admin"],
     write: true,
     handler: (params, context) => dependencies.monitorBroker.revoke(context.principal, params),
+  },
+  monitorDelete: {
+    access: ["admin"],
+    write: true,
+    handler: (params, context) => dependencies.monitorBroker.delete(context.principal, params),
   },
   monitorTarget: {
     access: "device",
