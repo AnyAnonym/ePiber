@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const { promisify } = require("util");
 const { AppError } = require("./errors.js");
-const { hasAnyRole } = require("./personRoles.js");
+const { hasAnyRole, memberRole } = require("./personRoles.js");
 const { timingSafeTextEqual } = require("./security.js");
 const { loginValue, passwordHashValue } = require("./validators.js");
 
@@ -78,7 +78,11 @@ class PostgresAuthService {
   }
 
   roles(person) {
-    return [...new Set([person.member || "player", ...(person.assignedRoles || [])])];
+    return [...new Set([
+      person.member || "player",
+      ...(memberRole(person.member) ? ["player"] : []),
+      ...(person.assignedRoles || []),
+    ])];
   }
 
   publicUser(person) {

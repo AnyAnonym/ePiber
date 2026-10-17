@@ -291,6 +291,38 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   const restoredRankings = await components.repositories.play.rankings("2");
   assert.equal(restoredRankings.find(({ personId }) => personId === "1").rank, 1);
   assert.equal(restoredRankings.find(({ personId }) => personId === "2").rank, 2);
+  const resultFingerprint = () => {
+    const values = dataStore.get("matches1"), header = headerOf(values);
+    return matchCompletionFingerprint(values.slice(1).find((row) => String(row[headerIndex(header, "id")]) === match.newMatchId), header);
+  };
+  for (const [index, kind] of ["regular", "retirement"].entries()) {
+    await assert.rejects(components.sheetService.setMatchResult(player, {
+      operationId: `0199c800-0000-7000-8000-00000000fe0${index}`, matchId: match.newMatchId,
+      kind, result: kind === "regular" ? "6-0/6-0" : "", losingSide: 1,
+      matchStart: "261011-1200", matchEnd: "261011-1900", expectedFingerprint: resultFingerprint(),
+    }), { code: "MATCH_DURATION_CONFIRMATION_REQUIRED" });
+  }
+  for (const [index, scheduledAt] of ["2026-10-01T10:00:00Z", "2099-10-01T10:00:00Z", null].entries()) {
+    await components.repositories.venue.database.query("UPDATE play.matches SET scheduled_at=$2::timestamptz WHERE contract_id=$1", [match.newMatchId, scheduledAt]);
+    await components.projectionLoader.refresh("walkover-test");
+    const params = {
+      operationId: `0199c800-0000-7000-8000-00000000fe1${index}`, matchId: match.newMatchId,
+      kind: "walkover", losingSide: 1, expectedFingerprint: resultFingerprint(),
+    };
+    const result = await components.sheetService.setMatchResult(player, params);
+    assert.equal(result.completionType, "walkover");
+    const stored = await components.repositories.venue.database.query(`SELECT r.play_started_at,r.play_ended_at,r.walkover_at,
+      (SELECT count(*)::int FROM play.match_result_sets WHERE result_id=r.id) AS sets
+      FROM play.matches m JOIN play.match_results r ON r.id=m.current_result_id WHERE m.contract_id=$1`, [match.newMatchId]);
+    assert.equal(stored.rows[0].play_started_at, null);
+    assert.equal(stored.rows[0].play_ended_at, null);
+    assert.ok(stored.rows[0].walkover_at);
+    assert.equal(stored.rows[0].sets, 0);
+    await components.sheetService.adminClearMatchResult(principal, {
+      operationId: `0199c800-0000-7000-8000-00000000fe2${index}`, matchId: match.newMatchId,
+      expectedFingerprint: resultFingerprint(), reason: "Walkover-Test Ruecknahme",
+    });
+  }
   const normalizedPerson = projectPeopleNormalization(dataStore.get("players")).people.find(({ id }) => id === "2");
   const normalization = await components.sheetService.normalizePerson(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd08", personId: "2",
@@ -728,6 +760,21 @@ test("PostgreSQL-Authservice fuehrt Login, Sessionrefresh und Passwortrotation o
   assert.equal(loggedIn.user.role, "player");
   assert.equal(Number.isSafeInteger(loggedIn.session.expiresAt), true);
   assert.equal((await auth.getUserForToken(loggedIn.session.token)).principal.id, "3");
+
+  for (const member of ["player A", "player B"]) {
+    await repositories.identity.database.query(`UPDATE identity.memberships SET classification=$2
+      WHERE person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='3') AND valid_until IS NULL`, [repositories.identity.context.tenantId, member]);
+    const existingSession = await auth.getUserForToken(loggedIn.session.token);
+    assert.equal(existingSession.user.member, member);
+    assert.equal(existingSession.user.role, member);
+    assert.equal(existingSession.principal.roles.includes("player"), true);
+    const newLogin = await auth.login({ login: "player", passwordHash: legacyCredential, ip: "127.0.0.1" });
+    assert.equal(newLogin.user.member, member);
+    assert.equal((await auth.requireRole(newLogin.session.token, ["player", "player a", "player b", "admin"])).principal.id, "3");
+    await assert.rejects(auth.requireRole(newLogin.session.token, ["admin"]), { code: "FORBIDDEN" });
+    await assert.rejects(auth.requireRole(newLogin.session.token, ["operator"]), { code: "FORBIDDEN" });
+    await auth.logout(newLogin.session.token);
+  }
 
   const newCredential = "b".repeat(64);
   const changed = await auth.changeOwnPassword(loggedIn.session.token, legacyCredential, newCredential);

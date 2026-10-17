@@ -276,10 +276,14 @@ class PostgresPlayService {
       const format = await transaction.query("SELECT sets_to_win,set_target_games,deciding_set_type FROM play.match_format_versions WHERE id=$1::uuid", [match.match_format_version_id]);
       const completion = validateCompletion(params, this.rulesFromDatabase(format.rows[0])); if (!completion.valid) throw new AppError("MATCH_RESULT_INVALID", "Matchergebnis ist ungültig", 409, { rule: completion.error });
       const version = await transaction.query("SELECT COALESCE(max(version_no),0)+1 AS value FROM play.match_results WHERE match_id=$1::uuid", [match.id]);
-      const ended = params.matchEnd ? parseMatchDate(params.matchEnd) : new Date(this.now()), started = params.matchStart ? parseMatchDate(params.matchStart) : match.scheduled_at;
-      if (!ended || ended.getTime() > this.now() + 60_000) throw new AppError("MATCH_END_IN_FUTURE", "Spielende darf nicht in der Zukunft liegen", 409);
-      if (started && ended <= new Date(started)) throw new AppError("MATCH_DURATION_INVALID", "Spielende muss nach Spielbeginn liegen", 409);
-      if (started && ended.getTime() - new Date(started).getTime() > 4 * 60 * 60 * 1000 && params.longDurationConfirmed !== true) throw new AppError("MATCH_DURATION_CONFIRMATION_REQUIRED", "Lange Spieldauer muss bestätigt werden", 409);
+      const walkover = completion.kind === "walkover";
+      const ended = walkover ? null : params.matchEnd ? parseMatchDate(params.matchEnd) : new Date(this.now());
+      const started = walkover ? null : params.matchStart ? parseMatchDate(params.matchStart) : match.scheduled_at;
+      if (!walkover) {
+        if (!ended || ended.getTime() > this.now() + 60_000) throw new AppError("MATCH_END_IN_FUTURE", "Spielende darf nicht in der Zukunft liegen", 409);
+        if (started && ended <= new Date(started)) throw new AppError("MATCH_DURATION_INVALID", "Spielende muss nach Spielbeginn liegen", 409);
+        if (started && ended.getTime() - new Date(started).getTime() > 4 * 60 * 60 * 1000 && params.longDurationConfirmed !== true) throw new AppError("MATCH_DURATION_CONFIRMATION_REQUIRED", "Lange Spieldauer muss bestätigt werden", 409);
+      }
       const inserted = await transaction.query(`INSERT INTO play.match_results(match_id,version_no,completion_type,winner_side_no,play_started_at,play_ended_at,first_captured_at,walkover_at,provenance)
         VALUES ($1::uuid,$2,$3,$4,$5,$6,clock_timestamp(),CASE WHEN $3='walkover' THEN clock_timestamp() ELSE NULL END,'postgresql') RETURNING id`, [match.id, version.rows[0].value, completion.kind, completion.winnerSide, started, ended]);
       for (const [index, set] of completion.sets.entries()) await transaction.query("INSERT INTO play.match_result_sets(result_id,set_no,side_one_games,side_two_games,loser_tiebreak_points,incomplete) VALUES ($1::uuid,$2,$3,$4,$5,$6)", [inserted.rows[0].id, index + 1, set.side1, set.side2, set.tiebreakLoserPoints, set.state === "partial"]);
