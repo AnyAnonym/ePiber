@@ -111,9 +111,12 @@ class PostgresProjectionService {
     }
     for (const item of navigation) {
       let target = "";
-      if (item.targetType === "page") target = `${item.pageKey}.html`;
+      if (!item.enabled) target = "";
+      else if (item.targetType === "court_assignment") target = `OL-Platz-${item.pageKey}`;
+      else if (item.targetType === "court_activation") target = "OL-Platzaktivierung";
+      else if (item.targetType === "page") target = `${item.pageKey}.html`;
       else if (item.competitionId) {
-        const page = item.targetType === "ranking" ? "rangliste" : item.targetType === "entry_list" ? "entryList" : "bewerbsRaster";
+        const page = item.pageKey || (item.targetType === "ranking" ? "rangliste" : item.targetType === "entry_list" ? "entryList" : item.roundRobin ? "RoundRobin" : "bewerbsRaster");
         target = `${page}.html?id=${encodeURIComponent(item.competitionId)}`;
       } else if (item.hallTimeGridId) target = `hallzeiten.html?id=${encodeURIComponent(item.hallTimeGridId)}`;
       tables.navigator.push([item.id || "", item.label, target, item.profileCode || "1"]);

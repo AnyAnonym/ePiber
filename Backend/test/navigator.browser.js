@@ -20,9 +20,27 @@ const courts = {
   "1": { matchId: "m1", aktiv: 0, revision: 4, automaticActivation: { matchId: "m1", matchDate: "260924-1800", status: "pending" } },
   "2": { matchId: "m2", aktiv: 0, revision: 7, automaticActivation: { matchId: "m2", matchDate: "260924-1700", status: "finished" } },
 };
+window.testCourtWrites = [];
 export function createEndpoint(endpoint) {
-  return async () => {
-    if (endpoint === "navigator") return { data: { success: true, items: [{ id: "activation", label: "Platzaktivierung", action: { kind: "court.activation" } }] } };
+  return async (params = {}) => {
+    if (endpoint === "navigator") return { data: { success: true, items: [
+      { id: "court-1", label: "Spielerauswahl Platz 1", action: { kind: "court.assign", court: "1" } },
+      { id: "court-2", label: "Spielerauswahl Platz 2", action: { kind: "court.assign", court: "2" } },
+      { id: "activation", label: "Platzaktivierung", action: { kind: "court.activation" } },
+    ] } };
+    if (endpoint === "players") return { data: { success: true, values: [["ID", "Vorname", "Nachname"], ["p1", "Ada", "Test"], ["p2", "Berta", "Test"]] } };
+    if (endpoint === "bewerbe") return { data: { success: true, values: [["ID", "Bezeichnung"], ["2", "Testbewerb"]] } };
+    if (endpoint === "preMatches") return { data: { success: true, values: [["ID", "Spieler1ID", "Spieler3ID", "BewerbID"], ["m1", "p1", "p2", "2"]] } };
+    if (endpoint === "courtAssign") {
+      window.testCourtWrites.push({ endpoint, ...params });
+      return { data: { success: true } };
+    }
+    if (endpoint === "courtSetActive") {
+      window.testCourtWrites.push({ endpoint, ...params });
+      courts[params.court].aktiv = params.active ? 1 : 0;
+      courts[params.court].revision += 1;
+      return { data: { success: true, court: structuredClone(courts[params.court]) } };
+    }
     if (endpoint === "monitorList") return { data: { success: true, monitors: [] } };
     if (endpoint === "getScoreboardCourts") return { data: { success: true, courts: structuredClone(courts) } };
     return { data: { success: true } };
@@ -86,11 +104,31 @@ test("Navigator zeigt den automatischen Courtstart responsiv", {
   try {
     const page = await newProfilePage(browser);
     await page.goto(`http://127.0.0.1:${server.address().port}/navigator.html`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Spielerauswahl Platz 1", exact: true }).waitFor({ state: "visible" });
+    assert.deepEqual(await page.locator("#navigator-container .nav-btn").allTextContents(), ["Spielerauswahl Platz 1", "Spielerauswahl Platz 2", "Platzaktivierung"]);
+    for (const court of ["1", "2"]) {
+      await page.getByRole("button", { name: `Spielerauswahl Platz ${court}`, exact: true }).click();
+      await page.getByRole("button", { name: "kein Spiel zuweisen", exact: true }).click();
+      await page.getByRole("button", { name: "Übernehmen", exact: true }).click();
+      await page.getByRole("button", { name: "Übernehmen", exact: true }).waitFor({ state: "detached" });
+    }
+    await page.getByRole("button", { name: "Spielerauswahl Platz 1", exact: true }).click();
+    await page.getByRole("button", { name: /Ada Test vs. Berta Test/ }).click();
+    await page.getByRole("button", { name: "Übernehmen", exact: true }).click();
+    await page.getByRole("button", { name: "Übernehmen", exact: true }).waitFor({ state: "detached" });
+    assert.deepEqual(await page.evaluate(() => window.testCourtWrites.map(({ court, empty, matchId, expectedRevision }) => ({ court, empty, matchId, expectedRevision }))), [
+      { court: "1", empty: true, matchId: undefined, expectedRevision: 4 },
+      { court: "2", empty: true, matchId: undefined, expectedRevision: 7 },
+      { court: "1", empty: undefined, matchId: "m1", expectedRevision: 4 },
+    ]);
     await page.getByRole("button", { name: "Platzaktivierung" }).click();
     const buttons = page.locator(".platz-aktivierung-btn");
     await buttons.first().waitFor({ state: "visible" });
     assert.equal(await buttons.nth(0).textContent(), "Platz 1: inaktivAutomatischer Start: 18:00");
     assert.equal(await buttons.nth(1).textContent(), "Platz 2: inaktivNach Ergebnis deaktiviert");
+    await buttons.nth(0).click();
+    await page.waitForFunction(() => document.querySelector(".platz-aktivierung-status").textContent === "Platz 1: aktiv");
+    assert.equal(await page.evaluate(() => window.testCourtWrites.at(-1).active), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   } finally {
     await browser.close();

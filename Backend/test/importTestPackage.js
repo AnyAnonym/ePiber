@@ -21,7 +21,7 @@ function writeSheet(root, name, records) {
   fs.writeFileSync(path.join(root, "sheets", `${name}.csv`), `${lines.map((row) => row.map(csvValue).join(";")).join("\n")}\n`, { mode: 0o600 });
 }
 
-function createImportTestPackage(t, { unknownState = false, invalidEmail = false, approveEmailWarning = false, withLegacyState = false, pajRefresh = false, refreshPasswordHash = "f".repeat(64), oldHistorical = false, allRoles = false, legacyMessagingWithoutVisibility = false } = {}) {
+function createImportTestPackage(t, { unknownState = false, invalidEmail = false, approveEmailWarning = false, withLegacyState = false, pajRefresh = false, refreshPasswordHash = "f".repeat(64), oldHistorical = false, allRoles = false, legacyMessagingWithoutVisibility = false, navigatorRows = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "epiber-import-package-"));
   t?.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, "sheets"), { recursive: true, mode: 0o700 });
@@ -48,7 +48,7 @@ function createImportTestPackage(t, { unknownState = false, invalidEmail = false
     { ID: "rank-2", BewerbID: "2", PersonID: "2", Rang: "2" },
   ]);
   writeSheet(root, "Matches1", [{ Ignore: "", ID: "match-1", MatchDate: "261001-1000", MatchStart: "261001-1000", MatchEnde: "261001-1115", ErgebnisErfasstAm: "261001-1120", ForderungDate: "260901-1000", Dauer: "90", BewerbID: "2", BewerbRunde: "R1", MatchtypID: "", Spieler1ID: "1", Spieler2ID: "", Spieler3ID: "2", Spieler4ID: "", Ergebnis: "6-3/6-4", Spieler1RangBeiErgebnis: "1", Spieler3RangBeiErgebnis: "2", "PTN-Wertung": "", Bemerkung: "" }]);
-  writeSheet(root, "Navigator", [{ ID: "nav-1", Name: "Scoreboard", Ziel: "/scoreboard.html", Profil: "1" }]);
+  writeSheet(root, "Navigator", navigatorRows || [{ ID: "nav-1", Name: "Scoreboard", Ziel: "/scoreboard.html", Profil: "1" }]);
 
   const { matrix } = loadImportContracts();
   for (const [source, relative] of Object.entries(SQLITE_FILES)) {

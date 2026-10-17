@@ -552,9 +552,11 @@ class VenueRepository {
     const result = await this.database.query(`
       SELECT preset.contract_id AS id, preset.profile_code AS "profileCode", preset.label, preset.target_type AS "targetType", preset.page_key AS "pageKey",
              competition.contract_id AS "competitionId", grid.contract_id AS "hallTimeGridId",
-             preset.enabled, preset.problem_code AS "problemCode", preset.sort_order AS "sortOrder"
+              preset.enabled, preset.problem_code AS "problemCode", preset.sort_order AS "sortOrder",
+              preset.legacy_target AS "legacyTarget", competition_type.round_robin AS "roundRobin"
         FROM venue.navigation_presets preset
-        LEFT JOIN play.competitions competition ON competition.id=preset.competition_id
+         LEFT JOIN play.competitions competition ON competition.id=preset.competition_id
+         LEFT JOIN play.competition_type_versions competition_type ON competition_type.id=competition.competition_type_version_id
         LEFT JOIN venue.hall_time_grids grid ON grid.id=preset.hall_time_grid_id
        WHERE preset.tenant_id=$1::uuid AND ($2::text IS NULL OR preset.profile_code=$2)
        ORDER BY preset.profile_code, preset.sort_order NULLS LAST, preset.label

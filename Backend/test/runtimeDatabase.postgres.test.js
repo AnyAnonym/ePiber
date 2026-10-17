@@ -9,6 +9,7 @@ const { runMigrations } = require("../db/migrationRunner");
 const { applyFullDevelSeed, applyTechnicalSeed } = require("../db/seedRunner");
 const { createRuntimeRepositories } = require("../db/createRuntimeRepositories");
 const { RuntimeDatabase } = require("../db/runtimeDatabase");
+const { repairNavigation } = require("../db/repairNavigation");
 const { PostgresAuthService } = require("../postgresAuthService");
 const { PostgresCompetitionService } = require("../postgresCompetitionService");
 const { PostgresProjectionService } = require("../postgresProjectionService");
@@ -32,6 +33,7 @@ async function preparedRuntime(t) {
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 7, output: () => {} });
   const events = [];
   const runtime = createRuntimeRepositories({
     connectionConfig: { ...cluster.connectionConfig, application_name: "epiber-runtime-test" },
@@ -102,7 +104,7 @@ test("PostgreSQL-Laufzeit validiert Tenant, Schema und Core-/Identity-Repositori
   assert.deepEqual((await repositories.identity.userStartPage("1")).target, { type: "page", page: "rangliste", params: { id: "2" } });
 
   assert.equal(runtime.status().ready, true);
-  assert.equal(runtime.status().generation, 6);
+  assert.equal(runtime.status().generation, 7);
   assert.equal(events.some(({ event, fields }) => event === "postgres_runtime_started" && fields.result === "success"), true);
   assert.equal(JSON.stringify(events).includes("secretHash"), false);
 });
@@ -139,6 +141,42 @@ test("PostgreSQL-Projektionsservice erzeugt alle acht bestehenden Tabellenvertra
   const walkover = tables.matches1.find((row) => row[matchIdIndex] === "rr-walkover");
   assert.equal(walkover[playerOneIndex].endsWith("[wo]") || walkover[matchHeader.indexOf("Spieler3ID")].endsWith("[wo]"), true);
   assert.equal(tables.navigator[1][3], "1");
+});
+
+test("Navigatorreparatur erhaelt Profil, Reihenfolge und Platzaktionen atomar und auditiert", { timeout: 30_000 }, async (t) => {
+  const { repositories, events } = await preparedRuntime(t);
+  const { venue } = repositories;
+  const database = venue.database;
+  await database.query("DELETE FROM venue.navigation_presets WHERE tenant_id=$1::uuid", [venue.context.tenantId]);
+  for (const [id, target, profile] of [["z", "OL-Platz-1", "1"], ["a", "OL-Platz-2", "1"], ["b", "OL-Platzaktivierung", "1"], ["c", "OL-Ergebnis", "1"], ["other", "OL-Platz-1", "2"]]) {
+    await database.query(`INSERT INTO venue.navigation_presets(tenant_id,contract_id,profile_code,label,enabled,problem_code,legacy_target)
+      VALUES($1::uuid,$2,$3,$2,false,'NAVIGATION_TARGET_INVALID',$4)`, [venue.context.tenantId, id, profile, target]);
+  }
+  const order = ["z", "a", "b", "c"];
+  const log = (level, event, fields) => events.push({ level, event, fields });
+  assert.equal((await repairNavigation({ venue, profile: "1", order, log })).changedCount, 5);
+  assert.equal((await venue.navigationPresets("1"))[0].sortOrder, null);
+  await assert.rejects(repairNavigation({ venue, profile: "1", order: ["z"], apply: true, log }), { code: "NAVIGATION_REPAIR_SOURCE_MISMATCH" });
+  assert.equal((await venue.navigationPresets("1"))[0].enabled, false);
+  assert.equal((await repairNavigation({ venue, profile: "1", order, apply: true, log })).changedCount, 5);
+  const tables = await new PostgresProjectionService(repositories).load();
+  assert.deepEqual(tables.navigator.slice(1, 5).map((row) => [row[0], row[2]]), [["z", "OL-Platz-1"], ["a", "OL-Platz-2"], ["b", "OL-Platzaktivierung"], ["c", ""]]);
+  assert.deepEqual(tables.navigator.at(-1), ["other", "other", "OL-Platz-1", "2"]);
+  await database.query(`INSERT INTO venue.navigation_presets(tenant_id,contract_id,profile_code,label,target_type,competition_id)
+    SELECT $1::uuid,'group-target','2','Gruppenphase','competition',id FROM play.competitions WHERE contract_id='rr-1'`, [venue.context.tenantId]);
+  const groupTables = await new PostgresProjectionService(repositories).load();
+  assert.equal(groupTables.navigator.find((row) => row[0] === "group-target")[2], "RoundRobin.html?id=rr-1");
+  assert.equal((await repairNavigation({ venue, profile: "1", order, apply: true, log })).changedCount, 0);
+  const audit = await database.query("SELECT status FROM ops.audit_operations WHERE action='navigation.repair' ORDER BY started_at");
+  assert.deepEqual(audit.rows.map(({ status }) => status), ["failed", "success", "success"]);
+  assert.equal(events.some(({ event }) => event === "navigation_repair_completed"), true);
+  const unknownVenue = { context: venue.context, database: { ...database, withTransaction(operation, ...args) {
+    if (operation === "navigation.repair") throw Object.assign(new Error("simulated unknown commit"), { code: "DB_COMMIT_OUTCOME_UNKNOWN" });
+    return database.withTransaction(operation, ...args);
+  } } };
+  await assert.rejects(repairNavigation({ venue: unknownVenue, profile: "1", order, apply: true, log }), { code: "DB_COMMIT_OUTCOME_UNKNOWN" });
+  assert.equal((await database.query("SELECT status FROM ops.audit_operations WHERE action='navigation.repair' ORDER BY started_at DESC LIMIT 1")).rows[0].status, "unknown");
+  await assert.rejects(database.query(`INSERT INTO venue.navigation_presets(tenant_id,label,target_type,page_key) VALUES($1::uuid,'Invalid','court_assignment','3')`, [venue.context.tenantId]), { code: "23514" });
 });
 
 test("PostgreSQL-Projektionsloader ersetzt den Sheet-Initialload atomar und ohne Polling", { timeout: 30_000 }, async (t) => {

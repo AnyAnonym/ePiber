@@ -200,7 +200,7 @@ runuser -u epiber-migration -- pg_ctl -D "${pgdata}" -w start > "${result}/postg
 postgres_started=true
 runuser -u epiber-migration -- createdb -h "${socket}" -U staging_admin epiber_staging
 pg_env=(env PGHOST="${socket}" PGPORT=5432 PGDATABASE=epiber_staging PGUSER=staging_admin)
-runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-migrate.js" up --target-generation 6 > "${result}/migrations.jsonl" 2>&1
+runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-migrate.js" up --target-generation 7 > "${result}/migrations.jsonl" 2>&1
 as_of="$(node -e 'const value=require(process.argv[1]);process.stdout.write(value.exportStartedAt)' "${package}/manifest.json")"
 runuser -u epiber-migration -- "${pg_env[@]}" node "${backend}/scripts/db-seed.js" technical-minimal --as-of "${as_of}" > "${result}/seed.jsonl" 2>&1
 runuser -u epiber-migration -- node "${import_script}" dry-run "${package}" > "${result}/dry-run.jsonl" 2>&1
@@ -221,7 +221,7 @@ if [[ -n "${candidate_database}" ]]; then
   cp -a "${package}/." "${shared_package}/"
   chown -R postgres-devel:postgres-devel "${shared_package}"
   shared_admin=(env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE="${candidate_database}" PGUSER=postgres EPIBER_DB_ROLE=epiber_devel_owner)
-  runuser -u postgres-devel -- "${shared_admin[@]}" node "${backend}/scripts/db-migrate.js" up --target-generation 6 > "${result}/candidate-migrations.jsonl" 2>&1
+  runuser -u postgres-devel -- "${shared_admin[@]}" node "${backend}/scripts/db-migrate.js" up --target-generation 7 > "${result}/candidate-migrations.jsonl" 2>&1
   as_of="$(node -e 'const value=require(process.argv[1]);process.stdout.write(value.exportStartedAt)' "${package}/manifest.json")"
   runuser -u postgres-devel -- "${shared_admin[@]}" node "${backend}/scripts/db-seed.js" technical-minimal --as-of "${as_of}" > "${result}/candidate-seed.jsonl" 2>&1
   bootstrap_env=(env PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=postgres PGUSER=postgres EPIBER_DB_NAME="${candidate_database}" EPIBER_DB_ROLE_PREFIX=epiber_devel EPIBER_DB_ENABLE_READONLY=false)

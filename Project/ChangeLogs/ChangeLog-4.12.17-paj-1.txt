@@ -22,3 +22,11 @@ Commit: 4.12.17-paj-1-3 | Scoreboard-Datum wie Live in Wiener Ortszeit anzeigen
   Changed
   - [Scoreboard] ISO-Zeitstempel der PostgreSQL-Courts werden wie im Live-System als TT.MM. - HH:MM in Europe/Vienna angezeigt; Sommer-/Winterzeit, Tageswechsel und bestehende Datumsformate werden in der Drei-Engine-Smokesuite geprueft. Layout und Bedienung bleiben unveraendert; keine neuen Schreiboperationen oder Diagnosepayloads.
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-2-x` gesetzt.
+
+[4.12.17-paj-1-4] - 2026-10-17
+Commit: 4.12.17-paj-1-4 | Navigatoraktionen und Reihenfolge wie Live erhalten
+
+  Changed
+  - [Monitorsteuerung] Navigatorimport erhaelt Quellreihenfolge, Profil und typisierte Platzzuweisungs-/Aktivierungsaktionen. Die PostgreSQL-Projektion rekonstruiert Platzoverlays und RoundRobin-Gruppenphasenziele statt deaktivierter Aktionen beziehungsweise KO-Ersatzziele; bewusst ungueltige Ziele bleiben gesperrt. Migration 7 erweitert nur den Zielvertrag, eine separate PAJ-Reparatur ist standardmaessig ein Dry-run und prueft die explizite Profilreihenfolge vor atomaren, auditierten Aenderungen. Monitorgeraete und Tokens bleiben unberuehrt.
+  - [PAJ-Betrieb] Nach ausdruecklicher Aktivierungsfreigabe Migration 7 eingespielt, 23 Navigatoreintraege auditiert korrigiert, Refresh-Helfer installiert und App/Worker kontrolliert neu gestartet. Profil 1 mit 20 Eintraegen, drei Platzaktionen, vier weiterhin deaktivierten Live-Zielen und korrektem Gruppenphasenziel nachgeprueft; Reparatur-Dry-run danach ohne weitere Aenderungen. Build mit 556 Tests, 17 Workflowtests und alle acht Browserprofile erfolgreich. Bereits vorher bestehendes not-ready bei aktivem Platz 1 und veralteter Court-Quelle bleibt unveraendert.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-3-x` gesetzt.

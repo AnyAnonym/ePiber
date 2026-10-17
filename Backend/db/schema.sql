@@ -1552,10 +1552,11 @@ CREATE TABLE venue.navigation_presets (
     legacy_target text,
     sort_order integer,
     CONSTRAINT navigation_presets_check CHECK ((enabled OR (problem_code IS NOT NULL))),
+    CONSTRAINT navigation_presets_court_action_check CHECK (((target_type <> ALL (ARRAY['court_assignment'::text, 'court_activation'::text])) OR ((competition_id IS NULL) AND (hall_time_grid_id IS NULL) AND (((target_type = 'court_assignment'::text) AND (page_key IS NOT NULL) AND (page_key = ANY (ARRAY['1'::text, '2'::text]))) OR ((target_type = 'court_activation'::text) AND (page_key IS NULL)))))),
     CONSTRAINT navigation_presets_label_check CHECK (((label = btrim(label)) AND (label <> ''::text))),
     CONSTRAINT navigation_presets_legacy_target_check CHECK (((legacy_target IS NULL) OR (length(legacy_target) <= 500))),
     CONSTRAINT navigation_presets_profile_code_check CHECK (((profile_code = btrim(profile_code)) AND (profile_code <> ''::text))),
-    CONSTRAINT navigation_presets_target_type_check CHECK ((target_type = ANY (ARRAY['page'::text, 'competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'hall_time_grid'::text])))
+    CONSTRAINT navigation_presets_target_type_check CHECK ((target_type = ANY (ARRAY['page'::text, 'competition'::text, 'ranking'::text, 'entry_list'::text, 'competition_history'::text, 'hall_time_grid'::text, 'court_assignment'::text, 'court_activation'::text])))
 );
 
 --
