@@ -15,3 +15,10 @@ Commit: 4.12.17-paj-1-2 | Widerrufene Monitorgeraete dauerhaft loeschen
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-1-x` gesetzt.
+
+[4.12.17-paj-1-3] - 2026-10-17
+Commit: 4.12.17-paj-1-3 | Scoreboard-Datum wie Live in Wiener Ortszeit anzeigen
+
+  Changed
+  - [Scoreboard] ISO-Zeitstempel der PostgreSQL-Courts werden wie im Live-System als TT.MM. - HH:MM in Europe/Vienna angezeigt; Sommer-/Winterzeit, Tageswechsel und bestehende Datumsformate werden in der Drei-Engine-Smokesuite geprueft. Layout und Bedienung bleiben unveraendert; keine neuen Schreiboperationen oder Diagnosepayloads.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-2-x` gesetzt.
