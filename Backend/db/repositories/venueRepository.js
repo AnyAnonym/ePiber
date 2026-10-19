@@ -550,7 +550,7 @@ class VenueRepository {
     const profile = profileCode === null ? null : String(profileCode || "").trim();
     if (profile !== null && (!profile || profile.length > 64)) throw Object.assign(new Error("PROFILE_CODE_INVALID"), { code: "PROFILE_CODE_INVALID" });
     const result = await this.database.query(`
-      SELECT preset.contract_id AS id, preset.profile_code AS "profileCode", preset.label, preset.target_type AS "targetType", preset.page_key AS "pageKey",
+      SELECT COALESCE(preset.contract_id, preset.id::text) AS id, preset.profile_code AS "profileCode", preset.label, preset.target_type AS "targetType", preset.page_key AS "pageKey",
              competition.contract_id AS "competitionId", grid.contract_id AS "hallTimeGridId",
               preset.enabled, preset.problem_code AS "problemCode", preset.sort_order AS "sortOrder",
               preset.legacy_target AS "legacyTarget", competition_type.round_robin AS "roundRobin"

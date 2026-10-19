@@ -24,6 +24,8 @@ const { createPostgresComponents } = require("../createPostgresComponents");
 const { createPostgresApplication } = require("../server");
 const { matchCompletionFingerprint } = require("../matchRules");
 const { headerIndex, headerOf } = require("../tableUtils");
+const { validateTableValues } = require("../tableSchemas");
+const { notificationChannels } = require("../messagingService");
 const { projectPeopleNormalization } = require("../peopleNormalization");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
 
@@ -129,6 +131,12 @@ test("PostgreSQL-Projektionsservice erzeugt alle acht bestehenden Tabellenvertra
   const { repositories } = await preparedRuntime(t);
   const tables = await new PostgresProjectionService(repositories).load();
   assert.deepEqual(Object.keys(tables).sort(), ["bewerbe", "bewerbsart", "entryList", "matches1", "matchtyp", "navigator", "players", "rlPlatzierung"].sort());
+  for (const [name, values] of Object.entries(tables)) assert.doesNotThrow(() => validateTableValues(name, values), name);
+  for (const row of tables.players.slice(1)) {
+    const value = row[tables.players[0].indexOf("Notification")];
+    assert.equal(notificationChannels(value).join("|"), value);
+  }
+  assert.equal(tables.rlPlatzierung.slice(1).every((row) => typeof row[0] === "string" && row[0].length > 0), true);
   assert.equal(tables.players.length, 6);
   const passwordIndex = tables.players[0].indexOf("PasswdHash");
   assert.equal(tables.players.slice(1).every((row) => row[passwordIndex] === ""), true);
@@ -141,6 +149,11 @@ test("PostgreSQL-Projektionsservice erzeugt alle acht bestehenden Tabellenvertra
   const walkover = tables.matches1.find((row) => row[matchIdIndex] === "rr-walkover");
   assert.equal(walkover[playerOneIndex].endsWith("[wo]") || walkover[matchHeader.indexOf("Spieler3ID")].endsWith("[wo]"), true);
   assert.equal(tables.navigator[1][3], "1");
+  await repositories.venue.database.query("UPDATE venue.navigation_presets SET contract_id=NULL WHERE tenant_id=$1::uuid", [repositories.venue.context.tenantId]);
+  const withoutLegacyId = await new PostgresProjectionService(repositories).load();
+  assert.match(withoutLegacyId.navigator[1][0], /^[0-9a-f-]{36}$/);
+  assert.doesNotThrow(() => validateTableValues("navigator", withoutLegacyId.navigator));
+  assert.equal((await new PostgresProjectionService(repositories).load()).navigator[1][0], withoutLegacyId.navigator[1][0]);
 });
 
 test("Navigatorreparatur erhaelt Profil, Reihenfolge und Platzaktionen atomar und auditiert", { timeout: 30_000 }, async (t) => {

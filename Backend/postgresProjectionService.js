@@ -16,7 +16,10 @@ function legacyInstant(value) {
 }
 
 function boundary(date, instant) {
-  return date ? plainDate(date) : legacyInstant(instant);
+  if (date) return Temporal.PlainDate.from(String(date)).toString().replaceAll("-", "");
+  if (!instant) return "";
+  const local = Temporal.Instant.from(instant instanceof Date ? instant.toISOString() : String(instant)).toZonedDateTimeISO("Europe/Vienna");
+  return `${local.toPlainDate().toString().replaceAll("-", "")}-${String(local.hour).padStart(2, "0")}${String(local.minute).padStart(2, "0")}`;
 }
 
 function participantValue(participant) {
@@ -66,7 +69,7 @@ class PostgresProjectionService {
         person.countryLabel || "", person.postalCode || "", person.city || "", person.addressLine || "", person.clubdeskId || "",
         person.login || "", "", person.passwordSetupAllowed ? "x" : "", person.member || "",
         roles.has("admin") ? "1" : "", roles.has("operator") ? "1" : "", person.role,
-        (person.notificationChannels || []).join("|"),
+        (person.notificationChannels || []).map((channel) => ({ email: "Email", whatsapp: "Whatsapp" })[channel]).filter(Boolean).join("|"),
       ]);
     }
     for (const type of competitionTypes) {
@@ -82,7 +85,7 @@ class PostgresProjectionService {
         competition.id, competition.competitionTypeId, competition.defaultMatchFormatId || "", competition.name,
         boundary(competition.entryStartDate, competition.entryStartsAt), boundary(competition.entryDeadlineDate, competition.entryDeadlineAt),
         boundary(competition.competitionStartDate, competition.competitionStartsAt), boundary(competition.competitionEndDate, competition.competitionEndsAt),
-        competition.genderCodes.join("|"), age, competition.sortOrder === null ? "" : String(competition.sortOrder),
+        competition.genderCodes.join(","), age, competition.sortOrder === null ? "" : String(competition.sortOrder),
       ]);
     }
     for (const entries of entriesByCompetition) for (const entry of entries) {
@@ -90,7 +93,7 @@ class PostgresProjectionService {
     }
     for (const rankings of rankingsByCompetition) for (const ranking of rankings) {
       tables.rlPlatzierung.push([
-        ranking.id || "", ranking.competitionId, ranking.personId, ranking.status === "active" ? String(ranking.rank) : "0",
+        ranking.id || ranking.internalId, ranking.competitionId, ranking.personId, ranking.status === "active" ? String(ranking.rank) : "0",
         legacyInstant(ranking.withdrawnAt), ranking.lastActiveRank === null ? "" : String(ranking.lastActiveRank), ranking.withdrawalReason || "",
       ]);
     }

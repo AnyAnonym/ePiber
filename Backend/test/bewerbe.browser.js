@@ -5,6 +5,7 @@ const http = require("node:http");
 const path = require("node:path");
 const { chromium } = require("playwright");
 const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
+const { projectCompetitions } = require("./postgresProjectionTestFixture");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -120,6 +121,7 @@ export function createEndpoint(name) {
       window.__comments = window.__comments.map((comment) => comment.id === params.commentId ? { ...comment, status: params.status } : comment);
       return { data: { success: true, eventId: "history-1", status: params.status } };
     }
+    if (name === "bewerbsart" && window.__projectionTables) return { data: { success: true, values: window.__projectionTables.bewerbsart } };
     if (name === "bewerbsart") return { data: { success: true, values: [
       ["ID", "EntryListAvailable", "Bezeichnung", "RoundRobin"],
       ["2", "0", "Rangliste", "0"],
@@ -158,6 +160,7 @@ export function createEndpoint(name) {
     }
     if (name === "bewerbe") {
       window.__bewerbeCalls.push({ ...params });
+      if (window.__projectionTables) return { data: { success: true, values: window.__projectionTables.bewerbe } };
       if (new URLSearchParams(location.search).get("finishedSorting") === "1") {
         return { data: { success: true, values: [
           ["ID", "BewerbsartID", "Bezeichnung", "EntryStart", "EntryDeadline", "Bewerbsbeginn", "Bewerbsende", "SortOrder"],
@@ -273,6 +276,65 @@ function startServer() {
     server.listen(0, "127.0.0.1", () => resolve(server));
   });
 }
+
+test("PostgreSQL-Bewerbsdaten steuern Gruppen, Fristen, Sortierung und Navigation wie Live", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    const tables = await projectCompetitions([
+      { id: "ranking", name: "Rangliste", competitionTypeId: "2", competitionStartDate: "2026-05-01", competitionEndDate: "2026-09-30" },
+      { id: "old", name: "Frueher beendet", competitionStartDate: "2026-05-01", competitionEndDate: "2026-08-31", sortOrder: 2 },
+      { id: "recent", name: "Zuletzt beendet", competitionStartDate: "2026-05-01", competitionEndDate: "2026-09-29", sortOrder: 2 },
+      { id: "priority", name: "Prioritaet", competitionStartDate: "2026-05-01", competitionEndDate: "2026-08-01", sortOrder: 1 },
+      { id: "timed", name: "Ende um zwoelf", competitionTypeId: "7", competitionStartDate: "2026-09-01", competitionEndsAt: "2026-09-30T10:00:00Z" },
+      { id: "entry-day", name: "Eintragung bis Tagesende", competitionStartDate: "2026-10-02", entryStartDate: "2026-09-30", entryDeadlineDate: "2026-09-30" },
+      { id: "entry-time", name: "Eintragung bis zwoelf", competitionStartDate: "2026-10-02", entryStartDate: "2026-09-01", entryDeadlineAt: "2026-09-30T10:00:00Z" },
+      { id: "not-open", name: "Eintragung erst morgen", competitionStartDate: "2026-10-02", entryStartDate: "2026-10-01", entryDeadlineDate: "2026-10-01" },
+      { id: "starting", name: "Start um zwoelf", competitionStartsAt: "2026-09-30T10:00:00Z", competitionEndDate: "2026-10-02", entryDeadlineAt: "2026-09-30T09:00:00Z" },
+      { id: "open", name: "Ohne Datumsgrenzen", competitionTypeId: "2" },
+    ]);
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { timezoneId: "Europe/Vienna" });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript((values) => { window.__projectionTables = values; }, tables);
+    await page.clock.install({ time: new Date("2026-09-30T09:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-09-30T09:59:59Z"));
+    await page.goto(`http://127.0.0.1:${server.address().port}/Bewerbe.html?anonymous=1`, { waitUntil: "domcontentloaded" });
+    await page.locator(".bewerb-card").first().waitFor();
+    const card = (name) => page.locator(".bewerb-card").filter({ has: page.getByRole("heading", { name, exact: true }) });
+    assert.deepEqual(await page.locator("#grid-finished h3").allTextContents(), ["Prioritaet", "Zuletzt beendet", "Frueher beendet"]);
+    assert.equal(await page.locator("#grid-active h3").allTextContents().then((names) => names.includes("Rangliste")), true);
+    assert.match(await card("Rangliste").textContent(), /Bewerbs Beginn: 01\.05\.2026/);
+    assert.match(await card("Rangliste").textContent(), /Bewerbs Ende: 30\.09\.2026/);
+    assert.equal(await card("Rangliste").getByRole("link").getAttribute("href"), "rangliste.html?id=ranking");
+    assert.equal(await card("Zuletzt beendet").getByRole("link").getAttribute("href"), "bewerbsRaster.html?id=recent");
+    assert.equal(await card("Ende um zwoelf").getByRole("link").getAttribute("href"), "RoundRobin.html?id=timed");
+    for (const name of ["Eintragung bis Tagesende", "Eintragung bis zwoelf"]) assert.match(await card(name).getByRole("link").getAttribute("href"), /^entryList\.html/);
+    for (const name of ["Eintragung erst morgen", "Start um zwoelf"]) assert.equal(await card(name).getByRole("link").count(), 0);
+    const url = page.url();
+    await page.clock.fastForward(2000);
+    await page.locator("#grid-finished h3").filter({ hasText: "Ende um zwoelf" }).waitFor();
+    assert.equal(await card("Eintragung bis zwoelf").getByRole("link").count(), 0);
+    assert.equal(await card("Eintragung bis Tagesende").getByRole("link").count(), 1);
+    assert.equal(await card("Start um zwoelf").getByRole("link").getAttribute("href"), "bewerbsRaster.html?id=starting");
+    await page.clock.fastForward(12 * 60 * 60 * 1000);
+    await page.locator("#grid-finished h3").filter({ hasText: "Rangliste" }).waitFor();
+    assert.equal(await card("Eintragung bis Tagesende").getByRole("link").count(), 0);
+    assert.equal(await card("Eintragung erst morgen").getByRole("link").getAttribute("href"), "entryList.html?id=not-open");
+    assert.equal(await page.locator("#grid-active h3").allTextContents().then((names) => names.includes("Ohne Datumsgrenzen")), true);
+    assert.equal(page.url(), url);
+    assert.equal(await page.locator(".bewerb-card").count(), 10);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
 
 test("Beendete Bewerbe bleiben nach SortOrder priorisiert und sind danach zuletzt beendet zuerst", {
   skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
