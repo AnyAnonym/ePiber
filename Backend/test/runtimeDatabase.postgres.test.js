@@ -263,12 +263,24 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.equal(hallBooking.grid.entries.find(({ personId }) => personId === "2").status, "confirmed");
   const savedGrid = await components.hallTimeService.saveGrid(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd04", expectedRevision: hallBooking.revision, gridId: "hall-seed",
-    name: "Synthetische Hallenzeit", description: "PostgreSQL", mode: "fair_use", capacity: 2,
+    name: "Synthetische Hallenzeit", description: "PostgreSQL", mode: "fair_use", capacity: 1,
     waitlistEnabled: true, maxWaitlistEntries: 2, publicJoinable: true,
     fairUse: { base: 1, extendedDays: 14, percent: 50, openDays: 7 }, active: true,
     participantIds: ["1", "2"], slots: hallBooking.grid.slots.map(({ id, date, start, end }) => ({ id, date, start, end })),
   });
   assert.equal(savedGrid.grid.publicJoinable, true);
+  await components.hallTimeService.setBooking(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fc11", gridId: "hall-seed",
+    slotId: hallGrid.grid.slots[0].id, personId: "1", selected: true,
+  });
+  await components.hallTimeService.setBooking(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fc12", gridId: "hall-seed",
+    slotId: hallGrid.grid.slots[0].id, personId: "2", selected: false,
+  });
+  const hallEvents = await components.repositories.messaging.database.query(`SELECT event_type,summary_snapshot FROM messaging.events WHERE source_operation_id=$1::uuid ORDER BY event_type`, ["0199c800-0000-7000-8000-00000000fc12"]);
+  assert.deepEqual(hallEvents.rows.map(row => row.event_type), ["hall_time.booking.changed", "hall_time.waitlist.promoted"]);
+  assert.ok(hallEvents.rows[0].summary_snapshot.includes("entfernt"));
+  assert.ok(hallEvents.rows[1].summary_snapshot.includes("nachgerückt"));
   await components.projectionLoader.refresh("play-service-test");
   const player = { type: "user", id: "2", name: "Olivia Operator", role: "player" };
   const match = await components.sheetService.addMatch(player, {
@@ -344,6 +356,38 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
       expectedFingerprint: resultFingerprint(), reason: "Walkover-Test Ruecknahme",
     });
   }
+  await components.sheetService.adminSetRankingChallengeDate(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fe31", matchId: match.newMatchId,
+    challengeDate: "261010-1200", reason: "Integrationstest Forderungsdatum",
+  });
+  await components.sheetService.adminDeleteRankingChallenge(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fe32", matchId: match.newMatchId,
+    reason: "Integrationstest Forderungsloeschung",
+  });
+  const history = await components.messagingService.competitionHistory(principal, { bewerbId: "2", limit: 50 });
+  const outcome = history.entries.find(entry => entry.type === "match.result.set" && entry.result !== "W.O.");
+  assert.ok(history.entries.some(entry => entry.summary === "Olivia Operator (2) hat Ada Admin (1) gefordert."));
+  assert.ok(history.entries.some(entry => entry.summary.includes("Olivia Operator und Ada Admin haben den Spieltermin")));
+  assert.ok(history.entries.some(entry => entry.type === "match.end.corrected" && entry.summary.includes("Olivia Operator")));
+  assert.ok(history.entries.some(entry => entry.type === "ranking_challenge_date_changed" && entry.summary.includes("10.10.2026, 12:00 Uhr")));
+  assert.ok(history.entries.some(entry => entry.type === "ranking_challenge_deleted" && entry.detail.includes("Forderungsloeschung")));
+  assert.ok(outcome.summary.includes("gewinnt"));
+  assert.equal(outcome.result, "6-0/6-0");
+  const walkovers = history.entries.filter(entry => entry.type.startsWith("match.result.") && entry.result === "W.O.");
+  assert.equal(walkovers.length, 3);
+  assert.ok(walkovers.every(entry => entry.summary === "Ada Admin gewinnt durch W.O. von Olivia Operator."));
+  const inbox = await components.repositories.messaging.inbox("1", { limit: 100 });
+  const won = inbox.find(entry => entry.legacySubject === "Match gewonnen: Synthetische Rangliste");
+  assert.ok(won);
+  assert.equal(won.legacyBody, "Du gewinnst durch W.O. von Olivia Operator.");
+  const lost = (await components.repositories.messaging.inbox("2", { limit: 100 })).find(entry => entry.legacySubject === "Match verloren: Synthetische Rangliste");
+  assert.equal(lost.legacyBody, "Du verlierst durch W.O.");
+  const hallNotice = (await components.repositories.messaging.inbox("2", { limit: 100 })).find(entry => entry.eventType === "hall_time.waitlist.promoted");
+  assert.match(hallNotice.legacyBody, /Hallenzeit.*nachgerückt/);
+  assert.match(hallNotice.legacyBody, /Uhr/);
+  const allHistory = await components.messagingService.competitionHistory(principal, { limit: 100 });
+  assert.ok(allHistory.entries.every(entry => entry.competitionId));
+  assert.ok(!allHistory.entries.some(entry => entry.id === hallNotice.eventId));
   const normalizedPerson = projectPeopleNormalization(dataStore.get("players")).people.find(({ id }) => id === "2");
   const normalization = await components.sheetService.normalizePerson(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd08", personId: "2",
@@ -362,6 +406,9 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     fromMs: 0, toMs: Date.now() + 365 * 24 * 60 * 60 * 1000, deployment: "paj", selection: ["all"], hallTimes: reportHallTimes,
   });
   assert.equal(report.totals.totalCount > 0, true);
+  assert.ok(report.messages.some(message => message.projectionType === "match.result.set" && message.isResult));
+  assert.ok(report.messages.some(message => message.projectionType === "match.challenge.created" && message.isChallenge));
+  assert.ok(report.messages.some(message => message.projectionType === "match.challenge.date_changed" && message.isDateChange));
   const provisionParams = { operationId: "0199c800-0000-7000-8000-00000000fc01", label: "Kompositionsmonitor" };
   const provisioned = await components.monitorBroker.provision(principal, provisionParams);
   assert.equal(typeof provisioned.monitor.token, "string");
@@ -665,6 +712,33 @@ test("Messaging-Repository liest Inbox, quittiert idempotent und erzeugt kontrol
     templateParameters: { subjectId: "private@example.test", status: "ready" },
     recipients: ["1"],
   }), (error) => error.code === "MESSAGE_PARAMETER_INVALID");
+});
+
+test("PostgreSQL-Meldungssnapshots sind empfaengerspezifisch, idempotent und atomar", { timeout: 30_000 }, async (t) => {
+  const { repositories, events } = await preparedRuntime(t);
+  const message = {
+    contractId: "event-personal", eventType: "test.notice", operationId: "0199c800-0000-7000-8000-00000000ab01",
+    templateParameters: { subjectId: "m-seed", status: "ready" }, competitionId: "2", matchId: "m-seed",
+    participants: [{ personId: "1", role: "winner" }, { personId: "2", role: "loser" }], recipients: ["1", "2"],
+    summary: "Ada gewinnt gegen Olivia.",
+    recipientMessages: [{ personId: "1", subject: "Gewonnen", body: "Du gewinnst. Ergebnis: 6-2/6-4." }, { personId: "2", subject: "Verloren", body: "Du verlierst. Ergebnis: 2-6/4-6." }],
+  };
+  assert.equal((await repositories.messaging.createEvent(message)).duplicate, false);
+  assert.equal((await repositories.messaging.createEvent(message)).duplicate, true);
+  const stored = (await repositories.messaging.inbox("2")).find(entry => entry.eventId === message.contractId);
+  assert.equal(stored.legacyBody, message.recipientMessages[1].body);
+  const service = new PostgresMessagingService({ messaging: repositories.messaging, ops: repositories.ops });
+  assert.equal((await service.message({ id: "2" }, stored.id)).message.body, message.recipientMessages[1].body);
+  assert.equal((await service.messages({ id: "2" }, { limit: 20 })).messages.find(entry => entry.id === stored.id).subject, "Verloren");
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: [{ ...message.recipientMessages[0], body: "Anderer Text" }] }), { code: "MESSAGE_OPERATION_CONFLICT" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: [] }), { code: "MESSAGE_OPERATION_CONFLICT" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: [{ personId: "3", subject: "Falsch", body: "Kein Empfaenger" }] }), { code: "MESSAGE_RECIPIENTS_INVALID" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: null }), { code: "MESSAGE_RECIPIENTS_INVALID" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, contractId: "event-failed", operationId: "0199c800-0000-7000-8000-00000000ab02", recipients: ["1", "missing"], recipientMessages: [] }), { code: "MESSAGE_RECIPIENT_NOT_FOUND" });
+  assert.ok(!(await repositories.messaging.competitionHistory("2", { limit: 100 })).events.some(entry => entry.id === "event-failed"));
+  const logged = JSON.stringify(events);
+  assert.ok(!logged.includes("Du gewinnst") && !logged.includes("Du verlierst") && !logged.includes("Anderer Text"));
+  assert.ok(events.some(entry => entry.event === "postgres_messaging_event_completed" && entry.fields.result === "failed"));
 });
 
 test("PostgreSQL-Messaginginteraktionen sind moderierbar, idempotent und ohne freien Auditpayload", { timeout: 30_000 }, async (t) => {
@@ -1117,6 +1191,9 @@ test("PostgreSQL-Spielbetrieb bindet Entry, Messaging, Audit und Idempotenz in e
   const removed = await service.removeEntry(principal, { operationId: "0199c800-0000-7000-8000-00000000ee02", bewerbId: "2" });
   assert.equal(removed.removed, true);
   assert.equal((await service.removeEntry(principal, { operationId: "0199c800-0000-7000-8000-00000000ee02", bewerbId: "2" })).repeated, true);
+  const entryMessages = (await repositories.messaging.inbox("3")).filter(entry => entry.eventType.startsWith("competition.entry."));
+  assert.equal(entryMessages.length, 2);
+  assert.ok(entryMessages.every(entry => entry.legacySubject.includes("Synthetische Rangliste") && entry.legacyBody.includes("Bewerb Synthetische Rangliste")));
   const rejectedOperation = "0199c800-0000-7000-8000-00000000ee03";
   await assert.rejects(service.addEntry(principal, { operationId: rejectedOperation, bewerbId: "missing" }), (error) => error.code === "ENTRY_CONTEXT_NOT_FOUND");
 
@@ -1127,7 +1204,7 @@ test("PostgreSQL-Spielbetrieb bindet Entry, Messaging, Audit und Idempotenz in e
       SELECT
         (SELECT count(*)::integer FROM play.competition_entries WHERE contract_id=$1) AS entries,
         (SELECT count(*)::integer FROM messaging.events WHERE source_operation_id IN ($2::uuid,'0199c800-0000-7000-8000-00000000ee02'::uuid)) AS events,
-        (SELECT count(*)::integer FROM ops.outbox WHERE idempotency_key IN ('messaging:' || $2::text, 'messaging:0199c800-0000-7000-8000-00000000ee02')) AS outbox,
+         (SELECT count(*)::integer FROM ops.outbox WHERE idempotency_key IN ('messaging:' || $2::text || ':competition.entry.created', 'messaging:0199c800-0000-7000-8000-00000000ee02:competition.entry.withdrawn')) AS outbox,
         (SELECT status FROM ops.audit_operations WHERE operation_id=$2::uuid) AS audit,
         (SELECT status FROM ops.idempotency_operations WHERE operation_id=$2::uuid) AS idempotency
     `, [first.entryId, operationId]);

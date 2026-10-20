@@ -2,6 +2,7 @@
 
 const crypto = require("crypto");
 const { AppError } = require("./errors.js");
+const { createDomainMessage } = require("./postgresDomainMessages");
 
 function requestHash(value) {
   return crypto.createHash("sha256").update(JSON.stringify(value)).digest();
@@ -57,7 +58,7 @@ class PostgresCompetitionService {
         });
         if (!entry.alreadyPresent) {
           const eventId = `event-${crypto.createHash("sha256").update(operationId).digest("hex").slice(0, 32)}`;
-          await this.messaging.createEvent({
+          await createDomainMessage(this.messaging, {
             contractId: eventId,
             eventType: "competition.entry.created",
             operationId,
@@ -124,7 +125,7 @@ class PostgresCompetitionService {
         });
         if (entry) {
           const eventId = `event-${crypto.createHash("sha256").update(operationId).digest("hex").slice(0, 32)}`;
-          await this.messaging.createEvent({
+          await createDomainMessage(this.messaging, {
             contractId: eventId,
             eventType: "competition.entry.withdrawn",
             operationId,

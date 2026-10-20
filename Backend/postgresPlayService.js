@@ -12,6 +12,8 @@ const { projectPeopleReconciliation } = require("./memberReconciliation.js");
 const { Temporal } = require("@js-temporal/polyfill");
 const { rankingEntryRestriction } = require("./rankingEntryRestriction");
 const { competitionLifecycle } = require("./competitionLifecycle");
+const { createDomainMessage } = require("./postgresDomainMessages");
+const { legacyInstant } = require("./postgresProjectionService");
 
 function hasRole(principal, role) { return principal?.role === role || principal?.roles?.includes?.(role); }
 function stableId(prefix, operationId) { return `${prefix}-${crypto.createHash("sha256").update(String(operationId)).digest("hex").slice(0, 32)}`; }
@@ -170,7 +172,7 @@ class PostgresPlayService {
         if (state.minimum_rank && state.rank < state.minimum_rank) throw new AppError("CHALLENGE_NOT_ALLOWED", "Einstiegsforderung liegt vor dem erlaubten Rang", 409);
         await transaction.query("UPDATE play.matches SET entry_target_rank=$2 WHERE id=$1::uuid", [result.rows[0].match_id, state.rank]);
       }
-      await this.messaging.createEvent({
+      await createDomainMessage(this.messaging, {
         contractId: eventId(params.operationId, "challenge"), eventType: "match.challenge.created", operationId: params.operationId,
         templateParameters: { matchId, competitionId: params.bewerbId }, competitionId: params.bewerbId, matchId,
         participants: [{ personId: String(principal.id), role: "challenger" }, { personId: params.opponentId, role: "challenged" }],
@@ -207,12 +209,13 @@ class PostgresPlayService {
       const scheduledAt = clear ? null : parseMatchDate(params.matchDate); if (!clear && !scheduledAt) throw new AppError("VALIDATION_ERROR", "Spieltermin ist ungültig", 400);
       await transaction.query("UPDATE play.matches SET scheduled_at=$2,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [match.id, scheduledAt]);
       const recipientIds = people.map(({ person_id }) => person_id).filter(Boolean);
-      await this.messaging.createEvent({
+      await createDomainMessage(this.messaging, {
         contractId: eventId(params.operationId, clear ? "appointment-cleared" : "appointment-set"), eventType: clear ? "match.appointment.cleared" : "match.appointment.set", operationId: params.operationId,
         templateParameters: { matchId: params.matchId, competitionId: match.competition_contract_id, ...(!clear ? { scheduledAt: scheduledAt.toISOString() } : {}) },
         competitionId: match.competition_contract_id, matchId: params.matchId, participants: recipientIds.map((personId, index) => ({ personId, role: `participant_${index + 1}` })),
         recipients: recipientIds, readPersonIds: [String(principal.id)], sourceType: "match", sourceId: params.matchId,
         actorPersonId: String(principal.id), actorName: principal.name || null, summary: clear ? "Spieltermin wurde abgesagt." : "Spieltermin wurde festgelegt.", detail: admin ? params.reason : null,
+        messageContext: { previousDate: legacyInstant(match.scheduled_at), matchDate: clear ? "" : params.matchDate },
       }, transaction);
       return { success: true, matchId: params.matchId, matchDate: clear ? "" : params.matchDate };
     });
@@ -347,18 +350,33 @@ class PostgresPlayService {
           WHERE participant.side_id=side.id AND side.match_id=$1::uuid AND side.side_no=$2 AND participant.position_no=1`, [progression.rows[0].target_match_id, progression.rows[0].target_side_no, winner.internal_person_id]);
       }
       const recipientIds = people.map(({ person_id }) => person_id).filter(Boolean);
-      await this.messaging.createEvent({
+      await createDomainMessage(this.messaging, {
         contractId: eventId(params.operationId, effectiveCorrection ? "result-corrected" : "result-set"), eventType: effectiveCorrection ? "match.result.corrected" : "match.result.set", operationId: params.operationId,
         templateParameters: { matchId: params.matchId, competitionId: match.competition_contract_id, completionType: completion.kind },
         competitionId: match.competition_contract_id, matchId: params.matchId, participants: recipientIds.map((personId, index) => ({ personId, role: `participant_${index + 1}` })),
         recipients: recipientIds, readPersonIds: [String(principal.id)], sourceType: "match", sourceId: params.matchId,
         actorPersonId: String(principal.id), actorName: principal.name || null, summary: effectiveCorrection ? "Matchergebnis wurde korrigiert." : "Matchergebnis wurde eingetragen.", result: completion.result || completion.kind,
+        messageContext: { winnerSide: completion.winnerSide, completionType: completion.kind, result: completion.result, matchEnd: ended ? legacyInstant(ended) : "", reason: admin ? params.reason : "" },
       }, transaction);
       return { success: true, matchId: params.matchId, result: completion.result, completionType: completion.kind };
     });
   }
   setMatchResult(principal, params) { return this.resultOperation(principal, params); }
   adminCorrectRankingResult(principal, params) { return this.resultOperation(principal, params, { admin: true, correction: true }); }
+
+  async administrativeMatchMessage(transaction, principal, params, match, eventType, messageContext = {}) {
+    const people = await this.participants(transaction, match.id);
+    const recipientIds = people.map(person => person.person_id).filter(Boolean);
+    await createDomainMessage(this.messaging, {
+      contractId: eventId(params.operationId, eventType), eventType, operationId: params.operationId,
+      templateParameters: { matchId: params.matchId, competitionId: match.competition_contract_id },
+      competitionId: match.competition_contract_id, matchId: params.matchId,
+      participants: recipientIds.map((personId, index) => ({ personId, role: `participant_${index + 1}` })),
+      recipients: recipientIds, readPersonIds: [String(principal.id)], sourceType: "match", sourceId: params.matchId,
+      actorPersonId: String(principal.id), actorName: principal.name || null, detail: params.reason,
+      messageContext,
+    }, transaction);
+  }
 
   async adminSetMatchEnd(principal, params) {
     if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
@@ -370,6 +388,7 @@ class PostgresPlayService {
       await transaction.query(`INSERT INTO play.match_result_history(match_id,operation_id,change_type,before_result_id,after_result_id,actor_person_id,administrative_reason,changed_at)
         VALUES ($1::uuid,$2::uuid,'end_corrected',$3::uuid,$3::uuid,$4::uuid,$5,clock_timestamp())`, [match.id, params.operationId, match.current_result_id, actor.rows[0]?.id || null, params.reason]);
       await transaction.query("UPDATE play.matches SET revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [match.id]);
+      await this.administrativeMatchMessage(transaction, principal, params, match, "match.end.corrected", { matchEnd: params.matchEnd });
       return { success: true, matchId: params.matchId, matchEnd: params.matchEnd };
     });
   }
@@ -388,7 +407,7 @@ class PostgresPlayService {
       if (progression.rowCount) await transaction.query(`UPDATE play.match_participants participant SET participant_type='open_bracket',person_id=NULL FROM play.match_sides side WHERE participant.side_id=side.id AND side.match_id=$1::uuid AND side.side_no=$2 AND participant.position_no=1`, [progression.rows[0].target_match_id, progression.rows[0].target_side_no]);
       await transaction.query(`INSERT INTO play.match_result_history(match_id,operation_id,change_type,before_result_id,after_result_id,administrative_reason,changed_at) VALUES ($1::uuid,$2::uuid,'cleared',$3::uuid,NULL,$4,clock_timestamp())`, [match.id, params.operationId, match.current_result_id, params.reason]);
       const people = await this.participants(transaction, match.id), recipientIds = people.map(({ person_id }) => person_id).filter(Boolean);
-      await this.messaging.createEvent({ contractId: eventId(params.operationId, "result-cleared"), eventType: "match.result.cleared", operationId: params.operationId,
+      await createDomainMessage(this.messaging, { contractId: eventId(params.operationId, "result-cleared"), eventType: "match.result.cleared", operationId: params.operationId,
         templateParameters: { matchId: params.matchId, competitionId: match.competition_contract_id }, competitionId: match.competition_contract_id, matchId: params.matchId,
         participants: recipientIds.map((personId, index) => ({ personId, role: `participant_${index + 1}` })), recipients: recipientIds, readPersonIds: [String(principal.id)],
         sourceType: "match", sourceId: params.matchId, actorPersonId: String(principal.id), actorName: principal.name || null, summary: "Matchergebnis wurde administrativ gelöscht.", detail: params.reason,
@@ -401,13 +420,17 @@ class PostgresPlayService {
     if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
     return this.execute(principal, params.operationId, "match.challenge.delete", { matchId: params.matchId, reason: params.reason }, async (transaction) => {
       const match = await this.lockMatch(transaction, params.matchId); if (match.current_result_id) throw new AppError("MATCH_ALREADY_COMPLETED", "Abgeschlossenes Match kann nicht gelöscht werden", 409);
-      await transaction.query("UPDATE play.matches SET is_ignored=true,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [match.id]); return { success: true, matchId: params.matchId, deleted: true };
+      await transaction.query("UPDATE play.matches SET is_ignored=true,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [match.id]);
+      await this.administrativeMatchMessage(transaction, principal, params, match, "match.challenge.deleted");
+      return { success: true, matchId: params.matchId, deleted: true };
     });
   }
   async adminSetRankingChallengeDate(principal, params) {
     if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
     return this.execute(principal, params.operationId, "match.challenge_date.set", { matchId: params.matchId, challengeDate: params.challengeDate, reason: params.reason }, async (transaction) => {
-      const match = await this.lockMatch(transaction, params.matchId); await transaction.query("UPDATE play.matches SET challenged_at=$2,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [match.id, parseMatchDate(params.challengeDate)]); return { success: true, matchId: params.matchId, challengeDate: params.challengeDate };
+      const match = await this.lockMatch(transaction, params.matchId); await transaction.query("UPDATE play.matches SET challenged_at=$2,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [match.id, parseMatchDate(params.challengeDate)]);
+      await this.administrativeMatchMessage(transaction, principal, params, match, "match.challenge.date_changed", { previousDate: legacyInstant(match.challenged_at), nextDate: params.challengeDate });
+      return { success: true, matchId: params.matchId, challengeDate: params.challengeDate };
     });
   }
 
@@ -423,7 +446,7 @@ class PostgresPlayService {
       await transaction.query("UPDATE play.ranking_entries SET rank=rank-1000001,revision=revision+1,updated_at=clock_timestamp() WHERE competition_id=$1::uuid AND status='active' AND rank>$2+1000000", [own.rows[0].competition_id, params.rank]);
       await transaction.query("UPDATE play.ranking_entries SET status='withdrawn',last_active_rank=$2,rank=NULL,withdrawn_at=clock_timestamp(),withdrawal_reason=$3,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [own.rows[0].id, params.rank, params.reason]);
       await transaction.query("UPDATE play.ranking_entries SET rank=rank-1000000 WHERE competition_id=$1::uuid AND status='active' AND rank>=1000000", [own.rows[0].competition_id]);
-      await this.messaging.createEvent({ contractId: eventId(params.operationId, "ranking-withdrawn"), eventType: "ranking.withdrawn", operationId: params.operationId,
+      await createDomainMessage(this.messaging, { contractId: eventId(params.operationId, "ranking-withdrawn"), eventType: "ranking.withdrawn", operationId: params.operationId,
         templateParameters: { competitionId: params.bewerbId, personId: String(principal.id), rank: params.rank }, competitionId: params.bewerbId,
         participants: [{ personId: String(principal.id), role: "withdrawn_player" }], recipients: [String(principal.id)], readPersonIds: [String(principal.id)],
         sourceType: "ranking", sourceId: String(principal.id), actorPersonId: String(principal.id), actorName: principal.name || null, summary: "Spieler wurde aus der Rangliste herausgehängt.", detail: params.reason,
