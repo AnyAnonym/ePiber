@@ -12,6 +12,7 @@ const { RuntimeDatabase } = require("../db/runtimeDatabase");
 const { repairNavigation } = require("../db/repairNavigation");
 const { PostgresAuthService } = require("../postgresAuthService");
 const { PostgresCompetitionService } = require("../postgresCompetitionService");
+const { PostgresPlayService } = require("../postgresPlayService");
 const { PostgresProjectionService } = require("../postgresProjectionService");
 const { PostgresProjectionLoader } = require("../postgresProjectionLoader");
 const { PostgresPreferenceService } = require("../postgresPreferenceService");
@@ -29,13 +30,13 @@ const { notificationChannels } = require("../messagingService");
 const { projectPeopleNormalization } = require("../peopleNormalization");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
 
-async function preparedRuntime(t) {
+async function preparedRuntime(t, { messageEventContracts = {} } = {}) {
   const cluster = startPostgresTestCluster();
   t.after(() => cluster.stop());
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
-  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 7, output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const events = [];
   const runtime = createRuntimeRepositories({
     connectionConfig: { ...cluster.connectionConfig, application_name: "epiber-runtime-test" },
@@ -62,6 +63,7 @@ async function preparedRuntime(t) {
       "preference.start_page.set": { success: "boolean", target: "preference_target", revision: "revision" },
     },
     messageEventContracts: {
+      ...messageEventContracts,
       "test.notice": { templateKey: "test.notice", templateVersion: 1, parameters: { subjectId: "id", status: "status" } },
       "competition.entry.created": { templateKey: "competition.entry.created", templateVersion: 1, parameters: { competitionId: "id", personId: "id" } },
       "competition.entry.withdrawn": { templateKey: "competition.entry.withdrawn", templateVersion: 1, parameters: { competitionId: "id", personId: "id" } },
@@ -106,7 +108,7 @@ test("PostgreSQL-Laufzeit validiert Tenant, Schema und Core-/Identity-Repositori
   assert.deepEqual((await repositories.identity.userStartPage("1")).target, { type: "page", page: "rangliste", params: { id: "2" } });
 
   assert.equal(runtime.status().ready, true);
-  assert.equal(runtime.status().generation, 7);
+  assert.equal(runtime.status().generation, 8);
   assert.equal(events.some(({ event, fields }) => event === "postgres_runtime_started" && fields.result === "success"), true);
   assert.equal(JSON.stringify(events).includes("secretHash"), false);
 });
@@ -219,6 +221,7 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const components = await createPostgresComponents({
     connectionConfig: cluster.connectionConfig,
     expectedTenantCode: "devel-epiber",
@@ -294,6 +297,11 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     expectedFingerprint: matchCompletionFingerprint(firstCompletedRow, firstCompletedHeader),
   });
   assert.equal(corrected.result, "6-1/6-1");
+  await components.sheetService.adminSetMatchEnd(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000feff", matchId: match.newMatchId,
+    expectedFingerprint: components.sheetService.cachedFingerprint(match.newMatchId).fingerprint,
+    matchEnd: "261011-2000", reason: "Integrationstest Spielendeberichtigung",
+  });
   const completedValues = dataStore.get("matches1"), completedHeader = headerOf(completedValues);
   const completedRow = completedValues.slice(1).find((row) => String(row[headerIndex(completedHeader, "id")]) === match.newMatchId);
   const cleared = await components.sheetService.adminClearMatchResult(principal, {
@@ -463,6 +471,7 @@ test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sow
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const client = new Client(cluster.connectionConfig); await client.connect();
   await client.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false"); await client.end();
   const app = await createPostgresApplication({
@@ -513,6 +522,7 @@ test("PostgreSQL-Read-only-Abnahme blockiert HTTP- und WebSocket-Writes vor Audi
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const before = new Client(cluster.connectionConfig); await before.connect();
   await before.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false");
   const auditCount = Number((await before.query("SELECT count(*) FROM ops.audit_operations")).rows[0].count);
@@ -567,6 +577,7 @@ test("PostgreSQL-Read-only-Abnahme startet mit der minimalen app_readonly-Datenb
   await runMigrations({ connectionConfig: ownerConnection, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: ownerConnection, command: "up", targetGeneration: 8, output: () => {} });
   await applyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords, output: () => {} });
   const readOnlyPassword = passwords.app_readonly;
   const app = await createPostgresApplication({
@@ -1020,6 +1031,76 @@ test("Operations-Repository bindet Idempotenz an Akteur, Requesthash und kontrol
   assert.equal(repeated.status, "success");
   assert.deepEqual(repeated.response, { personId: "1", revision: "2" });
   await assert.rejects(repositories.ops.beginIdempotency({ operationId, actorPersonId: "1", command: "identity.profile.update", requestHash: Buffer.alloc(32, 8) }), (error) => error.code === "IDEMPOTENCY_CONFLICT" && error.status === 409);
+});
+
+test("PostgreSQL-Neueinstieg persistiert Ranggrenze, Folgeversuche, Jahresfrist und reversible Einreihung", { timeout: 30_000 }, async (t) => {
+  const { MESSAGE_EVENT_CONTRACTS } = require("../postgresRuntimeContracts");
+  const { repositories } = await preparedRuntime(t, { messageEventContracts: MESSAGE_EVENT_CONTRACTS });
+  const db = repositories.play.database;
+  await db.query("UPDATE play.competitions SET competition_end_date=NULL WHERE contract_id='2'");
+  await db.query(`INSERT INTO identity.people(tenant_id,contract_id,first_name,last_name,active)
+    SELECT $1::uuid,n::text,'Test','Einsteiger',true FROM generate_series(99,127) n`, [repositories.play.context.tenantId]);
+  await db.query(`INSERT INTO play.ranking_entries(competition_id,person_id,status,rank)
+    SELECT c.id,p.id,'active',p.contract_id::int-97 FROM play.competitions c
+    JOIN identity.people p ON p.tenant_id=$1::uuid AND p.contract_id::int BETWEEN 100 AND 127 WHERE c.contract_id='2'`, [repositories.play.context.tenantId]);
+  const loader = new PostgresProjectionLoader({ projectionService: new PostgresProjectionService(repositories), dataStore });
+  await loader.initialLoad();
+  let now = Date.now();
+  const service = new PostgresPlayService({ ...repositories, projectionLoader: loader, now: () => now });
+  const player = { type: "user", id: "99", name: "Test", role: "player" };
+  const admin = { type: "user", id: "1", name: "Admin", role: "admin" };
+  const { randomUUID } = require("node:crypto");
+  const fingerprint = (id) => {
+    const values = dataStore.get("matches1"), header = headerOf(values);
+    return matchCompletionFingerprint(values.slice(1).find(row => row[headerIndex(header, "id")] === id), header);
+  };
+  const challenge = async (opponentId) => (await service.addMatch(player, { operationId: randomUUID(), bewerbId: "2", opponentId })).newMatchId;
+  const finish = async (matchId, losingSide) => service.setMatchResult(player, { operationId: randomUUID(), matchId, kind: "walkover", losingSide, expectedFingerprint: fingerprint(matchId) });
+  const clear = async (matchId) => service.adminClearMatchResult(admin, { operationId: randomUUID(), matchId, reason: "Test Ruecknahme", expectedFingerprint: fingerprint(matchId) });
+  const first = await challenge("105"); // rank 8 -> minimum rank 18
+  await finish(first, 1);
+  let state = service.rankingChallengeState(player, "2");
+  assert.equal(state.mode, "newcomer");
+  assert.equal(state.entryRestriction.minimumRank, 18);
+  assert.equal(state.entryRestriction.active, true);
+  const firstExpiry = state.entryRestriction.expiresAt;
+  assert.equal(service.challengeEligibility(player, "2", "105").allowed, false);
+  const eligibility = service.challengeEligibility.bind(service);
+  service.challengeEligibility = () => ({ allowed: true });
+  await assert.rejects(challenge("105"), { code: "CHALLENGE_NOT_ALLOWED" });
+  service.challengeEligibility = eligibility;
+  now += 8 * 24 * 60 * 60 * 1000;
+  assert.equal(service.challengeEligibility(player, "2", "114").allowed, false); // rank 17
+  assert.equal(service.challengeEligibility(player, "2", "115").allowed, true); // rank 18
+  // A fresh service and fresh DB projection retain the same restriction.
+  await loader.refresh("restart-test");
+  const fresh = new PostgresPlayService({ ...repositories, projectionLoader: loader, now: () => now });
+  assert.equal(fresh.rankingChallengeState(player, "2").entryRestriction.minimumRank, 18);
+  const second = await challenge("115");
+  await finish(second, 1);
+  assert.equal(service.rankingChallengeState(player, "2").entryRestriction.minimumRank, 28);
+  await clear(second);
+  assert.equal(service.rankingChallengeState(player, "2").entryRestriction.minimumRank, 18);
+  await service.adminDeleteRankingChallenge(admin, { operationId: randomUUID(), matchId: second, reason: "Test Forderung entfernen" });
+  now = firstExpiry;
+  assert.equal(service.rankingChallengeState(player, "2").entryRestriction.active, false);
+  assert.equal(service.challengeEligibility(player, "2", "105").allowed, true);
+  // Returning to the first loss and correcting to a win exercises inserted IDs,
+  // correction reversal and deletion of the newly inserted ranking row.
+  now = Date.now();
+  await finish(first, 2);
+  assert.equal((await repositories.play.rankings("2")).find(row => row.personId === "99").rank, 8);
+  await clear(first);
+  assert.equal((await repositories.play.rankings("2")).some(row => row.personId === "99"), false);
+  await service.adminDeleteRankingChallenge(admin, { operationId: randomUUID(), matchId: first, reason: "Test Forderung entfernen" });
+  // Target 35 is absent: immediate placement at the end, not a negative rank.
+  const last = await challenge("122"); // rank 25
+  await finish(last, 1);
+  const ranks = await repositories.play.rankings("2");
+  assert.equal(ranks.find(row => row.personId === "99").rank, 31);
+  assert.equal(new Set(ranks.filter(row => row.status === "active").map(row => row.rank)).size, 31);
+  await clear(last);
+  assert.equal((await repositories.play.rankings("2")).some(row => row.personId === "99"), false);
 });
 
 test("PostgreSQL-Spielbetrieb bindet Entry, Messaging, Audit und Idempotenz in eine Fachtransaktion", { timeout: 30_000 }, async (t) => {

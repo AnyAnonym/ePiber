@@ -24,6 +24,7 @@ const stateStore = require("./stateStore.js");
 const courtPoller = require("./courtPoller.js");
 const { AppError, errorData } = require("./errors.js");
 const { competitionLifecycle } = require("./competitionLifecycle.js");
+const { rankingEntryRestriction } = require("./rankingEntryRestriction.js");
 const { validateEndpointRequest, validateEndpointResponse, validateFavoriteTargets, validateStartTarget } = require("./contracts.js");
 const { TokenBucketLimiter, assertAllowedOrigin, getRequestIp, parseCookies } = require("./security.js");
 const { analyzeMatchRules, matchCompletionFingerprint, parseMatchDate, parseParticipant } = require("./matchRules.js");
@@ -436,6 +437,8 @@ function profileRankings(personId, principal = null) {
       canChallenge,
       canWithdraw: !withdrawn && principal?.type === "user" && String(principal.id || "") === String(personId) && !challenge,
       openChallenge: challenge,
+      ...(withdrawn && !ownReturnAvailable && principal?.type === "user" && String(principal.id) === String(personId)
+        ? { entryRestriction: rankingEntryRestriction(matches, competition.competitionId, personId, now.getTime()) } : {}),
       ...(withdrawn && principal?.type === "user" ? {
         withdrawal: {
           withdrawnAt,
@@ -452,7 +455,9 @@ function profileRankings(personId, principal = null) {
   for (const competition of rankingCompetitions.values()) {
     if (projectedCompetitionIds.has(competition.competitionId)) continue;
     const challenge = openChallenge(competition.competitionId);
-    if (!challenge) continue;
+    const entryRestriction = principal?.type === "user" && String(principal.id) === String(personId)
+      ? rankingEntryRestriction(matches, competition.competitionId, personId, now.getTime()) : null;
+    if (!challenge && !entryRestriction) continue;
     projected.push({
       competitionId: competition.competitionId,
       competitionName: competition.competitionName,
@@ -463,6 +468,7 @@ function profileRankings(personId, principal = null) {
       canChallenge: false,
       canWithdraw: false,
       openChallenge: challenge,
+      ...(entryRestriction ? { entryRestriction } : {}),
       sortOrder: competition.sortOrder,
     });
   }

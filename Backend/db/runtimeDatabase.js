@@ -43,7 +43,7 @@ class RuntimeDatabase {
     expectedTenantCode,
     requiredDomains = DEFAULT_REQUIRED_DOMAINS,
     minimumGeneration = 6,
-    maximumGeneration = 7,
+    maximumGeneration = 8,
     maxConnections = 5,
     statementTimeoutMs = 10_000,
     poolFactory = (config) => new Pool(config),

@@ -1097,6 +1097,43 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     { competitionId: "ranking-seniors", status: "withdrawn" },
   ]);
   assert.equal(ownProfile.data.profile.rankings[1].withdrawal.previousRank, 4);
+  const entryCompetitions = structuredClone(dataStore.get("bewerbe"));
+  const entryMatches = structuredClone(dataStore.get("matches1"));
+  const entryRankings = structuredClone(dataStore.get("rlPlatzierung"));
+  try {
+    const competitions = structuredClone(entryCompetitions);
+    const source = competitions.find(row => row.includes("ranking-men"));
+    competitions.push(source.map(value => value === "ranking-men" ? "ranking-entry" : value));
+    dataStore.set("bewerbe", competitions, { source: "test-entry-state" });
+    const matches = structuredClone(entryMatches);
+    matches[0].push("EinstiegAbRang", "EinstiegFreiAb");
+    const row = Array(matches[0].length).fill("");
+    const put = (name, value) => { row[matches[0].findIndex(field => field.toLowerCase() === name.toLowerCase())] = value; };
+    put("ID", "entry-loss"); put("BewerbID", "ranking-entry");
+    put("Spieler1ID", "p2 [wo]"); put("Spieler3ID", "p1");
+    put("MatchDate", "261020-1000"); put("ErgebnisErfasstAm", "261020-1000");
+    put("EinstiegAbRang", "18"); put("EinstiegFreiAb", "2099-10-20T08:00:00.000Z");
+    matches.push(row);
+    dataStore.set("matches1", matches, { source: "test-entry-state" });
+    const mine = (await playerClient.request("myProfile")).data.profile.rankings.find(ranking => ranking.competitionId === "ranking-entry");
+    assert.deepEqual(mine.entryRestriction, { minimumRank: 18, expiresAt: Date.parse("2099-10-20T08:00:00.000Z"), active: true });
+    assert.equal(mine.rank, null);
+    const withdrawnRows = structuredClone(entryRankings);
+    const withdrawnRow = Array(withdrawnRows[0].length).fill("");
+    for (const [field, value] of Object.entries({ id: "entry-withdrawn", bewerbid: "ranking-entry", personid: "p2", rang: "0", rausgehangenam: "240101-1000", rausgehangenletzteplatzierung: "4", rausgehangengrund: "Pause" })) {
+      withdrawnRow[withdrawnRows[0].findIndex(name => name.toLowerCase() === field)] = value;
+    }
+    withdrawnRows.push(withdrawnRow);
+    dataStore.set("rlPlatzierung", withdrawnRows, { source: "test-expired-return-entry" });
+    const expiredReturn = (await playerClient.request("myProfile")).data.profile.rankings.find(ranking => ranking.competitionId === "ranking-entry");
+    assert.deepEqual(expiredReturn.entryRestriction, mine.entryRestriction);
+    const foreign = (await adminClient.request("publicProfile", { id: "p2" })).data.profile;
+    assert.equal(foreign.rankings.some(ranking => ranking.entryRestriction), false);
+  } finally {
+    dataStore.set("bewerbe", entryCompetitions, { source: "test-entry-restore" });
+    dataStore.set("matches1", entryMatches, { source: "test-entry-restore" });
+    dataStore.set("rlPlatzierung", entryRankings, { source: "test-entry-restore" });
+  }
   assert.equal(ownProfile.data.profile.competitions[0].matches[0].canSetResult, true);
   const completedAdminMatch = ownProfile.data.profile.competitions[0].matches.find(({ matchId }) => matchId === "m1");
   assert.equal(completedAdminMatch.canAdminSetMatchEnd, true);

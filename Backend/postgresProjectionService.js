@@ -55,7 +55,7 @@ class PostgresProjectionService {
       bewerbe: [["ID", "BewerbsartID", "MatchtypID Standard", "Bezeichnung", "EntryStart", "EntryDeadline", "Bewerbsbeginn", "Bewerbsende", "Geschlecht", "Alterskategorie", "SortOrder"]],
       bewerbsart: [["ID", "Bezeichnung", "EntryListAvailable", "Rasterfunktion", "RoundRobin", "Spezifikum"]],
       matchtyp: [["ID", "Bezeichnung", "Gewinnsaetze", "Satzlaenge", "Satztiebreak", "Entscheidender Satz", "NoAd"]],
-      matches1: [["Ignore", "ID", "MatchDate", "MatchStart", "MatchEnde", "ErgebnisErfasstAm", "ForderungDate", "Dauer", "BewerbID", "BewerbRunde", "MatchtypID", "Spieler1ID", "Spieler2ID", "Spieler3ID", "Spieler4ID", "Ergebnis", "Spieler1RangBeiErgebnis", "Spieler3RangBeiErgebnis", "PTN-Wertung", "Bemerkung"]],
+      matches1: [["Ignore", "ID", "MatchDate", "MatchStart", "MatchEnde", "ErgebnisErfasstAm", "ForderungDate", "Dauer", "BewerbID", "BewerbRunde", "MatchtypID", "Spieler1ID", "Spieler2ID", "Spieler3ID", "Spieler4ID", "Ergebnis", "Spieler1RangBeiErgebnis", "Spieler3RangBeiErgebnis", "PTN-Wertung", "Bemerkung", "EinstiegAbRang", "EinstiegFreiAb"]],
       rlPlatzierung: [["ID", "BewerbID", "PersonID", "Rang", "RausgehangenAm", "RausgehangenLetztePlatzierung", "RausgehangenGrund"]],
       navigator: [["ID", "Name", "Ziel", "Profil"]],
       entryList: [["ID", "BewerbID", "PersonenID", "Entrydate", "GebuehrBezahlt"]],
@@ -110,6 +110,7 @@ class PostgresProjectionService {
         legacyInstant(match.playStartedAt), legacyInstant(match.playEndedAt), legacyInstant(match.firstCapturedAt), legacyInstant(match.challengedAt),
         match.reservedDurationMinutes === null ? "" : String(match.reservedDurationMinutes), match.competitionId, match.roundCode || "",
         match.formatBindingSource === "match_override" ? match.matchFormatId : "", ...values, resultString(match), "", "", "", match.note || "",
+        match.entryMinimumRank ? String(match.entryMinimumRank) : "", match.entryExpiresAt ? new Date(match.entryExpiresAt).toISOString() : "",
       ]);
     }
     for (const item of navigation) {

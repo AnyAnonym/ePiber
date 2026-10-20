@@ -2385,6 +2385,12 @@ window.openProfileModal = async (options = {}) => {
       panel.setAttribute("role", "tabpanel");
       panel.hidden = true;
       if (ranking.status === "active" && Number(ranking.rank) > 0) appendProfileField(panel, "Ranglistenposition", ranking.rank, "", actionSignal);
+      if (ownProfile && ranking.entryRestriction) {
+        const restriction = ranking.entryRestriction;
+        appendProfileField(panel, "Ranglistenstatus", "Noch nicht eingereiht", "", actionSignal);
+        appendProfileField(panel, "Einstiegsforderung", restriction.active ? `Ab Rang ${restriction.minimumRank}` : "Freie Gegnerwahl – Jahresfrist abgelaufen", "", actionSignal);
+        appendProfileField(panel, "Freie Gegnerwahl ab", new Date(restriction.expiresAt).toLocaleString("de-AT", { timeZone: "Europe/Vienna" }), "", actionSignal);
+      }
       if (ranking.openChallenge) {
         const challenge = ranking.openChallenge;
         const challengeBlock = document.createElement("div");

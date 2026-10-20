@@ -9,6 +9,9 @@ const { headerIndex, headerOf } = require("./tableUtils.js");
 const { requestHash } = require("./postgresCompetitionService.js");
 const { personFingerprint, projectPeopleNormalization } = require("./peopleNormalization.js");
 const { projectPeopleReconciliation } = require("./memberReconciliation.js");
+const { Temporal } = require("@js-temporal/polyfill");
+const { rankingEntryRestriction } = require("./rankingEntryRestriction");
+const { competitionLifecycle } = require("./competitionLifecycle");
 
 function hasRole(principal, role) { return principal?.role === role || principal?.roles?.includes?.(role); }
 function stableId(prefix, operationId) { return `${prefix}-${crypto.createHash("sha256").update(String(operationId)).digest("hex").slice(0, 32)}`; }
@@ -60,8 +63,7 @@ class PostgresPlayService {
   rankingContext(principal, competitionId) {
     const { header: competitionHeader, row: competition } = this.competitionRow(competitionId);
     if (String(competition[headerIndex(competitionHeader, "bewerbsartid")] || "") !== "2") throw new AppError("RANKING_REQUIRED", "Bewerb ist keine Rangliste", 409);
-    const end = parseMatchDate(competition[headerIndex(competitionHeader, "bewerbsende")]);
-    const competitionEndAt = end?.getTime() || null, competitionEnded = Boolean(end && end.getTime() < this.now());
+    const { competitionEndAt, competitionEnded } = competitionLifecycle(competition[headerIndex(competitionHeader, "bewerbsende")], this.now());
     const players = dataStore.get("players"), playerHeader = headerOf(players), playerId = headerIndex(playerHeader, "id"), activeIndex = headerIndex(playerHeader, "aktiv");
     const person = players.slice(1).find((row) => String(row[playerId] || "") === String(principal.id));
     if (!person || (activeIndex >= 0 && String(person[activeIndex] || "") !== "1")) throw new AppError("PLAYER_NOT_ACTIVE", "Spieler ist nicht aktiv", 409);
@@ -86,14 +88,16 @@ class PostgresPlayService {
       const age = new Date(this.now()).getFullYear() - Number(birth[3]), limit = Number(ageRule[1]);
       if (ageRule[2] === "+" ? age < limit : age > limit) throw new AppError("RANKING_ENTRY_NOT_ELIGIBLE", "Alter passt nicht zum Ranglistenbewerb", 409);
     }
-    return { mode: "newcomer", rank: null, returnFromRank: null, entries, competitionEndAt, competitionEnded };
+    const entryRestriction = rankingEntryRestriction(dataStore.get("matches1"), competitionId, principal.id, this.now());
+    return { mode: "newcomer", rank: null, returnFromRank: null, entryRestriction, entries, competitionEndAt, competitionEnded };
   }
   rankingChallengeState(principal, competitionId) {
     try { const { entries: _entries, ...value } = this.rankingContext(principal, competitionId); return { success: true, ...value }; }
     catch (error) {
       if (error.code === "RANKING_ENTRY_NOT_ELIGIBLE") {
-        const { header, row } = this.competitionRow(competitionId), end = parseMatchDate(row[headerIndex(header, "bewerbsende")]);
-        return { success: true, mode: "ineligible", rank: null, returnFromRank: null, competitionEndAt: end?.getTime() || null, competitionEnded: Boolean(end && end.getTime() < this.now()) };
+        const { header, row } = this.competitionRow(competitionId);
+        const { competitionEndAt, competitionEnded } = competitionLifecycle(row[headerIndex(header, "bewerbsende")], this.now());
+        return { success: true, mode: "ineligible", rank: null, returnFromRank: null, competitionEndAt, competitionEnded };
       }
       throw error;
     }
@@ -104,6 +108,7 @@ class PostgresPlayService {
       const context = this.rankingContext(principal, competitionId); if (context.competitionEnded) throw new AppError("COMPETITION_ENDED", "Bewerb ist beendet", 409);
       const opponentIndex = context.entries.findIndex(({ id }) => id === String(opponentId)); if (opponentIndex < 0) throw new AppError("RANKING_MEMBERSHIP_REQUIRED", "Gegner ist nicht gereiht", 409);
       if (context.mode === "returning") { if (context.entries[opponentIndex].rank < context.returnFromRank) throw new AppError("CHALLENGE_NOT_ALLOWED", "Spieler kann nicht gefordert werden", 409); }
+      else if (context.mode === "newcomer" && context.entryRestriction?.active && context.entries[opponentIndex].rank < context.entryRestriction.minimumRank) throw new AppError("CHALLENGE_NOT_ALLOWED", "Einstiegsforderung liegt vor dem erlaubten Rang", 409);
       else if (context.mode === "ranked") {
         const rows = []; for (let index = 0, size = 1; index < context.entries.length; size++) { rows.push(context.entries.slice(index, index + size)); index += size; }
         let rowIndex = -1, column = -1; for (const [index, row] of rows.entries()) { const found = row.findIndex(({ id }) => id === String(principal.id)); if (found >= 0) { rowIndex = index; column = found; break; } }
@@ -142,6 +147,29 @@ class PostgresPlayService {
         RETURNING match_id
       `, [this.play.context.tenantId, params.bewerbId, String(principal.id), params.opponentId, matchId]);
       if (!result.rowCount) throw new AppError("MATCH_CONTEXT_INVALID", "Forderungskontext wurde nicht gefunden", 409);
+      // Recheck the persistent entry boundary inside the serializable write,
+      // independently of the UI/cache. Snapshot the target before it can move.
+      const entry = await transaction.query(`SELECT opponent.rank,
+        own.status AS own_status, own.withdrawn_at,
+        (SELECT result.entry_minimum_rank FROM play.matches prior
+          JOIN play.match_results result ON result.id=prior.current_result_id
+          JOIN play.match_participants participant ON participant.match_id=prior.id
+          JOIN play.match_sides side ON side.id=participant.side_id AND side.side_no=1
+          WHERE prior.competition_id=match.competition_id AND participant.person_id=challenger.id
+            AND NOT prior.is_ignored AND result.winner_side_no=2 AND result.entry_expires_at>clock_timestamp()
+          ORDER BY result.entry_expires_at DESC LIMIT 1) AS minimum_rank
+        FROM play.matches match JOIN identity.people challenger ON challenger.tenant_id=$2::uuid AND challenger.contract_id=$3
+        JOIN identity.people defender ON defender.tenant_id=$2::uuid AND defender.contract_id=$4
+        JOIN play.ranking_entries opponent ON opponent.competition_id=match.competition_id AND opponent.person_id=defender.id AND opponent.status='active'
+        LEFT JOIN play.ranking_entries own ON own.competition_id=match.competition_id AND own.person_id=challenger.id
+        WHERE match.id=$1::uuid`, [result.rows[0].match_id, this.play.context.tenantId, String(principal.id), params.opponentId]);
+      const state = entry.rows[0];
+      if (!state) throw new AppError("RANKING_MEMBERSHIP_REQUIRED", "Gegner ist nicht gereiht", 409);
+      const returning = state.own_status === "withdrawn" && state.withdrawn_at && Temporal.Instant.from(new Date(state.withdrawn_at).toISOString()).toZonedDateTimeISO("Europe/Vienna").add({ years: 1 }).epochMilliseconds > this.now();
+      if (state.own_status !== "active" && !returning) {
+        if (state.minimum_rank && state.rank < state.minimum_rank) throw new AppError("CHALLENGE_NOT_ALLOWED", "Einstiegsforderung liegt vor dem erlaubten Rang", 409);
+        await transaction.query("UPDATE play.matches SET entry_target_rank=$2 WHERE id=$1::uuid", [result.rows[0].match_id, state.rank]);
+      }
       await this.messaging.createEvent({
         contractId: eventId(params.operationId, "challenge"), eventType: "match.challenge.created", operationId: params.operationId,
         templateParameters: { matchId, competitionId: params.bewerbId }, competitionId: params.bewerbId, matchId,
@@ -156,7 +184,7 @@ class PostgresPlayService {
   async lockMatch(transaction, matchId) {
     const result = await transaction.query(`SELECT match.id,match.contract_id,match.competition_id,match.match_format_version_id,match.current_result_id,match.scheduled_at,match.challenged_at,match.revision,
       competition.contract_id AS competition_contract_id,type.contract_id AS competition_type_id,type_version.bracket_size,
-      result.first_captured_at,result.play_started_at,result.play_ended_at,result.winner_side_no
+       result.first_captured_at,result.play_started_at,result.play_ended_at,result.winner_side_no,match.entry_target_rank,result.entry_expires_at
       FROM play.matches match JOIN play.competitions competition ON competition.id=match.competition_id JOIN core.sections section ON section.id=competition.section_id
       JOIN play.competition_type_versions type_version ON type_version.id=competition.competition_type_version_id JOIN play.competition_types type ON type.id=type_version.competition_type_id
       LEFT JOIN play.match_results result ON result.id=match.current_result_id
@@ -216,7 +244,7 @@ class PostgresPlayService {
     const challenger = byPerson.get(challengerId), defender = byPerson.get(defenderId); if (!defender?.rank) throw new AppError("RANKING_REPAIR_REQUIRED", "Rangliste muss repariert werden", 409);
     const active = values.filter(({ status }) => status === "active");
     if (!challenger) {
-      if (winnerSide !== 1 && active.filter(({ rank }) => rank > defender.rank).length >= 10) return [];
+      if (winnerSide !== 1 && active.some(({ rank }) => rank === (match.entry_target_rank || defender.rank) + 10)) return [];
       const afterRank = winnerSide === 1 ? defender.rank : Math.max(...active.map(({ rank }) => rank)) + 1;
       const person = participants.find(({ side_no }) => side_no === 1);
       return [...(winnerSide === 1 ? active.filter(({ rank }) => rank >= defender.rank).map((row) => ({ row, beforeRank: row.rank, afterRank: row.rank + 1 })) : []), { row: { id: null, person_id: challengerId, internal_person_id: person.internal_person_id }, beforeRank: null, afterRank }];
@@ -224,6 +252,7 @@ class PostgresPlayService {
     const challengerRank = challenger.status === "active" ? challenger.rank : 0;
     if (challengerRank === 0) {
       const expires = challenger.withdrawn_at ? new Date(challenger.withdrawn_at) : null; expires?.setFullYear(expires.getFullYear() + 1);
+      if (match.entry_target_rank && winnerSide !== 1 && active.some(({ rank }) => rank === match.entry_target_rank + 10)) return [];
       const returning = expires && expires.getTime() >= this.now(); const insertion = winnerSide === 1 ? defender.rank : returning ? defender.rank + 1 : Math.max(...active.map(({ rank }) => rank)) + 1;
       return [...active.filter(({ rank }) => rank >= insertion).map((row) => ({ row, beforeRank: row.rank, afterRank: row.rank + 1 })), { row: challenger, beforeRank: 0, afterRank: insertion }];
     }
@@ -235,14 +264,15 @@ class PostgresPlayService {
     if (!changes.length) return;
     await transaction.query("UPDATE play.ranking_entries SET rank=rank+1000000 WHERE competition_id=$1::uuid AND status='active'", [competitionId]);
     const rankingChange = await transaction.query("INSERT INTO play.ranking_changes(competition_id,match_result_history_id,created_at) VALUES ($1::uuid,$2::uuid,clock_timestamp()) RETURNING id", [competitionId, historyId]);
+    const changedIds = [];
     for (const change of changes) {
       let rowId = change.row.id;
       if (!rowId) {
         const inserted = await transaction.query(`INSERT INTO play.ranking_entries(competition_id,person_id,contract_id,status,rank) VALUES ($1::uuid,$2::uuid,$3,'active',$4) RETURNING id`, [competitionId, change.row.internal_person_id, stableId("r", `${historyId}:${change.row.person_id}`), change.afterRank]); rowId = inserted.rows[0].id;
       } else if (change.afterRank > 0) await transaction.query("UPDATE play.ranking_entries SET status='active',rank=$2,last_active_rank=NULL,withdrawn_at=NULL,withdrawal_reason=NULL,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [rowId, change.afterRank]);
+      changedIds.push(rowId);
       await transaction.query("INSERT INTO play.ranking_change_items(ranking_change_id,person_id,before_rank,after_rank) SELECT $1::uuid,person_id,$3,$4 FROM play.ranking_entries WHERE id=$2::uuid", [rankingChange.rows[0].id, rowId, change.beforeRank, change.afterRank]);
     }
-    const changedIds = changes.map(({ row }) => row.id).filter(Boolean);
     await transaction.query("UPDATE play.ranking_entries SET rank=rank-1000000 WHERE competition_id=$1::uuid AND status='active' AND NOT (id=ANY($2::uuid[]))", [competitionId, changedIds]);
     await transaction.query("INSERT INTO play.match_ranking_effects(match_result_history_id,ranking_change_id) VALUES ($1::uuid,$2::uuid)", [historyId, rankingChange.rows[0].id]);
   }
@@ -291,8 +321,22 @@ class PostgresPlayService {
       const history = await transaction.query(`INSERT INTO play.match_result_history(match_id,operation_id,change_type,before_result_id,after_result_id,actor_person_id,administrative_reason,changed_at)
         VALUES ($1::uuid,$2::uuid,$3,$4::uuid,$5::uuid,$6::uuid,$7,clock_timestamp()) RETURNING id`, [match.id, params.operationId, effectiveCorrection ? "corrected" : "created", match.current_result_id, inserted.rows[0].id, actor, admin ? params.reason : null]);
       if (effectiveCorrection && match.current_result_id) {
-        const priorHistory = await transaction.query("SELECT id FROM play.match_result_history WHERE match_id=$1::uuid AND after_result_id=$2::uuid ORDER BY changed_at DESC LIMIT 1", [match.id, match.current_result_id]);
+        const priorHistory = await transaction.query("SELECT id FROM play.match_result_history WHERE match_id=$1::uuid AND after_result_id=$2::uuid AND change_type IN ('created','corrected') ORDER BY changed_at DESC LIMIT 1", [match.id, match.current_result_id]);
         await this.reverseRankingEffect(transaction, priorHistory.rows[0]?.id, match.competition_id);
+      }
+      if (match.competition_type_id === "2" && !match.entry_target_rank) {
+        const entry = await transaction.query(`SELECT defender.rank FROM play.ranking_entries defender
+          WHERE defender.competition_id=$1::uuid AND defender.person_id=$2::uuid AND defender.status='active'
+          AND NOT EXISTS (SELECT 1 FROM play.ranking_entries own WHERE own.competition_id=$1::uuid AND own.person_id=$3::uuid)`,
+        [match.competition_id, people.find(({ side_no }) => side_no === 2)?.internal_person_id, people.find(({ side_no }) => side_no === 1)?.internal_person_id]);
+        if (entry.rowCount) {
+          match.entry_target_rank = entry.rows[0].rank;
+          await transaction.query("UPDATE play.matches SET entry_target_rank=$2 WHERE id=$1::uuid", [match.id, match.entry_target_rank]);
+        }
+      }
+      if (match.entry_target_rank) {
+        const expires = match.entry_expires_at || Temporal.Instant.fromEpochMilliseconds(this.now()).toZonedDateTimeISO("Europe/Vienna").add({ years: 1 }).toInstant().toString();
+        await transaction.query("UPDATE play.match_results SET entry_minimum_rank=$2,entry_expires_at=$3 WHERE id=$1::uuid", [inserted.rows[0].id, match.entry_target_rank + 10, expires]);
       }
       const changes = await this.rankingTargets(transaction, match, people, completion.winnerSide, params.rankPlan || null); await this.applyRanks(transaction, match.competition_id, changes, history.rows[0].id);
       await transaction.query("UPDATE play.matches SET current_result_id=$2::uuid,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1::uuid", [match.id, inserted.rows[0].id]);
@@ -335,7 +379,7 @@ class PostgresPlayService {
     const current = this.cachedFingerprint(params.matchId); if (current.fingerprint !== params.expectedFingerprint) throw new AppError("RESULT_CONFLICT", "Matchergebnis wurde geändert", 409);
     return this.execute(principal, params.operationId, "match.result.clear", { matchId: params.matchId, reason: params.reason }, async (transaction) => {
       const match = await this.lockMatch(transaction, params.matchId); if (!match.current_result_id) return { success: true, matchId: params.matchId, cleared: false };
-      const previousHistory = await transaction.query("SELECT id FROM play.match_result_history WHERE match_id=$1::uuid AND after_result_id=$2::uuid ORDER BY changed_at DESC LIMIT 1", [match.id, match.current_result_id]);
+      const previousHistory = await transaction.query("SELECT id FROM play.match_result_history WHERE match_id=$1::uuid AND after_result_id=$2::uuid AND change_type IN ('created','corrected') ORDER BY changed_at DESC LIMIT 1", [match.id, match.current_result_id]);
       if (previousHistory.rowCount) {
         await this.reverseRankingEffect(transaction, previousHistory.rows[0].id, match.competition_id);
       }

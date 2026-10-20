@@ -43,6 +43,7 @@ async function createPostgresComponents({
   let repositories;
   try {
     repositories = await runtime.connect();
+    if (runtime.status().generation < 8) throw Object.assign(new Error("PostgreSQL-Spielbetrieb benoetigt Schemageneration 8"), { code: "DB_SCHEMA_GENERATION_UNSUPPORTED" });
     const projectionService = new PostgresProjectionService(repositories);
     const projectionLoader = new PostgresProjectionLoader({ projectionService, dataStore, publish, log });
     const frontendLoggingService = await PostgresFrontendLoggingService.create({ identityRepository: repositories.identity, log, appVersion });

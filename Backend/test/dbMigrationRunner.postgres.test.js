@@ -22,7 +22,7 @@ test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank",
     output,
   });
   assert.equal(initial.generation, 0);
-  assert.deepEqual(initial.pending.map(({ id }) => id), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(initial.pending.map(({ id }) => id), [1, 2, 3, 4, 5, 6, 7, 8]);
 
   await runMigrations({
     connectionConfig: cluster.connectionConfig,

@@ -279,6 +279,7 @@ export function createEndpoint(name) {
     } };
     if (name === "bewerbe") return { data: { success: true, values: [["ID", "Bezeichnung"], ["2", new URLSearchParams(window.location.search).get("longFavorite") === "1" ? "Vereinsmeisterschaft Herren Einzel mit sehr langem Bewerbsnamen 2026" : "Mobile Rangliste"]] } };
     if (name === "rankingChallengeState") return { data: { success: true,
+      entryRestriction: new URLSearchParams(window.location.search).has("entryRestricted") ? { minimumRank: 18, expiresAt: Date.now() + (new URLSearchParams(window.location.search).has("entryExpired") ? -86400000 : 86400000), active: !new URLSearchParams(window.location.search).has("entryExpired") } : null,
       mode: ineligible ? "ineligible" : (newcomer ? "newcomer" : (withdrawn ? "returning" : "ranked")),
       rank: newcomer || withdrawn || ineligible ? null : 1,
       returnFromRank: withdrawn ? 4 : null,
@@ -299,7 +300,10 @@ export function createEndpoint(name) {
         email: "contact+team?x@example.test", phone: "0043 664 1234567", birthDate: "", notifications: noNotifications ? [] : ["Email", "Whatsapp"], competitions: emptyProfile ? [] : competitions.filter(({ competitionId }) => competitionId.startsWith("r")), rankings: emptyProfile ? [] : withdrawn ? [{
          competitionId: "2", competitionName: "Mobile Rangliste", rank: 0, status: "withdrawn",
          withdrawal: { withdrawnAt: "260829-1200", previousRank: 4, reason: "Pause" },
-       }] : rankings,
+        }] : new URLSearchParams(window.location.search).has("entryRestricted") ? [{
+          competitionId: "2", competitionName: "Mobile Rangliste", rank: null, status: "active",
+          entryRestriction: { minimumRank: 18, expiresAt: Date.now() + (new URLSearchParams(window.location.search).has("entryExpired") ? -86400000 : 86400000), active: !new URLSearchParams(window.location.search).has("entryExpired") },
+        }] : rankings,
       } } };
     }
     if (name === "publicProfile") {
@@ -1381,6 +1385,37 @@ test("Ranglistenseite rendert trotz Favoriten-Titelzeile vollstaendig", {
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Ranglisten-Einstiegsgrenze erscheint in Eigeninfos und sperrt nur vordere Gegner bis Jahresablauf", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser);
+    page.setDefaultTimeout(5000);
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    for (const expired of [false, true]) {
+      await page.goto(`http://127.0.0.1:${server.address().port}/ranking-test.html?role=player&id=2&newcomer=1&entryRestricted=1${expired ? "&entryExpired=1" : ""}`, { waitUntil: "domcontentloaded" });
+      await page.locator("#rankingEntryInfo").waitFor();
+      assert.match(await page.locator("#rankingEntryInfo").textContent(), expired ? /Jahresfrist abgelaufen/ : /Forderbar ab Rang 18/);
+      assert.equal(await page.locator("#rankingContainer .box.challengeable").count(), expired ? 28 : 11);
+      await page.evaluate(() => window.openProfileModal());
+      await page.getByRole("tab", { name: "Aktuell", exact: true }).click();
+      await page.getByRole("tab", { name: "Mobile Rangliste", exact: true }).click();
+      const info = await page.locator('.profile-panel[data-competition-id="2"]').textContent();
+      assert.match(info, /Noch nicht eingereiht/);
+      assert.match(info, expired ? /Freie Gegnerwahl.*Jahresfrist abgelaufen/ : /Ab Rang 18/);
+      assert.match(info, /Freie Gegnerwahl ab/);
+    }
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
   }
 });
 

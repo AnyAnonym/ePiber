@@ -98,7 +98,9 @@ class PlayRepository {
              m.format_binding_source AS "formatBindingSource",
              result.id::text AS "resultId", result.version_no AS "resultVersion", result.completion_type AS "completionType",
              result.winner_side_no AS "winnerSideNo", result.play_started_at AS "playStartedAt",
-             result.play_ended_at AS "playEndedAt", result.first_captured_at AS "firstCapturedAt", result.walkover_at AS "walkoverAt",
+              result.play_ended_at AS "playEndedAt", result.first_captured_at AS "firstCapturedAt", result.walkover_at AS "walkoverAt",
+              CASE WHEN result.winner_side_no=2 THEN result.entry_minimum_rank END AS "entryMinimumRank",
+              CASE WHEN result.winner_side_no=2 THEN result.entry_expires_at END AS "entryExpiresAt",
              COALESCE(participants.items, '[]'::jsonb) AS participants,
              COALESCE(sets.items, '[]'::jsonb) AS sets
         FROM play.matches m

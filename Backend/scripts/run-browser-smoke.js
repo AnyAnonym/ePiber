@@ -61,7 +61,7 @@ for (const [profileName, profile] of selectedProfiles) {
     "--test",
     "--test-concurrency=1",
     "--test-name-pattern",
-    testPattern,
+    suite === "lifecycle" ? testPattern : `${testPattern}|^Ranglisten-Einstiegsgrenze`,
     ...selectedTests,
   ], {
     cwd: backendRoot,
