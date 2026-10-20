@@ -73,3 +73,50 @@ Commit: 4.12.17-paj-1-8 | PostgreSQL-Meldungen wie im Bestand formulieren
   - [Tests] Passwortrotations-Testfixture verwendet fuer die exakt 24-stuendige Freigabe denselben Statementzeitpunkt statt zweier mikrosekundenverschiedener Uhrzeitabrufe; keine Aenderung der Passwortlogik.
   - [Verifikation] Build mit 580 erfolgreichen Backend-/Integrationstests und 17 Workflowtests sowie Drei-Engine-Smokesuite mit je 26 erfolgreichen Tests in Chromium, WebKit und Firefox abgeschlossen. Erfolgreiche Browserprofile einzeln erhalten; Firefox nach Timeout allein im frischen Container wiederholt. Keine Funktionswrites auf PAJ oder Live.
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-7-x` gesetzt.
+
+[4.12.17-paj-1-9] - 2026-10-20
+Commit: 4.12.17-paj-1-9 | Dokumentationsuebernahme fuer Main-Abschluss vorbereiten
+
+  Changed
+  - [Dokumentation] Vollstaendige Uebernahmeliste fuer den bestaetigten Main-Abschluss ergaenzt; offene KO-Adminwarnung und getrennte Aktivierungsgates bleiben ausdruecklich erhalten.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-8-x` gesetzt.
+
+Dokumentationsuebernahme beim Main-Versionssprung
+
+  Project/software/ENDPOINTS.txt
+  - Admin-RPC monitorDelete mit operationId/monitorId, Widerrufspflicht, MONITOR_NOT_REVOKED/MONITOR_NOT_FOUND, idempotenter Antwort, Audit und Loeschumfang dokumentieren.
+  - rankingChallengeState.entryRestriction sowie private myProfile.rankings[].entryRestriction mit minimumRank, expiresAt (Epoch-Millisekunden), active und fehlender Legacy-Metadatenunterstuetzung beschreiben; keine Weitergabe in fremden Profilen.
+
+  Project/software/seiten/navigator.txt
+  - Dauerhaftes Loeschen ausschliesslich widerrufener Geraete nach Sicherheitsabfrage; aktive Geraete geschuetzt, Liste aktualisiert, Ziel-/Kommandostate entfernt, fremde Geraete/Tokens erhalten.
+  - PostgreSQL-Navigator erhaelt Quellreihenfolge und Profil, Platzzuweisungs-/Aktivierungsaktionen und RoundRobin-Ziele; bewusst ungueltige Ziele bleiben deaktiviert.
+
+  Project/software/seiten/scoreboard.txt
+  - ISO-Courtzeitpunkte fuer TT.MM. - HH:MM ausdruecklich in Europe/Vienna inklusive Sommer-/Winterzeit und Tageswechsel formatieren; kompakte Bestandswerte bleiben kompatibel, kein Layoutwechsel.
+
+  Project/software/seiten/rangliste.txt
+  - PostgreSQL-Neueinstieg nach Niederlage ab urspruenglichem Zielrang plus zehn, jede weitere Niederlage mit neuer Grenze/Jahresfrist; exakter Zielrang unbesetzt bedeutet sofortige Endeinreihung bei unveraenderter Siebentagessperre.
+  - Ungereihter Eigenstatus mit Mindestzielrang und Freie-Gegnerwahl-Zeitpunkt; Ablauf nach einem Wiener Kalenderjahr, sonstige Regeln/Bewerbsende bleiben wirksam. Korrektur/Ruecknahme richtet sich nach aktuellem Ergebnis; keine geratenen historischen Zielraenge. Fehlende Legacy-Metadaten nicht als persistente Einschraenkung ausgeben.
+
+  Project/software/DATENBANK.txt
+  - Migration 7 erweitert venue.navigation_presets um court_assignment (page_key 1/2) und court_activation (page_key NULL).
+  - Migration 8: play.matches.entry_target_rank (>0); play.match_results.entry_minimum_rank (>10) und entry_expires_at nur gemeinsam gesetzt; keine historischen Werte nachtragen. Aktuelles verlorenes Ergebnis liefert EinstiegAbRang und EinstiegFreiAb (ISO) in matches1; Zielrang bleibt Forderungssnapshot, Frist bei Korrektur erhalten.
+  - Bewerbsgrenzen kompakt YYYYMMDD beziehungsweise YYYYMMDD-HHMM in Europe/Vienna, Geschlecht komma-, Notification Email|Whatsapp-separiert, Ranglisten-ID ersatzweise interne stabile ID; Geburtsdaten/Matchzeitstempel unveraendert.
+  - Neue Meldungen verwenden bestehende Empfaenger-Snapshotspalten legacy_subject/legacy_body mit Validierung und Idempotenzvergleich. Outboxschluessel messaging:<operationId>:<eventType> trennt mehrere Ereignisse derselben Fachoperation.
+
+  Project/software/ARCHITEKTUR.txt
+  - PostgreSQL-App erwartet Schemageneration 8; Worker/Systemaktivierung bleibt eigenstaendig freizugeben. Migrationen und Journal ops.schema_migrations sind Ausfuehrungsnachweis, nicht Git allein.
+  - player A/B erhalten die allgemeine Spielerberechtigung ohne Admin-/Operatoraufwertung. Walkover hat keinen gespielten Start/Ende-/Dauervertrag, aber serverseitigen Abschlusszeitpunkt; regulaere/Retirement-Dauerpruefung bleibt erhalten.
+  - Einstiegsgrenze innerhalb serieller Fachtransaktion pruefen und aus aktuellem Ergebnis projizieren; Rangwirkung bei Korrektur/Ruecknahme auch nach Matchendekorrektur reversibel, neue Rangzeilen nicht millionenfach rueckverschieben.
+  - postgresDomainMessages verwendet bestehende Textformatter mit PostgreSQL-Kontext und schreibt Ereignis/Empfaenger/Outbox atomar; Namen/Ergebnisse/Gruende nur im fachlichen Snapshot, nicht in Diagnose-/Auditlogs. Historische generische Meldungen nicht automatisch reparieren.
+
+  Project/software/seiten/bewerbe.txt
+  - PostgreSQL erzeugt neue namentliche Ergebnis-, Forderungs-, Termin-, An-/Abmelde-, Hallen- und Adminmeldungen mit persoenlichen Texten. Historie ohne allgemeine Ereignisse mit NULL-Bewerb, KO-/Gruppenrunden aus Match; bestehende Gewinnerperspektive/W.O./Aufgabe und Layout bleiben erhalten.
+  - Noch fehlende PostgreSQL-Adminwarnung fuer nicht vorhandenes KO-Folgematch ausdruecklich als bekannte Grenze benennen; keine pauschale Paritaetsbehauptung und keine historischen Snapshotreparaturen.
+
+  Project/server-configs/postgresql/README.txt
+  - Migrationen 7/8 vor passender Appaktivierung pruefen, Ausfuehrung in ops.schema_migrations nachweisen; keinen Neustart oder Liveeingriff aus Git-Merge ableiten.
+  - Backend/scripts/db-repair-navigation.js --profile <profil> --order <kommagetrennte-Quell-IDs> ist standardmaessig Dry-run, --apply nur nach Freigabe auf epiber_devel. Profilumfang/IDs muessen exakt passen; bekannte deaktivierte Platzaktionen werden tenantbegrenzt repariert, Reihenfolge des gewaehlten Profils wiederhergestellt, sonstige ungueltige Ziele bleiben gesperrt. Audit/Abschlusslogs ohne Tokens/Personenpayloads; Monitorgeraete und Tokens werden nicht geaendert.
+
+  Project/ChangeLogs/ChangeLog-main.txt
+  - Saemtliche Branchabschnitte mit IDs, Datum, Test-, Aktivierungs- und offenen Prueffunden vollstaendig unter der bestaetigten Main-Version uebernehmen; danach dieses temporaere Branchlog entfernen. RANGLISTE.txt Abschnitt 8 ist bereits freigegeben angepasst und wird unveraendert mitgemergt.
