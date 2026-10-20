@@ -1377,12 +1377,49 @@ Der vorbereitete Zielstand umfasst:
   periodengebunden und verarbeitet sie tenantbegrenzt in Batches bis 1.000.
 
 Die Runtime lehnt eine fehlende Domaene bereits vor dem Verbindungsaufbau ab.
+Die App-Komposition erwartet Schemageneration 8. Migration 7 erweitert die
+Navigatoraktionen; Migration 8 speichert Einstiegs-Zielrang sowie versionierte
+Ranggrenze/Jahresfrist. Ausgefuehrte Migrationen sind in
+`ops.schema_migrations` nachgewiesen; SQL-Dateien und Git allein belegen keine
+Installation. Schemaanwendung, App-/Workeraktivierung und Live-Rollout bleiben
+getrennte Freigaben, die ein Merge nicht ersetzt.
 Controller und WebSocket-Routing erhalten keinen direkten SQL-Zugriff. Beim
 PostgreSQL-Start ersetzt ein atomarer Projektionsload den Sheet-Initialload;
 danach gibt es kein Datenpolling. Fachwrites aktualisieren die lokale Projektion
 unmittelbar und erzeugen zusaetzlich eine dauerhafte Outbox-Invalidierung.
 `LISTEN/NOTIFY` ist nur der verlierbare Weckhinweis; Worker und App lesen danach
 den autoritativen Datenbankstand.
+
+PostgreSQL-Mitgliedsklassen `player A` und `player B` erhalten zusaetzlich die
+allgemeine Spielerberechtigung wie im Bestand, ohne Aenderung ihrer sichtbaren
+Mitgliedsklasse und ohne neue Admin-/Operatorrechte. Das gilt fuer Anmeldung
+und bestehende Sitzungsprojektionen.
+
+Walkover speichert `walkover_at` als serverseitigen Abschlusszeitpunkt, aber
+keinen gespielten Start-/Endzeitpunkt und keine synthetische Spieldauer. Alte,
+zukuenftige oder fehlende geplante Termine loesen bei W.O. keine Bestaetigung
+einer langen Spieldauer aus. Regulaere Ergebnisse und Aufgabe behalten ihre
+Start-/Ende-/Langdauerpruefung.
+
+Die Einstiegsgrenze wird im seriellen PostgreSQL-Forderungswrite nochmals aus
+dem aktuellen Ergebnis geprueft, unabhaengig von Browser und Cache. Korrekturen
+und Ruecknahmen verwenden die rangwirksame Ergebnis-Historie auch nach einer
+reinen Matchendeberichtigung. Neu erzeugte Rangzeilen sind mit ihren realen
+IDs von der temporaeren Millionen-Rueckverschiebung ausgenommen. Details zu
+Feldern/Projektionen stehen in `DATENBANK.txt`, Fachregeln im Ranglistenregelwerk.
+
+`Backend/postgresDomainMessages.js` verwendet die etablierten Textformatter
+ohne SQLite, Cache-Personenlookup oder externe Zustelladapter. Namen, Teams,
+Raenge, Bewerb und Termine stammen aus dem PostgreSQL-Transaktionskontext;
+Ereignis- und persoenliche Empfaengersnapshots werden zusammen mit dem Fachwrite
+und seiner Outbox geschrieben. Ergebnistexte verwenden Gewinner-/Empfaenger-
+perspektive, neutrales W.O. und Aufgabe; der Akteur bleibt separat. Namen,
+freie Gruende und Ergebnisse gehoeren in die fachliche Meldungsprojektion,
+nicht in neue freie Audit-/Diagnosepayloads. Fehler rollen den Fachwrite zurueck;
+ein unbekannter Commitausgang bleibt als solcher sichtbar. Historische
+generische Meldungen werden nicht automatisch repariert. Die fehlende
+PostgreSQL-KO-Folgematch-Adminwarnung bleibt eine explizite Paritaetsgrenze
+(siehe `seiten/bewerbe.txt`).
 
 Die Konfiguration kennt `PERSISTENCE_MODE=legacy|postgres`. Der PostgreSQL-Wert
 benoetigt keine Sheet- oder SQLite-Konfiguration, aber eine PostgreSQL-

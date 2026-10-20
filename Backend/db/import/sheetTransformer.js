@@ -339,25 +339,33 @@ function transformMatches(rows, result, refs, findings) {
 }
 
 function compileNavigation(raw, refs) {
+  const value = String(raw ?? "").trim();
+  if (/^OL-Platz-[12]$/i.test(value)) {
+    return { target_type: "court_assignment", page_key: value.slice(-1), competition_id: null, enabled: true, problem_code: null };
+  }
+  if (/^OL-Platzaktivierung$/i.test(value)) {
+    return { target_type: "court_activation", page_key: null, competition_id: null, enabled: true, problem_code: null };
+  }
   try {
-    const url = new URL(String(raw).trim(), "https://epiber.invalid");
+    const url = new URL(value, "https://epiber.invalid");
+    if (url.origin !== "https://epiber.invalid" || url.username || url.password || url.hash) throw new Error("NAVIGATION_TARGET_INVALID");
     const pages = new Set(["/index.html", "/scoreboard.html", "/Sponsoren.html", "/Matches1.html", "/Bewerbe.html"]);
     if (pages.has(url.pathname) && ![...url.searchParams].length) return { target_type: "page", page_key: url.pathname.slice(1, -5), competition_id: null, enabled: true, problem_code: null };
     const id = url.searchParams.get("id"), competition = refs.competitions.get(id)?.id;
     if (["/bewerbsRaster.html", "/RoundRobin.html", "/entryList.html", "/rangliste.html"].includes(url.pathname) && competition) {
       const target_type = url.pathname === "/rangliste.html" ? "ranking" : url.pathname === "/entryList.html" ? "entry_list" : "competition";
-      return { target_type, page_key: null, competition_id: competition, enabled: true, problem_code: null };
+      return { target_type, page_key: url.pathname.slice(1, -5), competition_id: competition, enabled: true, problem_code: null };
     }
   } catch {}
   return { target_type: null, page_key: null, competition_id: null, enabled: false, problem_code: "NAVIGATION_TARGET_INVALID" };
 }
 
 function transformNavigation(rows, result, refs, findings) {
-  for (const { source, value: row } of rows) {
+  for (const [index, { source, value: row }] of rows.entries()) {
     const contract = contractId(row.ID, source, { optional: true });
     const target = compileNavigation(row.Ziel, refs);
     if (!target.enabled) finding(findings, target.problem_code, "Navigator", "warning");
-    result.navigation_presets.push({ id: stableUuid("navigation", contract || source), tenant_id: TENANT_ID, contract_id: contract, profile_code: text(row.Profil, { max: 50, source, projection: "Profil" }) || "1", label: text(row.Name, { required: true, source, projection: "Name" }), ...target, hall_time_grid_id: null, legacy_target: target.enabled ? null : text(row.Ziel, { max: 500, source, projection: "Ziel" }) });
+    result.navigation_presets.push({ id: stableUuid("navigation", contract || source), tenant_id: TENANT_ID, contract_id: contract, profile_code: text(row.Profil, { max: 50, source, projection: "Profil" }) || "1", label: text(row.Name, { required: true, source, projection: "Name" }), ...target, hall_time_grid_id: null, sort_order: index + 1, legacy_target: target.enabled ? null : text(row.Ziel, { max: 500, source, projection: "Ziel" }) });
   }
 }
 

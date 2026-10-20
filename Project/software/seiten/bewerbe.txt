@@ -106,4 +106,20 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   sind fuer angemeldete Benutzer ueber die Emojiaktion namentlich einsehbar.
   Texte entstehen ausschliesslich als DOM-Text; ausgeblendete Texte werden
   normalen Benutzern bereits serverseitig nicht projiziert. Einzel- und
-  Gesamthistorie teilen Kommentare und Reaktionen ueber dieselbe Ereignis-ID.
+   Gesamthistorie teilen Kommentare und Reaktionen ueber dieselbe Ereignis-ID.
+
+-- PostgreSQL-Meldungsprojektion und Grenze --
+  Neue PostgreSQL-Ereignisse verwenden die bestehenden namentlichen Texte fuer
+  Ergebnis/Korrektur, Forderung samt Rang, Termin und Absage, An-/Abmeldung,
+  Hallenbuchung/Nachruecken sowie administrative Matchende-, Forderungsloesch-
+  und Forderungsdatumsaktionen. Die persoenlichen Betreffe und Texte werden
+  getrennt je Empfaenger gespeichert; sie sind keine oeffentliche Historienzeile.
+  Ergebnistext, Gewinnerperspektive, W.O./Aufgabe und getrennte Akteursangabe
+  folgen dem oben beschriebenen Vertrag. Allgemeine Ereignisse ohne Bewerbsbezug
+  erscheinen nicht in der Bewerbshistorie; damit entsteht dort kein `Bewerb null`.
+  KO-/Gruppenrunden stammen aus dem zugeordneten Match. Historische generische
+  Summary-/Ergebnis-Snapshots werden nicht automatisch nachtraeglich repariert.
+  Bekannte Paritaetsgrenze: Die Legacy-Adminwarnung bei fehlendem KO-Folgematch
+  (`ensureMissingKoTargetEvent`) ist im PostgreSQL-Ergebnispfad noch nicht
+  angebunden. Eine vollstaendige Gleichheit aller Sonderfallmeldungen wird
+  deshalb nicht behauptet. Darstellung und Bedienung bleiben unveraendert.

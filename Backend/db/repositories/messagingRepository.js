@@ -208,7 +208,7 @@ class PostgresMessagingRepository {
     if (cursor !== null) {
       const valid = await this.database.query(`
         SELECT 1 FROM messaging.events event LEFT JOIN play.competitions competition ON competition.id=event.competition_id
-         WHERE event.tenant_id=$1::uuid AND event.contract_id=$2 AND ($3::text IS NULL OR competition.contract_id=$3)
+         WHERE event.tenant_id=$1::uuid AND event.competition_id IS NOT NULL AND event.contract_id=$2 AND ($3::text IS NULL OR competition.contract_id=$3)
       `, [this.context.tenantId, cursor, competition]);
       if (!valid.rowCount) throw Object.assign(new Error("COMPETITION_HISTORY_CURSOR_INVALID"), { code: "COMPETITION_HISTORY_CURSOR_INVALID" });
     }
@@ -219,7 +219,7 @@ class PostgresMessagingRepository {
       SELECT event.contract_id AS id, competition.contract_id AS "competitionId",
              event.event_type AS type, event.source_type AS source, event.source_contract_id AS "sourceId",
              extract(epoch FROM event.created_at)*1000 AS "createdAt", event.summary_snapshot AS summary,
-             event.detail_snapshot AS detail, event.result_snapshot AS result, event.actor_name_snapshot AS "actorName",
+             event.detail_snapshot AS detail, event.result_snapshot AS result, event.actor_name_snapshot AS "actorName", match.round_code AS "roundCode",
              COALESCE(jsonb_agg(jsonb_build_object(
                'participantRole',participant.participant_role,
                'displayName',concat_ws(' ',participant.first_name_snapshot,participant.last_name_snapshot)
@@ -227,10 +227,11 @@ class PostgresMessagingRepository {
                FILTER (WHERE participant.event_id IS NOT NULL),'[]'::jsonb) AS participants
         FROM messaging.events event
         LEFT JOIN play.competitions competition ON competition.id=event.competition_id
+        LEFT JOIN play.matches match ON match.id=event.match_id
         LEFT JOIN messaging.event_participants participant ON participant.event_id=event.id
-       WHERE event.tenant_id=$1::uuid AND ($2::text IS NULL OR competition.contract_id=$2)
+       WHERE event.tenant_id=$1::uuid AND event.competition_id IS NOT NULL AND ($2::text IS NULL OR competition.contract_id=$2)
          AND ($3::text IS NULL OR (event.created_at,event.id)<(SELECT created_at,id FROM cursor_row))
-       GROUP BY event.id,competition.contract_id
+       GROUP BY event.id,competition.contract_id,match.round_code
        ORDER BY event.created_at DESC,event.id DESC
        LIMIT $4
     `, [this.context.tenantId, competition, cursor, limit + 1]);
@@ -543,7 +544,7 @@ class PostgresMessagingRepository {
   async createEvent({
     contractId, eventType, operationId, templateParameters = {}, competitionId = null, matchId = null,
     participants = [], recipients = [], readPersonIds = [], createdAt = new Date(), sourceType = null,
-    sourceId = null, actorPersonId = null, actorName = null, summary = null, detail = null, result = null,
+    sourceId = null, actorPersonId = null, actorName = null, summary = null, detail = null, result = null, recipientMessages = [],
   }, existingTransaction = null) {
     const { type, contract } = this.eventContract(eventType);
     const messageId = identifier(contractId, "message_id");
@@ -552,10 +553,16 @@ class PostgresMessagingRepository {
     if (match !== null && competition === null) throw Object.assign(new Error("MESSAGE_COMPETITION_REQUIRED"), { code: "MESSAGE_COMPETITION_REQUIRED" });
     if (!UUID.test(String(operationId || ""))) throw Object.assign(new Error("MESSAGE_OPERATION_ID_INVALID"), { code: "MESSAGE_OPERATION_ID_INVALID" });
     const controlledParameters = parameters(templateParameters, contract.parameters);
-    if (!Array.isArray(participants) || !Array.isArray(recipients) || !recipients.length) throw Object.assign(new Error("MESSAGE_RECIPIENTS_INVALID"), { code: "MESSAGE_RECIPIENTS_INVALID" });
+    if (!Array.isArray(participants) || !Array.isArray(recipients) || !recipients.length || !Array.isArray(recipientMessages)) throw Object.assign(new Error("MESSAGE_RECIPIENTS_INVALID"), { code: "MESSAGE_RECIPIENTS_INVALID" });
     const participantRows = participants.map((entry) => ({ personId: identifier(entry.personId, "person_id"), role: identifier(entry.role, "participant_role", CODE) }));
     const recipientIds = [...new Set(recipients.map((value) => identifier(value, "person_id")))];
     const readIds = new Set(readPersonIds.map((value) => identifier(value, "person_id")));
+    const personal = new Map();
+    for (const message of recipientMessages) {
+      const id = identifier(message.personId, "person_id");
+      if (!recipientIds.includes(id) || personal.has(id)) throw Object.assign(new Error("MESSAGE_RECIPIENTS_INVALID"), { code: "MESSAGE_RECIPIENTS_INVALID" });
+      personal.set(id, { subject: optionalText(message.subject, "message_subject", 2000), body: optionalText(message.body, "message_body", 16000) });
+    }
     const timestamp = createdAt instanceof Date && Number.isFinite(createdAt.getTime()) ? createdAt : null;
     if (!timestamp) throw Object.assign(new Error("MESSAGE_CREATED_AT_INVALID"), { code: "MESSAGE_CREATED_AT_INVALID" });
     const controlledHistory = {
@@ -609,6 +616,10 @@ class PostgresMessagingRepository {
             && JSON.stringify(prior.recipients) === JSON.stringify(expectedRecipients)
             && JSON.stringify(prior.participants) === JSON.stringify(expectedParticipants);
           if (!same) throw Object.assign(new Error("MESSAGE_OPERATION_CONFLICT"), { code: "MESSAGE_OPERATION_CONFLICT" });
+          const stored = await transaction.query(`SELECT person.contract_id AS id,recipient.legacy_subject AS subject,recipient.legacy_body AS body
+            FROM messaging.event_recipients recipient JOIN messaging.events event ON event.id=recipient.event_id
+            JOIN identity.people person ON person.id=recipient.person_id WHERE event.tenant_id=$1::uuid AND event.contract_id=$2`, [this.context.tenantId, messageId]);
+          if (stored.rows.some(row => row.subject !== (personal.get(row.id)?.subject || null) || row.body !== (personal.get(row.id)?.body || null))) throw Object.assign(new Error("MESSAGE_OPERATION_CONFLICT"), { code: "MESSAGE_OPERATION_CONFLICT" });
           return { id: messageId, duplicate: true };
         }
         const event = await transaction.query(`
@@ -646,12 +657,12 @@ class PostgresMessagingRepository {
         for (const personId of recipientIds) {
           const inserted = await transaction.query(`
             INSERT INTO messaging.event_recipients(
-              event_id, person_id, template_key, template_version, template_parameters, created_at
+              event_id, person_id, template_key, template_version, template_parameters, created_at, legacy_subject, legacy_body
             )
-            SELECT $1::uuid, id, $2, $3, $4::jsonb, $5
+            SELECT $1::uuid, id, $2, $3, $4::jsonb, $5, $8, $9
               FROM identity.people WHERE tenant_id=$6::uuid AND contract_id=$7
             RETURNING id, person_id
-          `, [event.rows[0].id, contract.templateKey, contract.templateVersion, JSON.stringify(controlledParameters), timestamp, this.context.tenantId, personId]);
+          `, [event.rows[0].id, contract.templateKey, contract.templateVersion, JSON.stringify(controlledParameters), timestamp, this.context.tenantId, personId, personal.get(personId)?.subject || null, personal.get(personId)?.body || null]);
           if (!inserted.rowCount) throw Object.assign(new Error("MESSAGE_RECIPIENT_NOT_FOUND"), { code: "MESSAGE_RECIPIENT_NOT_FOUND" });
           await transaction.query(`
             INSERT INTO messaging.receipts(recipient_id, read_at, acknowledged_at)
@@ -672,7 +683,7 @@ class PostgresMessagingRepository {
           INSERT INTO ops.outbox(tenant_id, event_type, payload_version, payload, idempotency_key, status, available_at)
           VALUES ($1::uuid, 'websocket.invalidate', 1,
                   jsonb_build_object('eventId',$2::text,'projection','messaging'), $3, 'pending', clock_timestamp())
-        `, [this.context.tenantId, messageId, `messaging:${operationId}`]);
+        `, [this.context.tenantId, messageId, `messaging:${operationId}:${type}`]);
         await transaction.query("SELECT pg_notify('epiber_worker_wake', '')");
         return { id: messageId, duplicate: false, recipients: recipientIds.length };
       };

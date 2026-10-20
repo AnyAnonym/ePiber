@@ -20,9 +20,27 @@ const courts = {
   "1": { matchId: "m1", aktiv: 0, revision: 4, automaticActivation: { matchId: "m1", matchDate: "260924-1800", status: "pending" } },
   "2": { matchId: "m2", aktiv: 0, revision: 7, automaticActivation: { matchId: "m2", matchDate: "260924-1700", status: "finished" } },
 };
+window.testCourtWrites = [];
 export function createEndpoint(endpoint) {
-  return async () => {
-    if (endpoint === "navigator") return { data: { success: true, items: [{ id: "activation", label: "Platzaktivierung", action: { kind: "court.activation" } }] } };
+  return async (params = {}) => {
+    if (endpoint === "navigator") return { data: { success: true, items: [
+      { id: "court-1", label: "Spielerauswahl Platz 1", action: { kind: "court.assign", court: "1" } },
+      { id: "court-2", label: "Spielerauswahl Platz 2", action: { kind: "court.assign", court: "2" } },
+      { id: "activation", label: "Platzaktivierung", action: { kind: "court.activation" } },
+    ] } };
+    if (endpoint === "players") return { data: { success: true, values: [["ID", "Vorname", "Nachname"], ["p1", "Ada", "Test"], ["p2", "Berta", "Test"]] } };
+    if (endpoint === "bewerbe") return { data: { success: true, values: [["ID", "Bezeichnung"], ["2", "Testbewerb"]] } };
+    if (endpoint === "preMatches") return { data: { success: true, values: [["ID", "Spieler1ID", "Spieler3ID", "BewerbID"], ["m1", "p1", "p2", "2"]] } };
+    if (endpoint === "courtAssign") {
+      window.testCourtWrites.push({ endpoint, ...params });
+      return { data: { success: true } };
+    }
+    if (endpoint === "courtSetActive") {
+      window.testCourtWrites.push({ endpoint, ...params });
+      courts[params.court].aktiv = params.active ? 1 : 0;
+      courts[params.court].revision += 1;
+      return { data: { success: true, court: structuredClone(courts[params.court]) } };
+    }
     if (endpoint === "monitorList") return { data: { success: true, monitors: [] } };
     if (endpoint === "getScoreboardCourts") return { data: { success: true, courts: structuredClone(courts) } };
     return { data: { success: true } };
@@ -45,12 +63,12 @@ function contentType(filePath) {
   return "application/octet-stream";
 }
 
-function startServer() {
+function startServer({ role = "operator", data = dataStub } = {}) {
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     const stubs = {
-      "/JS/authClient.js": authStub,
-      "/JS/dataClient.js": dataStub,
+      "/JS/authClient.js": authStub.replace('role: "operator"', `role: "${role}"`),
+      "/JS/dataClient.js": data,
       "/JS/diagnostics.js": diagnosticsStub,
       "/JS/favorites.js": "",
       "/JS/navigatorScroll.js": "",
@@ -86,12 +104,95 @@ test("Navigator zeigt den automatischen Courtstart responsiv", {
   try {
     const page = await newProfilePage(browser);
     await page.goto(`http://127.0.0.1:${server.address().port}/navigator.html`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Spielerauswahl Platz 1", exact: true }).waitFor({ state: "visible" });
+    assert.deepEqual(await page.locator("#navigator-container .nav-btn").allTextContents(), ["Spielerauswahl Platz 1", "Spielerauswahl Platz 2", "Platzaktivierung"]);
+    for (const court of ["1", "2"]) {
+      await page.getByRole("button", { name: `Spielerauswahl Platz ${court}`, exact: true }).click();
+      await page.getByRole("button", { name: "kein Spiel zuweisen", exact: true }).click();
+      await page.getByRole("button", { name: "Übernehmen", exact: true }).click();
+      await page.getByRole("button", { name: "Übernehmen", exact: true }).waitFor({ state: "detached" });
+    }
+    await page.getByRole("button", { name: "Spielerauswahl Platz 1", exact: true }).click();
+    await page.getByRole("button", { name: /Ada Test vs. Berta Test/ }).click();
+    await page.getByRole("button", { name: "Übernehmen", exact: true }).click();
+    await page.getByRole("button", { name: "Übernehmen", exact: true }).waitFor({ state: "detached" });
+    assert.deepEqual(await page.evaluate(() => window.testCourtWrites.map(({ court, empty, matchId, expectedRevision }) => ({ court, empty, matchId, expectedRevision }))), [
+      { court: "1", empty: true, matchId: undefined, expectedRevision: 4 },
+      { court: "2", empty: true, matchId: undefined, expectedRevision: 7 },
+      { court: "1", empty: undefined, matchId: "m1", expectedRevision: 4 },
+    ]);
     await page.getByRole("button", { name: "Platzaktivierung" }).click();
     const buttons = page.locator(".platz-aktivierung-btn");
     await buttons.first().waitFor({ state: "visible" });
     assert.equal(await buttons.nth(0).textContent(), "Platz 1: inaktivAutomatischer Start: 18:00");
     assert.equal(await buttons.nth(1).textContent(), "Platz 2: inaktivNach Ergebnis deaktiviert");
+    await buttons.nth(0).click();
+    await page.waitForFunction(() => document.querySelector(".platz-aktivierung-status").textContent === "Platz 1: aktiv");
+    assert.equal(await page.evaluate(() => window.testCourtWrites.at(-1).active), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Navigator loescht nur widerrufene Monitore nach Bestaetigung und erhaelt neue Tokens", {
+  skip: !process.env.PLAYWRIGHT_PROFILE && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 60000,
+}, async () => {
+  const data = dataStub.replace('if (endpoint === "monitorList") return { data: { success: true, monitors: [] } };', `
+    if (endpoint === "monitorList") return { data: { success: true, monitors: structuredClone(window.testMonitors) } };
+    if (endpoint === "monitorProvision") {
+      const monitor = { monitorId: "new-monitor", label: params.label, revokedAt: null, token: "test-token" };
+      window.testMonitors.push(monitor);
+      return { data: { success: true, monitor } };
+    }
+    if (endpoint === "monitorDelete") {
+      window.deleteCalls.push(params);
+      if (window.failDelete) return { data: { success: false, error: { code: "MONITOR_NOT_REVOKED", message: "Monitor muss vor dem Loeschen widerrufen werden" } } };
+      window.testMonitors = window.testMonitors.filter(({ monitorId }) => monitorId !== params.monitorId);
+      return { data: { success: true, monitorId: params.monitorId, deleted: true } };
+    }
+  `).replace("return async () =>", "return async (params = {}) =>");
+  const server = await startServer({ role: "admin", data });
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser);
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript(() => {
+      window.testMonitors = [
+        { monitorId: "veranda", label: "Veranda", revokedAt: 1 },
+        { monitorId: "active-monitor", label: "Aktiver Monitor", revokedAt: null },
+      ];
+      window.deleteCalls = [];
+      window.failDelete = false;
+    });
+    await page.goto(`http://127.0.0.1:${server.address().port}/navigator.html`, { waitUntil: "domcontentloaded" });
+    const veranda = page.locator(".admin-monitor-row").filter({ hasText: "Veranda" });
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await page.locator(".admin-monitor-row").filter({ hasText: "Aktiver Monitor" }).getByRole("button", { name: "Löschen", exact: true }).count(), 0);
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).click();
+    assert.equal(await page.evaluate(() => window.deleteCalls.length), 0);
+    await page.getByLabel("Bezeichnung", { exact: true }).fill("Neuer Monitor");
+    await page.getByRole("button", { name: "Monitor anlegen", exact: true }).click();
+    await page.locator("#monitor-token-panel").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#monitor-token").textContent(), "test-token");
+    await page.evaluate(() => { window.failDelete = true; });
+    page.once("dialog", (dialog) => dialog.accept());
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector("#admin-monitor-status").dataset.type === "error");
+    assert.equal(await veranda.count(), 1);
+    await page.evaluate(() => { window.failDelete = false; });
+    page.once("dialog", (dialog) => dialog.accept());
+    await veranda.getByRole("button", { name: "Löschen", exact: true }).click();
+    await veranda.waitFor({ state: "detached" });
+    assert.equal(await page.locator(".admin-monitor-row").count(), 2);
+    assert.equal(await page.locator("#monitor-token-panel").isVisible(), true);
+    assert.equal(await page.locator("#monitor-token").textContent(), "test-token");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+    assert.deepEqual(errors, []);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

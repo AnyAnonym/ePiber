@@ -36,6 +36,9 @@ const snapshot = {
 };
 globalThis.__scoreboardTest = {
   snapshotCalls: () => snapshotCalls,
+  setCourtDates(first, second) {
+    snapshot.courts = { "1": { dateTime: first }, "2": { dateTime: second } };
+  },
   setScore(value) {
     snapshot.scores.revision += 1;
     snapshot.scores.courts[0].punktehome = value;
@@ -104,7 +107,7 @@ function startServer() {
       response.end();
       return;
     }
-    response.writeHead(200, { "Content-Type": filePath.endsWith(".css") ? "text/css" : "application/octet-stream" });
+    response.writeHead(200, { "Content-Type": filePath.endsWith(".css") ? "text/css" : filePath.endsWith(".js") ? "text/javascript; charset=utf-8" : "application/octet-stream" });
     response.end(fs.readFileSync(filePath));
   });
   return new Promise((resolve, reject) => {
@@ -139,6 +142,46 @@ test("Scoreboard zeigt WO und RET nur als Namensbadge und rechts nur das Satzerg
     assert.equal(await entries.nth(2).locator(".badge").textContent(), "ret");
     assert.equal(await entries.nth(3).locator(".badge").textContent(), "ret");
     assert.equal(await entries.locator(".ae-result").first().evaluate((result) => getComputedStyle(result).whiteSpace), "nowrap");
+  } finally {
+    await browser?.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Scoreboard zeigt Datumswerte in Wiener Ortszeit wie Live", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 60000,
+}, async () => {
+  const server = await startServer();
+  let browser;
+  try {
+    browser = await launchSelectedBrowser(CHROMIUM_PATH);
+    const page = await newProfilePage(browser, { timezoneId: "America/New_York" });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/scoreboard-test.html`, { waitUntil: "domcontentloaded" });
+    await page.locator("#scoreboard-content.loaded").waitFor({ state: "visible" });
+    const cases = [
+      ["2026-10-14T16:00:00.000Z", "14.10. - 18:00", "2026-01-14T16:00:00Z", "14.01. - 17:00"],
+      ["2026-10-14T18:00:00+02:00", "14.10. - 18:00", "2026-12-31T23:00:00Z", "01.01. - 00:00"],
+      ["2026-03-29T00:30:00Z", "29.03. - 01:30", "2026-03-29T01:30:00Z", "29.03. - 03:30"],
+      ["2026-10-25T00:30:00Z", "25.10. - 02:30", "2026-10-25T01:30:00Z", "25.10. - 02:30"],
+      ["261014-1800", "14.10. - 18:00", "14.10., 18:00", "14.10. - 18:00"],
+      ["14.10. - 18:00", "14.10. - 18:00", "", "-"],
+      ["2026-99-14T16:00:00Z", "2026-99-14T16:00:00Z", "ungueltig", "ungueltig"],
+    ];
+    for (const [first, expectedFirst, second, expectedSecond] of cases) {
+      await page.waitForTimeout(550);
+      await page.evaluate(([first, second]) => {
+        globalThis.__scoreboardTest.setCourtDates(first, second);
+        document.dispatchEvent(new Event("visibilitychange"));
+      }, [first, second]);
+      await page.waitForFunction(([first, second]) =>
+        document.getElementById("p1-datetime").textContent === first
+        && document.getElementById("p2-datetime").textContent === second,
+      [expectedFirst, expectedSecond]);
+    }
+    assert.deepEqual(errors, []);
   } finally {
     await browser?.close();
     await new Promise((resolve) => server.close(resolve));

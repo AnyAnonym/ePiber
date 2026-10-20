@@ -596,7 +596,14 @@ AUTHENTICATED (player, operator oder admin):
       `Email|Whatsapp`. `rankings` folgt dem Vertrag
       von `publicProfile`. Kontakt-E-Mail und Login sind getrennt; Passwort- und
       Resetwerte erscheinen nie. Raushaengezeit und -grund folgen dem
-      angemeldeten Profilvertrag.
+       angemeldeten Profilvertrag.
+
+      Im eigenen ungereihten PostgreSQL-Ranglistenreiter kann zusaetzlich
+      `entryRestriction:{ minimumRank, expiresAt, active }` stehen: Mindestzielrang,
+      Ablauf als Epoch-Millisekunden und aktuelle Wirksamkeit. Auch eine abgelaufene
+      Einschraenkung bleibt als Eigeninformation sichtbar; fremde Profile erhalten
+      diese Projektion nicht. Ohne gespeicherte Einstiegsmetadaten, insbesondere
+      im Legacybetrieb, wird keine historische Einschraenkung geraten.
 
   `myHallTimeGroups {}`
       Liefert `{ success, revision, groups:[{ id, name, joined }] }` fuer alle
@@ -791,7 +798,13 @@ AUTHENTICATED (player, operator oder admin):
       fehlerhafte Regeldaten abgelehnt. Neueinsteiger ohne Ranglistenzeile und Spieler nach Ablauf
       ihrer zwoelfmonatigen Rueckkehrfrist werden anhand von Aktivstatus,
       `Bewerb.Geschlecht`, `Bewerb.Alterskategorie`, Personengeschlecht und
-      Geburtsjahr geprueft. Personenwerte selbst werden nicht ausgegeben.
+       Geburtsjahr geprueft. Personenwerte selbst werden nicht ausgegeben.
+
+      Im PostgreSQL-Modus enthaelt `newcomer` bei gespeicherter Einstiegsniederlage
+      `entryRestriction:{ minimumRank, expiresAt, active }` oder `null` ohne
+      Metadaten. Nur bei `active:true` begrenzt minimumRank die Gegnerwahl; Bewerbsende
+      und sonstige Sperr-/Teilnahmeregeln bleiben unabhaengig wirksam. Der Write
+      prueft die persistente Grenze nochmals innerhalb seiner Fachtransaktion.
 
   `withdrawnRankingPlayers { bewerbId }`
       Nur fuer angemeldete Benutzer. Liefert Bewerb-ID/-Bezeichnung und alle
@@ -1284,7 +1297,17 @@ ADMIN:
       Ersetzt Token und trennt das Geraet. Wiederholung gibt keinen Token erneut.
 
   `monitorRevoke { operationId, monitorId }`
-      Widerruft Token und trennt das Geraet.
+       Widerruft Token und trennt das Geraet.
+
+  `monitorDelete { operationId, monitorId }`
+       Loescht nur ein bereits widerrufenes Geraet dauerhaft samt eigenem Ziel- und
+       Kommandostate. Antwort `{ success:true, monitorId, deleted:true }`, bei
+       identischer Wiederholung zusaetzlich `repeated:true`. Aktive Geraete werden
+       mit `MONITOR_NOT_REVOKED` (409), unbekannte mit `MONITOR_NOT_FOUND` (404)
+       abgelehnt. Geraeteliste wird invalidiert; andere Geraete und Tokens bleiben
+       erhalten. Legacy und PostgreSQL binden Loeschung und Idempotenz atomar;
+       Audit erfasst Start und terminalen Erfolg, Ablehnung oder unklaren Ausgang
+       ohne Tokenwerte. Der Navigator verlangt vorher eine Sicherheitsbestaetigung.
 
 DEVICE (gueltiges Monitorcookie und pageType monitor):
   `monitorTarget {}`

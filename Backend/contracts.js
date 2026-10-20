@@ -494,6 +494,7 @@ const requestContracts = {
   }),
   monitorRotate: monitorWrite,
   monitorRevoke: monitorWrite,
+  monitorDelete: monitorWrite,
   monitorTarget: empty,
   monitorAck: (params) => objectShape(params, {
     kind: text("kind", { max: 16, pattern: /^(navigate|scroll)$/ }),

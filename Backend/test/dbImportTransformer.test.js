@@ -41,6 +41,19 @@ test("synthetisches Quellpaket wird deterministisch, typisiert und datensparsam 
   assert.deepEqual(first.findings, []);
 });
 
+test("Navigatorimport erhaelt Quellreihenfolge, Profile, Platzaktionen und Gruppenphasenziel", (t) => {
+  const targets = ["scoreboard.html", "OL-Platz-1", "OL-Platz-2", "OL-Platzaktivierung", "RoundRobin.html?id=2", "OL-Ergebnis", "players.html", "https://example.test/index.html"];
+  const result = transformSource(createImportTestPackage(t, { navigatorRows: targets.map((Ziel, index) => ({ ID: `nav-${20 - index}`, Name: `Eintrag ${index}`, Ziel, Profil: index === 2 ? "2" : "1" })) }));
+  const rows = result.plan.tables.navigation_presets;
+  assert.deepEqual(rows.map(({ sort_order }) => sort_order), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(rows.map(({ target_type }) => target_type), ["page", "court_assignment", "court_assignment", "court_activation", "competition", null, null, null]);
+  assert.deepEqual(rows.slice(1, 4).map(({ page_key }) => page_key), ["1", "2", null]);
+  assert.equal(rows[2].profile_code, "2");
+  assert.equal(rows[4].page_key, "RoundRobin");
+  assert.equal(rows[5].enabled, false);
+  assert.equal(rows[5].legacy_target, "OL-Ergebnis");
+});
+
 test("nichtpositive historische Matchdauer behaelt den Start ohne ein Ende zu erfinden", () => {
   const findings = new Map(), value = normalizePlayTimes("261001-1000", "261001-1000", "Matches1:2", findings);
   assert.match(value.playStartedAt, /^2026-10-01T08:00:00/);

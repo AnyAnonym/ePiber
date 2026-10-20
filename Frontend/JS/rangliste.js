@@ -158,6 +158,7 @@ async function fetchMyState() {
   return {
     myPlayerId,
     mode: state.mode,
+    entryRestriction: state.entryRestriction || null,
     myRank: Number.isInteger(Number(state.rank)) && Number(state.rank) > 0 ? Number(state.rank) : null,
     returnFromRank: Number.isInteger(Number(state.returnFromRank)) && Number(state.returnFromRank) > 0
       ? Number(state.returnFromRank)
@@ -211,6 +212,7 @@ async function applyAllRules(container, pyramid, rankedList, warningHost = conta
     ...schonzeitMap.values(),
     ...sperrzeitMap.values(),
     ...(myState?.competitionEndAt ? [myState.competitionEndAt] : []),
+    ...(myState?.entryRestriction?.active ? [new Date(myState.entryRestriction.expiresAt)] : []),
   ]);
 
   const ruleDataComplete = busyRes.status === "fulfilled"
@@ -232,6 +234,20 @@ async function applyAllRules(container, pyramid, rankedList, warningHost = conta
   if (warning) {
     warning.textContent = statusMessage;
     warning.hidden = !statusMessage;
+  }
+  let entryInfo = document.getElementById("rankingEntryInfo");
+  const restriction = myState?.mode === "newcomer" ? myState.entryRestriction : null;
+  if (restriction && !entryInfo) {
+    entryInfo = document.createElement("p");
+    entryInfo.id = "rankingEntryInfo";
+    entryInfo.setAttribute("role", "status");
+    warningHost?.insertBefore(entryInfo, document.getElementById("rankingContainer") || warningHost.firstChild);
+  }
+  if (entryInfo) {
+    entryInfo.hidden = !restriction;
+    entryInfo.textContent = restriction?.active
+      ? `Noch nicht eingereiht. Forderbar ab Rang ${restriction.minimumRank}. Freie Gegnerwahl wieder ab ${new Date(restriction.expiresAt).toLocaleString("de-AT", { timeZone: "Europe/Vienna" })}.`
+      : "Noch nicht eingereiht. Jahresfrist abgelaufen: freie Gegnerwahl (Schon- und Sperrzeiten gelten weiterhin).";
   }
 
   diagnostic.info("ranking_rules_loaded", {
@@ -257,7 +273,7 @@ async function applyAllRules(container, pyramid, rankedList, warningHost = conta
   const challengeableIds = new Set();
   if (ruleDataComplete && !competitionEnded && myState?.mode === "newcomer") {
     for (const player of rankedList) {
-      if (player.playerId) challengeableIds.add(String(player.playerId).trim());
+      if (player.playerId && (!myState.entryRestriction?.active || player.rank >= myState.entryRestriction.minimumRank)) challengeableIds.add(String(player.playerId).trim());
     }
   } else if (ruleDataComplete && !competitionEnded && myState?.mode === "returning" && myState.returnFromRank) {
     for (const player of rankedList) {

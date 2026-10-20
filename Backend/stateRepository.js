@@ -396,6 +396,16 @@ class StateRepository {
     return { monitorId, revokedAt: now };
   }
 
+  deleteMonitor(monitorId) {
+    this.ensureOpen();
+    const row = this.db.prepare("SELECT revoked_at FROM monitor_devices WHERE monitor_id = ?").get(monitorId);
+    if (!row) throw new AppError("MONITOR_NOT_FOUND", "Monitor wurde nicht gefunden", 404);
+    if (row.revoked_at === null) throw new AppError("MONITOR_NOT_REVOKED", "Monitor muss vor dem Loeschen widerrufen werden", 409);
+    this.db.prepare("DELETE FROM monitor_devices WHERE monitor_id = ? AND revoked_at IS NOT NULL").run(monitorId);
+    this.db.prepare("DELETE FROM app_state WHERE key = ?").run(`monitor-target:${monitorId}`);
+    return { monitorId, deleted: true };
+  }
+
   getOperation(actorKey, operationId, endpoint, payload) {
     this.ensureOpen();
     const row = this.db.prepare(`

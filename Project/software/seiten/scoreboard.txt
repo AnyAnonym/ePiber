@@ -100,8 +100,13 @@ Live-Scoreboard - Vollbildanzeige fuer zwei Plaetze
 
 -- Formatierung --
   Pro Platz stehen Datum/Uhrzeit `TT.MM. - HH:MM` und Bewerb/Runde in zwei
-  getrennten Unterzeilen. R1/AF/VF/HF/F/Gruppen-Codes werden zu lesbaren Runden,
-  z.B. `VM 2026 Frauen Vorrunde | 2.Gruppe`. Externe Daten werden ausschliesslich
+   getrennten Unterzeilen.
+   ISO-Courtzeitpunkte werden dabei ausdruecklich in `Europe/Vienna` ausgewertet,
+   unabhaengig von der Browserzeitzone, einschliesslich Sommer-/Winterzeit und
+   Tageswechsel. Kompakte Bestandsdatumswerte bleiben kompatibel; das Layout
+   aendert sich dadurch nicht.
+   R1/AF/VF/HF/F/Gruppen-Codes werden zu lesbaren Runden,
+   z.B. `VM 2026 Frauen Vorrunde | 2.Gruppe`. Externe Daten werden ausschliesslich
   mit sicheren DOM-/Textknoten aufgebaut; Ressourcen und Font-Fallbacks sind lokal
   und CSP-kompatibel.
   In `Letzte Spiele` erscheinen `wo` und `ret` ausschliesslich als Badge am

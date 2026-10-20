@@ -178,10 +178,21 @@ Sperrzeit. Nach deren Ablauf darf er den Spieler genau zehn Positionen hinter de
 urspruenglich geforderten Rang oder jeden weiter hinten gereihten Spieler fordern.
 [Bestaetigt]
 
-Existieren hinter dem urspruenglich geforderten Rang weniger als zehn weitere
-Positionen, wird der Neueinsteiger unmittelbar nach seiner Niederlage am letzten
+Ist der Zielrang (urspruenglich geforderter Rang plus zehn) nicht besetzt,
+wird der Neueinsteiger unmittelbar nach seiner Niederlage am letzten
 Rang eingereiht. Die sieben Tage Sperrzeit gelten trotzdem und verhindern bis zu
 ihrem urspruenglichen Ende eine neue Forderung. [Bestaetigt]
+
+Diese Regel gilt nach jeder weiteren erfolglosen Einstiegsforderung erneut:
+Massgeblich ist jeweils der bei dieser Forderung gespeicherte Zielrang plus
+zehn. Die Einschraenkung gilt ein Kalenderjahr ab der erfolglosen Forderung
+(Zeitpunkt des Ergebnisabschlusses in Europe/Vienna). Nach Ablauf darf der
+weiterhin ungereihte Spieler wieder jeden verfuegbaren Gegner fordern.
+Eine weitere erfolglose Einstiegsforderung setzt Ranggrenze und Jahresfrist
+neu. Schonzeiten, offene Forderungen und Sperrzeiten gelten unabhaengig davon.
+Ranggrenze und Frist werden dauerhaft je Spieler und Rangliste gespeichert
+und in den eigenen Ranglisten-Infos angezeigt. Ergebnisberichtigung und
+Ruecknahme berichtigen auch den daraus abgeleiteten Status. [Bestaetigt]
 
 
 9. TEMPORAERES RAUSHAENGEN

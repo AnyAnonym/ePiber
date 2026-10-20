@@ -624,7 +624,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   const protectedEndpoints = [
     "memberDirectory", "myProfile", "myHallTimeGroups", "myFavorites", "myStartPage", "setMyFavorites", "setMyHallTimeGroupMembership", "setMyStartPage", "publicProfile", "addMatch", "setMatchAppointment", "clearMatchAppointment", "addEntryList", "removeEntryList",
     "withdrawFromRanking", "matchResultSuggestion", "setMatchResult", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminSetMatchEnd", "adminDeleteRankingChallenge", "adminSetRankingChallengeDate", "adminSetMatchAppointment", "operationStatus", "navigator", "courtAssign", "courtSetActive", "monitorList",
-    "monitorNavigate", "monitorScroll", "monitorProvision", "monitorRotate", "monitorRevoke",
+    "monitorNavigate", "monitorScroll", "monitorProvision", "monitorRotate", "monitorRevoke", "monitorDelete",
     "monitorTarget", "monitorAck",
   ];
   for (const endpoint of protectedEndpoints) {
@@ -1097,6 +1097,43 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     { competitionId: "ranking-seniors", status: "withdrawn" },
   ]);
   assert.equal(ownProfile.data.profile.rankings[1].withdrawal.previousRank, 4);
+  const entryCompetitions = structuredClone(dataStore.get("bewerbe"));
+  const entryMatches = structuredClone(dataStore.get("matches1"));
+  const entryRankings = structuredClone(dataStore.get("rlPlatzierung"));
+  try {
+    const competitions = structuredClone(entryCompetitions);
+    const source = competitions.find(row => row.includes("ranking-men"));
+    competitions.push(source.map(value => value === "ranking-men" ? "ranking-entry" : value));
+    dataStore.set("bewerbe", competitions, { source: "test-entry-state" });
+    const matches = structuredClone(entryMatches);
+    matches[0].push("EinstiegAbRang", "EinstiegFreiAb");
+    const row = Array(matches[0].length).fill("");
+    const put = (name, value) => { row[matches[0].findIndex(field => field.toLowerCase() === name.toLowerCase())] = value; };
+    put("ID", "entry-loss"); put("BewerbID", "ranking-entry");
+    put("Spieler1ID", "p2 [wo]"); put("Spieler3ID", "p1");
+    put("MatchDate", "261020-1000"); put("ErgebnisErfasstAm", "261020-1000");
+    put("EinstiegAbRang", "18"); put("EinstiegFreiAb", "2099-10-20T08:00:00.000Z");
+    matches.push(row);
+    dataStore.set("matches1", matches, { source: "test-entry-state" });
+    const mine = (await playerClient.request("myProfile")).data.profile.rankings.find(ranking => ranking.competitionId === "ranking-entry");
+    assert.deepEqual(mine.entryRestriction, { minimumRank: 18, expiresAt: Date.parse("2099-10-20T08:00:00.000Z"), active: true });
+    assert.equal(mine.rank, null);
+    const withdrawnRows = structuredClone(entryRankings);
+    const withdrawnRow = Array(withdrawnRows[0].length).fill("");
+    for (const [field, value] of Object.entries({ id: "entry-withdrawn", bewerbid: "ranking-entry", personid: "p2", rang: "0", rausgehangenam: "240101-1000", rausgehangenletzteplatzierung: "4", rausgehangengrund: "Pause" })) {
+      withdrawnRow[withdrawnRows[0].findIndex(name => name.toLowerCase() === field)] = value;
+    }
+    withdrawnRows.push(withdrawnRow);
+    dataStore.set("rlPlatzierung", withdrawnRows, { source: "test-expired-return-entry" });
+    const expiredReturn = (await playerClient.request("myProfile")).data.profile.rankings.find(ranking => ranking.competitionId === "ranking-entry");
+    assert.deepEqual(expiredReturn.entryRestriction, mine.entryRestriction);
+    const foreign = (await adminClient.request("publicProfile", { id: "p2" })).data.profile;
+    assert.equal(foreign.rankings.some(ranking => ranking.entryRestriction), false);
+  } finally {
+    dataStore.set("bewerbe", entryCompetitions, { source: "test-entry-restore" });
+    dataStore.set("matches1", entryMatches, { source: "test-entry-restore" });
+    dataStore.set("rlPlatzierung", entryRankings, { source: "test-entry-restore" });
+  }
   assert.equal(ownProfile.data.profile.competitions[0].matches[0].canSetResult, true);
   const completedAdminMatch = ownProfile.data.profile.competitions[0].matches.find(({ matchId }) => matchId === "m1");
   assert.equal(completedAdminMatch.canAdminSetMatchEnd, true);
@@ -1158,6 +1195,13 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.ok(provisioned.data.monitor.token);
   const provisionedToken = provisioned.data.monitor.token;
   const monitorId = provisioned.data.monitor.monitorId;
+
+  assert.equal((await operatorClient.request("monitorDelete", {
+    monitorId, operationId: "00000000-0000-4000-8000-000000000320",
+  })).data.error.code, "FORBIDDEN");
+  assert.equal((await playerClient.request("monitorDelete", {
+    monitorId, operationId: "00000000-0000-4000-8000-000000000321",
+  })).data.error.code, "FORBIDDEN");
 
   const deviceLogin = await fetch(`${httpBase}/api/monitor/session`, {
     method: "POST",
@@ -1276,6 +1320,10 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(monitorFavoriteWrite.data.favorites[0].page, "monitor");
   assert.equal((await dualPrincipalClient.request("monitorTarget")).data.success, true);
   await dualPrincipalClient.close();
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  assert.equal((await adminClient.request("monitorDelete", {
+    monitorId, operationId: "00000000-0000-4000-8000-000000000322",
+  })).data.error.code, "MONITOR_NOT_REVOKED");
   const revoked = await adminClient.request("monitorRevoke", {
     monitorId,
     operationId: "00000000-0000-4000-8000-000000000306",
@@ -1283,6 +1331,27 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(revoked.data.success, true, JSON.stringify(revoked.data));
   assert.ok(revoked.data.monitor.revokedAt);
   assert.equal((await adminClient.request("monitorList")).data.monitors[0].revokedAt > 0, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  const originalDeleteMonitor = application.repository.deleteMonitor.bind(application.repository);
+  application.repository.deleteMonitor = () => { throw new AppError("WRITE_OUTCOME_UNKNOWN", "simulated monitor unknown", 503); };
+  assert.equal((await adminClient.request("monitorDelete", {
+    monitorId, operationId: "00000000-0000-4000-8000-000000000323",
+  })).data.error.code, "WRITE_OUTCOME_UNKNOWN");
+  application.repository.deleteMonitor = originalDeleteMonitor;
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  const deleteParams = { monitorId, operationId: "00000000-0000-4000-8000-000000000324" };
+  assert.equal((await adminClient.request("monitorDelete", deleteParams)).data.deleted, true);
+  await new Promise((resolve) => setTimeout(resolve, 5100));
+  assert.equal((await adminClient.request("monitorDelete", deleteParams)).data.repeated, true);
+  assert.deepEqual((await adminClient.request("monitorList")).data.monitors, []);
+  const deletedDeviceLogin = await fetch(`${httpBase}/api/monitor/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "http://test.local" },
+    body: JSON.stringify({ token: rotatedToken }),
+  });
+  assert.equal(deletedDeviceLogin.status, 401);
+  await new Promise((resolve) => setTimeout(resolve, 5100));
 
   const loggingTargetRemove = await fetch(`${httpBase}/api/admin/frontend-logging/targets`, {
     method: "DELETE",
@@ -1606,6 +1675,13 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     after: { matchId: "m-00000201", matchDate: "260905-1800" },
   });
   const successfulActions = new Set(auditRows.filter((row) => row.result === "success").map((row) => row.action));
+  assert.equal(successfulActions.has("monitorDelete"), true);
+  for (const errorCode of ["AUTH_REQUIRED", "FORBIDDEN", "MONITOR_NOT_REVOKED"]) {
+    assert.equal(auditRows.some((row) => row.action === "monitorDelete" && row.result === "failed" && row.errorCode === errorCode), true, errorCode);
+  }
+  assert.equal(auditRows.some((row) => row.action === "monitorDelete" && row.result === "unknown" && row.errorCode === "WRITE_OUTCOME_UNKNOWN"), true);
+  assert.equal(auditRows.some((row) => row.action === "monitorDelete" && row.result === "success" && row.after?.deleted === true), true);
+  assert.equal(logEntries.some(({ event, fields }) => event === "ws_request_completed" && fields.endpoint === "monitorDelete" && fields.result === "success"), true);
   assert.equal(auditRows.some((row) => row.action === "acknowledgeMessage" && row.result === "failed" && row.errorCode === "MESSAGE_NOT_FOUND"), true);
   assert.equal(auditRows.some((row) => row.action === "acknowledgeMessage" && row.result === "unknown" && row.errorCode === "WRITE_OUTCOME_UNKNOWN"), true);
   assert.equal(auditRows.some((row) => row.action === "acknowledgeAllMessages" && row.result === "success" && row.after?.acknowledgedCount === 1), true);

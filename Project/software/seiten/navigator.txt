@@ -13,11 +13,15 @@ Navigator-Steuerung - Regie fuer mehrere Monitorgeraete
 
 -- Zugriff und Aktualisierung --
   Die serverseitige Sitzung muss Rolle operator oder admin besitzen; anonyme und
-  player-Sitzungen sehen nur den Zugriffshinweis. `navigator`- und `monitors`-
+   player-Sitzungen sehen nur den Zugriffshinweis. `navigator`- und `monitors`-
   Invalidierungen sowie ein Resync laden Konfiguration und Monitorliste neu. Fuer
   jeden aktiven Monitor wird `monitor-status:<monitorId>` abonniert. Auswahl,
   Online/Offline-Presence, Verbindung und Navigation sind pro Monitor getrennt;
-  ein globaler Monitorzielzustand und 150-ms-Statuspolling existieren nicht.
+   ein globaler Monitorzielzustand und 150-ms-Statuspolling existieren nicht.
+   Die PostgreSQL-Projektion erhaelt Quellreihenfolge und Profil. Platzaktionen
+   bleiben `OL-Platz-1`, `OL-Platz-2` und `OL-Platzaktivierung`; Gruppenbewerbe
+   fuehren zu RoundRobin statt zum KO-Ersatzraster. Bewusst ungueltige importierte
+   Ziele bleiben deaktiviert und werden nicht durch ein geratenes Ziel ersetzt.
 
 -- Navigation und Scrollen --
   `monitorNavigate` und `monitorScroll` senden `operationId`, `monitorId` und
@@ -50,4 +54,11 @@ Navigator-Steuerung - Regie fuer mehrere Monitorgeraete
   Geraete neu aktivieren und Geraete widerrufen. Tokens werden nur in der direkten
   Provisionierungs-/Rotationsantwort angezeigt; wiederholte idempotente Antworten
   koennen deshalb `tokenUnavailable` melden. Alle Aktionen werden bei fehlender
-  Verbindung gesperrt und serverseitig erneut autorisiert.
+   Verbindung gesperrt und serverseitig erneut autorisiert.
+   Bereits widerrufene Geraete bieten zusaetzlich `Dauerhaft löschen`. Nach einer
+   Sicherheitsabfrage sendet die UI `monitorDelete` mit stabiler operationId;
+   Abbruch schreibt nichts, Erfolg entfernt das Geraet aus der aktualisierten
+   Liste. Aktive Geraete sind auch gegen direkte Loeschaufrufe geschuetzt.
+   Entfernt werden nur dieses Geraet und sein Ziel-/Kommandostate; andere
+   Monitorgeraete und Tokens bleiben erhalten. Die Aktion ist idempotent und
+   auditiert, verlorene/unklare Antworten rechtfertigen keinen blinden Neuwrite.

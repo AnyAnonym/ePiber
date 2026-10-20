@@ -9,8 +9,10 @@ const { runMigrations } = require("../db/migrationRunner");
 const { applyFullDevelSeed, applyTechnicalSeed } = require("../db/seedRunner");
 const { createRuntimeRepositories } = require("../db/createRuntimeRepositories");
 const { RuntimeDatabase } = require("../db/runtimeDatabase");
+const { repairNavigation } = require("../db/repairNavigation");
 const { PostgresAuthService } = require("../postgresAuthService");
 const { PostgresCompetitionService } = require("../postgresCompetitionService");
+const { PostgresPlayService } = require("../postgresPlayService");
 const { PostgresProjectionService } = require("../postgresProjectionService");
 const { PostgresProjectionLoader } = require("../postgresProjectionLoader");
 const { PostgresPreferenceService } = require("../postgresPreferenceService");
@@ -23,15 +25,18 @@ const { createPostgresComponents } = require("../createPostgresComponents");
 const { createPostgresApplication } = require("../server");
 const { matchCompletionFingerprint } = require("../matchRules");
 const { headerIndex, headerOf } = require("../tableUtils");
+const { validateTableValues } = require("../tableSchemas");
+const { notificationChannels } = require("../messagingService");
 const { projectPeopleNormalization } = require("../peopleNormalization");
 const { startPostgresTestCluster } = require("./postgresTestCluster");
 
-async function preparedRuntime(t) {
+async function preparedRuntime(t, { messageEventContracts = {} } = {}) {
   const cluster = startPostgresTestCluster();
   t.after(() => cluster.stop());
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-11T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const events = [];
   const runtime = createRuntimeRepositories({
     connectionConfig: { ...cluster.connectionConfig, application_name: "epiber-runtime-test" },
@@ -58,6 +63,7 @@ async function preparedRuntime(t) {
       "preference.start_page.set": { success: "boolean", target: "preference_target", revision: "revision" },
     },
     messageEventContracts: {
+      ...messageEventContracts,
       "test.notice": { templateKey: "test.notice", templateVersion: 1, parameters: { subjectId: "id", status: "status" } },
       "competition.entry.created": { templateKey: "competition.entry.created", templateVersion: 1, parameters: { competitionId: "id", personId: "id" } },
       "competition.entry.withdrawn": { templateKey: "competition.entry.withdrawn", templateVersion: 1, parameters: { competitionId: "id", personId: "id" } },
@@ -102,7 +108,7 @@ test("PostgreSQL-Laufzeit validiert Tenant, Schema und Core-/Identity-Repositori
   assert.deepEqual((await repositories.identity.userStartPage("1")).target, { type: "page", page: "rangliste", params: { id: "2" } });
 
   assert.equal(runtime.status().ready, true);
-  assert.equal(runtime.status().generation, 6);
+  assert.equal(runtime.status().generation, 8);
   assert.equal(events.some(({ event, fields }) => event === "postgres_runtime_started" && fields.result === "success"), true);
   assert.equal(JSON.stringify(events).includes("secretHash"), false);
 });
@@ -127,6 +133,12 @@ test("PostgreSQL-Projektionsservice erzeugt alle acht bestehenden Tabellenvertra
   const { repositories } = await preparedRuntime(t);
   const tables = await new PostgresProjectionService(repositories).load();
   assert.deepEqual(Object.keys(tables).sort(), ["bewerbe", "bewerbsart", "entryList", "matches1", "matchtyp", "navigator", "players", "rlPlatzierung"].sort());
+  for (const [name, values] of Object.entries(tables)) assert.doesNotThrow(() => validateTableValues(name, values), name);
+  for (const row of tables.players.slice(1)) {
+    const value = row[tables.players[0].indexOf("Notification")];
+    assert.equal(notificationChannels(value).join("|"), value);
+  }
+  assert.equal(tables.rlPlatzierung.slice(1).every((row) => typeof row[0] === "string" && row[0].length > 0), true);
   assert.equal(tables.players.length, 6);
   const passwordIndex = tables.players[0].indexOf("PasswdHash");
   assert.equal(tables.players.slice(1).every((row) => row[passwordIndex] === ""), true);
@@ -139,6 +151,47 @@ test("PostgreSQL-Projektionsservice erzeugt alle acht bestehenden Tabellenvertra
   const walkover = tables.matches1.find((row) => row[matchIdIndex] === "rr-walkover");
   assert.equal(walkover[playerOneIndex].endsWith("[wo]") || walkover[matchHeader.indexOf("Spieler3ID")].endsWith("[wo]"), true);
   assert.equal(tables.navigator[1][3], "1");
+  await repositories.venue.database.query("UPDATE venue.navigation_presets SET contract_id=NULL WHERE tenant_id=$1::uuid", [repositories.venue.context.tenantId]);
+  const withoutLegacyId = await new PostgresProjectionService(repositories).load();
+  assert.match(withoutLegacyId.navigator[1][0], /^[0-9a-f-]{36}$/);
+  assert.doesNotThrow(() => validateTableValues("navigator", withoutLegacyId.navigator));
+  assert.equal((await new PostgresProjectionService(repositories).load()).navigator[1][0], withoutLegacyId.navigator[1][0]);
+});
+
+test("Navigatorreparatur erhaelt Profil, Reihenfolge und Platzaktionen atomar und auditiert", { timeout: 30_000 }, async (t) => {
+  const { repositories, events } = await preparedRuntime(t);
+  const { venue } = repositories;
+  const database = venue.database;
+  await database.query("DELETE FROM venue.navigation_presets WHERE tenant_id=$1::uuid", [venue.context.tenantId]);
+  for (const [id, target, profile] of [["z", "OL-Platz-1", "1"], ["a", "OL-Platz-2", "1"], ["b", "OL-Platzaktivierung", "1"], ["c", "OL-Ergebnis", "1"], ["other", "OL-Platz-1", "2"]]) {
+    await database.query(`INSERT INTO venue.navigation_presets(tenant_id,contract_id,profile_code,label,enabled,problem_code,legacy_target)
+      VALUES($1::uuid,$2,$3,$2,false,'NAVIGATION_TARGET_INVALID',$4)`, [venue.context.tenantId, id, profile, target]);
+  }
+  const order = ["z", "a", "b", "c"];
+  const log = (level, event, fields) => events.push({ level, event, fields });
+  assert.equal((await repairNavigation({ venue, profile: "1", order, log })).changedCount, 5);
+  assert.equal((await venue.navigationPresets("1"))[0].sortOrder, null);
+  await assert.rejects(repairNavigation({ venue, profile: "1", order: ["z"], apply: true, log }), { code: "NAVIGATION_REPAIR_SOURCE_MISMATCH" });
+  assert.equal((await venue.navigationPresets("1"))[0].enabled, false);
+  assert.equal((await repairNavigation({ venue, profile: "1", order, apply: true, log })).changedCount, 5);
+  const tables = await new PostgresProjectionService(repositories).load();
+  assert.deepEqual(tables.navigator.slice(1, 5).map((row) => [row[0], row[2]]), [["z", "OL-Platz-1"], ["a", "OL-Platz-2"], ["b", "OL-Platzaktivierung"], ["c", ""]]);
+  assert.deepEqual(tables.navigator.at(-1), ["other", "other", "OL-Platz-1", "2"]);
+  await database.query(`INSERT INTO venue.navigation_presets(tenant_id,contract_id,profile_code,label,target_type,competition_id)
+    SELECT $1::uuid,'group-target','2','Gruppenphase','competition',id FROM play.competitions WHERE contract_id='rr-1'`, [venue.context.tenantId]);
+  const groupTables = await new PostgresProjectionService(repositories).load();
+  assert.equal(groupTables.navigator.find((row) => row[0] === "group-target")[2], "RoundRobin.html?id=rr-1");
+  assert.equal((await repairNavigation({ venue, profile: "1", order, apply: true, log })).changedCount, 0);
+  const audit = await database.query("SELECT status FROM ops.audit_operations WHERE action='navigation.repair' ORDER BY started_at");
+  assert.deepEqual(audit.rows.map(({ status }) => status), ["failed", "success", "success"]);
+  assert.equal(events.some(({ event }) => event === "navigation_repair_completed"), true);
+  const unknownVenue = { context: venue.context, database: { ...database, withTransaction(operation, ...args) {
+    if (operation === "navigation.repair") throw Object.assign(new Error("simulated unknown commit"), { code: "DB_COMMIT_OUTCOME_UNKNOWN" });
+    return database.withTransaction(operation, ...args);
+  } } };
+  await assert.rejects(repairNavigation({ venue: unknownVenue, profile: "1", order, apply: true, log }), { code: "DB_COMMIT_OUTCOME_UNKNOWN" });
+  assert.equal((await database.query("SELECT status FROM ops.audit_operations WHERE action='navigation.repair' ORDER BY started_at DESC LIMIT 1")).rows[0].status, "unknown");
+  await assert.rejects(database.query(`INSERT INTO venue.navigation_presets(tenant_id,label,target_type,page_key) VALUES($1::uuid,'Invalid','court_assignment','3')`, [venue.context.tenantId]), { code: "23514" });
 });
 
 test("PostgreSQL-Projektionsloader ersetzt den Sheet-Initialload atomar und ohne Polling", { timeout: 30_000 }, async (t) => {
@@ -168,6 +221,7 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const components = await createPostgresComponents({
     connectionConfig: cluster.connectionConfig,
     expectedTenantCode: "devel-epiber",
@@ -209,12 +263,24 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.equal(hallBooking.grid.entries.find(({ personId }) => personId === "2").status, "confirmed");
   const savedGrid = await components.hallTimeService.saveGrid(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd04", expectedRevision: hallBooking.revision, gridId: "hall-seed",
-    name: "Synthetische Hallenzeit", description: "PostgreSQL", mode: "fair_use", capacity: 2,
+    name: "Synthetische Hallenzeit", description: "PostgreSQL", mode: "fair_use", capacity: 1,
     waitlistEnabled: true, maxWaitlistEntries: 2, publicJoinable: true,
     fairUse: { base: 1, extendedDays: 14, percent: 50, openDays: 7 }, active: true,
     participantIds: ["1", "2"], slots: hallBooking.grid.slots.map(({ id, date, start, end }) => ({ id, date, start, end })),
   });
   assert.equal(savedGrid.grid.publicJoinable, true);
+  await components.hallTimeService.setBooking(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fc11", gridId: "hall-seed",
+    slotId: hallGrid.grid.slots[0].id, personId: "1", selected: true,
+  });
+  await components.hallTimeService.setBooking(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fc12", gridId: "hall-seed",
+    slotId: hallGrid.grid.slots[0].id, personId: "2", selected: false,
+  });
+  const hallEvents = await components.repositories.messaging.database.query(`SELECT event_type,summary_snapshot FROM messaging.events WHERE source_operation_id=$1::uuid ORDER BY event_type`, ["0199c800-0000-7000-8000-00000000fc12"]);
+  assert.deepEqual(hallEvents.rows.map(row => row.event_type), ["hall_time.booking.changed", "hall_time.waitlist.promoted"]);
+  assert.ok(hallEvents.rows[0].summary_snapshot.includes("entfernt"));
+  assert.ok(hallEvents.rows[1].summary_snapshot.includes("nachgerückt"));
   await components.projectionLoader.refresh("play-service-test");
   const player = { type: "user", id: "2", name: "Olivia Operator", role: "player" };
   const match = await components.sheetService.addMatch(player, {
@@ -243,6 +309,11 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     expectedFingerprint: matchCompletionFingerprint(firstCompletedRow, firstCompletedHeader),
   });
   assert.equal(corrected.result, "6-1/6-1");
+  await components.sheetService.adminSetMatchEnd(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000feff", matchId: match.newMatchId,
+    expectedFingerprint: components.sheetService.cachedFingerprint(match.newMatchId).fingerprint,
+    matchEnd: "261011-2000", reason: "Integrationstest Spielendeberichtigung",
+  });
   const completedValues = dataStore.get("matches1"), completedHeader = headerOf(completedValues);
   const completedRow = completedValues.slice(1).find((row) => String(row[headerIndex(completedHeader, "id")]) === match.newMatchId);
   const cleared = await components.sheetService.adminClearMatchResult(principal, {
@@ -253,6 +324,70 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   const restoredRankings = await components.repositories.play.rankings("2");
   assert.equal(restoredRankings.find(({ personId }) => personId === "1").rank, 1);
   assert.equal(restoredRankings.find(({ personId }) => personId === "2").rank, 2);
+  const resultFingerprint = () => {
+    const values = dataStore.get("matches1"), header = headerOf(values);
+    return matchCompletionFingerprint(values.slice(1).find((row) => String(row[headerIndex(header, "id")]) === match.newMatchId), header);
+  };
+  for (const [index, kind] of ["regular", "retirement"].entries()) {
+    await assert.rejects(components.sheetService.setMatchResult(player, {
+      operationId: `0199c800-0000-7000-8000-00000000fe0${index}`, matchId: match.newMatchId,
+      kind, result: kind === "regular" ? "6-0/6-0" : "", losingSide: 1,
+      matchStart: "261011-1200", matchEnd: "261011-1900", expectedFingerprint: resultFingerprint(),
+    }), { code: "MATCH_DURATION_CONFIRMATION_REQUIRED" });
+  }
+  for (const [index, scheduledAt] of ["2026-10-01T10:00:00Z", "2099-10-01T10:00:00Z", null].entries()) {
+    await components.repositories.venue.database.query("UPDATE play.matches SET scheduled_at=$2::timestamptz WHERE contract_id=$1", [match.newMatchId, scheduledAt]);
+    await components.projectionLoader.refresh("walkover-test");
+    const params = {
+      operationId: `0199c800-0000-7000-8000-00000000fe1${index}`, matchId: match.newMatchId,
+      kind: "walkover", losingSide: 1, expectedFingerprint: resultFingerprint(),
+    };
+    const result = await components.sheetService.setMatchResult(player, params);
+    assert.equal(result.completionType, "walkover");
+    const stored = await components.repositories.venue.database.query(`SELECT r.play_started_at,r.play_ended_at,r.walkover_at,
+      (SELECT count(*)::int FROM play.match_result_sets WHERE result_id=r.id) AS sets
+      FROM play.matches m JOIN play.match_results r ON r.id=m.current_result_id WHERE m.contract_id=$1`, [match.newMatchId]);
+    assert.equal(stored.rows[0].play_started_at, null);
+    assert.equal(stored.rows[0].play_ended_at, null);
+    assert.ok(stored.rows[0].walkover_at);
+    assert.equal(stored.rows[0].sets, 0);
+    await components.sheetService.adminClearMatchResult(principal, {
+      operationId: `0199c800-0000-7000-8000-00000000fe2${index}`, matchId: match.newMatchId,
+      expectedFingerprint: resultFingerprint(), reason: "Walkover-Test Ruecknahme",
+    });
+  }
+  await components.sheetService.adminSetRankingChallengeDate(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fe31", matchId: match.newMatchId,
+    challengeDate: "261010-1200", reason: "Integrationstest Forderungsdatum",
+  });
+  await components.sheetService.adminDeleteRankingChallenge(principal, {
+    operationId: "0199c800-0000-7000-8000-00000000fe32", matchId: match.newMatchId,
+    reason: "Integrationstest Forderungsloeschung",
+  });
+  const history = await components.messagingService.competitionHistory(principal, { bewerbId: "2", limit: 50 });
+  const outcome = history.entries.find(entry => entry.type === "match.result.set" && entry.result !== "W.O.");
+  assert.ok(history.entries.some(entry => entry.summary === "Olivia Operator (2) hat Ada Admin (1) gefordert."));
+  assert.ok(history.entries.some(entry => entry.summary.includes("Olivia Operator und Ada Admin haben den Spieltermin")));
+  assert.ok(history.entries.some(entry => entry.type === "match.end.corrected" && entry.summary.includes("Olivia Operator")));
+  assert.ok(history.entries.some(entry => entry.type === "ranking_challenge_date_changed" && entry.summary.includes("10.10.2026, 12:00 Uhr")));
+  assert.ok(history.entries.some(entry => entry.type === "ranking_challenge_deleted" && entry.detail.includes("Forderungsloeschung")));
+  assert.ok(outcome.summary.includes("gewinnt"));
+  assert.equal(outcome.result, "6-0/6-0");
+  const walkovers = history.entries.filter(entry => entry.type.startsWith("match.result.") && entry.result === "W.O.");
+  assert.equal(walkovers.length, 3);
+  assert.ok(walkovers.every(entry => entry.summary === "Ada Admin gewinnt durch W.O. von Olivia Operator."));
+  const inbox = await components.repositories.messaging.inbox("1", { limit: 100 });
+  const won = inbox.find(entry => entry.legacySubject === "Match gewonnen: Synthetische Rangliste");
+  assert.ok(won);
+  assert.equal(won.legacyBody, "Du gewinnst durch W.O. von Olivia Operator.");
+  const lost = (await components.repositories.messaging.inbox("2", { limit: 100 })).find(entry => entry.legacySubject === "Match verloren: Synthetische Rangliste");
+  assert.equal(lost.legacyBody, "Du verlierst durch W.O.");
+  const hallNotice = (await components.repositories.messaging.inbox("2", { limit: 100 })).find(entry => entry.eventType === "hall_time.waitlist.promoted");
+  assert.match(hallNotice.legacyBody, /Hallenzeit.*nachgerückt/);
+  assert.match(hallNotice.legacyBody, /Uhr/);
+  const allHistory = await components.messagingService.competitionHistory(principal, { limit: 100 });
+  assert.ok(allHistory.entries.every(entry => entry.competitionId));
+  assert.ok(!allHistory.entries.some(entry => entry.id === hallNotice.eventId));
   const normalizedPerson = projectPeopleNormalization(dataStore.get("players")).people.find(({ id }) => id === "2");
   const normalization = await components.sheetService.normalizePerson(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd08", personId: "2",
@@ -271,6 +406,9 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     fromMs: 0, toMs: Date.now() + 365 * 24 * 60 * 60 * 1000, deployment: "paj", selection: ["all"], hallTimes: reportHallTimes,
   });
   assert.equal(report.totals.totalCount > 0, true);
+  assert.ok(report.messages.some(message => message.projectionType === "match.result.set" && message.isResult));
+  assert.ok(report.messages.some(message => message.projectionType === "match.challenge.created" && message.isChallenge));
+  assert.ok(report.messages.some(message => message.projectionType === "match.challenge.date_changed" && message.isDateChange));
   const provisionParams = { operationId: "0199c800-0000-7000-8000-00000000fc01", label: "Kompositionsmonitor" };
   const provisioned = await components.monitorBroker.provision(principal, provisionParams);
   assert.equal(typeof provisioned.monitor.token, "string");
@@ -304,6 +442,20 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.equal(sent.some(({ data }) => data.kind === "navigate"), true);
   assert.equal(sent.some(({ data }) => data.kind === "scroll"), true);
   components.monitorBroker.unregister(deviceInfo);
+  const deleteParams = { operationId: "0199c800-0000-7000-8000-00000000fc05", monitorId: provisioned.monitor.monitorId };
+  await assert.rejects(components.monitorBroker.delete(principal, deleteParams), { code: "MONITOR_NOT_REVOKED", status: 409 });
+  assert.equal((await components.repositories.venue.listMonitors()).some(({ monitorId }) => monitorId === deleteParams.monitorId), true);
+  await components.monitorBroker.revoke(principal, { ...deleteParams, operationId: "0199c800-0000-7000-8000-00000000fc06" });
+  assert.equal((await components.monitorBroker.delete(principal, deleteParams)).deleted, true);
+  assert.equal((await components.monitorBroker.delete(principal, deleteParams)).repeated, true);
+  assert.equal(components.monitorBroker.listMonitors().some(({ monitorId }) => monitorId === deleteParams.monitorId), false);
+  assert.equal(components.monitorBroker.commandStatus.has(deleteParams.monitorId), false);
+  await components.monitorBroker.refresh();
+  assert.equal(components.monitorBroker.listMonitors().some(({ monitorId }) => monitorId === deleteParams.monitorId), false);
+  assert.equal(await components.repositories.venue.monitorByToken(provisioned.monitor.token), null);
+  const commands = await components.repositories.venue.database.query("SELECT count(*)::integer AS count FROM venue.monitor_commands WHERE command_id=$1::uuid", [navigated.commandId]);
+  assert.equal(commands.rows[0].count, 0);
+  await assert.rejects(components.monitorBroker.delete(principal, { ...deleteParams, operationId: "0199c800-0000-7000-8000-00000000fc07" }), { code: "MONITOR_NOT_FOUND" });
 });
 
 test("Venue-Repository liest Courts und Hallenzeiten und persistiert Scores atomar", { timeout: 30_000 }, async (t) => {
@@ -366,6 +518,7 @@ test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sow
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const client = new Client(cluster.connectionConfig); await client.connect();
   await client.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false"); await client.end();
   const app = await createPostgresApplication({
@@ -416,6 +569,7 @@ test("PostgreSQL-Read-only-Abnahme blockiert HTTP- und WebSocket-Writes vor Audi
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const before = new Client(cluster.connectionConfig); await before.connect();
   await before.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false");
   const auditCount = Number((await before.query("SELECT count(*) FROM ops.audit_operations")).rows[0].count);
@@ -470,6 +624,7 @@ test("PostgreSQL-Read-only-Abnahme startet mit der minimalen app_readonly-Datenb
   await runMigrations({ connectionConfig: ownerConnection, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: ownerConnection, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
+  await runMigrations({ connectionConfig: ownerConnection, command: "up", targetGeneration: 8, output: () => {} });
   await applyBootstrap({ adminConnectionConfig: cluster.connectionConfig, prefix, database, passwords, output: () => {} });
   const readOnlyPassword = passwords.app_readonly;
   const app = await createPostgresApplication({
@@ -557,6 +712,33 @@ test("Messaging-Repository liest Inbox, quittiert idempotent und erzeugt kontrol
     templateParameters: { subjectId: "private@example.test", status: "ready" },
     recipients: ["1"],
   }), (error) => error.code === "MESSAGE_PARAMETER_INVALID");
+});
+
+test("PostgreSQL-Meldungssnapshots sind empfaengerspezifisch, idempotent und atomar", { timeout: 30_000 }, async (t) => {
+  const { repositories, events } = await preparedRuntime(t);
+  const message = {
+    contractId: "event-personal", eventType: "test.notice", operationId: "0199c800-0000-7000-8000-00000000ab01",
+    templateParameters: { subjectId: "m-seed", status: "ready" }, competitionId: "2", matchId: "m-seed",
+    participants: [{ personId: "1", role: "winner" }, { personId: "2", role: "loser" }], recipients: ["1", "2"],
+    summary: "Ada gewinnt gegen Olivia.",
+    recipientMessages: [{ personId: "1", subject: "Gewonnen", body: "Du gewinnst. Ergebnis: 6-2/6-4." }, { personId: "2", subject: "Verloren", body: "Du verlierst. Ergebnis: 2-6/4-6." }],
+  };
+  assert.equal((await repositories.messaging.createEvent(message)).duplicate, false);
+  assert.equal((await repositories.messaging.createEvent(message)).duplicate, true);
+  const stored = (await repositories.messaging.inbox("2")).find(entry => entry.eventId === message.contractId);
+  assert.equal(stored.legacyBody, message.recipientMessages[1].body);
+  const service = new PostgresMessagingService({ messaging: repositories.messaging, ops: repositories.ops });
+  assert.equal((await service.message({ id: "2" }, stored.id)).message.body, message.recipientMessages[1].body);
+  assert.equal((await service.messages({ id: "2" }, { limit: 20 })).messages.find(entry => entry.id === stored.id).subject, "Verloren");
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: [{ ...message.recipientMessages[0], body: "Anderer Text" }] }), { code: "MESSAGE_OPERATION_CONFLICT" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: [] }), { code: "MESSAGE_OPERATION_CONFLICT" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: [{ personId: "3", subject: "Falsch", body: "Kein Empfaenger" }] }), { code: "MESSAGE_RECIPIENTS_INVALID" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, recipientMessages: null }), { code: "MESSAGE_RECIPIENTS_INVALID" });
+  await assert.rejects(repositories.messaging.createEvent({ ...message, contractId: "event-failed", operationId: "0199c800-0000-7000-8000-00000000ab02", recipients: ["1", "missing"], recipientMessages: [] }), { code: "MESSAGE_RECIPIENT_NOT_FOUND" });
+  assert.ok(!(await repositories.messaging.competitionHistory("2", { limit: 100 })).events.some(entry => entry.id === "event-failed"));
+  const logged = JSON.stringify(events);
+  assert.ok(!logged.includes("Du gewinnst") && !logged.includes("Du verlierst") && !logged.includes("Anderer Text"));
+  assert.ok(events.some(entry => entry.event === "postgres_messaging_event_completed" && entry.fields.result === "failed"));
 });
 
 test("PostgreSQL-Messaginginteraktionen sind moderierbar, idempotent und ohne freien Auditpayload", { timeout: 30_000 }, async (t) => {
@@ -676,6 +858,21 @@ test("PostgreSQL-Authservice fuehrt Login, Sessionrefresh und Passwortrotation o
   assert.equal(loggedIn.user.role, "player");
   assert.equal(Number.isSafeInteger(loggedIn.session.expiresAt), true);
   assert.equal((await auth.getUserForToken(loggedIn.session.token)).principal.id, "3");
+
+  for (const member of ["player A", "player B"]) {
+    await repositories.identity.database.query(`UPDATE identity.memberships SET classification=$2
+      WHERE person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='3') AND valid_until IS NULL`, [repositories.identity.context.tenantId, member]);
+    const existingSession = await auth.getUserForToken(loggedIn.session.token);
+    assert.equal(existingSession.user.member, member);
+    assert.equal(existingSession.user.role, member);
+    assert.equal(existingSession.principal.roles.includes("player"), true);
+    const newLogin = await auth.login({ login: "player", passwordHash: legacyCredential, ip: "127.0.0.1" });
+    assert.equal(newLogin.user.member, member);
+    assert.equal((await auth.requireRole(newLogin.session.token, ["player", "player a", "player b", "admin"])).principal.id, "3");
+    await assert.rejects(auth.requireRole(newLogin.session.token, ["admin"]), { code: "FORBIDDEN" });
+    await assert.rejects(auth.requireRole(newLogin.session.token, ["operator"]), { code: "FORBIDDEN" });
+    await auth.logout(newLogin.session.token);
+  }
 
   const newCredential = "b".repeat(64);
   const changed = await auth.changeOwnPassword(loggedIn.session.token, legacyCredential, newCredential);
@@ -910,6 +1107,76 @@ test("Operations-Repository bindet Idempotenz an Akteur, Requesthash und kontrol
   await assert.rejects(repositories.ops.beginIdempotency({ operationId, actorPersonId: "1", command: "identity.profile.update", requestHash: Buffer.alloc(32, 8) }), (error) => error.code === "IDEMPOTENCY_CONFLICT" && error.status === 409);
 });
 
+test("PostgreSQL-Neueinstieg persistiert Ranggrenze, Folgeversuche, Jahresfrist und reversible Einreihung", { timeout: 30_000 }, async (t) => {
+  const { MESSAGE_EVENT_CONTRACTS } = require("../postgresRuntimeContracts");
+  const { repositories } = await preparedRuntime(t, { messageEventContracts: MESSAGE_EVENT_CONTRACTS });
+  const db = repositories.play.database;
+  await db.query("UPDATE play.competitions SET competition_end_date=NULL WHERE contract_id='2'");
+  await db.query(`INSERT INTO identity.people(tenant_id,contract_id,first_name,last_name,active)
+    SELECT $1::uuid,n::text,'Test','Einsteiger',true FROM generate_series(99,127) n`, [repositories.play.context.tenantId]);
+  await db.query(`INSERT INTO play.ranking_entries(competition_id,person_id,status,rank)
+    SELECT c.id,p.id,'active',p.contract_id::int-97 FROM play.competitions c
+    JOIN identity.people p ON p.tenant_id=$1::uuid AND p.contract_id::int BETWEEN 100 AND 127 WHERE c.contract_id='2'`, [repositories.play.context.tenantId]);
+  const loader = new PostgresProjectionLoader({ projectionService: new PostgresProjectionService(repositories), dataStore });
+  await loader.initialLoad();
+  let now = Date.now();
+  const service = new PostgresPlayService({ ...repositories, projectionLoader: loader, now: () => now });
+  const player = { type: "user", id: "99", name: "Test", role: "player" };
+  const admin = { type: "user", id: "1", name: "Admin", role: "admin" };
+  const { randomUUID } = require("node:crypto");
+  const fingerprint = (id) => {
+    const values = dataStore.get("matches1"), header = headerOf(values);
+    return matchCompletionFingerprint(values.slice(1).find(row => row[headerIndex(header, "id")] === id), header);
+  };
+  const challenge = async (opponentId) => (await service.addMatch(player, { operationId: randomUUID(), bewerbId: "2", opponentId })).newMatchId;
+  const finish = async (matchId, losingSide) => service.setMatchResult(player, { operationId: randomUUID(), matchId, kind: "walkover", losingSide, expectedFingerprint: fingerprint(matchId) });
+  const clear = async (matchId) => service.adminClearMatchResult(admin, { operationId: randomUUID(), matchId, reason: "Test Ruecknahme", expectedFingerprint: fingerprint(matchId) });
+  const first = await challenge("105"); // rank 8 -> minimum rank 18
+  await finish(first, 1);
+  let state = service.rankingChallengeState(player, "2");
+  assert.equal(state.mode, "newcomer");
+  assert.equal(state.entryRestriction.minimumRank, 18);
+  assert.equal(state.entryRestriction.active, true);
+  const firstExpiry = state.entryRestriction.expiresAt;
+  assert.equal(service.challengeEligibility(player, "2", "105").allowed, false);
+  const eligibility = service.challengeEligibility.bind(service);
+  service.challengeEligibility = () => ({ allowed: true });
+  await assert.rejects(challenge("105"), { code: "CHALLENGE_NOT_ALLOWED" });
+  service.challengeEligibility = eligibility;
+  now += 8 * 24 * 60 * 60 * 1000;
+  assert.equal(service.challengeEligibility(player, "2", "114").allowed, false); // rank 17
+  assert.equal(service.challengeEligibility(player, "2", "115").allowed, true); // rank 18
+  // A fresh service and fresh DB projection retain the same restriction.
+  await loader.refresh("restart-test");
+  const fresh = new PostgresPlayService({ ...repositories, projectionLoader: loader, now: () => now });
+  assert.equal(fresh.rankingChallengeState(player, "2").entryRestriction.minimumRank, 18);
+  const second = await challenge("115");
+  await finish(second, 1);
+  assert.equal(service.rankingChallengeState(player, "2").entryRestriction.minimumRank, 28);
+  await clear(second);
+  assert.equal(service.rankingChallengeState(player, "2").entryRestriction.minimumRank, 18);
+  await service.adminDeleteRankingChallenge(admin, { operationId: randomUUID(), matchId: second, reason: "Test Forderung entfernen" });
+  now = firstExpiry;
+  assert.equal(service.rankingChallengeState(player, "2").entryRestriction.active, false);
+  assert.equal(service.challengeEligibility(player, "2", "105").allowed, true);
+  // Returning to the first loss and correcting to a win exercises inserted IDs,
+  // correction reversal and deletion of the newly inserted ranking row.
+  now = Date.now();
+  await finish(first, 2);
+  assert.equal((await repositories.play.rankings("2")).find(row => row.personId === "99").rank, 8);
+  await clear(first);
+  assert.equal((await repositories.play.rankings("2")).some(row => row.personId === "99"), false);
+  await service.adminDeleteRankingChallenge(admin, { operationId: randomUUID(), matchId: first, reason: "Test Forderung entfernen" });
+  // Target 35 is absent: immediate placement at the end, not a negative rank.
+  const last = await challenge("122"); // rank 25
+  await finish(last, 1);
+  const ranks = await repositories.play.rankings("2");
+  assert.equal(ranks.find(row => row.personId === "99").rank, 31);
+  assert.equal(new Set(ranks.filter(row => row.status === "active").map(row => row.rank)).size, 31);
+  await clear(last);
+  assert.equal((await repositories.play.rankings("2")).some(row => row.personId === "99"), false);
+});
+
 test("PostgreSQL-Spielbetrieb bindet Entry, Messaging, Audit und Idempotenz in eine Fachtransaktion", { timeout: 30_000 }, async (t) => {
   const { cluster, repositories } = await preparedRuntime(t);
   const service = new PostgresCompetitionService(repositories);
@@ -924,6 +1191,9 @@ test("PostgreSQL-Spielbetrieb bindet Entry, Messaging, Audit und Idempotenz in e
   const removed = await service.removeEntry(principal, { operationId: "0199c800-0000-7000-8000-00000000ee02", bewerbId: "2" });
   assert.equal(removed.removed, true);
   assert.equal((await service.removeEntry(principal, { operationId: "0199c800-0000-7000-8000-00000000ee02", bewerbId: "2" })).repeated, true);
+  const entryMessages = (await repositories.messaging.inbox("3")).filter(entry => entry.eventType.startsWith("competition.entry."));
+  assert.equal(entryMessages.length, 2);
+  assert.ok(entryMessages.every(entry => entry.legacySubject.includes("Synthetische Rangliste") && entry.legacyBody.includes("Bewerb Synthetische Rangliste")));
   const rejectedOperation = "0199c800-0000-7000-8000-00000000ee03";
   await assert.rejects(service.addEntry(principal, { operationId: rejectedOperation, bewerbId: "missing" }), (error) => error.code === "ENTRY_CONTEXT_NOT_FOUND");
 
@@ -934,7 +1204,7 @@ test("PostgreSQL-Spielbetrieb bindet Entry, Messaging, Audit und Idempotenz in e
       SELECT
         (SELECT count(*)::integer FROM play.competition_entries WHERE contract_id=$1) AS entries,
         (SELECT count(*)::integer FROM messaging.events WHERE source_operation_id IN ($2::uuid,'0199c800-0000-7000-8000-00000000ee02'::uuid)) AS events,
-        (SELECT count(*)::integer FROM ops.outbox WHERE idempotency_key IN ('messaging:' || $2::text, 'messaging:0199c800-0000-7000-8000-00000000ee02')) AS outbox,
+         (SELECT count(*)::integer FROM ops.outbox WHERE idempotency_key IN ('messaging:' || $2::text || ':competition.entry.created', 'messaging:0199c800-0000-7000-8000-00000000ee02:competition.entry.withdrawn')) AS outbox,
         (SELECT status FROM ops.audit_operations WHERE operation_id=$2::uuid) AS audit,
         (SELECT status FROM ops.idempotency_operations WHERE operation_id=$2::uuid) AS idempotency
     `, [first.entryId, operationId]);

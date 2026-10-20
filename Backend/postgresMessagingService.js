@@ -6,12 +6,19 @@ const dataStore = require("./dataStore.js");
 const { hasRole } = require("./personRoles.js");
 const { reactionCatalog, reactionByKey } = require("./competitionHistoryReactionCatalog.js");
 const { normalizeWinnerPerspective } = require("./resultPerspective.js");
+const { competitionRoundName } = require("./messagingService");
+const { createDomainMessage } = require("./postgresDomainMessages");
 
 const COMMENT_SEGMENTER = new Intl.Segmenter("de", { granularity: "grapheme" });
 const VIENNA_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" });
-const RESULT_REPORT_TYPES = new Set(["result", "result_corrected", "result_cleared", "match_end_corrected"]);
-const CHALLENGE_REPORT_TYPES = new Set(["challenge", "challenge_confirmation"]);
-const DATE_CHANGE_REPORT_TYPES = new Set(["appointment_changed", "ranking_challenge_date_changed", "ranking_match_date_admin_changed", "match_end_corrected"]);
+const RESULT_REPORT_TYPES = new Set(["result", "result_corrected", "result_cleared", "match_end_corrected", "match.result.set", "match.result.corrected", "match.result.cleared", "match.end.corrected"]);
+const CHALLENGE_REPORT_TYPES = new Set(["challenge", "challenge_confirmation", "match.challenge.created"]);
+const DATE_CHANGE_REPORT_TYPES = new Set(["appointment_changed", "ranking_challenge_date_changed", "ranking_match_date_admin_changed", "match_end_corrected", "match.challenge.date_changed", "match.end.corrected"]);
+// The existing history UI uses these public types to reveal administrative reasons.
+const ADMIN_HISTORY_TYPES = Object.freeze({
+  "match.challenge.deleted": "ranking_challenge_deleted",
+  "match.challenge.date_changed": "ranking_challenge_date_changed",
+});
 function viennaDay(timestamp) { const parts = Object.fromEntries(VIENNA_DAY.formatToParts(new Date(timestamp)).filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value])); return `${parts.year}-${parts.month}-${parts.day}`; }
 
 function hash(value) { return crypto.createHash("sha256").update(JSON.stringify(value)).digest(); }
@@ -180,7 +187,7 @@ class PostgresMessagingService {
     }
   }
 
-  createDomainEvent(values, transaction) { return this.repository.createEvent(values, transaction); }
+  createDomainEvent(values, transaction) { return createDomainMessage(this.repository, values, transaction); }
 
   async competitionHistory(principal, { bewerbId, cursor = null, limit = 50 }) {
     const values = dataStore.get("bewerbe");
@@ -199,7 +206,7 @@ class PostgresMessagingService {
       revision: await this.repository.historyRevision(),
       entries: page.events.map((event) => ({
         id: event.id, competitionId: event.competitionId, competitionName: competitions.get(event.competitionId) || `Bewerb ${event.competitionId}`,
-        roundName: event.source === "match" && !rankingIds.has(event.competitionId) ? "" : "", type: event.type,
+        roundName: event.source === "match" && !rankingIds.has(event.competitionId) ? competitionRoundName(event.roundCode) : "", type: ADMIN_HISTORY_TYPES[event.type] || event.type,
         occurredAt: event.createdAt, summary: event.summary || "", detail: event.detail || "",
         result: ["result", "result_corrected"].includes(event.type) ? normalizeWinnerPerspective(event.result) : event.result,
         actorName: event.actorName || "", participants: event.participants.map(({ participantRole, displayName }) => ({ role: participantRole, name: displayName })),
@@ -341,7 +348,7 @@ class PostgresMessagingService {
       const recipients = new Map(), entries = [], messages = [];
       if (requested.has("personal")) for (const projection of await this.repository.reportProjections(fromMs, toMs)) {
         const person = people.get(projection.recipientId) || { role: "unknown", recipientClass: "Andere/Unbekannt", name: "" };
-        const category = { result: RESULT_REPORT_TYPES.has(projection.projectionType), challenge: CHALLENGE_REPORT_TYPES.has(projection.projectionType), dateChange: DATE_CHANGE_REPORT_TYPES.has(projection.projectionType) };
+        const category = { result: RESULT_REPORT_TYPES.has(projection.projectionType), challenge: CHALLENGE_REPORT_TYPES.has(projection.projectionType), dateChange: DATE_CHANGE_REPORT_TYPES.has(projection.projectionType) || (projection.projectionType === "match.appointment.set" && projection.subject.startsWith("Spieltermin geändert")) };
         const day = days.get(viennaDay(projection.createdAt)); day.total++; day.personal++; if (category.result) day.results++; if (category.challenge) day.challenges++; if (category.dateChange) day.dateChanges++;
         const total = roleTotals.get(person.recipientClass); total.messageCount++; total.recipients.add(projection.recipientId);
         const key = `${deployment}:${projection.recipientId}`, recipient = recipients.get(key) || { recipientKey: key, recipientId: projection.recipientId, recipientName: projection.recipientName || person.name || projection.recipientId, recipientRole: person.role, recipientClass: person.recipientClass, messageCount: 0, unreadCount: 0, latestAt: projection.createdAt };

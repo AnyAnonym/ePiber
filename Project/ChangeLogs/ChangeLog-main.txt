@@ -1,12 +1,106 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 4.12.17
+Stand: 4.12.18
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[4.12.18] - 2026-10-20
+Commit: 4.12.18 | PostgreSQL-Paritaet und Ranglisten-Neueinstieg absichern
+Quelle: 4.12.17-paj-1
+
+  Changed
+  - [Release] Bestaetigter PATCH-Abschluss des Seitenbranches; permanente Dokumentation zu Monitorloeschung, Navigator, Datumsprojektion, Rollen, Walkover, Einstiegsgrenzen und Meldungssnapshots uebernommen. Fachregel RANGLISTE.txt Abschnitt 8 bleibt wie freigegeben praezisiert. Paketversionen auf die bestaetigte Main-Version gesetzt.
+  - [Dokumentation] Uebernahmeliste vollstaendig in Project/software/ENDPOINTS.txt, DATENBANK.txt, ARCHITEKTUR.txt, seiten/navigator.txt, seiten/scoreboard.txt, seiten/rangliste.txt, seiten/bewerbe.txt und Project/server-configs/postgresql/README.txt eingearbeitet; temporaeres Branch-Changelog nach vollstaendiger Uebernahme entfernt.
+  - [Betriebsgrenze] Dieser Releaseabschluss fuehrt keine Migration, Datenreparatur oder Dienstaktivierung aus. Fruehere PAJ-Aktivierungen und bekannte Court-Quellenstoerung bleiben unten nachvollziehbar; Live bleibt unberuehrt. PostgreSQL-Adminwarnung bei fehlendem KO-Folgematch ist weiterhin offen.
+
+Vollstaendige Branchhistorie:
+
+[4.12.17-paj-1-1] - 2026-10-16
+Commit: 4.12.17-paj-1-1 | Branch-Stand nummeriert initialisiert
+
+  Added
+  - [Dokumentation] Temporaeres Branch-Changelog fuer den Seitenbranch `4.12.17-paj-1` angelegt.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-1` gesetzt.
+
+[4.12.17-paj-1-2] - 2026-10-17
+Commit: 4.12.17-paj-1-2 | Widerrufene Monitorgeraete dauerhaft loeschen
+
+  Added
+  - [Monitorsteuerung] Admins koennen widerrufene Monitorgeraete nach Sicherheitsabfrage dauerhaft loeschen; aktive Geraete bleiben serverseitig geschuetzt. PostgreSQL und Legacy entfernen Geraet und Ziel-/Kommandostate mit idempotenter Operation, Listenaktualisierung und Auditvertrag.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-1-x` gesetzt.
+
+[4.12.17-paj-1-3] - 2026-10-17
+Commit: 4.12.17-paj-1-3 | Scoreboard-Datum wie Live in Wiener Ortszeit anzeigen
+
+  Changed
+  - [Scoreboard] ISO-Zeitstempel der PostgreSQL-Courts werden wie im Live-System als TT.MM. - HH:MM in Europe/Vienna angezeigt; Sommer-/Winterzeit, Tageswechsel und bestehende Datumsformate werden in der Drei-Engine-Smokesuite geprueft. Layout und Bedienung bleiben unveraendert; keine neuen Schreiboperationen oder Diagnosepayloads.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-2-x` gesetzt.
+
+[4.12.17-paj-1-4] - 2026-10-17
+Commit: 4.12.17-paj-1-4 | Navigatoraktionen und Reihenfolge wie Live erhalten
+
+  Changed
+  - [Monitorsteuerung] Navigatorimport erhaelt Quellreihenfolge, Profil und typisierte Platzzuweisungs-/Aktivierungsaktionen. Die PostgreSQL-Projektion rekonstruiert Platzoverlays und RoundRobin-Gruppenphasenziele statt deaktivierter Aktionen beziehungsweise KO-Ersatzziele; bewusst ungueltige Ziele bleiben gesperrt. Migration 7 erweitert nur den Zielvertrag, eine separate PAJ-Reparatur ist standardmaessig ein Dry-run und prueft die explizite Profilreihenfolge vor atomaren, auditierten Aenderungen. Monitorgeraete und Tokens bleiben unberuehrt.
+  - [PAJ-Betrieb] Nach ausdruecklicher Aktivierungsfreigabe Migration 7 eingespielt, 23 Navigatoreintraege auditiert korrigiert, Refresh-Helfer installiert und App/Worker kontrolliert neu gestartet. Profil 1 mit 20 Eintraegen, drei Platzaktionen, vier weiterhin deaktivierten Live-Zielen und korrektem Gruppenphasenziel nachgeprueft; Reparatur-Dry-run danach ohne weitere Aenderungen. Build mit 556 Tests, 17 Workflowtests und alle acht Browserprofile erfolgreich. Bereits vorher bestehendes not-ready bei aktivem Platz 1 und veralteter Court-Quelle bleibt unveraendert.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-3-x` gesetzt.
+
+[4.12.17-paj-1-5] - 2026-10-17
+Commit: 4.12.17-paj-1-5 | Spielerberechtigungen und Walkover-Abschluss korrigieren
+
+  Changed
+  - [Spielbetrieb] PostgreSQL-Walkover erfasst keinen gespielten Start-/Endzeitpunkt und verlangt keine Spieldauerbestaetigung fuer den geplanten Spieltermin. Der Walkover-Abschlusszeitpunkt bleibt serverseitig erfasst; bestehende Audit-, Messaging- und Transaktionspfade bleiben erhalten. Integration prueft alte, zukuenftige und fehlende Spieltermine sowie weiterhin abgelehnte unbestaetigte Langmatches bei regulaerem Ergebnis und Retirement; Oberflaeche unveraendert.
+  - [PAJ-Betrieb] Walkover-Korrektur nach ausdruecklicher Neustartfreigabe aktiviert; PAJ-App aktiv und /ready erfolgreich. 557 Tests und 17 Workflowtests erfolgreich; keine Bestandsdaten manuell geaendert, Live unveraendert.
+  - [Authentifizierung] PostgreSQL-Anmeldung und bestehende Sessions erhalten fuer Mitgliedsklassen player A und player B zusaetzlich die allgemeine Spielerrolle wie im Legacybetrieb. Mitgliedsklasse und Anzeige bleiben unveraendert; keine zusaetzlichen Admin-/Operatorrechte. Rollenmatrix und echte PostgreSQL-Login-/Sessionpfade werden auf erlaubte Spielerzugriffe und abgelehnte Verwaltungszugriffe geprueft; bestehende Request-/Auditprotokollierung bleibt unveraendert, ohne neue personenbezogene Diagnosefelder.
+  - [PAJ-Betrieb] Nach ausdruecklicher Freigabe ausschliesslich die PAJ-App neu gestartet; PostgreSQL-Start und Initialisierung mit ready=true sowie Laufzeitversion 4.12.17-paj-1-4-x bestaetigt. 557 Tests und 17 Workflowtests erfolgreich; keine Datenbankaenderung und kein Live-Eingriff.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-4-x` gesetzt.
+
+[4.12.17-paj-1-6] - 2026-10-19
+Commit: 4.12.17-paj-1-6 | Bewerbsdaten und PostgreSQL-Projektionen wie Live ausgeben
+
+  Changed
+  - [Bewerbe] PostgreSQL-Projektion liefert EntryStart, EntryDeadline, Bewerbsbeginn und Bewerbsende im kompakten vierstelligen Live-Datumsvertrag statt TT.MM.JJJJ. Reine Tage behalten Tagesgrenzen, Zeitpunkte werden in Europe/Vienna inklusive Sommer-/Winterzeit und Tageswechsel projiziert. Dadurch stimmen aktive, bevorstehende und beendete Bewerbe, Sortierung und Kartenlinks wieder mit den bestehenden Verbrauchern ueberein; Geburtsdaten und Matchzeitstempel behalten ihr eigenes Format.
+  - [Datenprojektion] Angrenzende Vertragspruefung korrigiert kommaseparierte Bewerbsgeschlechter, die Meldungskanaele Email/Whatsapp und stabile Ersatz-IDs fuer Ranglisten-/Navigatoreintraege ohne alte Sheet-ID. Acht Tabellenprojektionen mit dem vorhandenen PAJ-Bestand validiert; semantischer Read-only-Abgleich von 16 Bewerben und 12 Bewerbsarten mit Live in 188 Feldvergleichen ohne Abweichung. Keine Bestandsdaten geaendert.
+  - [Tests] Import-/Projektionsregressionen pruefen alle vier Bewerbsgrenzen, leere Werte, Schaltjahr, vierstellige Jahreszahlen, Wiener Zeitumstellungen und den Fehlerpfad mit Last-good-Erhalt und datensparsamen Abschlusslogs. PostgreSQL-Integration validiert alle acht Tabellenvertraege; neuer Browser-Kernablauf verwendet echte Projektionsdaten fuer Fristwechsel, Tagesende, Gruppierung, Prioritaetssortierung und Ranglisten-/KO-/Gruppen-/EntryList-Links ohne Reload und ohne Layoutaenderung.
+  - [PAJ-Betrieb] Nach ausdruecklicher Aktivierungsfreigabe am 19.10.2026 ausschliesslich PAJ-App neu gestartet. 562 Tests, 17 Workflowtests und alle acht Browserprofile erfolgreich; diffgebundener Nachweis beim Fortsetzen unveraendert gueltig. Laufender Browserabgleich mit Live bestaetigt fuer 15 sichtbare Bewerbe identische Gruppierung, Datumsanzeigen und Zielseiten ohne Seitenfehler. Bestehender Court-Quellenausfall verursacht weiterhin /ready=503; Dateninitialisierung erfolgreich, Court-Konfiguration und Bestandsdaten unberuehrt.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-5-x` gesetzt.
+
+[4.12.17-paj-1-7] - 2026-10-20
+Commit: 4.12.17-paj-1-7 | Ranglisten-Neueinstieg mit Ranggrenze und Jahresfrist absichern
+
+  Changed
+  - [Rangliste] Neueinsteiger nach erfolgloser Einstiegsforderung dauerhaft auf den bei Forderung gespeicherten Zielrang plus zehn einschraenken. Jede weitere Niederlage setzt Ranggrenze und ein Kalenderjahr Gueltigkeit in Europe/Vienna neu; nach Jahresablauf wieder freie Gegnerwahl unter Beachtung aller sonstigen Regeln. Ist der Zielrang unbesetzt, erfolgt sofortige Einreihung am Ende bei unveraenderter Sperrzeit. Regelwerk Abschnitt 8 entsprechend der Userfreigabe praezisiert.
+  - [PostgreSQL] Migration 8 ergaenzt den gespeicherten Einstiegs-Zielrang am Match sowie Ranggrenze und Ablauf je Ergebnisversion. Nur das aktuelle Ergebnis erzeugt den Status; Berichtigung und Ruecknahme aktualisieren ihn atomar. Keine historischen Zielraenge geraten oder Bestandsdaten nachgetragen. App-Komposition verlangt vor Aktivierung Generation 8.
+  - [Fehlerkorrektur] Neue Ranglisteneintraege mit ihren tatsaechlich erzeugten IDs von der temporaeren Millionen-Rueckverschiebung ausnehmen. Ergebnisruecknahmen finden auch nach einer Spielendeberichtigung die rangwirksame Historie. Bewerbsende im PostgreSQL-Eigenstatus ueber den gemeinsamen Kalender-/Zeitgrenzenvertrag auswerten, sodass eine abgelaufene Einstiegsgrenze keinen beendeten Bewerb freigibt.
+  - [Anzeige und Tests] Eigene Ranglisten-Infos zeigen den ungereihten Status, Mindestzielrang und Zeitpunkt der erneuten freien Gegnerwahl; die Pyramide markiert nur zulaessige Gegner. Pruefungen fuer direkte serverseitige Umgehungsversuche, weitere Niederlagen, Jahresablauf, Neustartprojektion, Einreihung, Korrektur, Ruecknahme und private Eigenprofilprojektion hinzugefuegt. Bestehende Fachtransaktions-, Idempotenz-, Audit- und Abschlusslogvertraege werden weiterverwendet; keine neuen freien Diagnosepayloads.
+  - [Verifikation] 565 Backend-/Integrationstests, 17 Workflowtests und je 26 Smokes in allen acht Browserprofilen erfolgreich. Eigene Einstiegsinfos auch bei abgelaufenem Rueckkehranspruch geprueft; keine Weitergabe der Einschraenkung an fremde Profilaufrufe. Diffgebundener Build-/Browsernachweis vollstaendig.
+  - [PAJ-Aktivierung] Nach ausdruecklicher Userfreigabe am 20.10.2026 ausschliesslich Migration 8 auf epiber_devel angewendet und verifiziert; 324 Matches, 308 Ergebnisse und 73 Ranglisteneintraege unveraendert, historische Einstiegsfelder bleiben leer. Nur epiber-devel.service explizit neu gestartet; der abhaengige Worker wurde dabei ebenfalls neu gestartet (Abweichung von der angekuendigten Beschraenkung), beide laufen erfolgreich mit Generation 8. Acht Tabellenprojektionen auf PAJ validiert, Ranglistenseite mit 55 Boxen ohne Browserfehler und neue Eigeninfo-Oberflaeche ausgeliefert. Kein fachlicher Testwrite im PAJ-Bestand, keine Live-Aktion. Bestehende Court-Quellenstoerung verursacht weiterhin /ready=503 bei erfolgreicher Dateninitialisierung.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-6-x` gesetzt.
+
+[4.12.17-paj-1-8] - 2026-10-20
+Commit: 4.12.17-paj-1-8 | PostgreSQL-Meldungen wie im Bestand formulieren
+
+  Changed
+  - [Meldungen] PostgreSQL-Ergebnisse verwenden wieder die bestehenden namentlichen Gewinner-/Verlierertexte, Gewinnerperspektive, W.O.- und Aufgabeanzeige sowie persoenliche Empfaengertexte. Forderungen nennen beide Personen samt Rang, Termine beide Seiten und Datum; An-/Abmeldungen und Hallenmeldungen enthalten ihren Kontext. Matchendeberichtigung, Forderungsloeschung und Forderungsdatumsberichtigung erzeugen die bisher fehlenden Historien-/Empfaengermeldungen. Allgemeine Meldungen ohne Bewerbsbezug erscheinen wie im Bestand nicht in der Bewerbshistorie; KO-/Gruppenrunden werden aus dem Match projiziert.
+  - [Meldungen] Empfaengertexte werden als validierte Snapshots in der bestehenden PostgreSQL-Struktur gespeichert und bei Idempotenzkonflikten mitgeprueft. Outbox-Schluessel unterscheiden Ereignistypen, damit administrative Hallenentfernung und Nachruecken innerhalb derselben Fachoperation atomar moeglich sind. Berichte erkennen auch PostgreSQL-Ereignistypen; vorhandene Audit-/Abschlusslogs bleiben datensparsam und enthalten keine Meldungsinhalte. Layout und Bedienung, historische Meldungssnapshots und Live bleiben unveraendert; keine Migration oder Dienstaktivierung vorgenommen.
+  - [Prueffund] Die Legacy-Adminwarnung bei fehlendem KO-Folgematch (`ensureMissingKoTargetEvent`) besitzt weiterhin keinen PostgreSQL-Aufruf; als gesonderte offene Paritaetsluecke festgestellt, nicht als Teil der Textkorrektur umgesetzt.
+  - [Tests] Passwortrotations-Testfixture verwendet fuer die exakt 24-stuendige Freigabe denselben Statementzeitpunkt statt zweier mikrosekundenverschiedener Uhrzeitabrufe; keine Aenderung der Passwortlogik.
+  - [Verifikation] Build mit 580 erfolgreichen Backend-/Integrationstests und 17 Workflowtests sowie Drei-Engine-Smokesuite mit je 26 erfolgreichen Tests in Chromium, WebKit und Firefox abgeschlossen. Erfolgreiche Browserprofile einzeln erhalten; Firefox nach Timeout allein im frischen Container wiederholt. Keine Funktionswrites auf PAJ oder Live.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-7-x` gesetzt.
+
+[4.12.17-paj-1-9] - 2026-10-20
+Commit: 4.12.17-paj-1-9 | Dokumentationsuebernahme fuer Main-Abschluss vorbereiten
+
+  Changed
+  - [Dokumentation] Vollstaendige Uebernahmeliste fuer den bestaetigten Main-Abschluss ergaenzt; offene KO-Adminwarnung und getrennte Aktivierungsgates bleiben ausdruecklich erhalten.
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `4.12.17-paj-1-8-x` gesetzt.
 
 [4.12.17] - 2026-10-16
 Commit: 4.12.17 | PostgreSQL-PAJ-Laufzeit und sichere Echtdatenmigration abgeschlossen

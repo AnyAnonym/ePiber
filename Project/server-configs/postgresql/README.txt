@@ -26,6 +26,37 @@ Status:
   Boot keine Warnung oder Fehlermeldung.
 
 
+Migrations- und Aktivierungsgate der Anwendung
+===============================================================================
+
+Die App-Komposition erwartet Schemageneration 8. Vor einer passenden
+Appaktivierung sind `Backend/db/migrations/000007_navigation_actions.sql` und
+`000008_ranking_entry_restrictions.sql` ueber den Migration Runner anzuwenden
+beziehungsweise als bereits erfolgreich ausgefuehrt zu verifizieren. Der
+Ausfuehrungsnachweis liegt je Datenbank in `ops.schema_migrations`; Gitstand
+und versionierter Schema-Snapshot allein belegen keine installierte Migration.
+Migration 8 ergaenzt nur nullable Einstiegsmetadaten, ohne historische Zielraenge
+zu raten. Migrationsanwendung, App-/Workerneustart und Live-Rollout benoetigen
+weiterhin ihre jeweilige ausdrueckliche Freigabe; ein Main-Merge startet nichts.
+
+Kontrollierte Reparatur alter Navigatorimporte (kein Neuimport):
+
+  node Backend/scripts/db-repair-navigation.js --profile <profil> --order <id1,id2,...>
+
+Der Standard ist Dry-run. Der explizite Zusatz `--apply` ist nur nach
+Datenkorrekturfreigabe zulaessig. Das CLI verlangt `PGDATABASE=epiber_devel`,
+Tenant `devel-epiber` und die exakten eindeutigen Quell-IDs des gesamten
+gewaehlten Profils. Fehlende/zusaetzliche IDs oder falscher Profilumfang stoppen
+vor dem Write. Die Verbindung nutzt die vorhandene geschuetzte PostgreSQL-
+Konfiguration; keine Geheimnisse als Chattext oder Befehlsargument uebergeben.
+Nach Migration 7 koennen bekannte, irrtuemlich deaktivierte Platzzuweisungs-
+und Aktivierungsaktionen wiederhergestellt und die angegebene Profilreihenfolge
+atomar gesetzt werden. Andere ungueltige Ziele bleiben gesperrt. Die
+tenantbegrenzte Reparatur besitzt Audit und kontrollierte Abschlusslogs ohne
+Tokens oder Personenpayloads; Monitorgeraete und Tokens werden nicht geaendert.
+Die historischen PAJ-Freigaben und Ausfuehrungen stehen im Main-Changelog;
+daraus folgt keine erneute oder systemuebergreifende Ausfuehrungsfreigabe.
+
 1. Installierte Grundlage
 ================================================================================
 

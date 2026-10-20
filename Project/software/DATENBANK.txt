@@ -1115,6 +1115,34 @@ eng begrenzten Identity-Repositorypfad. Datums-, Wiener Zeitpunkt-,
 Teilnehmermarker- und Ergebnisprojektionen bleiben kompatibel zu den bestehenden
 HTTP-/WebSocket-Vertraegen.
 
+Die Bewerbsgrenzen EntryStart, EntryDeadline, Bewerbsbeginn und Bewerbsende werden
+als `YYYYMMDD` beziehungsweise `YYYYMMDD-HHMM` in Europe/Vienna projiziert.
+Reine Kalendertage bleiben Tage, Zeitpunkte behalten ihre Wiener Zeitgrenze.
+Geschlechtscodes sind kommasepariert, Meldungskanaele lauten `Email|Whatsapp`;
+Geburtsdaten und Matchzeitstempel behalten ihre jeweiligen Bestandsformate.
+Fehlt eine alte Ranglisten-Contract-ID, dient die interne UUID als stabile
+Projektions-ID statt eines leeren Werts.
+
+Die additive Migration `000007_navigation_actions.sql` erweitert
+`venue.navigation_presets.target_type` um `court_assignment` und
+`court_activation`. Bei Zuweisung ist `page_key` exakt `1` oder `2`, bei
+Aktivierung NULL; beide Varianten haben keinen Bewerbs-/Hallenrasterbezug.
+Import und Projektion erhalten Quellreihenfolge, Profil und RoundRobin-Ziele.
+Unbekannte/ungueltige Ziele bleiben gesperrt.
+
+`000008_ranking_entry_restrictions.sql` ergaenzt
+`play.matches.entry_target_rank` (>0) als gespeicherten Einstiegs-Zielrang und
+`play.match_results.entry_minimum_rank` (>10) sowie `entry_expires_at`
+(timestamptz). Die beiden Ergebnisfelder sind nur gemeinsam gesetzt. Die
+Migration fuellt keine historischen Werte auf. Nur das aktuelle verlorene
+Ergebnis der Einstiegsforderung wird als `EinstiegAbRang` und `EinstiegFreiAb`
+(ISO-Zeitpunkt) in `matches1` projiziert. Die Mindestgrenze ist Zielrang plus
+zehn, die Frist ein Wiener Kalenderjahr ab Erstabschluss dieser Forderung;
+Korrekturen behalten ihre Frist, weitere Einstiegsniederlagen beginnen eine
+neue. Korrektur und Ruecknahme aendern den aktuellen Status ohne additive
+Altstatuswirkung. Die private Eigenprojektion und der Write pruefen dieselbe
+Grenze; das Regelwerk steht in `Project/Regelwerk/Spielbetrieb/RANGLISTE.txt`.
+
 Der getrennte Worker verwendet einen eigenen Pool mit hoechstens zwei
 Verbindungen. Jobs und Outbox-Eintraege werden ueber `FOR UPDATE SKIP LOCKED`
 zeitlich geleast. Erfolg, Retry, dauerhafter Fehler und unbekannter externer
@@ -1137,6 +1165,16 @@ Reaktion erlaubt. `messaging.history_revision` bildet den globalen
 Interaktionsstand ab. Kommentare, Moderation, Reaktionen und
 Inboxquittierungen committen gemeinsam mit typisierter Idempotenz und erzeugen
 bei einer Aenderung eine dauerhafte Outbox-Invalidierung.
+
+Auch neu erzeugte PostgreSQL-Meldungen speichern empfaengerspezifischen Betreff
+und Text in den bestehenden `messaging.event_recipients.legacy_subject` und
+`legacy_body`. Diese Spalten sind nicht auf importierte Meldungen beschraenkt.
+Texte sind laengenbegrenzt, muessen zu einem expliziten Empfaenger gehoeren und
+werden beim Idempotenzvergleich einschliesslich Weglassen/Abweichung geprueft.
+Ereignis, Teilnehmer, Empfaenger, Revision und Outbox werden gemeinsam committet.
+Der Outboxschluessel `messaging:<operationId>:<eventType>` erlaubt mehrere
+unterschiedliche Meldungen derselben Fachoperation, etwa Hallenentfernung und
+Nachruecken. Historische Snapshots werden nicht pauschal neu formuliert.
 
 Der PostgreSQL-Auditadapter normalisiert bestehende Aktionsnamen auf feste
 Aktionscodes und akzeptiert ausschliesslich registrierte Projektionsfelder mit

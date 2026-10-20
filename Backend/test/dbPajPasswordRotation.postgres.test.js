@@ -51,7 +51,7 @@ test("PAJ-Passwortrotation ersetzt alle Credentials atomar, widerruft Sitzungen 
   const setup = new Client(cluster.connectionConfig); await setup.connect();
   await setup.query(`
     INSERT INTO identity.password_authorizations(account_id,issued_by_person_id,issued_at,expires_at)
-    SELECT account.id,account.person_id,clock_timestamp(),clock_timestamp()+interval '24 hours'
+    SELECT account.id,account.person_id,statement_timestamp(),statement_timestamp()+interval '24 hours'
       FROM identity.user_accounts account WHERE account.login='ada'
   `);
   await setup.query("INSERT INTO identity.login_rate_limits(key_hash,key_type,window_started_at,attempt_count,expires_at) VALUES ($1,'ip',clock_timestamp(),1,clock_timestamp()+interval '1 hour')", [Buffer.alloc(32, 1)]);
