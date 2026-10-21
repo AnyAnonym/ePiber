@@ -1,8 +1,58 @@
 # ePiber Rollout-Checkliste
 
-Stand: 06.09.2026
+Stand: 21.10.2026
 
 Diese Checkliste ist das verbindliche Gate fuer die aktuelle Reihenfolge **PAJ -> Live**. PK bleibt deaktiviert und wird erst in einem eigenen spaeteren Release aufgenommen. Jede aktive Stufe verwendet exakt denselben bestaetigten Release-Commit und dieselben versionierten Caddy-/systemd-Vorlagen. Abweichungen, offene Pflichtpunkte oder ein Branchsuffix in der Version stoppen die Promotion.
+
+## PostgreSQL-Betrieb und einmaliger Datastore-Cutover
+
+Live und PAJ verwenden PostgreSQL. Die nachfolgenden historischen Sheet-,
+Developer-Metadata- und SQLite-Pflichtpunkte gelten nur fuer Legacybetrieb bzw.
+die entsprechende Migrationsquelle, nicht als Konfiguration der PostgreSQL-App.
+Sie werden fuer einen reinen PostgreSQL-Release als nicht anwendbar begruendet,
+nicht durch kuenstliche Sheet-/SQLite-Writes erfuellt. Die fachlichen,
+Datenschutz-, Transport-, Browser- und Observability-Gates bleiben verbindlich.
+
+- [ ] Ziel ist `epiber_askoe`, Tenant `askoe-piberbach`, im gemeinsamen Cluster
+  `shared-devel`/`postgresql-devel.service`, Socket `/run/postgresql/devel`,
+  Port 5433; Live-/Devel-Approllen sind gegeneinander und gegen Gitea isoliert.
+- [ ] Gemeinsame Volume-/WAL-/Ausfall-/Kapazitaets-/Restore-/PITR-Grenzen und
+  Live-Auswirkung von `development-services-stop` ausdruecklich beruecksichtigt.
+- [ ] Erwartete Schemageneration 8 einschliesslich Migrationen 7 und 8 in
+  `ops.schema_migrations` erfolgreich nachgewiesen; Vorlagendateien genuegen nicht.
+- [ ] App und Worker besitzen getrennte Rollen und systemd-Credentials;
+  Quellcredentials bleiben rootgeschuetzt, keine Werte in Git/Logs/Protokollen.
+- [ ] Vor Datastore-Cutover: Wartung aktiviert, Legacy gestoppt, keine parallelen
+  Sheet-Editoren/Clients; vollstaendiger exklusiver Finalexport als XLSX und
+  Grid-JSON sowie konsistente Backups aller vier SQLite-Dateien mit Integritaet,
+  Manifest, Dateipruefsummen und unveraendertem Quellfingerprint vorhanden.
+- [ ] Importvalidierung, Sechs-Domaenen-Shadow-Read und idempotentes Replay
+  erfolgreich; freigegebene deaktivierte Navigatorziele dokumentiert.
+- [ ] Fehlende globale Frontenddiagnose gegebenenfalls separat mit Start-/
+  Erfolgs-Audit initialisiert: deaktiviert, Level `error`, Sampling 0, keine Ziele.
+- [ ] Interne Read-only-Abnahme mit `epiber-live-readonly.service` und technisch
+  schreibgesperrter Rolle: HTTP-Mutationssperre und SQL-Writeablehnung geprueft.
+- [ ] Erst danach `epiber-live.service` und `epiber-live-worker.service`
+  freigegeben; Ops-/Outbox-/Worker-Smoke separat autorisiert, ohne Fake-Fachdaten
+  erfolgreich und vollstaendig bereinigt; One-shot-Freigabemarker entfernt.
+- [ ] Live-App/Worker bootaktiviert, Legacy und Read-only gestoppt; keine
+  gleichzeitigen Writer. Kein automatischer oder nach Produktivwrites
+  vermeintlich verlustfreier Rueckfall auf den alten Datastore.
+- [ ] Health, Version, WSS v2, Projektionen, interne Pfadsperren, WC und M365
+  geprueft; keine offenen/unklaren Audits oder fehlgeschlagenen/unklaren Jobs/Outbox.
+- [ ] Neu erforderliche Anmeldung und neue Adminfreigabe fuer Passwort-Neueingabe
+  kommuniziert; vorhandene Passwortcredentials/Monitorprovisionierung bewahrt.
+- [ ] Alloy sammelt neue Live-App-/Workerjournale, Prometheus zeigt aktive Dienste
+  und Live/Devel `up=1`; Reporting ist nur lokal mit Bearer erreichbar.
+- [ ] PostgreSQL-Backupkette, Off-site-WAL, Vollrestore und PITR nachgewiesen oder
+  eine konkrete befristete Betreiber-Risikoausnahme fuer diesen Lauf dokumentiert.
+
+Historische Ausnahme: Fuer den Cutover vom 20.10.2026 wurde die funktionale
+Liveaktivierung vor Aufbau der Backup-/WAL-/Restore-/PITR-Kette ausdruecklich
+freigegeben. Diese Kette bleibt offen; lokale Quellsicherungen und WAL-Marker
+sind keine Wiederherstellungszusage. Dies entfernt kein Gate fuer spaetere
+Rollouts. Abnahme und Nachweise stehen im Main-Changelog und im dort benannten
+geschuetzten Finalbackup. Ein Main-Versionsabschluss allein deployt nichts.
 
 ## Freigabeprotokoll
 
@@ -82,7 +132,7 @@ Diese Checkliste ist das verbindliche Gate fuer die aktuelle Reihenfolge **PAJ -
   unveraendert.
 - [ ] `caddy validate --config /etc/caddy/Caddyfile` ist mit Hauptdatei und allen
   installierten Fragmenten erfolgreich.
-- [ ] Die aktiven Units `epiber-piber.service`, `epiber-paj.service` und `epiber-grafana-auth.service` bestehen `systemd-analyze verify`; die installierte PK-Unit bleibt unveraendert.
+- [ ] Die aktiven Units `epiber-live.service`, `epiber-live-worker.service`, `epiber-devel.service`, `epiber-devel-worker.service` und `epiber-grafana-auth.service` bestehen `systemd-analyze verify`; die installierte PK-Unit bleibt unveraendert. Read-only-/Ops-Smoke-Vorlagen werden vor ihrer separaten Aktivierung ebenfalls validiert.
 - [ ] Caddy proxyt nur `/ws`, `/api/*`, `/live`, `/ready`, `/health`, `/version`, `/status` auf die aktiven Backends; `/metrics` und `/api/admin/grafana-auth` bleiben auf allen Origins extern gesperrt. `/internal/*` liefert auf Live, PAJ und PK explizit 404. Nur die zentrale Live-Origin proxyt das separat geschuetzte `/grafana/*` ueber den Grafana-Unix-Socket. Auf PK bleibt ausser den expliziten 404-Sperren interner Pfade das bestehende Anwendungsrouting unveraendert.
 - [ ] Caddy-Roots zeigen exakt auf die jeweiligen `Frontend/`-Verzeichnisse; Backend, `.env`, Credentials und SQLite sind nicht statisch erreichbar.
 - [ ] `https://epiber.at/wc/` und
@@ -139,8 +189,8 @@ Gesamtfreigabe.
 - [ ] Ausschliesslich Grafana sowie die Live- und PAJ-Units lesen dieses Maschinen-Credential. Live und PAJ setzen `MESSAGING_REPORT_DEPLOYMENT=live|paj`; die PK-Unit liest die Datei nicht, setzt keine Reportingkennung und bleibt auch lokal fuer `/internal/messaging-report` deaktiviert.
 - [ ] Externe Aufrufe von `/metrics` an allen drei Origins liefern keine Metriken; `/internal/messaging-report` und ein weiterer `/internal/*`-Pfad liefern auf Live, PAJ und PK jeweils 404. Loki, Prometheus, Alloy, Node Exporter und Auth-Broker lauschen nur auf Loopback, Grafana ausschliesslich auf dem gruppengeschuetzten Unix-Socket.
 - [ ] Prometheus zeigt exakt `live` und `paj` im Job `epiber` dauerhaft `up`; es existiert kein aktives PK-Ziel.
-- [ ] Node Exporter erfasst `epiber-piber.service`, `epiber-paj.service`, `epiber-grafana-auth.service` und `grafana.service` genau einmal auf dem gemeinsamen Host, nicht aber PK.
-- [ ] Alloy liest die Live-/PAJ-Backendjournale, das Auth-Brokerjournal und `/var/log/caddy/epiber-{live,paj}-access.json`; Loki zeigt Ereignisse mit korrektem `deployment`.
+- [ ] Node Exporter erfasst `epiber-live.service`, `epiber-live-worker.service`, `epiber-devel.service`, `epiber-devel-worker.service`, `epiber-grafana-auth.service` und `grafana.service` genau einmal auf dem gemeinsamen Host, nicht aber PK oder deaktivierte Legacydienste.
+- [ ] Alloy liest Live-App und -Worker, Devel-App, Live-Read-only-Abnahme und das historische Live-Legacyjournal, das Auth-Brokerjournal und `/var/log/caddy/epiber-{live,devel}-access.json`; Loki zeigt Ereignisse mit korrektem `deployment=live|devel`. Fuer den Devel-Worker existiert derzeit keine eigene Journalquelle.
 - [ ] Caddy-Access-Logs gehoeren `caddy:grafana-alloy`, haben Modus 0640, das Verzeichnis Modus 2750, rotieren maximal 14 Tage und enthalten keine Querystrings, Header, Cookies, Tokens oder Quelladressen. Alloy ist kein Mitglied der Caddy-Gruppe; nach einer kontrolliert erzwungenen Rotation kann Alloy die neue Datei lesen.
 - [ ] Grafana lauscht nur auf `/run/epiber-observability/grafana.sock` mit `grafana:caddy` und Modus 0660. Caddy stellt nur Grafanas `/metrics` mit explizitem Loopback-Bind auf `127.0.0.1:3001` bereit; `ss` zeigt keinen Wildcard-Listener, andere Pfade und externe Zugriffe werden abgewiesen.
 - [ ] Personen-, Session-, IP-, Request-/Support-, Client- und Geraetewerte sind keine Prometheus- oder Loki-Labels; personenbezogene JSON-Felder werden nur fuer den Betriebszweck verwendet.

@@ -97,7 +97,8 @@ Turnieren, Matches, Live-Scoreboard und Platzsteuerung.
 
 - Frontend: HTML, CSS und Vanilla JavaScript mit ES6-Modulen; kein Framework
 - Backend: Node.js 26 mit HTTP, WebSocket v2 und modularen Services
-- Persistenz: Google Sheets API fuer Fachdaten, SQLite fuer Anwendungsstate
+- Persistenz: PostgreSQL fuer Live und PAJ; Google Sheets und vier SQLite-Dateien
+  nur im expliziten Legacybetrieb
 - Proxy: Caddy fuer HTTPS/WSS, statische Dateien sowie `/ws`, `/api/*`, `/live`,
   `/ready`, `/health`, `/status` und `/version`
 - Prozessmanagement: systemd auf Arch Linux
@@ -132,8 +133,10 @@ Node Exporter, Grafana-Authentifizierung, Dashboards oder Alerts einbezogen.
 
 ## Development-Dienste starten und stoppen
 
-Der gemeinsame PostgreSQL-Development-Cluster, die interne Gitea-Instanz sowie
-die PostgreSQL-basierte PAJ-App und ihr Worker liegen beziehungsweise haengen am
+Der weiterhin `shared-devel` genannte gemeinsame PostgreSQL-Cluster traegt
+`epiber_devel`, die Live-Datenbank `epiber_askoe` und Gitea. Live-App
+`epiber-live.service` und Worker `epiber-live-worker.service`, die interne
+Gitea-Instanz sowie die PostgreSQL-basierte PAJ-App und ihr Worker haengen am
 LUKS-Volume `development-data`. Das Volume wird beim Boot ueber eine lokale
 root-only Schluesseldatei automatisch geoeffnet; PostgreSQL, Gitea,
 M365-Konnektor, App und Worker sind bootaktiviert. `epiber-paj.service` ist als Legacy-Worst-Case-Weg
@@ -152,7 +155,13 @@ und startet danach PostgreSQL, Gitea, den M365-Konnektor, `epiber-devel.service`
 Legacydienst und prueft die lokale PAJ-Readiness. Die Passphrase darf nie im
 Chat, in Git oder als Befehlsargument stehen.
 
-Kontrollierter Stop als root:
+ACHTUNG: Der folgende Gesamtstop beendet auch den gemeinsamen PostgreSQL-Dienst
+und damit dessen abhaengige Live-App und Live-Worker. Er ist eine
+Live-beeintraechtigende Infrastrukturaktion, kein isolierter Development-Stop.
+Das Startskript prueft PAJ, startet aber die Live-Dienste nicht explizit wieder;
+eine Live-Recovery muss separat freigegeben und geprueft werden.
+
+Kontrollierter Stop als root, nur mit ausdruecklicher Live-Ausfallfreigabe:
 
 ```text
 development-services-stop
@@ -169,6 +178,14 @@ Rueckkehr von Legacy zum PostgreSQL-Standard erfolgt wieder mit
 `development-services-start`; das Skript stoppt Legacy kontrolliert. Es gibt
 keinen automatischen Fallback und `systemctl start epiber-paj.service` aktiviert
 den Legacydienst nicht fuer den naechsten Boot.
+
+`epiber-piber.service` ist ebenfalls deaktivierter Legacybestand ohne
+automatischen Fallback. Nach PostgreSQL-Fachwrites ist ein Rueckfall auf die
+eingefrorenen Sheets-/SQLite-Daten nicht verlustfrei. Live und Devel haben
+getrennte Rollen, teilen aber Volume, WAL, Kapazitaet, Neustart-/Ausfall- und
+physische Restore-/PITR-Grenzen. Off-site-Backup, WAL-Archivierung, Restore und
+PITR sind aufgrund der konkreten Cutover-Ausnahme nachgelagert und noch nicht
+nachgewiesen; daraus folgt keine Wiederherstellungszusage.
 
 Details, Fehlerpfade und installierte Pfade stehen in
 `Project/server-configs/postgresql/README.txt` und

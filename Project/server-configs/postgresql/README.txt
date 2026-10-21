@@ -1,13 +1,14 @@
 ================================================================================
-PostgreSQL Development-Cluster - Installation und Betrieb
+Gemeinsamer PostgreSQL-Cluster fuer Live und Development - Installation und Betrieb
 ================================================================================
 
 Status:
 
 - Der gemeinsame PostgreSQL-18-Development-Cluster ist auf dem bestehenden Host
   technisch aufgebaut und erfolgreich gestartet, gestoppt und neu gestartet.
-- Er ist produktneutral und darf getrennte Datenbanken fuer `epiber_devel`,
-  Gitea und eine kleine spezifische Development-Anwendung enthalten.
+- Er enthaelt getrennte Datenbanken fuer `epiber_devel`, Live `epiber_askoe`
+  (Tenant `askoe-piberbach`) und Gitea. Dienst und Clusterkennung behalten ihre
+  historischen Namen `postgresql-devel.service` und `shared-devel`.
 - Der Cluster besitzt noch kein Off-host- oder Off-site-Backup. Gitea und die
   kleine Anwendung duerfen aufgrund einer ausdruecklich akzeptierten
   Risikoausnahme voruebergehend ohne Sicherung betrieben werden. Vollstaendiger
@@ -16,7 +17,8 @@ Status:
   credentialbereinigte Live-Fachdatenkopie darf ohne vorherigen Backup-/Restore-
   Nachweis betrieben werden. Ihr vollstaendiger Verlust ist akzeptiert; Live
   bleibt autoritativ. Die Ausnahme ist keine Wiederherstellungszusage und gilt
-  fuer kein anderes System.
+  fuer kein anderes System. Fuer den Live-Cutover besteht die unten separat
+  dokumentierte ausdrueckliche Risikoausnahme.
 - Der erste vollstaendige Hostneustart mit lokaler LUKS-Schluesseldatei wurde am
   13.10.2026 erfolgreich nachgewiesen: Cryptsetup-Unit und Mount wurden ohne
   Passworteingabe aktiv, danach starteten PostgreSQL, Gitea, M365-Konnektor,
@@ -77,7 +79,9 @@ daraus folgt keine erneute oder systemuebergreifende Ausfuehrungsfreigabe.
 Der Arch-Standarddienst `postgresql.service` ist deaktiviert und inaktiv. Der
 eigene PostgreSQL-Dienst, Gitea, der M365-Konnektor, PAJ-PostgreSQL-App und Worker sind fuer den
 automatischen Bootstart aktiviert und haengen vom automatisch entsperrten Mount
-ab. Der deaktivierte Legacydienst `epiber-paj.service` startet nur noch auf
+ab. Live-App `epiber-live.service` und `epiber-live-worker.service` sind ebenfalls
+bootaktiviert und vom gemeinsamen Cluster/Mount abhaengig. Der deaktivierte
+Legacydienst `epiber-paj.service` startet nur noch auf
 ausdruecklichen manuellen Auftrag.
 
 Der Cluster wurde mit `C.utf8`, UTF-8 und Datenseitenpruefsummen initialisiert.
@@ -202,10 +206,22 @@ verifiziert:
 `verify` anstelle von `apply` prueft Rollenattribute, CONNECT, Schemas, alle
 aktuellen Tabellen und Sequenzen, ohne Rechte zu veraendern.
 
-Jede Anwendung erhaelt spaeter eine eigene Datenbank, Eigentuemer-, Migrations-
+Jede Anwendung erhaelt eine eigene Datenbank, Eigentuemer-, Migrations-
 und Laufzeitrolle. Keine normale Anwendungsrolle erhaelt Zugriff auf eine andere
 Anwendungsdatenbank. DDL erfolgt regulaer ueber den jeweiligen Migration Runner
 und nicht frei aus der DBeaver-Standardverbindung.
+
+Live verwendet `epiber_askoe` mit getrennten `epiber_live_*`-Owner-, Migrator-,
+App-, Read-only-App-, Worker-, Monitor-, Backup- und Refreshrollen. Credentials
+liegen rootgeschuetzt unter `/etc/epiber-live/credentials/` und werden ueber
+systemd LoadCredential eingebunden; die neue Hinterlegung in Keeper ist
+betreiberseitig zu vervollstaendigen. App und Worker verwenden getrennte Rollen.
+Live-App und Devel-App besitzen keinen CONNECT-Zugriff auf die jeweils andere
+Fachdatenbank oder Gitea. Der Socketzugriff nutzt `postgres-devel-client`.
+Es gibt keinen separaten Live-Cluster, Tablespace oder neues Live-Volume.
+Getrennte Datenbanken isolieren nicht Ausfall, Neustart, Kapazitaet, WAL oder
+physische Wiederherstellung/PITR des gemeinsamen Clusters. Daten, WAL und Temp
+liegen gemeinsam unter den oben angegebenen Pfaden.
 
 
 5. Installations- und Driftpruefung
@@ -263,6 +279,16 @@ Das Stoppskript beendet zuerst Worker, App und M365-Konnektor, danach Gitea und 
 schliesst das Volume nur nach erfolgreichem Unmount. Beide Skripte schreiben
 strukturierte Start-/Abschlussereignisse ohne Geheimnisse.
 
+ACHTUNG: Der Gesamtstop betrifft seit dem Live-Cutover auch Live. Durch
+`Requires=postgresql-devel.service` werden die Live-App und ihr Worker beim
+PostgreSQL-Stop beendet. Das bestehende Startskript startet/prueft PAJ, nicht
+explizit Live; PostgreSQL allein wieder zu starten belegt keine Live-Recovery.
+Vor Gesamtstop oder Recovery sind Live-Ausfall und anschliessende Live-App-/
+Workeraktivierung mit Health-/Versionspruefung ausdruecklich freizugeben.
+`epiber-piber.service` bleibt deaktivierter Legacybestand; nach produktiven
+PostgreSQL-Writes ist ein Datastore-Rueckfall nicht verlustfrei und darf nicht
+durch blosses Starten des alten Dienstes erfolgen.
+
 Der manuelle Worst-Case-Rueckfall lautet, solange kein PostgreSQL-Fachwrite einen
 neueren autoritativen Stand erzeugt hat:
 
@@ -293,11 +319,17 @@ Off-site-Sicherung oder Restoretest. Bis zu deren spaeterer Einrichtung gilt:
 - `epiber_devel` darf aufgrund der ausdruecklichen PAJ-Ausnahme eine jederzeit
   aus Live neu erzeugbare, credentialbereinigte Echtdatenkopie enthalten;
 - reale ePiber-Migrationsproben verwenden keinen gemeinsamen Cluster;
-- vor Live, geschaeftskritischer Nutzung oder einer Wiederherstellungszusage
-  bleibt der Backup-/Restore-Nachweis verpflichtend.
+- fuer den Live-Cutover wurde am 20.10.2026 ausdruecklich freigegeben, den
+  funktionalen Produktivbetrieb vor Off-site-Backup, WAL-Archivierung,
+  Vollrestore und PITR aufzunehmen und diese Arbeiten nachzulagern;
+- vor einer Wiederherstellungszusage bleibt deren Nachweis verpflichtend.
 
-Diese Ausnahme ist kein Praezedenzfall fuer Live oder spaetere produktive
-Plattformdienste. Die PAJ-Kopie bleibt personenbezogen und ist trotz ersetzter
+Die konkrete Live-Ausnahme ist kein Praezedenzfall fuer spaetere Rollouts oder
+produktive Plattformdienste. Es besteht insbesondere fuer die neuen
+Live-Produktivwrites keine zugesicherte Wiederherstellung. Die lokalen
+Spreadsheet-/SQLite-Quellsicherungen auf demselben LUKS-Volume ersetzen keine
+PostgreSQL-Sicherungskette. Der Cutover-Restore-Point ist nur ein WAL-Marker,
+ohne gesichertes WAL kein Recovery-Nachweis. Die PAJ-Kopie bleibt personenbezogen und ist trotz ersetzter
 Zugangsdaten entsprechend zu schuetzen.
 
 

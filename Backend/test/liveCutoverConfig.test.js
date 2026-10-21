@@ -8,7 +8,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "../../Project/server-configs");
 const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
 
-test("Live-PostgreSQL bleibt von Development getrennt und bis Phase 7B ohne Aktivierung", () => {
+test("Unbenutzte separate Live-Cluster-Vorlagen bleiben als Alternative erhalten", () => {
   const config = read("postgresql/postgresql-live.conf");
   const unit = read("systemd/postgresql-live.service");
   const hba = read("postgresql/pg_hba-live.conf");
@@ -28,7 +28,14 @@ test("Live-Appmodi trennen Read-only, Read-write und Worker fail-closed", () => 
   const readWrite = read("systemd/epiber-live.service");
   const worker = read("systemd/epiber-live-worker.service");
   for (const unit of [readOnly, readWrite, worker]) {
-    assert.match(unit, /PGHOST=\/run\/postgresql\/epiber-live/);
+    assert.match(unit, /PGHOST=\/run\/postgresql\/devel/);
+    assert.match(unit, /PGPORT=5433/);
+    assert.match(unit, /Requires=postgresql-devel\.service/);
+    assert.match(unit, /RequiresMountsFor=\/var\/lib\/development-data/);
+    assert.match(unit, /SupplementaryGroups=postgres-devel-client/);
+    assert.match(unit, /StandardOutput=journal/);
+    assert.match(unit, /LogRateLimitBurst=1000/);
+    assert.doesNotMatch(unit, /postgresql-live\.service|PGPORT=5432|postgres-live-client/);
     assert.match(unit, /PGDATABASE=epiber_askoe/);
     assert.match(unit, /EPIBER_TENANT_CODE=askoe-piberbach/);
   }
@@ -39,6 +46,9 @@ test("Live-Appmodi trennen Read-only, Read-write und Worker fail-closed", () => 
   assert.match(readWrite, /PGUSER=epiber_live_app/);
   assert.match(worker, /PGUSER=epiber_live_worker/);
   assert.match(worker, /Conflicts=epiber-live-readonly\.service/);
+  assert.match(readWrite, /LISTEN_HOST=127\.0\.0\.1/);
+  assert.doesNotMatch(readWrite, /^IPAddressDeny=any$/m);
+  assert.match(worker, /RestrictAddressFamilies=AF_UNIX$/m);
 });
 
 test("Live-Moduswechsel und Ops-Smoke bleiben aktionsbezogen gegated", () => {
@@ -49,7 +59,8 @@ test("Live-Moduswechsel und Ops-Smoke bleiben aktionsbezogen gegated", () => {
   assert.match(controller, /live_mode_change_completed/);
   assert.match(controller, /CADDY_ACTIVATION_FAILED/);
   assert.match(smoke, /ConditionPathExists=\/etc\/epiber-live\/ops-smoke-approved/);
-  assert.match(smoke, /Requires=postgresql-live\.service epiber-live\.service epiber-live-worker\.service/);
+  assert.match(smoke, /Requires=postgresql-devel\.service epiber-live\.service epiber-live-worker\.service/);
+  assert.match(smoke, /PGHOST=\/run\/postgresql\/devel PGPORT=5433 PGDATABASE=epiber_askoe/);
   assert.match(smoke, /EPIBER_DB_SMOKE_CLEANUP_ROLE=epiber_live_owner/);
   assert.match(smoke, /scripts\/db-ops-smoke\.js/);
 });

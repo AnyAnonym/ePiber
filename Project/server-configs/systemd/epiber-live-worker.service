@@ -1,17 +1,22 @@
 [Unit]
 Description=ePiber PostgreSQL live worker
-After=postgresql-live.service epiber-live.service
-Requires=postgresql-live.service
+After=postgresql-devel.service epiber-live.service
+Requires=postgresql-devel.service
 Conflicts=epiber-live-readonly.service
+RequiresMountsFor=/var/lib/development-data
 
 [Service]
 Type=simple
 User=piber
-SupplementaryGroups=postgres-live-client
+SupplementaryGroups=postgres-devel-client
 WorkingDirectory=/srv/http/ePiber/piber/Backend
 SyslogIdentifier=epiber-live-worker
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
 LoadCredential=database:/etc/epiber-live/credentials/postgres-worker-password
-ExecStart=/usr/bin/env NODE_ENV=production TZ=UTC INSTANCE_ID=live-worker PUBLIC_ORIGIN=https://epiber.at EPIBER_TENANT_CODE=askoe-piberbach PGHOST=/run/postgresql/epiber-live PGPORT=5432 PGDATABASE=epiber_askoe PGUSER=epiber_live_worker EPIBER_DB_PASSWORD_FILE=%d/database /usr/bin/node worker.js
+ExecStart=/usr/bin/env NODE_ENV=production TZ=UTC INSTANCE_ID=live-worker PUBLIC_ORIGIN=https://epiber.at EPIBER_TENANT_CODE=askoe-piberbach PGHOST=/run/postgresql/devel PGPORT=5433 PGDATABASE=epiber_askoe PGUSER=epiber_live_worker EPIBER_DB_PASSWORD_FILE=%d/database /usr/bin/node worker.js
 Restart=always
 RestartSec=5
 TimeoutStopSec=95

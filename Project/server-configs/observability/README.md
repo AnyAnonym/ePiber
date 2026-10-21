@@ -8,7 +8,8 @@ aktives Observability-Deployment. Alle internen Netzwerklistener binden ausschli
 ## Topologie
 
 ```text
-epiber-{piber,paj}.service --journald-----+
+epiber-live{,-worker}.service --journald--+
+epiber-devel.service --journald----------+
 Caddy-Access-Logs ------------------------+--> Alloy --> Loki ----+
 Backend /metrics ----------------------------> Prometheus --------+--> Grafana
 Node Exporter ----------------------------------------------------+
@@ -81,9 +82,14 @@ ein Rueckfall auf Grafanas synthetische Testdaten ist nicht zulaessig.
 
 Alloy sammelt ausschliesslich:
 
-- die Journale von `epiber-piber.service` und `epiber-paj.service`;
+- das historische Legacyjournal von `epiber-piber.service` sowie das
+  PostgreSQL-Appjournal von `epiber-devel.service`;
+- die Live-Journalquellen `live_postgres` fuer `epiber-live.service`,
+  `live_worker` fuer `epiber-live-worker.service` und `live_readonly` fuer
+  `epiber-live-readonly.service`; Deployment ist jeweils `live`, Service
+  `epiber-backend` beziehungsweise `epiber-worker`, ohne neue private Labels;
 - das Journal von `epiber-grafana-auth.service`;
-- `/var/log/caddy/epiber-{live,paj}-access.json`.
+- `/var/log/caddy/epiber-{live,devel}-access.json`.
 
 Caddy entfernt Querystrings, Header und Quelladressen. Personen-ID, Klarname,
 E-Mail, IP, Support-/Request-ID, Session-, Client- und Geraetewerte bleiben
@@ -92,8 +98,16 @@ und Frontenddiagnose bleiben maximal 14 Tage, gezielte Frontenddiagnose 7 Tage.
 Prometheus verwendet 30 Tage und maximal 5 GiB; die tatsaechliche Reichweite ist
 bei Erreichen der Groessenbegrenzung kuerzer.
 
-Score- und Auditfachhistorien bleiben ausschliesslich in ihren ePiber-SQLite-
-Dateien System of Record. Grafana speichert Benutzer, Dashboards und 30 Tage
+Die aktuelle PostgreSQL-Topologie verwendet `deployment=live|devel` und die
+Access-Logs `epiber-{live,devel}-access.json`. Historische PAJ-Bezeichnungen
+`paj` in den folgenden Legacybeschreibungen sind keine aktuelle Alloyquelle.
+Der Devel-Worker wird als systemd-Dienst ueberwacht, besitzt aber derzeit keine
+eigene Alloy-Journalquelle; die neue Worker-Logquelle betrifft Live.
+
+Score-, Audit- und Messagingfachhistorien haben im PostgreSQL-Betrieb ihre
+jeweilige Anwendungsdatenbank als System of Record; die unten genannten
+SQLite-Dateien gelten nur im Legacybetrieb. Retention und erlaubte
+Diagnoseprojektionen bleiben unveraendert. Grafana speichert Benutzer, Dashboards und 30 Tage
 Alarmzustandshistorie getrennt in `/var/lib/grafana/grafana.db` mit WAL.
 Messaging-Ereignisse, persoenliche Projektionen, Zustellungen und Quittierungen
 bleiben ausschliesslich in `messaging.sqlite`; Journal und Prometheus enthalten
@@ -129,8 +143,13 @@ anderen Normalisierungsfeldern nur der Feldname. Kontakt-, Adress-, Geburts-,
 Geschlechts-, sonstige Vorher-/Nachher- und freie Fachdaten werden dort nicht
 dargestellt.
 
-Das Hostressourcen-Dashboard formatiert CPU, RAM, freien Speicher, Inodes und
-Netzwerkdurchsatz mit passenden dynamischen Einheiten und zeigt die aktuellen
+Das Hostressourcen-Dashboard ueberwacht zusammen mit Node Exporter die aktiven
+Dienste `epiber-live.service`,
+`epiber-live-worker.service`, `epiber-devel.service`,
+`epiber-devel-worker.service`, `epiber-grafana-auth.service` und `grafana.service`;
+der deaktivierte Live-Legacydienst ist kein aktives Dienstziel mehr. Es formatiert
+CPU, RAM, freien Speicher, Inodes und Netzwerkdurchsatz mit passenden dynamischen
+Einheiten und zeigt die aktuellen
 Werte zusaetzlich in den Tabellenlegenden. Verfuegbarer RAM und freier
 Dateisystemspeicher werden bereits in den Prometheus-Abfragen in GiB umgerechnet
 und in Achsen sowie Legenden eindeutig mit dieser Einheit dargestellt. Die CPU-

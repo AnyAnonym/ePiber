@@ -17,7 +17,7 @@ SERVER-DOKU.txt             | Dieser Verzeichnisindex
 SERVER-SETUP.txt            | Installation, Topologie, Betrieb und Diagnose
 BACKUP-RESTORE-KONZEPT.md   | Zielkonzept fuer Sicherung, Restore und Disaster
                             | Recovery; kein Nachweis bereits aktiver Backups
-postgresql/README.txt       | Installierter gemeinsamer Development-Cluster,
+postgresql/README.txt       | Gemeinsamer Live-/Development-Cluster,
                             | LUKS-/Swap-, Rollen-, DBeaver- und Betriebsvertrag
 postgresql/*.conf           | Geheimnisfreie installierbare PostgreSQL-Vorlagen
 gitea/README.txt            | Interne, nur ueber SSH-Tunnel erreichbare
@@ -33,13 +33,17 @@ caddy/README.txt            | Vertrag fuer den gemeinsam genutzten Caddy und
 caddy/conf.d/               | Vollstaendige zusaetzliche Sites, derzeit M365
 caddy/epiber-live-routes/   | Pfadrouten vor dem Live-Frontend-Fallback, derzeit WC
 systemd/                    | Vorlagen fuer /etc/systemd/system/
-  epiber-piber.service      | Live, User piber, Backend 127.0.0.1:8080
+  epiber-live.service       | Live PostgreSQL-App, Backend 127.0.0.1:8080
+  epiber-live-worker.service | Live PostgreSQL-Worker ohne HTTP-Listener
+  epiber-live-readonly.service | Interne schreibgesperrte Abnahme, regulaer gestoppt
+  epiber-live-ops-smoke.service | Separat freizugebender technischer One-shot
+  epiber-piber.service      | Live-Legacy, deaktiviert, kein automatischer Fallback
   epiber-paj.service        | PAJ-Legacy, deaktivierter manueller Worst-Case-Weg
   epiber-devel.service      | PAJ PostgreSQL-App, User paj, Backend 127.0.0.1:8083
   epiber-devel-worker.      | PAJ PostgreSQL-Worker ohne HTTP-Listener
     service                 |
   epiber-pk.service         | PK, User pk, Backend 127.0.0.1:8084
-  postgresql-devel.service  | Gemeinsamer Development-Cluster, Loopback 5433
+  postgresql-devel.service  | Gemeinsamer Live-/Devel-/Gitea-Cluster, Loopback 5433
   gitea-devel.service       | Interne Gitea-Instanz, Loopback 3002
   m365-connector-           | Mountabhaengigkeits-Drop-in fuer den auf dem
     development-data.conf   | Development-Volume persistierenden Fremddienst
@@ -66,10 +70,32 @@ Live   | https://epiber.at         | 127.0.0.1:8080    | wss://epiber.at/ws
 PAJ    | https://epiber.at:8081    | 127.0.0.1:8083    | wss://epiber.at:8081/ws
 PK     | https://epiber.at:8082    | 127.0.0.1:8084    | wss://epiber.at:8082/ws
 
-Der gemeinsame PostgreSQL-Development-Cluster lauscht zusaetzlich nur auf
+Der gemeinsame PostgreSQL-Cluster `shared-devel` lauscht zusaetzlich nur auf
 `127.0.0.1:5433` und dem gruppengeschuetzten Unix-Socket
 `/run/postgresql/devel`. DBeaver erreicht ihn ausschliesslich ueber einen
 persoenlichen SSH-Tunnel. Der Arch-Standarddienst bleibt deaktiviert.
+
+Live verwendet `epiber_askoe`, Tenant `askoe-piberbach`, mit eigenen
+`epiber_live_*`-Rollen und root-/systemd-geschuetzten Credentials unter
+`/etc/epiber-live/`. Live-App/Worker laufen aus
+`/srv/http/ePiber/piber/Backend/`, das Frontend bleibt im dortigen `Frontend/`.
+Die getrennten Datenbanken teilen LUKS-Volume, Daten/WAL/Temp, Ausfall,
+Kapazitaet und physische Restore-/PITR-Grenzen. Der Gesamtstop
+`development-services-stop` ist deshalb Live-beeintraechtigend; das bestehende
+Startskript prueft nicht automatisch die Live-Recovery. Nach neuen
+PostgreSQL-Writes ist ein Legacy-Datastore-Rueckfall nicht verlustfrei.
+
+Cutover-Nachweis vom 20.10.2026 (nicht aus Vorlagen abgeleitet): Finalexport,
+Schema 8, Importvalidierung, Sechs-Domaenen-Shadow-Read und Replay erfolgreich;
+Diagnoseinitialisierung separat auditiert. Read-only-HTTP-/SQL-Schreibsperre,
+technischer Ops-/Worker-Smoke mit Bereinigung, externe HTTPS-/WSS-Probes und
+Chromium-/Firefox-/WebKit-Lesesmokes bestanden. App/Worker bootaktiviert,
+Legacy gestoppt/deaktiviert; PostgreSQL und PAJ wurden dafuer nicht neu gestartet.
+Geschuetzter Bericht, Dateiinventar und gepruefte SHA-256-Summen liegen unter
+`/var/lib/development-data/live-migration-backups/live-final-20261020T150703891Z/`;
+die unabhaengige erste Sicherung liegt im benachbarten
+`live-preflight-20261020T143802936Z/`. Off-site-/WAL-/Restore-/PITR-Aufbau wurde
+fuer diesen Cutover ausdruecklich nachgelagert und ist nicht nachgewiesen.
 
 PAJ verwendet im Normalbetrieb `epiber-devel.service` und
 `epiber-devel-worker.service` gegen `epiber_devel`. Das LUKS-Volume wird beim

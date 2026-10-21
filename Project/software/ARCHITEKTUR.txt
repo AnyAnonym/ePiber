@@ -1289,6 +1289,8 @@ werden Login, Erstvergabe, Sessionbindung/-widerruf, Profilprojektionen,
 Normalisierung und Mitgliederabgleich in PAJ abgenommen. Waehrend des ersten
 kontrollierten Imports bleiben manuelle und weitere Backend-Personenwrites
 gesperrt; Live-Deployment folgt erst nach Backup- und Rollbackfreigabe.
+Die konkrete Ausnahme fuer den PostgreSQL-Live-Cutover ist in Abschnitt 11
+beschrieben; sie ist keine allgemeine Aufhebung dieser Freigaben.
 
 
 ================================================================================
@@ -1300,6 +1302,20 @@ Serverlaufzeit sind implementiert. `server.js` waehlt beim Start genau einen
 Persistenzmodus. `PERSISTENCE_MODE=legacy` verwendet weiterhin Google Sheets und
 die vier SQLite-Dateien; `PERSISTENCE_MODE=postgres` komponiert ausschliesslich
 PostgreSQL-Repositories und besitzt keinen Rueckfall auf Legacy-Persistenz.
+
+Live und PAJ verwenden PostgreSQL im gemeinsamen Cluster `shared-devel`
+(`postgresql-devel.service`, `/run/postgresql/devel`, Port 5433): Live nutzt
+`epiber_askoe`/Tenant `askoe-piberbach`, PAJ `epiber_devel`. Live-App und Worker
+laufen getrennt als `epiber-live.service` und `epiber-live-worker.service` aus
+`/srv/http/ePiber/piber/Backend/`; Caddy liefert dessen Frontend-Verzeichnis aus.
+Live besitzt eigene `epiber_live_*`-Rollen und systemd-Credentials. Die normalen
+Live-/Devel-Approllen koennen weder die andere Fachdatenbank noch Gitea verbinden.
+Das LUKS-Volume `development-data` sowie Daten/WAL/Temp unter
+`/var/lib/development-data/postgresql/18/` bleiben gemeinsam: Wartung, Ausfall,
+Kapazitaet und physischer Restore/PITR sind nicht datenbankweise isoliert.
+Insbesondere ist `development-services-stop` nun Live-beeintraechtigend.
+Legacy ist deaktiviert, kein automatischer Fallback; nach PostgreSQL-Fachwrites
+ist die Rueckkehr zum eingefrorenen Sheets-/SQLite-Bestand nicht verlustfrei.
 
 Der vorbereitete Zielstand umfasst:
 
@@ -1435,8 +1451,13 @@ Backup, Restore und PITR sind bewusst als letzter technischer Freigabeblock nach
 PostgreSQL-Anwendungsumbau, synthetischer Gesamtintegration, Browser- und
 Betriebstests sowie geschuetzter kurzlebiger Realanalyse eingeordnet. Bis dahin
 sind ePiber-Development-Bestaende reproduzierbar und verwerfbar; es besteht keine
-Wiederherstellungszusage. Vor dauerhaftem Realbestand und Live bleiben
-pgBackRest, Off-site-WAL, Vollrestore und PITR zwingend.
+Wiederherstellungszusage. Grundsaetzlich bleiben vor dauerhaftem Realbestand und
+Live pgBackRest, Off-site-WAL, Vollrestore und PITR zwingend. Fuer den konkreten
+Live-Cutover vom 20.10.2026 wurde ausdruecklich die abweichende Reihenfolge
+freigegeben: zuerst funktionaler Livebetrieb, danach Aufbau und Nachweis dieser
+Sicherungskette. Diese Arbeiten sind weiterhin offen. Lokale Quellsicherungen
+und ein WAL-Restore-Point ersetzen weder Backup noch Restore-/PITR-Nachweis und
+begruenden keine Wiederherstellungszusage oder allgemeine Gateaufhebung.
 
 
 ================================================================================
