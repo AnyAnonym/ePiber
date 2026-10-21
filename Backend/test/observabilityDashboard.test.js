@@ -87,7 +87,7 @@ test("Ranglistenaktivitaeten trennen Forderungen von nicht angelegten Versuchen"
 test("Hostressourcen zeigen aktuelle Werte mit passenden Einheiten", () => {
   const dashboard = JSON.parse(fs.readFileSync(resourcesDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-resources");
-  assert.equal(dashboard.version, 7);
+  assert.equal(dashboard.version, 8);
 
   const expectedUnits = new Map([
     ["CPU-Auslastung", "percent"],
@@ -123,6 +123,27 @@ test("Hostressourcen zeigen aktuelle Werte mit passenden Einheiten", () => {
   assert.equal(storage.targets[0].expr, 'node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs"} / 1024^3');
   const services = dashboard.panels.find(({ title }) => title === "ePiber-Dienstzustand");
   assert.equal(services.fieldConfig.defaults.mappings[0].options["1"].text, "Aktiv");
+  assert.match(services.targets[0].expr, /live\|live-worker\|devel\|devel-worker/);
+  assert.doesNotMatch(services.targets[0].expr, /piber\|/);
+});
+
+test("Live-PostgreSQL-App und Worker werden ohne neue private Labels gesammelt", () => {
+  const alloy = fs.readFileSync(path.join(observabilityRoot, "alloy/config.alloy"), "utf8");
+  for (const [component, unit, service] of [
+    ["live_postgres", "epiber-live.service", "epiber-backend"],
+    ["live_worker", "epiber-live-worker.service", "epiber-worker"],
+    ["live_readonly", "epiber-live-readonly.service", "epiber-backend"],
+  ]) {
+    const section = alloy.match(new RegExp(`loki\\.source\\.journal "${component}" \\{([\\s\\S]*?)\\n\\}`));
+    assert.ok(section, component);
+    assert.ok(section[1].includes(`_SYSTEMD_UNIT=${unit}`));
+    assert.match(section[1], /deployment = "live"/);
+    assert.ok(section[1].includes(`service    = "${service}"`));
+    assert.doesNotMatch(section[1], /(?:person|session|token|password|email|source_ip)\s*=/i);
+  }
+  const exporter = fs.readFileSync(path.join(observabilityRoot, "node-exporter/node-exporter.env"), "utf8");
+  assert.match(exporter, /live\|live-worker\|devel\|devel-worker/);
+  assert.doesNotMatch(exporter, /piber\|/);
 });
 
 test("Grafana blendet die experimentellen Panelansichtsregler aus", () => {

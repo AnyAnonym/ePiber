@@ -33,6 +33,39 @@ loki.source.journal "live" {
 	}
 }
 
+loki.source.journal "live_postgres" {
+	forward_to    = [loki.process.epiber.receiver]
+	relabel_rules = loki.relabel.epiber_journal.rules
+	matches       = "_SYSTEMD_UNIT=epiber-live.service"
+	max_age       = "24h"
+	labels        = {
+		deployment = "live",
+		service    = "epiber-backend",
+	}
+}
+
+loki.source.journal "live_worker" {
+	forward_to    = [loki.process.epiber.receiver]
+	relabel_rules = loki.relabel.epiber_journal.rules
+	matches       = "_SYSTEMD_UNIT=epiber-live-worker.service"
+	max_age       = "24h"
+	labels        = {
+		deployment = "live",
+		service    = "epiber-worker",
+	}
+}
+
+loki.source.journal "live_readonly" {
+	forward_to    = [loki.process.epiber.receiver]
+	relabel_rules = loki.relabel.epiber_journal.rules
+	matches       = "_SYSTEMD_UNIT=epiber-live-readonly.service"
+	max_age       = "24h"
+	labels        = {
+		deployment = "live",
+		service    = "epiber-backend",
+	}
+}
+
 loki.source.journal "grafana_auth" {
 	forward_to    = [loki.process.epiber.receiver]
 	relabel_rules = loki.relabel.epiber_journal.rules
