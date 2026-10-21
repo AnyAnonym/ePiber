@@ -42,6 +42,9 @@ async function formatDomainMessage(values, context) {
       }); break;
     case "ranking.withdrawn":
       formatted = await formatter.ensureRankingWithdrawalEvent({ ...common, participantId: values.actorPersonId, participantName: context.participantNames[values.actorPersonId] }); break;
+    case "ko_progression_required":
+      formatter.activeAdministrators = () => context.administrators;
+      formatted = await formatter.ensureMissingKoTargetEvent(common); break;
     default: return values;
   }
   return { ...values, summary: formatted.event.summary, detail: formatted.event.detail || null,

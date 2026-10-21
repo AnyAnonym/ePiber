@@ -576,10 +576,15 @@ Providerwerte ausgeben. Im Verlauf der Untersuchung wurde dadurch der Wert von
 `POE_API_KEY` in lokalen Tool- und Sitzungslogs sichtbar. Der konkrete
 Schluesselwert wird in dieser Dokumentation bewusst nicht wiedergegeben.
 
-Erforderliche Restarbeit:
+Betreiberbestaetigung vom 21.10.2026: Der seinerzeit in Diagnoseausgaben sichtbar
+gewordene API-Schluessel ist nicht mehr gueltig. Der offene Handlungsbedarf zur
+Ungueltigmachung ist damit erledigt. Daraus folgt keine Bestaetigung einer
+Bereinigung historischer Diagnose- oder Sitzungslogs.
 
-- `POE_API_KEY` rotieren,
-- alten Schluessel beim Provider widerrufen,
+Historische Massnahmenliste (Schluessel-Ungueltigmachung inzwischen erledigt):
+
+- `POE_API_KEY` rotieren beziehungsweise alten Schluessel ungueltig machen
+  (laut Betreiber erledigt; alter Schluessel nicht mehr gueltig),
 - neuen Wert nur ueber die Umgebung bereitstellen,
 - lokale Diagnose- und Toollogs als geheimnishaltig behandeln,
 - vor Weitergabe von Logs API-Keys, Authorization-Header, Prompts und Payloads
@@ -596,7 +601,7 @@ nicht durch einen im Repository gespeicherten Klartextschluessel.
 - Soll der automatische Runner nach Bereinigung und Generalisierung als
   wiederverwendbares OpenCode-Diagnosewerkzeug ausserhalb dieses
   projektspezifischen Repositorys erhalten bleiben?
-- Soll nach Rotation des Poe-Schluessels eine kontrollierte Bereinigung lokaler
+- Soll nach bestaetigter Ungueltigkeit des alten Poe-Schluessels eine kontrollierte Bereinigung lokaler
   Diagnoseausgaben erfolgen?
 - Soll ein separater semantischer Langkontexttest mit eindeutigen Fakten und
   spaeteren Recall-Fragen aufgebaut werden? Der bisherige Test misst nur die

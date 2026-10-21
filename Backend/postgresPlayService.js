@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const { AppError } = require("./errors.js");
 const dataStore = require("./dataStore.js");
 const { analyzeMatchRules, matchCompletionFingerprint, parseMatchDate } = require("./matchRules.js");
-const { validateCompletion } = require("./matchResultRules.js");
+const { validateCompletion, koRoundSuccessor } = require("./matchResultRules.js");
 const { headerIndex, headerOf } = require("./tableUtils.js");
 const { requestHash } = require("./postgresCompetitionService.js");
 const { personFingerprint, projectPeopleNormalization } = require("./peopleNormalization.js");
@@ -12,7 +12,7 @@ const { projectPeopleReconciliation } = require("./memberReconciliation.js");
 const { Temporal } = require("@js-temporal/polyfill");
 const { rankingEntryRestriction } = require("./rankingEntryRestriction");
 const { competitionLifecycle } = require("./competitionLifecycle");
-const { createDomainMessage } = require("./postgresDomainMessages");
+const { createDomainMessage, formatDomainMessage } = require("./postgresDomainMessages");
 const { legacyInstant } = require("./postgresProjectionService");
 
 function hasRole(principal, role) { return principal?.role === role || principal?.roles?.includes?.(role); }
@@ -184,8 +184,8 @@ class PostgresPlayService {
   }
 
   async lockMatch(transaction, matchId) {
-    const result = await transaction.query(`SELECT match.id,match.contract_id,match.competition_id,match.match_format_version_id,match.current_result_id,match.scheduled_at,match.challenged_at,match.revision,
-      competition.contract_id AS competition_contract_id,type.contract_id AS competition_type_id,type_version.bracket_size,
+    const result = await transaction.query(`SELECT match.id,match.contract_id,match.round_code,competition.name AS competition_name,match.competition_id,match.match_format_version_id,match.current_result_id,match.scheduled_at,match.challenged_at,match.revision,
+      competition.contract_id AS competition_contract_id,type.contract_id AS competition_type_id,type_version.bracket_size,type_version.round_robin,
        result.first_captured_at,result.play_started_at,result.play_ended_at,result.winner_side_no,match.entry_target_rank,result.entry_expires_at
       FROM play.matches match JOIN play.competitions competition ON competition.id=match.competition_id JOIN core.sections section ON section.id=competition.section_id
       JOIN play.competition_type_versions type_version ON type_version.id=competition.competition_type_version_id JOIN play.competition_types type ON type.id=type_version.competition_type_id
@@ -294,11 +294,39 @@ class PostgresPlayService {
     await transaction.query("UPDATE play.ranking_entries SET rank=rank-1000000 WHERE competition_id=$1::uuid AND status='active' AND NOT (person_id=ANY($2::uuid[]))", [competitionId, ids]);
   }
 
+  async missingKoTargetMessage(transaction, principal, params, match) {
+    const raster = Number(match.bracket_size);
+    if (match.competition_type_id === "2" || match.round_robin || !Number.isInteger(raster) || raster < 2 || (raster & (raster - 1)) !== 0) return false;
+    const successor = koRoundSuccessor(match.round_code, raster);
+    if (!successor) return false;
+    const result = await transaction.query(`SELECT person.contract_id AS id,concat_ws(' ',person.first_name,person.last_name) AS name
+      FROM identity.people person WHERE person.tenant_id=$1::uuid AND person.active
+      AND EXISTS (SELECT 1 FROM identity.tenant_role_assignments role WHERE role.person_id=person.id
+        AND role.tenant_id=person.tenant_id AND role.role_code='admin' AND role.revoked_at IS NULL)
+      ORDER BY person.contract_id`, [this.play.context.tenantId]);
+    if (!result.rowCount) {
+      this.log("warn", "ko_progression_admin_notification_skipped", { matchId: params.matchId, expectedRoundCode: successor.roundCode, reason: "NO_ACTIVE_ADMINISTRATORS" });
+      return true;
+    }
+    const recipients = result.rows.map(person => person.id);
+    const values = {
+      contractId: eventId(params.operationId, "ko-target-missing"), eventType: "ko_progression_required", operationId: params.operationId,
+      templateParameters: { matchId: params.matchId, expectedRoundCode: successor.roundCode },
+      matchId: params.matchId, participants: recipients.map(personId => ({ personId, role: "administrator" })), recipients,
+      sourceType: "system", sourceId: params.matchId, actorPersonId: String(principal.id), actorName: principal.name || null,
+    };
+    const formatted = await formatDomainMessage(values, { administrators: result.rows, competitionName: match.competition_name,
+      roundCode: match.round_code, expectedRoundCode: successor.roundCode });
+    // Keep this administrator-only event out of the public competition history.
+    await this.messaging.createEvent({ ...formatted, matchId: null }, transaction);
+    return true;
+  }
+
   async resultOperation(principal, params, { admin = false, correction = false } = {}) {
     if (admin && !hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
-    const current = this.cachedFingerprint(params.matchId); if (current.fingerprint !== params.expectedFingerprint) throw new AppError("RESULT_CONFLICT", "Matchergebnis wurde geändert", 409, { currentFingerprint: current.fingerprint });
     const command = correction ? "match.result.correct" : "match.result.set";
     return this.execute(principal, params.operationId, command, { matchId: params.matchId, kind: params.kind, result: params.result || "none", losingSide: params.losingSide || 0, fingerprint: params.expectedFingerprint, reason: params.reason || "none" }, async (transaction) => {
+      const current = this.cachedFingerprint(params.matchId); if (current.fingerprint !== params.expectedFingerprint) throw new AppError("RESULT_CONFLICT", "Matchergebnis wurde geändert", 409, { currentFingerprint: current.fingerprint });
       const match = await this.lockMatch(transaction, params.matchId), people = await this.participants(transaction, match.id); this.assertParticipant(principal, people);
       let effectiveCorrection = correction;
       if (match.current_result_id && !correction) {
@@ -349,6 +377,7 @@ class PostgresPlayService {
         await transaction.query(`UPDATE play.match_participants participant SET participant_type='person',person_id=$3::uuid FROM play.match_sides side
           WHERE participant.side_id=side.id AND side.match_id=$1::uuid AND side.side_no=$2 AND participant.position_no=1`, [progression.rows[0].target_match_id, progression.rows[0].target_side_no, winner.internal_person_id]);
       }
+      const missingKoTarget = !progression.rowCount && await this.missingKoTargetMessage(transaction, principal, params, match);
       const recipientIds = people.map(({ person_id }) => person_id).filter(Boolean);
       await createDomainMessage(this.messaging, {
         contractId: eventId(params.operationId, effectiveCorrection ? "result-corrected" : "result-set"), eventType: effectiveCorrection ? "match.result.corrected" : "match.result.set", operationId: params.operationId,
@@ -358,7 +387,8 @@ class PostgresPlayService {
         actorPersonId: String(principal.id), actorName: principal.name || null, summary: effectiveCorrection ? "Matchergebnis wurde korrigiert." : "Matchergebnis wurde eingetragen.", result: completion.result || completion.kind,
         messageContext: { winnerSide: completion.winnerSide, completionType: completion.kind, result: completion.result, matchEnd: ended ? legacyInstant(ended) : "", reason: admin ? params.reason : "" },
       }, transaction);
-      return { success: true, matchId: params.matchId, result: completion.result, completionType: completion.kind };
+      return { success: true, matchId: params.matchId, result: completion.result, completionType: completion.kind,
+        ...(missingKoTarget ? { warningCode: "KO_TARGET_MISSING" } : {}) };
     });
   }
   setMatchResult(principal, params) { return this.resultOperation(principal, params); }

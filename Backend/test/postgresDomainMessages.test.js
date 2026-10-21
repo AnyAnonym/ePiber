@@ -13,6 +13,16 @@ const context = {
   participantNames: { 1: "Anna Eins", 2: "Berta Zwei", 3: "Clara Drei", 4: "Dora Vier" }, roundCode: "HF",
 };
 
+test("KO-Adminwarnung verwendet etablierten Text und ausschliesslich Adminempfaenger", async () => {
+  const message = await formatDomainMessage({ ...values, eventType: "ko_progression_required" }, {
+    ...context, roundCode: "VF-P1", expectedRoundCode: "HF-P1", administrators: [{ id: "9", name: "Admin Neun" }],
+  });
+  assert.equal(message.summary, "KO-Fortschreibung erforderlich: Clubmeisterschaft");
+  assert.deepEqual(message.recipientMessages.map(person => person.personId), ["9"]);
+  assert.match(message.recipientMessages[0].body, /Ergebnis.*gespeichert.*Folgematch.*fehlt/);
+  assert.match(message.recipientMessages[0].body, /Gewinnerseite übernehmen/);
+});
+
 for (const eventType of ["match.result.set", "match.result.corrected"]) {
   for (const completionType of ["regular", "retirement", "walkover"]) {
     test(`${eventType}: ${completionType} nennt beide Teams und wahrt Gewinner-/Empfaengerperspektive`, async () => {

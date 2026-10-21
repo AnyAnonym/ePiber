@@ -48,8 +48,8 @@ const IDEMPOTENCY_CONTRACTS = Object.freeze({
   "match.appointment.admin_set": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
   "match.appointment.clear": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
   "match.appointment.admin_clear": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
-  "match.result.set": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status" }),
-  "match.result.correct": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status" }),
+  "match.result.set": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status", warningCode: "controlled" }),
+  "match.result.correct": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status", warningCode: "controlled" }),
   "match.end.set": Object.freeze({ success: "boolean", matchId: "id", matchEnd: "controlled" }),
   "match.result.clear": Object.freeze({ success: "boolean", matchId: "id", cleared: "boolean" }),
   "match.challenge.delete": Object.freeze({ success: "boolean", matchId: "id", deleted: "boolean" }),
@@ -62,6 +62,7 @@ const IDEMPOTENCY_CONTRACTS = Object.freeze({
 });
 
 const MESSAGE_EVENT_CONTRACTS = Object.freeze({
+  "ko_progression_required": Object.freeze({ templateKey: "ko_progression_required", templateVersion: 1, parameters: Object.freeze({ matchId: "id", expectedRoundCode: "id" }) }),
   "competition.entry.created": Object.freeze({
     templateKey: "competition.entry.created",
     templateVersion: 1,

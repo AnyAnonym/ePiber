@@ -1107,6 +1107,96 @@ test("Operations-Repository bindet Idempotenz an Akteur, Requesthash und kontrol
   await assert.rejects(repositories.ops.beginIdempotency({ operationId, actorPersonId: "1", command: "identity.profile.update", requestHash: Buffer.alloc(32, 8) }), (error) => error.code === "IDEMPOTENCY_CONFLICT" && error.status === 409);
 });
 
+test("PostgreSQL-KO-Adminwarnung ist privat, atomar, idempotent und auf fehlende Folgematches begrenzt", { timeout: 30_000 }, async (t) => {
+  const { MESSAGE_EVENT_CONTRACTS } = require("../postgresRuntimeContracts");
+  const { randomUUID } = require("node:crypto");
+  const { repositories, events } = await preparedRuntime(t, { messageEventContracts: MESSAGE_EVENT_CONTRACTS });
+  const db = repositories.play.database, tenantId = repositories.play.context.tenantId;
+  await db.query(`INSERT INTO identity.tenant_role_assignments(tenant_id,person_id,role_code)
+    SELECT tenant_id,id,'admin' FROM identity.people WHERE tenant_id=$1::uuid AND contract_id IN ('3','4','5')`, [tenantId]);
+  await db.query(`UPDATE identity.tenant_role_assignments SET revoked_at=clock_timestamp()
+    WHERE person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='5') AND role_code='admin'`, [tenantId]);
+  await db.query(`UPDATE play.match_participants SET participant_type='person',person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='1')
+    WHERE match_id=(SELECT id FROM play.matches WHERE contract_id='ko-open') AND position_no=1
+    AND side_id=(SELECT id FROM play.match_sides WHERE match_id=(SELECT id FROM play.matches WHERE contract_id='ko-open') AND side_no=1)`, [tenantId]);
+  const loader = new PostgresProjectionLoader({ projectionService: new PostgresProjectionService(repositories), dataStore });
+  await loader.initialLoad();
+  const logs = [];
+  const service = new PostgresPlayService({ ...repositories, projectionLoader: loader, log: (level, event, fields) => logs.push({ level, event, fields }) });
+  const admin = { type: "user", id: "1", name: "Ada Admin", role: "admin" };
+  const player = { type: "user", id: "2", name: "Olivia Operator", role: "player" };
+  const params = () => ({ operationId: randomUUID(), matchId: "ko-open", kind: "walkover", losingSide: 2, expectedFingerprint: service.cachedFingerprint("ko-open").fingerprint });
+  const warnings = async () => (await db.query("SELECT * FROM messaging.events WHERE event_type='ko_progression_required'")).rows;
+  const clear = async () => service.adminClearMatchResult(admin, { operationId: randomUUID(), matchId: "ko-open", reason: "Test Ruecknahme", expectedFingerprint: service.cachedFingerprint("ko-open").fingerprint });
+
+  // A final never expects a successor.
+  assert.equal((await service.setMatchResult(player, params())).warningCode, undefined);
+  assert.equal((await warnings()).length, 0);
+  await clear();
+  await db.query("UPDATE play.matches SET round_code='HF-P1' WHERE contract_id='ko-open'");
+  await loader.refresh("missing-ko-test");
+  const missing = params();
+  const saved = await service.setMatchResult(player, missing);
+  assert.equal(saved.warningCode, "KO_TARGET_MISSING");
+  const repeated = await service.setMatchResult(player, missing);
+  assert.equal(repeated.repeated, true);
+  assert.equal(repeated.warningCode, "KO_TARGET_MISSING");
+  assert.equal((await warnings()).length, 1);
+  const notice = (await repositories.messaging.inbox("1", { limit: 100 })).find(row => row.eventType === "ko_progression_required");
+  assert.ok(notice);
+  assert.equal(notice.competitionId, null);
+  assert.equal(notice.readAt, null); // also unread if the administrator is the actor
+  assert.equal(notice.acknowledgedAt, null);
+  assert.match(notice.legacySubject, /KO-Fortschreibung erforderlich/);
+  assert.match(notice.legacyBody, /Finale.*fehlt/);
+  assert.equal((await repositories.messaging.inbox("2", { limit: 100 })).some(row => row.eventType === "ko_progression_required"), false);
+  assert.equal((await repositories.messaging.inbox("3", { limit: 100 })).some(row => row.eventType === "ko_progression_required"), true);
+  for (const id of ["4", "5"]) assert.equal((await repositories.messaging.inbox(id, { limit: 100 })).some(row => row.eventType === "ko_progression_required"), false);
+  assert.equal((await warnings())[0].match_id, null);
+  await service.setMatchResult(admin, params()); // correction creates one further notice
+  assert.equal((await warnings()).length, 2);
+  await clear();
+  assert.equal((await warnings()).length, 2);
+
+  // A message failure rolls back the result, history and idempotency together.
+  const createEvent = repositories.messaging.createEvent.bind(repositories.messaging);
+  repositories.messaging.createEvent = async (values, transaction) => {
+    if (values.eventType === "ko_progression_required") throw Object.assign(new Error("Test failure"), { code: "MESSAGE_TEST_FAILURE" });
+    return createEvent(values, transaction);
+  };
+  const failed = params();
+  await assert.rejects(service.setMatchResult(player, failed), { code: "MESSAGE_TEST_FAILURE" });
+  assert.equal((await db.query("SELECT current_result_id FROM play.matches WHERE contract_id='ko-open'")).rows[0].current_result_id, null);
+  assert.equal((await db.query("SELECT count(*)::int AS count FROM play.match_result_history WHERE operation_id=$1::uuid", [failed.operationId])).rows[0].count, 0);
+  repositories.messaging.createEvent = createEvent;
+  assert.equal((await service.setMatchResult(player, failed)).warningCode, "KO_TARGET_MISSING");
+  await clear();
+
+  // Inactive or revoked administrators must not receive new notices.
+  await db.query("UPDATE identity.people SET active=false WHERE tenant_id=$1::uuid AND contract_id IN ('1','3')", [tenantId]);
+  const before = (await warnings()).length;
+  assert.equal((await service.setMatchResult(player, params())).warningCode, "KO_TARGET_MISSING");
+  assert.equal((await warnings()).length, before);
+  assert.ok(logs.some(row => row.event === "ko_progression_admin_notification_skipped" && row.fields.reason === "NO_ACTIVE_ADMINISTRATORS"));
+  assert.ok(events.some(row => row.event === "postgres_messaging_event_completed" && row.fields.eventType === "ko_progression_required" && row.fields.result === "success"));
+  assert.equal(JSON.stringify(logs).includes("Ada Admin"), false);
+  await clear();
+  await db.query("UPDATE identity.people SET active=true WHERE tenant_id=$1::uuid AND contract_id IN ('1','3')", [tenantId]);
+  await db.query(`UPDATE play.match_participants SET participant_type='person',person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='3')
+    WHERE match_id=(SELECT id FROM play.matches WHERE contract_id='ko-bye') AND participant_type='bye'`, [tenantId]);
+  await loader.refresh("linked-ko-test");
+  const linked = await service.setMatchResult(admin, { ...params(), matchId: "ko-bye", expectedFingerprint: service.cachedFingerprint("ko-bye").fingerprint });
+  assert.equal(linked.warningCode, undefined);
+  assert.equal((await warnings()).length, before);
+  const target = await service.participants(db, (await db.query("SELECT id FROM play.matches WHERE contract_id='ko-open'")).rows[0].id);
+  assert.equal(target.find(person => person.side_no === 1).person_id, "1");
+  for (const match of [
+    { competition_type_id: "2", bracket_size: 4, round_code: "HF-P1" },
+    { competition_type_id: "rr", bracket_size: 4, round_robin: true, round_code: "G1" },
+    { competition_type_id: "ko", bracket_size: null, round_code: "HF-P1" },
+  ]) assert.equal(await service.missingKoTargetMessage(null, admin, {}, match), false);
+});
+
 test("PostgreSQL-Neueinstieg persistiert Ranggrenze, Folgeversuche, Jahresfrist und reversible Einreihung", { timeout: 30_000 }, async (t) => {
   const { MESSAGE_EVENT_CONTRACTS } = require("../postgresRuntimeContracts");
   const { repositories } = await preparedRuntime(t, { messageEventContracts: MESSAGE_EVENT_CONTRACTS });

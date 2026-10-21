@@ -6,3 +6,23 @@ Commit: 5.0.0-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.0.0-paj-1-1` gesetzt.
+
+[5.0.0-paj-1-2] - 2026-10-21
+Commit: 5.0.0-paj-1-2 | PostgreSQL-Adminwarnung bei fehlendem KO-Folgematch ergaenzen
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.0.0-paj-1-1-x` gesetzt.
+  - [Sicherheit/Dokumentation] Betreiberbestaetigung vom 21.10.2026 im Kontexttest festgehalten: Der damals exponierte Provider-API-Schluessel ist nicht mehr gueltig; Ungueltigmachung erledigt. Keine Aussage ueber Bereinigung historischer Diagnose-/Sitzungslogs.
+
+  Fixed
+  - [PostgreSQL/KO] Fehlende KO-Nachfolgerverknuepfung erzeugt beim Ergebniswrite beziehungsweise bei Korrektur eine private, ungelesene und quittierbare `ko_progression_required`-Inboxmeldung fuer alle aktiven, nicht widerrufenen Administratoren. Etablierter Legacytext nennt Bewerb, Match, Ausgangs- und erwartete Folgerunde sowie die erforderliche manuelle Rasterergaenzung/Gewinneruebernahme. Kein automatisches Anlegen oder Reparieren des Rasters.
+  - [Konsistenz] Meldung, Ergebnis und Idempotenz werden in derselben PostgreSQL-Transaktion persistiert; Meldungsfehler rollen den Ergebniswrite zurueck. Replay liefert das gespeicherte Ergebnis samt `warningCode: KO_TARGET_MISSING`, ohne erneute Meldung. Fingerprintpruefung erfolgt erst nach dem Idempotenzabgleich; echte neue Writes bleiben konfliktgeschuetzt.
+  - [Abgrenzung] Finals, Ranglisten, RoundRobin und Bewerbe ohne gueltige KO-Rastergroesse erzeugen keine Warnung. Vorhandene Fortschreibungen bleiben unveraendert. Ohne aktive Admins bleibt das Ergebnis erfolgreich und liefert den Warncode; kontrolliertes Warnlog mit Match-ID, erwarteter Runde und `NO_ACTIVE_ADMINISTRATORS` statt Personen-/Payloaddaten.
+  - [Datenschutz/Observability] Warnereignis bleibt ohne Bewerbs-/Matchrelation ausserhalb der Bewerbshistorie; Matchreferenz nur in kontrollierten Templateparametern und Source-ID. Bestehende Meldungs-/Transaktionsabschlusslogs und Ergebnis-Auditvertraege bleiben wirksam; keine Browserdiagnose, neue Browser-API oder Layout-/Navigationsaenderung. Keine Migration, Dienststeuerung oder Liveaktivierung.
+  - [Tests] Gezielte PostgreSQL-Regression und Formatierung erfolgreich: private Empfaengerprojektion, mehrere aktive Admins, Ausschluss inaktiver/widerrufener Admins und Operatoren, ungelesener Admin-Eigenwrite, Korrektur, Replay, Ruecknahme, Fehlerrollback und Retry sowie Finale/Ranking/RoundRobin/normaler KO-Nachfolger.
+  - [Verifikation] Diffgebundener Gesamtbuild erfolgreich: statische Pruefungen, 583 Backendtests und 17 Workflowtests ohne Fehler, Abbruch oder Skip. Erster Gesamtversuch vorzeitig beendet (Server-Integration mit offenem Promise, anschliessend Toolzeitlimit); unveraenderte Server-Integration separat und Gesamtbuild mit erhoehtem Zeitlimit danach erfolgreich. Zusaetzlicher Drei-Engine-Smoke mit Chromium, WebKit und Firefox erfolgreich, je 26 Tests in frischem Container, ohne Fehler oder Skip; keine Touch-/Responsive-/Navigationsaenderung und deshalb keine zusaetzlichen Mobilprofile. Linux-Engine-Naeherungen, keine nativen Windows-/Apple-Hardwaretests.
+
+Dokumentationsuebernahme beim Main-Versionssprung
+  - Project/software/ENDPOINTS.txt: Bestehenden Vertrag fuer fehlendes KO-Folgematch ausdruecklich auch fuer PostgreSQL bestaetigen: Ergebnis/Korrektur und private Adminwarnung atomar, Replay ohne Duplikat, `KO_TARGET_MISSING` auch ohne aktive Admins; bei Meldungsfehler kein erfolgreicher Ergebniscommit. Finals und RoundRobin/Ranglisten ausgeschlossen, keine automatische Rasterreparatur.
+  - Project/software/ARCHITEKTUR.txt: PostgreSQL-Pfad in postgresPlayService.js/missingKoTargetMessage und Formatierung in postgresDomainMessages.js ergaenzen. `ko_progression_required` als registrierten Templatevertrag mit `matchId`/`expectedRoundCode` beschreiben; aktive tenantlokale Adminrollen innerhalb derselben Transaktion bestimmen. Private Warnung ohne Bewerbs-/Matchrelation, keine oeffentliche Historie, unbekannter Commit-Ausgang nach bestehendem Transaktions-/Auditvertrag; keine neuen Browserdiagnosen oder Infrastrukturaktionen.
+  - Project/2do/OPENCODE-GPT-5.6-SOL-KONTEXTTEST.md: Betreiberbestaetigung bereits direkt eingearbeitet; alte Schluessel-Ungueltigmachung nicht erneut als offene Aufgabe behandeln. Historische Logs bleiben getrennt zu bewerten.
