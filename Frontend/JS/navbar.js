@@ -356,7 +356,16 @@ async function updateHallTimeNavigation(user) {
   }
 }
 
+let lastMessageRevision = null;
+function messageRevision(value) {
+  if (Number.isSafeInteger(value) && value >= 0) return String(value);
+  return typeof value === "string" && /^\d{1,20}$/.test(value) ? value.replace(/^0+(?=\d)/, "") : null;
+}
 function setMessageCount(rawCount, revision = null) {
+  const nextRevision = messageRevision(revision);
+  if (nextRevision !== null && lastMessageRevision !== null
+    && (nextRevision.length < lastMessageRevision.length || (nextRevision.length === lastMessageRevision.length && nextRevision < lastMessageRevision))) return false;
+  if (nextRevision !== null) lastMessageRevision = nextRevision;
   const count = Math.max(0, Number(rawCount) || 0);
   const hamburgerButton = document.getElementById("hamburgerBtn");
   hamburgerButton?.classList.toggle("has-unread-messages", count > 0);
@@ -372,6 +381,7 @@ function setMessageCount(rawCount, revision = null) {
   window.dispatchEvent(new CustomEvent("epiber-message-summary", {
     detail: { unreadCount: count, revision },
   }));
+  return true;
 }
 
 async function refreshMessageSummary(identity = messageIdentity) {
@@ -395,12 +405,21 @@ function updateMessageSubscription(user) {
   stopMessageSubscription?.();
   stopMessageSubscription = null;
   messageIdentity = identity;
+  lastMessageRevision = null;
   summaryGeneration += 1;
   if (!identity) {
     setMessageCount(0);
     return;
   }
-  stopMessageSubscription = subscribe(`messages:${identity}`, () => refreshMessageSummary(identity));
+  stopMessageSubscription = subscribe(`messages:${identity}`, (data) => {
+    if (identity !== messageIdentity) return;
+    if (Number.isSafeInteger(data?.unreadCount) && data.unreadCount >= 0 && messageRevision(data?.revision) !== null) {
+      // Ignore stale events without cancelling a potentially newer pending snapshot.
+      if (setMessageCount(data.unreadCount, data.revision)) summaryGeneration += 1;
+    } else {
+      refreshMessageSummary(identity);
+    }
+  });
   refreshMessageSummary(identity);
 }
 

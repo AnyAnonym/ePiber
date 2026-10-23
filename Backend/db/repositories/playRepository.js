@@ -73,7 +73,7 @@ class PlayRepository {
     return result.rows;
   }
 
-  async entries(competitionId, { includeWithdrawn = false } = {}) {
+  async entries(competitionId, { includeWithdrawn = false, all = false } = {}) {
     const result = await this.database.query(`
       SELECT e.id::text AS "internalId", e.contract_id AS id, c.contract_id AS "competitionId",
              p.contract_id AS "personId", e.entered_at AS "enteredAt", e.status,
@@ -82,13 +82,13 @@ class PlayRepository {
         JOIN play.competitions c ON c.id=e.competition_id
         JOIN core.sections s ON s.id=c.section_id
         JOIN identity.people p ON p.id=e.person_id
-       WHERE s.tenant_id=$1::uuid AND c.contract_id=$2 AND ($3::boolean OR e.status='active')
+       WHERE s.tenant_id=$1::uuid AND ($2::text IS NULL OR c.contract_id=$2) AND ($3::boolean OR e.status='active')
        ORDER BY e.entered_at, e.contract_id
-    `, [this.context.tenantId, publicId(competitionId, "competition_id"), Boolean(includeWithdrawn)]);
+    `, [this.context.tenantId, all ? null : publicId(competitionId, "competition_id"), Boolean(includeWithdrawn)]);
     return result.rows;
   }
 
-  async matches(competitionId) {
+  async matches(competitionId, { all = false } = {}) {
     const result = await this.database.query(`
       SELECT m.id::text AS "internalId", m.contract_id AS id, c.contract_id AS "competitionId",
              m.round_code AS "roundCode", m.challenged_at AS "challengedAt", m.scheduled_at AS "scheduledAt",
@@ -129,13 +129,13 @@ class PlayRepository {
             FROM play.match_result_sets set_row
            WHERE set_row.result_id=m.current_result_id
         ) sets ON true
-       WHERE section.tenant_id=$1::uuid AND c.contract_id=$2
+       WHERE section.tenant_id=$1::uuid AND ($2::text IS NULL OR c.contract_id=$2)
        ORDER BY m.scheduled_at NULLS LAST, m.contract_id
-    `, [this.context.tenantId, publicId(competitionId, "competition_id")]);
+    `, [this.context.tenantId, all ? null : publicId(competitionId, "competition_id")]);
     return result.rows;
   }
 
-  async rankings(competitionId) {
+  async rankings(competitionId, { all = false } = {}) {
     const result = await this.database.query(`
       SELECT r.id::text AS "internalId", r.contract_id AS id, c.contract_id AS "competitionId",
              p.contract_id AS "personId", r.status, r.rank, r.last_active_rank AS "lastActiveRank",
@@ -144,9 +144,9 @@ class PlayRepository {
         JOIN play.competitions c ON c.id=r.competition_id
         JOIN core.sections s ON s.id=c.section_id
         JOIN identity.people p ON p.id=r.person_id
-       WHERE s.tenant_id=$1::uuid AND c.contract_id=$2
+       WHERE s.tenant_id=$1::uuid AND ($2::text IS NULL OR c.contract_id=$2)
        ORDER BY r.rank NULLS LAST, r.last_active_rank NULLS LAST, p.contract_id::numeric
-    `, [this.context.tenantId, publicId(competitionId, "competition_id")]);
+    `, [this.context.tenantId, all ? null : publicId(competitionId, "competition_id")]);
     return result.rows;
   }
 

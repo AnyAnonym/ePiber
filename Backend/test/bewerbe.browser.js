@@ -160,9 +160,10 @@ export function createEndpoint(name) {
     }
     if (name === "bewerbe") {
       window.__bewerbeCalls.push({ ...params });
-      if (window.__projectionTables) return { data: { success: true, values: window.__projectionTables.bewerbe } };
+      const bewerbsartValues = [["ID", "EntryListAvailable", "Bezeichnung", "RoundRobin"], ["2", "0", "Rangliste", "0"], ["3", "0", "KO", "0"]];
+      if (window.__projectionTables) return { data: { success: true, values: window.__projectionTables.bewerbe, bewerbsartValues: window.__projectionTables.bewerbsart } };
       if (new URLSearchParams(location.search).get("finishedSorting") === "1") {
-        return { data: { success: true, values: [
+        return { data: { success: true, bewerbsartValues, values: [
           ["ID", "BewerbsartID", "Bezeichnung", "EntryStart", "EntryDeadline", "Bewerbsbeginn", "Bewerbsende", "SortOrder"],
           ["10", "3", "Priorität 1, älter", "", "", "20220101", "20230101", "1"],
           ["11", "3", "Priorität 2, älter", "", "", "20220101", "20240101", "2"],
@@ -171,13 +172,13 @@ export function createEndpoint(name) {
         ] } };
       }
       if (new URLSearchParams(location.search).get("slowVisibilityRefresh") === "1" && window.__bewerbeCalls.length > 1) {
-        return new Promise((resolve) => setTimeout(() => resolve({ data: { success: true, values: [
+        return new Promise((resolve) => setTimeout(() => resolve({ data: { success: true, bewerbsartValues, values: [
           ["ID", "BewerbsartID", "Bezeichnung", "EntryStart", "EntryDeadline", "Bewerbsbeginn", "Bewerbsende", "SortOrder"],
           ["2", "2", "Rangliste <img src=x onerror=alert(1)>", "", "", "20250101", "", "1"],
           ["3", "3", "Sommercup", "", "", "20250101", "", "2"],
         ] } }), 500));
       }
-      return { data: { success: true, values: [
+      return { data: { success: true, bewerbsartValues, values: [
         ["ID", "BewerbsartID", "Bezeichnung", "EntryStart", "EntryDeadline", "Bewerbsbeginn", "Bewerbsende", "SortOrder"],
         ["2", "2", "Rangliste <img src=x onerror=alert(1)>", "", "", "20250101", "", "1"],
         ["3", "3", "Sommercup", "", "", "20250101", "", "2"],

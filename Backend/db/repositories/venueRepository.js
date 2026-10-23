@@ -282,6 +282,19 @@ class VenueRepository {
     return values;
   }
 
+  async hallTimeGridSummaries(personId, gridId = null) {
+    const result = await this.database.query(`
+      SELECT grid.contract_id AS id,grid.name,grid.active,grid.public_join_enabled AS "publicJoinable",
+             CASE grid.mode WHEN 'reservation' THEN 'fair_use' ELSE 'equal' END AS mode,grid.revision::text,
+             EXISTS(SELECT 1 FROM venue.hall_time_grid_participants member JOIN identity.people p ON p.id=member.person_id
+                     WHERE member.grid_id=grid.id AND member.left_at IS NULL AND p.contract_id=$2 AND p.tenant_id=$1::uuid) AS joined
+        FROM venue.hall_time_grids grid JOIN core.sections section ON section.id=grid.section_id
+       WHERE section.tenant_id=$1::uuid AND ($3::text IS NULL OR grid.contract_id=$3)
+       ORDER BY lower(grid.name),grid.contract_id
+    `, [this.context.tenantId, String(personId || ""), gridId === null ? null : publicId(gridId, "grid_id")]);
+    return result.rows.map((row) => ({ ...row, revision: Number(row.revision) }));
+  }
+
   async monitorByToken(token) {
     const value = String(token || "");
     if (value.length < 32 || value.length > 256) return null;

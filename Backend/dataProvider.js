@@ -1966,12 +1966,21 @@ async function sendSubscriptionSnapshot(info, topic) {
 }
 
 async function handleRequest(info, message, supportId) {
+  if (info.inflight >= WS_MAX_INFLIGHT) throw new AppError("TOO_MANY_REQUESTS", "Zu viele parallele Requests", 429);
+  info.inflight++;
+  try {
+    return await executeRequest(info, message, supportId);
+  } finally {
+    info.inflight--;
+  }
+}
+
+async function executeRequest(info, message, supportId) {
   const historyInteractionStartedAt = Date.now();
   if (shuttingDown) throw new AppError("SHUTTING_DOWN", "Server wird beendet", 503);
   const endpoint = endpoints[message.endpoint];
   if (!endpoint || !Object.hasOwn(endpoints, message.endpoint)) throw new AppError("ENDPOINT_NOT_FOUND", "Unbekannter Endpoint", 404);
   if (endpoint.write && dependencies.writeMode === "read_only") throw new AppError("READ_ONLY_MODE", "Schreiboperationen sind waehrend der Abnahme gesperrt", 503);
-  if (info.inflight >= WS_MAX_INFLIGHT) throw new AppError("TOO_MANY_REQUESTS", "Zu viele parallele Requests", 429);
   const connectionAuthContext = await refreshPrincipal(info);
   let authContext = connectionAuthContext;
   if (endpoint.sessionAccessOnDevice && connectionAuthContext.principal?.type === "device" && info.sessionToken) {
@@ -2007,7 +2016,6 @@ async function handleRequest(info, message, supportId) {
   if (endpoint.write && endpoint.audit !== false) {
     await writeAudit({ eventId: supportId, principal: authContext.principal, endpoint: message.endpoint, params, outcome: "started" });
   }
-  info.inflight++;
   let actionCompleted = false;
   try {
     const rawData = await endpoint.handler(params, { ...authContext, info });
@@ -2055,8 +2063,6 @@ async function handleRequest(info, message, supportId) {
     }
     logPreferenceCompletion(message.endpoint, authContext.principal, params, {}, responseError);
     throw responseError;
-  } finally {
-    info.inflight--;
   }
 }
 

@@ -243,11 +243,11 @@ class PostgresAuthService {
   async people() { return this.repository.people(); }
   async findById(id) { return this.repository.personByContractId(id); }
   async publicPlayersTable() {
-    const people = await this.people();
+    const people = await this.repository.publicPlayers();
     return [["ID", "Vorname", "Nachname", "Aktiv"], ...people.map((person) => [person.id, person.firstName || "", person.lastName, person.active ? "1" : "0"])];
   }
   async memberDirectoryTable() {
-    const people = (await this.people()).filter((person) => person.active);
+    const people = await this.repository.memberDirectory();
     return [["ID", "Vorname", "Nachname", "TelefonMobil", "E-Mail", "GeburtsDatum", "Aktiv"], ...people.map((person) => [person.id, person.firstName || "", person.lastName, person.phone || "", person.email || "", person.birthDate || "", "1"])];
   }
   async memberProfile(id, { includeAdminFields = false } = {}) {

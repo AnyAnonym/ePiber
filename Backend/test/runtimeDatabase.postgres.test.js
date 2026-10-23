@@ -127,6 +127,27 @@ test("Play-Repository liest typisierte Bewerbs-, Match- und Ranglistenprojektion
   const groupMatches = await repositories.play.matches("rr-1");
   assert.deepEqual(groupMatches.map(({ completionType }) => completionType).sort(), ["retirement", "walkover"]);
   assert.equal((await repositories.play.rankings("2")).length, 3);
+  for (const method of ["entries", "matches", "rankings"]) {
+    const expected = (await Promise.all(competitions.map(({ id }) => repositories.play[method](id)))).flat();
+    const bulk = await repositories.play[method](null, { all: true });
+    const ordered = (rows) => rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    assert.deepEqual(ordered(bulk), ordered(expected), method);
+    await assert.rejects(repositories.play[method](null));
+  }
+});
+
+test("Schmale Personen- und Hallenlisten wahren bestehende Ausgabe und Zugriffsrechte", { timeout: 30_000 }, async (t) => {
+  const { repositories } = await preparedRuntime(t);
+  const people = await repositories.identity.people();
+  assert.deepEqual(await repositories.identity.publicPlayers(), people.map(({ id, firstName, lastName, active }) => ({ id, firstName, lastName, active })));
+  assert.deepEqual(await repositories.identity.memberDirectory(), people.filter(({ active }) => active).map(({ id, firstName, lastName, birthDate, email, phone }) => ({ id, firstName, lastName, birthDate, email, phone })));
+  const grids = await repositories.venue.hallTimeGridsDetailed();
+  for (const personId of ["1", "3", "missing"]) {
+    const summaries = await repositories.venue.hallTimeGridSummaries(personId);
+    assert.deepEqual(summaries, grids.map(({ id, name, active, publicJoinable, mode, revision, participants }) => ({ id, name, active, publicJoinable, mode, revision, joined: participants.some(({ id }) => id === personId) })));
+    assert.deepEqual(await repositories.venue.hallTimeGridSummaries(personId, "hall-seed"), summaries.filter(({ id }) => id === "hall-seed"));
+  }
+  assert.deepEqual(await repositories.venue.hallTimeGridSummaries("1", "missing"), []);
 });
 
 test("PostgreSQL-Projektionsservice erzeugt alle acht bestehenden Tabellenvertraege ohne Credentialprojektion", { timeout: 30_000 }, async (t) => {

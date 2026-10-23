@@ -200,6 +200,7 @@ async function loadEntries() {
     const playerValues = playerRes.data?.values || [];
     const rlValues = rlRes.data?.values || [];
     const bewerbeValues = bewerbeRes.data?.values || [];
+    await loadBewerbsName(bewerbeRes);
 
     // Geschlecht des aktuellen Bewerbs ermitteln
     let bewerbGeschlecht = "";
@@ -397,13 +398,12 @@ async function handleEntrySubmit(btn) {
   btn.textContent = "Eintragen";
 }
 
-async function loadBewerbsName() {
+async function loadBewerbsName(res) {
   const heading = document.getElementById("entryListHeading");
   if (!BEWERB_ID) return;
 
   if (heading) heading.textContent = "Entrylist für";
 
-  const res = await callWithRetry(readBewerbe);
   if (!res.data?.success) {
     throw new Error(errorMessage(res.data, "Bewerb konnte nicht geladen werden."));
   }
@@ -529,10 +529,8 @@ subscribeAuth(() => {
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     await ready;
-    await loadBewerbsName();
     await loadEntries();
     subscribeInvalidations(["entryList", "players", "bewerbe", "ranking"], async () => {
-      await loadBewerbsName();
       await loadEntries();
     });
     signalMonitorReady();

@@ -7,6 +7,7 @@ const fullTests = [
   "test/navbar.browser.js",
   "test/matches1.browser.js",
   "test/bewerbe.browser.js",
+  "test/bewerbsRaster.browser.js",
   "test/scoreboardRecentMatches.browser.js",
   "test/hallzeiten.browser.js",
   "test/navigator.browser.js",
@@ -63,7 +64,7 @@ for (const [profileName, profile] of selectedProfiles) {
     "--test",
     "--test-concurrency=1",
     "--test-name-pattern",
-    suite === "lifecycle" ? testPattern : `${testPattern}|^(Ranglisten-Einstiegsgrenze|Servicebereich|Normalisierungsseite|Profilbewerbe werden)`,
+    suite === "lifecycle" ? testPattern : `${testPattern}|^(KO-Doppelnamen|Ranglisten-Einstiegsgrenze|Servicebereich|Normalisierungsseite|Profilbewerbe werden)`,
     ...selectedTests,
   ], {
     cwd: backendRoot,

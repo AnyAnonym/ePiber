@@ -116,6 +116,7 @@ test("PostgreSQL-Worker projiziert interne Outbox-Invalidierung nur als NOTIFY-W
 test("PostgreSQL-Worker registriert und verarbeitet die begrenzten Retentionklassen", { timeout: 30_000 }, async (t) => {
   const { client, repository } = await fixture(t);
   await repository.ensureMaintenanceJobs(new Date("2026-10-12T02:15:00.000Z"));
+  assert.equal((await repository.ensureMaintenanceJobs(new Date("2026-10-12T02:15:00.000Z"))).scheduled, 0);
   const scheduled = await client.query("SELECT job_type FROM ops.jobs WHERE status='pending' ORDER BY job_type");
   assert.deepEqual(scheduled.rows.map(({ job_type: type }) => type), [
     "hall_time.expire_waitlists", "retention.daily", "retention.hourly", "retention.short",
@@ -125,6 +126,16 @@ test("PostgreSQL-Worker registriert und verarbeitet die begrenzten Retentionklas
   for (let index = 0; index < 4; index++) assert.equal(await service.runOnce(), true);
   const completed = await client.query("SELECT count(*)::int AS count FROM ops.jobs WHERE job_type=ANY($1::text[]) AND status='success'", [["retention.short", "retention.hourly", "retention.daily", "hall_time.expire_waitlists"]]);
   assert.equal(completed.rows[0].count, 4);
+  for (const [time, count] of [
+    ["2026-10-12T02:29:59.999Z", 0],
+    ["2026-10-12T02:30:00.000Z", 2],
+    ["2026-10-12T03:00:00.000Z", 3],
+    ["2026-10-13T02:14:59.999Z", 3],
+    ["2026-10-13T02:15:00.000Z", 3],
+  ]) {
+    assert.equal((await repository.ensureMaintenanceJobs(new Date(time))).scheduled, count, time);
+    assert.equal((await repository.ensureMaintenanceJobs(new Date(time))).scheduled, 0, `${time}: replay`);
+  }
 });
 
 test("PostgreSQL-Workerprozess startet fail-closed und beendet Listener sowie Pool kontrolliert", { timeout: 30_000 }, async (t) => {

@@ -70,7 +70,6 @@ class PostgresCourtService {
     const courts = this.getScoreboardCourtsCached();
     const event = { type: "court", court: courtId, value: courts[courtId] };
     for (const listener of this.listeners) { try { listener(event); } catch {} }
-    this.publish("scoreboard-state", { courts });
   }
 
   mapError(error) {

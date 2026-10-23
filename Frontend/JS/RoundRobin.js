@@ -9,7 +9,6 @@ import { formatWalkoverResult } from "./matchCompletionText.js";
 const readMatchesList = createEndpoint("matches");
 const readPlayersList = createEndpoint("players");
 const readBewerbe     = createEndpoint("bewerbe");
-const readBewerbsart  = createEndpoint("bewerbsart");
 let renderGeneration = 0;
 let roundRobinLoaded = false;
 const profileLinkContainers = new WeakSet();
@@ -492,18 +491,17 @@ export async function renderRoundRobin(bewerbId, container, paarungslayout) {
   try {
     await ready;
     const currentUserId = String(getUser()?.id || "");
-    const [matchRes, playerRes, bewerbRes, bewerbsartRes] = await Promise.all([
-      callWithRetry(readMatchesList),
+    const [matchRes, playerRes, bewerbRes] = await Promise.all([
+      callWithRetry(readMatchesList, { bewerbId: BEWERB_ID }),
       callWithRetry(readPlayersList),
       callWithRetry(readBewerbe),
-      callWithRetry(readBewerbsart),
     ]);
     if (generation !== renderGeneration) return null;
 
     const matchValues = matchRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
     const bewerbValues = bewerbRes.data?.values || [];
-    const bewerbsartValues = bewerbsartRes.data?.values || [];
+    const bewerbsartValues = bewerbRes.data?.bewerbsartValues || [];
 
     // Spieler-Map
     const playerMap = new Map();

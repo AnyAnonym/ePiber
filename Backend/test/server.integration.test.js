@@ -4,7 +4,8 @@ const { WebSocket } = require("ws");
 const { peopleFixture, setTestEnvironment } = require("./helpers.js");
 
 setTestEnvironment();
-const { SESSION_REFRESH_INTERVAL_MS, SESSION_TTL_MS, TABLE_NAMES } = require("../config.js");
+const { SESSION_REFRESH_INTERVAL_MS, SESSION_TTL_MS, TABLE_NAMES, WS_MAX_INFLIGHT } = require("../config.js");
+const { AuthService } = require("../authService.js");
 const dataStore = require("../dataStore.js");
 const { createApplicationFixture } = require("./applicationFixture.js");
 const { StateRepository } = require("../stateRepository.js");
@@ -676,6 +677,28 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(adminPrincipal.role, "admin");
   assert.equal(adminPrincipal.user.login, "ada.login");
   assert.equal(adminPrincipal.user.email, "ada@example.test");
+  {
+    const original = AuthService.prototype.getUserForToken;
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let entered = 0;
+    const authMock = t.mock.method(AuthService.prototype, "getUserForToken", async function (...args) {
+      entered++;
+      await gate;
+      return original.apply(this, args);
+    });
+    try {
+      advanceRateLimits(60_000);
+      const requests = Array.from({ length: WS_MAX_INFLIGHT }, () => adminClient.request("players"));
+      await waitFor(() => entered === WS_MAX_INFLIGHT, 1000, "Authentifizierungsrequests wurden nicht reserviert");
+      const excess = await adminClient.request("players");
+      assert.equal(excess.data.error.code, "TOO_MANY_REQUESTS");
+      assert.equal(entered, WS_MAX_INFLIGHT);
+      release();
+      assert.equal((await Promise.all(requests)).every(({ data }) => data.success), true);
+    } finally { release(); authMock.mock.restore(); }
+    assert.equal((await adminClient.request("players")).data.success, true, "Slots werden nach Abschluss freigegeben");
+  }
   let statusPayload;
   await waitFor(async () => {
     const statusResponse = await fetch(`${httpBase}/status`, { headers: { Cookie: cookie } });

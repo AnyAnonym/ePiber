@@ -35,20 +35,22 @@ function resultString(match) {
 }
 
 class PostgresProjectionService {
-  constructor({ identity, play, venue }) {
+  constructor({ identity, play, venue, readSnapshot = null }) {
     this.identity = identity;
     this.play = play;
     this.venue = venue;
+    this.readSnapshot = readSnapshot;
   }
 
   async load() {
+    if (this.readSnapshot) return this.readSnapshot();
     const [people, competitionTypes, matchFormats, competitions, navigation] = await Promise.all([
       this.identity.people(), this.play.competitionTypes(), this.play.matchFormats(), this.play.competitions(), this.venue.navigationPresets(null),
     ]);
     const [entriesByCompetition, matchesByCompetition, rankingsByCompetition] = await Promise.all([
-      Promise.all(competitions.map((competition) => this.play.entries(competition.id))),
-      Promise.all(competitions.map((competition) => this.play.matches(competition.id))),
-      Promise.all(competitions.map((competition) => this.play.rankings(competition.id))),
+      this.play.entries(null, { all: true }),
+      this.play.matches(null, { all: true }),
+      this.play.rankings(null, { all: true }),
     ]);
     const tables = {
       players: [["ID", "Vorname", "Nachname", "GeburtsDatum", "GeschlechtID", "Geschlecht", "Aktiv", "E-Mail", "TelefonMobil", "Land", "PLZ", "Ort", "Adresse", "CD-ID", "Login", "PasswdHash", "KennwortVergessen", "Mitglied", "Admin", "Operator", "Role", "Notification"]],
@@ -88,16 +90,21 @@ class PostgresProjectionService {
         competition.genderCodes.join(","), age, competition.sortOrder === null ? "" : String(competition.sortOrder),
       ]);
     }
-    for (const entries of entriesByCompetition) for (const entry of entries) {
+    const ordered = (rows) => {
+      const groups = new Map(competitions.map(({ id }) => [id, []]));
+      for (const row of rows) groups.get(row.competitionId)?.push(row);
+      return [...groups.values()].flat();
+    };
+    for (const entry of ordered(entriesByCompetition)) {
       tables.entryList.push([entry.id, entry.competitionId, entry.personId, legacyInstant(entry.enteredAt), entry.legacyFeeStatus || ""]);
     }
-    for (const rankings of rankingsByCompetition) for (const ranking of rankings) {
+    for (const ranking of ordered(rankingsByCompetition)) {
       tables.rlPlatzierung.push([
         ranking.id || ranking.internalId, ranking.competitionId, ranking.personId, ranking.status === "active" ? String(ranking.rank) : "0",
         legacyInstant(ranking.withdrawnAt), ranking.lastActiveRank === null ? "" : String(ranking.lastActiveRank), ranking.withdrawalReason || "",
       ]);
     }
-    for (const matches of matchesByCompetition) for (const match of matches) {
+    for (const match of ordered(matchesByCompetition)) {
       const slots = new Map(match.participants.map((participant) => [`${participant.sideNo}:${participant.positionNo}`, participant]));
       const values = [1, 2, 3, 4].map((index) => participantValue(slots.get(`${index <= 2 ? 1 : 2}:${index <= 2 ? index : index - 2}`)));
       if (match.completionType && match.completionType !== "regular") {

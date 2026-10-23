@@ -123,6 +123,26 @@ class IdentityRepository {
     return result.rows;
   }
 
+  async publicPlayers() {
+    const result = await this.database.query(`
+      SELECT contract_id AS id,first_name AS "firstName",last_name AS "lastName",active
+        FROM identity.people WHERE tenant_id=$1::uuid ORDER BY contract_id::numeric
+    `, [this.context.tenantId]);
+    return result.rows;
+  }
+
+  async memberDirectory() {
+    const result = await this.database.query(`
+      SELECT p.contract_id AS id,p.first_name AS "firstName",p.last_name AS "lastName",p.birth_date::text AS "birthDate",
+             email.contact_value AS email,mobile.contact_value AS phone
+        FROM identity.people p
+        LEFT JOIN identity.person_contacts email ON email.person_id=p.id AND email.contact_type='email' AND email.active
+        LEFT JOIN identity.person_contacts mobile ON mobile.person_id=p.id AND mobile.contact_type='mobile' AND mobile.active
+       WHERE p.tenant_id=$1::uuid AND p.active ORDER BY p.contract_id::numeric
+    `, [this.context.tenantId]);
+    return result.rows;
+  }
+
   async personByContractId(personId) {
     const result = await this.database.query(`${PERSON_SELECT}
       WHERE p.tenant_id=$1::uuid AND p.contract_id=$2

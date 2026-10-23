@@ -16,7 +16,7 @@ function registry(definitions, kind) {
 }
 
 class WorkerService {
-  constructor({ repository, jobs = {}, outbox = {}, workerId = `worker-${crypto.randomUUID()}`, leaseMs = 60_000, pollMs = 1_000, subscribe = null, log = () => {} }) {
+  constructor({ repository, jobs = {}, outbox = {}, workerId = `worker-${crypto.randomUUID()}`, leaseMs = 60_000, pollMs = 1_000, subscribe = null, log = () => {}, now = Date.now }) {
     this.repository = repository;
     this.jobs = registry(jobs, "job");
     this.outbox = registry(outbox, "outbox");
@@ -30,6 +30,11 @@ class WorkerService {
     this.active = null;
     this.tick = null;
     this.unsubscribe = null;
+    this.now = now;
+    this.lastMaintenanceAt = null;
+    this.queued = false;
+    this.wakePending = false;
+    this.subscription = null;
   }
 
   async processJob() {
@@ -99,40 +104,60 @@ class WorkerService {
   start() {
     if (this.running) return;
     this.running = true;
+    this.lastMaintenanceAt = null;
     const tick = async () => {
+      this.queued = false;
       if (!this.running) return;
+      if (this.active) { this.wakePending = true; return; }
+      let worked = false;
+      // Reserve the iteration before its first asynchronous operation.
+      this.active = Promise.resolve().then(async () => {
+        const now = this.now();
+        if (this.lastMaintenanceAt === null || now - this.lastMaintenanceAt >= 60_000 || now < this.lastMaintenanceAt) {
+          const startedAt = this.now();
+          try {
+            const result = await this.repository.ensureMaintenanceJobs?.(new Date(now));
+            this.lastMaintenanceAt = now;
+            this.log("info", "postgres_worker_maintenance_schedule_completed", { result: "success", scheduled: result?.scheduled || 0, durationMs: Math.max(0, this.now() - startedAt) });
+          } catch {
+            this.log("error", "postgres_worker_maintenance_schedule_failed", { result: "failed", errorCode: "MAINTENANCE_SCHEDULE_FAILED", durationMs: Math.max(0, this.now() - startedAt) });
+          }
+        }
+        if (this.running) worked = await this.runOnce();
+      });
       try {
-        this.active = this.runOnce();
-        const worked = await this.active;
+        await this.active;
+      } catch {
+        this.log("error", "postgres_worker_iteration_failed", { errorCode: "WORKER_ITERATION_FAILED" });
+      } finally {
         this.active = null;
-        this.timer = setTimeout(tick, worked ? 0 : this.pollMs);
-        this.timer.unref?.();
-      } catch (error) {
-        this.active = null;
-        this.log("error", "postgres_worker_iteration_failed", { errorCode: error.code || "WORKER_ITERATION_FAILED" });
-        this.timer = setTimeout(tick, this.pollMs);
-        this.timer.unref?.();
+        if (this.running) {
+          const delay = worked || this.wakePending ? 0 : this.pollMs;
+          this.wakePending = false;
+          this.timer = setTimeout(() => { this.timer = null; tick(); }, delay);
+          this.timer.unref?.();
+        }
       }
     };
     this.tick = tick;
     if (this.subscribe) {
-      Promise.resolve(this.subscribe(() => this.wake())).then((unsubscribe) => {
+      this.subscription = Promise.resolve().then(() => this.subscribe(() => this.wake())).then((unsubscribe) => {
         if (this.running) this.unsubscribe = unsubscribe;
         else return unsubscribe?.();
-      }).catch((error) => {
-        this.log("error", "postgres_worker_listener_failed", { errorCode: error.code || "WORKER_LISTENER_FAILED" });
+      }).catch(() => {
+        this.log("error", "postgres_worker_listener_failed", { errorCode: "WORKER_LISTENER_FAILED" });
       });
     }
-    Promise.resolve(this.repository.ensureMaintenanceJobs?.()).then(tick).catch((error) => {
-      this.log("error", "postgres_worker_maintenance_schedule_failed", { errorCode: error.code || "MAINTENANCE_SCHEDULE_FAILED" });
-      tick();
-    });
+    this.wake();
   }
 
   wake() {
-    if (!this.running || this.active || !this.tick) return;
+    if (!this.running || !this.tick) return;
+    if (this.active) { this.wakePending = true; return; }
+    if (this.queued) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.queued = true;
     queueMicrotask(this.tick);
   }
 
@@ -141,9 +166,11 @@ class WorkerService {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     await this.active?.catch(() => {});
+    await this.subscription;
     if (this.unsubscribe) await this.unsubscribe();
     this.unsubscribe = null;
     this.tick = null;
+    this.wakePending = false;
   }
 }
 

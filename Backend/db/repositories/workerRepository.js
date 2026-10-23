@@ -38,13 +38,17 @@ class WorkerRepository {
       ["hall_time.expire_waitlists", `quarter:${quarter}`],
       ...(minuteOfDay >= 135 ? [["retention.daily", `day:${day}`]] : []),
     ];
-    for (const [type, key] of jobs) await this.database.query(`
+    let scheduled = 0;
+    for (const [type, key] of jobs) {
+      const result = await this.database.query(`
       INSERT INTO ops.jobs(tenant_id,job_type,payload_version,payload,idempotency_key,status,available_at)
       VALUES ($1::uuid,$2,1,'{"batchSize":1000}'::jsonb,$3,'pending',clock_timestamp())
-      ON CONFLICT (tenant_id,job_type,idempotency_key) DO NOTHING
+      ON CONFLICT (tenant_id,job_type,idempotency_key) DO NOTHING RETURNING id
     `, [this.context.tenantId, type, key]);
-    if (jobs.length) await this.database.query("SELECT pg_notify('epiber_worker_wake','maintenance')");
-    return { scheduled: jobs.length };
+      scheduled += result.rowCount;
+    }
+    if (scheduled) await this.database.query("SELECT pg_notify('epiber_worker_wake','maintenance')");
+    return { scheduled };
   }
 
   async claimJob(owner, leaseMs = 60_000) {
