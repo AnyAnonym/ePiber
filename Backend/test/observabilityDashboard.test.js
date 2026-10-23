@@ -146,6 +146,13 @@ test("Live-PostgreSQL-App und Worker werden ohne neue private Labels gesammelt",
   assert.doesNotMatch(exporter, /piber\|/);
 });
 
+test("Grafana-Auth-Broker ordnet sich nach den PostgreSQL-Apps statt der entfernten Legacy-Unit ein", () => {
+  const unit = fs.readFileSync(path.join(observabilityRoot, "../systemd/epiber-grafana-auth.service"), "utf8");
+  assert.match(unit, /^After=network-online.target epiber-live\.service epiber-devel\.service$/m);
+  assert.doesNotMatch(unit, /epiber-piber\.service/);
+  assert.doesNotMatch(unit, /^(?:Requires|BindsTo|PartOf)=/m);
+});
+
 test("Grafana blendet die experimentellen Panelansichtsregler aus", () => {
   const config = fs.readFileSync(grafanaConfigFile, "utf8");
   assert.match(config, /^\[feature_toggles\]$/m);
@@ -363,19 +370,19 @@ test("Projektionsdashboards verwenden nur aktuelle PostgreSQL-Metriken", () => {
   assert.equal(people.panels.find(({ id }) => id === 10).fieldConfig.defaults.thresholds.steps.length, 2);
 });
 
-test("Alertvorlage trennt PAJ-PostgreSQL von unveraenderten Live-Kompatibilitaetsregeln", () => {
+test("Alertvorlage ueberwacht beide PostgreSQL-Deployments und entfernt ersetzte Legacy-Regeln", () => {
   const rules = fs.readFileSync(path.join(observabilityRoot, "grafana/provisioning/alerting/rules.yml"), "utf8");
   const [deletions, active] = rules.split(/^groups:\n/m);
   const sections = active.split(/^      - uid: /m).slice(1);
   const activeRules = new Map(sections.map((section) => [section.split("\n", 1)[0], section]));
-  assert.equal(sections.length, 12);
+  assert.equal(sections.length, 9);
   assert.equal(activeRules.size, sections.length, "Aktive Alert-UIDs muessen eindeutig sein");
   for (const uid of activeRules.keys()) assert.equal(deletions.includes(`uid: ${uid}`), false, uid);
 
   for (const [uid, expression] of [
-    ["epiber-projection-missing", 'min by (deployment) (epiber_projection_table_current{deployment="devel"})'],
-    ["epiber-postgres-unhealthy", 'min by (deployment) (epiber_readiness_component_ready{deployment="devel",component=~"postgres_runtime|postgres_score_state|postgres_audit|postgres_messaging"})'],
-    ["epiber-projection-refresh-failed", 'epiber_projection_refresh_failed{deployment="devel"}'],
+    ["epiber-projection-missing", 'min by (deployment) (epiber_projection_table_current{deployment=~"live|devel"})'],
+    ["epiber-postgres-unhealthy", 'min by (deployment) (epiber_readiness_component_ready{deployment=~"live|devel",component=~"postgres_runtime|postgres_score_state|postgres_audit|postgres_messaging"})'],
+    ["epiber-projection-refresh-failed", 'epiber_projection_refresh_failed{deployment=~"live|devel"}'],
   ]) {
     const rule = activeRules.get(uid);
     assert.ok(rule, uid);
@@ -385,19 +392,9 @@ test("Alertvorlage trennt PAJ-PostgreSQL von unveraenderten Live-Kompatibilitaet
     assert.match(rule, /^        execErrState: Alerting$/m);
   }
 
-  for (const [uid, expression, duration, severity] of [
-    ["epiber-sheet-stale", 'min by (deployment) (epiber_sheet_table_current{deployment="live"})', "2m", "warning"],
-    ["epiber-sqlite-unhealthy", 'min by (deployment) (epiber_sqlite_ready{deployment="live"})', "1m", "critical"],
-    ["epiber-pending-metadata", 'epiber_sheet_metadata_intents_pending{deployment="live"}', "1m", "critical"],
-  ]) {
-    const rule = activeRules.get(uid);
-    assert.ok(rule, uid);
-    assert.ok(rule.includes(`expr: '${expression}'`), uid);
-    assert.ok(rule.includes(`for: ${duration}`), uid);
-    assert.ok(rule.includes(`labels: { scope: application, severity: ${severity} }`), uid);
-    assert.match(rule, /^        noDataState: Alerting$/m);
-    assert.match(rule, /^        execErrState: Alerting$/m);
-    assert.doesNotMatch(rule, /epiber_projection_|postgres_runtime/);
+  for (const uid of ["epiber-sheet-stale", "epiber-sqlite-unhealthy", "epiber-pending-metadata"]) {
+    assert.equal(activeRules.has(uid), false, uid);
+    assert.ok(deletions.includes(`uid: ${uid}`), uid);
   }
 
   for (const uid of ["epiber-backend-down", "epiber-not-ready", "epiber-court-stale", "epiber-http-failures"]) {

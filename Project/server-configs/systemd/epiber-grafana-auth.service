@@ -1,7 +1,7 @@
 [Unit]
 Description=ePiber shared Grafana authentication broker
 Wants=network-online.target
-After=network-online.target epiber-piber.service epiber-devel.service
+After=network-online.target epiber-live.service epiber-devel.service
 
 [Service]
 Type=simple

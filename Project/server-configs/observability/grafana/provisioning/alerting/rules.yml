@@ -10,10 +10,12 @@ deleteRules:
   - { orgId: 1, uid: paj-http-failures }
   - { orgId: 1, uid: paj-stack-target-down }
   - { orgId: 1, uid: paj-host-disk-low }
+  - { orgId: 1, uid: epiber-sheet-stale }
+  - { orgId: 1, uid: epiber-sqlite-unhealthy }
+  - { orgId: 1, uid: epiber-pending-metadata }
 
-# Live 5.0.0 liefert noch die bisherigen Metriken. Seine drei Kompatibilitaets-
-# regeln erst nach einem gesonderten Live-Update durch PostgreSQL-Regeln ersetzen.
-# Neue PostgreSQL-Regeln sind bis dahin ausschliesslich fuer PAJ/devel aktiv.
+# Voraussetzung fuer Live: gepruefter Metrikbackport auf Basis von Live 5.0.0.
+# Beide Deployments liefern echte PostgreSQL-Readiness und Projektionsmetriken.
 groups:
   - orgId: 1
     name: epiber-applications
@@ -105,7 +107,7 @@ groups:
             relativeTimeRange: { from: 600, to: 0 }
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'min by (deployment) (epiber_projection_table_current{deployment="devel"})'
+              expr: 'min by (deployment) (epiber_projection_table_current{deployment=~"live|devel"})'
               instant: true
               intervalMs: 15000
               maxDataPoints: 43200
@@ -181,7 +183,7 @@ groups:
             relativeTimeRange: { from: 600, to: 0 }
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'min by (deployment) (epiber_readiness_component_ready{deployment="devel",component=~"postgres_runtime|postgres_score_state|postgres_audit|postgres_messaging"})'
+              expr: 'min by (deployment) (epiber_readiness_component_ready{deployment=~"live|devel",component=~"postgres_runtime|postgres_score_state|postgres_audit|postgres_messaging"})'
               instant: true
               intervalMs: 15000
               maxDataPoints: 43200
@@ -219,7 +221,7 @@ groups:
             relativeTimeRange: { from: 600, to: 0 }
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'epiber_projection_refresh_failed{deployment="devel"}'
+              expr: 'epiber_projection_refresh_failed{deployment=~"live|devel"}'
               instant: true
               intervalMs: 15000
               maxDataPoints: 43200
@@ -285,121 +287,6 @@ groups:
           summary: '{{ $labels.deployment }} erzeugt anhaltend HTTP-Serverfehler'
           runbook: Project/server-configs/observability/RUNBOOKS.md#http-server-errors
         labels: { scope: application, severity: warning }
-
-      # Bestaetigte Uebergangsregeln: Live-Anwendung und Bedingungen unveraendert.
-      - uid: epiber-sheet-stale
-        title: ePiber Sheet Snapshot Missing
-        condition: C
-        data:
-          - refId: A
-            datasourceUid: prometheus
-            relativeTimeRange: { from: 600, to: 0 }
-            model:
-              datasource: { type: prometheus, uid: prometheus }
-              expr: 'min by (deployment) (epiber_sheet_table_current{deployment="live"})'
-              instant: true
-              intervalMs: 15000
-              maxDataPoints: 43200
-              refId: A
-          - refId: B
-            datasourceUid: __expr__
-            model: { datasource: { type: __expr__, uid: __expr__ }, expression: A, reducer: last, refId: B, type: reduce }
-          - refId: C
-            datasourceUid: __expr__
-            model:
-              datasource: { type: __expr__, uid: __expr__ }
-              expression: B
-              refId: C
-              type: threshold
-              conditions:
-                - evaluator: { params: [1], type: lt }
-                  operator: { type: and }
-                  query: { params: [C] }
-                  reducer: { params: [], type: last }
-                  type: query
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 2m
-        annotations:
-          summary: '{{ $labels.deployment }} besitzt keinen vollstaendigen Sheet-Snapshot'
-          runbook: Project/server-configs/observability/RUNBOOKS.md#sheet-snapshot-missing
-        labels: { scope: application, severity: warning }
-
-      - uid: epiber-sqlite-unhealthy
-        title: ePiber SQLite Unhealthy
-        condition: C
-        data:
-          - refId: A
-            datasourceUid: prometheus
-            relativeTimeRange: { from: 600, to: 0 }
-            model:
-              datasource: { type: prometheus, uid: prometheus }
-              expr: 'min by (deployment) (epiber_sqlite_ready{deployment="live"})'
-              instant: true
-              intervalMs: 15000
-              maxDataPoints: 43200
-              refId: A
-          - refId: B
-            datasourceUid: __expr__
-            model: { datasource: { type: __expr__, uid: __expr__ }, expression: A, reducer: last, refId: B, type: reduce }
-          - refId: C
-            datasourceUid: __expr__
-            model:
-              datasource: { type: __expr__, uid: __expr__ }
-              expression: B
-              refId: C
-              type: threshold
-              conditions:
-                - evaluator: { params: [1], type: lt }
-                  operator: { type: and }
-                  query: { params: [C] }
-                  reducer: { params: [], type: last }
-                  type: query
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 1m
-        annotations:
-          summary: 'Mindestens eine SQLite-Datenbank von {{ $labels.deployment }} ist ungesund'
-          runbook: Project/server-configs/observability/RUNBOOKS.md#sqlite-unhealthy
-        labels: { scope: application, severity: critical }
-
-      - uid: epiber-pending-metadata
-        title: ePiber Pending Metadata Intent
-        condition: C
-        data:
-          - refId: A
-            datasourceUid: prometheus
-            relativeTimeRange: { from: 600, to: 0 }
-            model:
-              datasource: { type: prometheus, uid: prometheus }
-              expr: 'epiber_sheet_metadata_intents_pending{deployment="live"}'
-              instant: true
-              intervalMs: 15000
-              maxDataPoints: 43200
-              refId: A
-          - refId: B
-            datasourceUid: __expr__
-            model: { datasource: { type: __expr__, uid: __expr__ }, expression: A, reducer: last, refId: B, type: reduce }
-          - refId: C
-            datasourceUid: __expr__
-            model:
-              datasource: { type: __expr__, uid: __expr__ }
-              expression: B
-              refId: C
-              type: threshold
-              conditions:
-                - evaluator: { params: [0], type: gt }
-                  operator: { type: and }
-                  query: { params: [C] }
-                  reducer: { params: [], type: last }
-                  type: query
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 1m
-        annotations:
-          summary: '{{ $labels.deployment }} besitzt einen ungeklaerten Metadata-Intent'
-          runbook: Project/server-configs/observability/RUNBOOKS.md#pending-metadata-intent
-        labels: { scope: application, severity: critical }
 
   - orgId: 1
     name: epiber-host

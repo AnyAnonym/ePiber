@@ -1,6 +1,6 @@
 {
   "name": "epiber-backend",
-  "version": "5.0.0-paj-1-4",
+  "version": "5.0.0-paj-1-5",
   "description": "ePiber Tennis Dashboard — Backend (WebSocket + PostgreSQL)",
   "main": "server.js",
   "scripts": {

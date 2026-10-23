@@ -12,7 +12,7 @@ const { AppError } = require("../errors.js");
 const { version: appVersion } = require("../package.json");
 const logger = require("../logger.js");
 const metrics = require("../metrics.js");
-const { hashToken } = require("../security.js");
+const { hashToken, TokenBucketLimiter } = require("../security.js");
 
 function createSocketClient(url, headers) {
   const socket = new WebSocket(url, { headers });
@@ -113,6 +113,19 @@ function rejectedUpgrade(url, origin) {
 }
 
 test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
+  // Advance only limiter clocks: real HTTP/WS timers, sessions and business dates stay unchanged.
+  let limiterElapsedMs = 0;
+  const take = TokenBucketLimiter.prototype.take;
+  t.mock.method(TokenBucketLimiter.prototype, "take", function (...args) {
+    const now = this.now;
+    this.now = () => now() + limiterElapsedMs;
+    try {
+      return take.apply(this, args);
+    } finally {
+      this.now = now;
+    }
+  });
+  const advanceRateLimits = (ms) => { limiterElapsedMs += ms; };
   metrics.resetForTests();
   const logEntries = [];
   t.mock.method(logger, "log", (level, event, fields = {}) => logEntries.push({ level, event, fields }));
@@ -1086,7 +1099,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   for (const endpoint of [...resultPlayerEndpoints, ...playerOnlyEndpoints, ...adminEndpoints, ...deviceEndpoints]) await assertForbiddenByPolicy(operatorClient, endpoint);
   for (const endpoint of [...authenticatedEndpoints, ...resultPlayerEndpoints, ...operatorEndpoints, ...adminEndpoints]) await assertAllowedByPolicy(adminClient, endpoint);
   for (const endpoint of [...playerOnlyEndpoints, ...deviceEndpoints]) await assertForbiddenByPolicy(adminClient, endpoint);
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  advanceRateLimits(1000);
 
   const ownProfile = await adminClient.request("myProfile");
   assert.equal(ownProfile.data.profile.email, "ada@example.test");
@@ -1295,7 +1308,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.ok(rotated.data.monitor.token);
   const rotatedToken = rotated.data.monitor.token;
   assert.equal(await deviceClosed, 4003);
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  advanceRateLimits(1000);
   const favoriteMonitorLogin = await fetch(`${httpBase}/api/monitor/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "http://test.local" },
@@ -1319,7 +1332,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(monitorFavoriteWrite.data.favorites[0].page, "monitor");
   assert.equal((await dualPrincipalClient.request("monitorTarget")).data.success, true);
   await dualPrincipalClient.close();
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   assert.equal((await adminClient.request("monitorDelete", {
     monitorId, operationId: "00000000-0000-4000-8000-000000000322",
   })).data.error.code, "MONITOR_NOT_REVOKED");
@@ -1331,17 +1344,17 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.ok(revoked.data.monitor.revokedAt);
   assert.equal((await adminClient.request("monitorList")).data.monitors[0].revokedAt > 0, true);
 
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const originalDeleteMonitor = application.repository.deleteMonitor.bind(application.repository);
   application.repository.deleteMonitor = () => { throw new AppError("WRITE_OUTCOME_UNKNOWN", "simulated monitor unknown", 503); };
   assert.equal((await adminClient.request("monitorDelete", {
     monitorId, operationId: "00000000-0000-4000-8000-000000000323",
   })).data.error.code, "WRITE_OUTCOME_UNKNOWN");
   application.repository.deleteMonitor = originalDeleteMonitor;
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const deleteParams = { monitorId, operationId: "00000000-0000-4000-8000-000000000324" };
   assert.equal((await adminClient.request("monitorDelete", deleteParams)).data.deleted, true);
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   assert.equal((await adminClient.request("monitorDelete", deleteParams)).data.repeated, true);
   assert.deepEqual((await adminClient.request("monitorList")).data.monitors, []);
   const deletedDeviceLogin = await fetch(`${httpBase}/api/monitor/session`, {
@@ -1350,7 +1363,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     body: JSON.stringify({ token: rotatedToken }),
   });
   assert.equal(deletedDeviceLogin.status, 401);
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
 
   const loggingTargetRemove = await fetch(`${httpBase}/api/admin/frontend-logging/targets`, {
     method: "DELETE",
@@ -1374,7 +1387,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   for (const [table, values] of Object.entries(currentTables)) {
     if (table !== "matchtyp") dataStore.set(table, values, { source: "stale-matchtyp-test" });
   }
-  await new Promise((resolve) => setTimeout(resolve, 10100)); // Replenish two shared per-IP write tokens.
+  advanceRateLimits(10100); // Replenish two shared per-IP write tokens.
   const staleMatchtypReplay = await operatorClient.request("courtAssign", {
     court: "1",
     matchId: "m1",
@@ -1498,7 +1511,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.deepEqual((await adminClient.request("competitionHistoryCommentReactions", { commentId })).data.reactions.map(({ key, userName, mine }) => ({ key, userName, mine })), [
     { key: "thumbs_up", userName: "Peter Player", mine: false },
   ]);
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const hiddenWrite = await adminClient.request("moderateCompetitionHistoryComment", {
     operationId: "00000000-0000-4000-8000-000000000703",
     commentId,
@@ -1523,7 +1536,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   });
   assert.equal(editedWrite.data.success, true, JSON.stringify(editedWrite.data));
   assert.equal((await playerClient.request("competitionHistoryComments", { eventId: historyEventId })).data.comments[0].status, "under_review");
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const releasedWrite = await adminClient.request("moderateCompetitionHistoryComment", {
     operationId: "00000000-0000-4000-8000-000000000705",
     commentId,
@@ -1534,7 +1547,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(releasedComment.body, "Überarbeiteter Kommentar");
   assert.equal(Number.isFinite(releasedComment.updatedAt), true);
   assert.equal(releasedComment.interaction.reactionTotal, 1);
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const removedComment = await adminClient.request("deleteCompetitionHistoryComment", {
     operationId: "00000000-0000-4000-8000-000000000706",
     commentId,
@@ -1571,27 +1584,27 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     operationId: "00000000-0000-4000-8000-000000000202",
     messageId: seededMessage.id,
   };
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const acknowledgment = await adminClient.request("acknowledgeMessage", acknowledgmentParams);
   assert.equal(acknowledgment.data.success, true);
   const messageUpdate = await adminClient.next((message) => message.type === "event" && message.topic === "messages:p1" && message.data.unreadCount === 0, "message-update");
   assert.equal(Object.hasOwn(messageUpdate.data, "subject"), false);
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const repeatedAcknowledgment = await adminClient.request("acknowledgeMessage", acknowledgmentParams);
   assert.equal(repeatedAcknowledgment.data.repeated, true);
   await application.messagingService.ensureChallengeMessage({
     matchId: "bulk-ack-match", recipientId: "p1", competitionId: "cup-1", competitionName: "Cup", challengerId: "p2", challengerName: "Peter Player",
   });
   await adminClient.next((message) => message.type === "event" && message.topic === "messages:p1" && message.data.unreadCount === 1, "bulk-message-update");
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const bulkAcknowledgmentParams = { operationId: "00000000-0000-4000-8000-000000000209" };
   const bulkAcknowledgment = await adminClient.request("acknowledgeAllMessages", bulkAcknowledgmentParams);
   assert.equal(bulkAcknowledgment.data.changedCount, 1);
   assert.equal(bulkAcknowledgment.data.unreadCount, 0);
   await adminClient.next((message) => message.type === "event" && message.topic === "messages:p1" && message.data.unreadCount === 0, "bulk-acknowledgment-update");
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   assert.equal((await adminClient.request("acknowledgeAllMessages", bulkAcknowledgmentParams)).data.repeated, true);
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const acknowledgeAllOriginal = application.messagingRepository.acknowledgeAll.bind(application.messagingRepository);
   application.messagingRepository.acknowledgeAll = () => {
     throw new AppError("WRITE_OUTCOME_UNKNOWN", "simulated bulk unknown", 503);
@@ -1601,13 +1614,13 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   });
   application.messagingRepository.acknowledgeAll = acknowledgeAllOriginal;
   assert.equal(unknownBulkAcknowledgment.data.error.code, "WRITE_OUTCOME_UNKNOWN");
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const failedAcknowledgment = await adminClient.request("acknowledgeMessage", {
     operationId: "00000000-0000-4000-8000-000000000203",
     messageId: "msg-does-not-exist",
   });
   assert.equal(failedAcknowledgment.data.error.code, "MESSAGE_NOT_FOUND");
-  await new Promise((resolve) => setTimeout(resolve, 5100));
+  advanceRateLimits(5100);
   const acknowledgeOriginal = application.messagingRepository.acknowledge.bind(application.messagingRepository);
   application.messagingRepository.acknowledge = () => {
     throw new AppError("WRITE_OUTCOME_UNKNOWN", "simulated unknown", 503);

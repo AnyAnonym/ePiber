@@ -3,7 +3,26 @@ const assert = require("node:assert/strict");
 const { setTestEnvironment } = require("./helpers.js");
 
 setTestEnvironment();
-const { assertBearerToken, getRequestIp, normalizeIp } = require("../security.js");
+const { assertBearerToken, getRequestIp, normalizeIp, TokenBucketLimiter } = require("../security.js");
+
+test("Limiteruhr erhaelt Burst, Kosten und exakte Nachfuellgrenzen ohne reale Wartezeit", () => {
+  let now = 1000;
+  const limiter = new TokenBucketLimiter({ rate: 0.2, burst: 2, now: () => now });
+  assert.equal(limiter.take("ip", 2), true);
+  assert.equal(limiter.take("ip"), false);
+  assert.equal(limiter.take("other-ip"), true);
+  now += 4999;
+  assert.equal(limiter.take("ip"), false);
+  now += 1;
+  assert.equal(limiter.take("ip"), true);
+  assert.equal(limiter.take("ip"), false);
+  now += 10000;
+  assert.equal(limiter.take("ip", 2), true);
+  assert.equal(limiter.take("ip"), false);
+  now += 100000;
+  assert.equal(limiter.take("ip", 3), false);
+  assert.equal(limiter.take("ip", 2), true);
+});
 
 test("Request-IP vertraut Forwarded-For nur hinter dem lokalen Proxy", () => {
   assert.equal(getRequestIp({

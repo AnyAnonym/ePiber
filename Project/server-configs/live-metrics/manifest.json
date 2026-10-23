@@ -1,0 +1,11 @@
+{
+  "baseCommit": "d4be15121ea3dce6b7a843536b9adf973be711ce",
+  "runtimeVersion": "5.0.0",
+  "backportRevision": 1,
+  "releaseDirectory": "/usr/local/lib/epiber-live-5.0.0-metrics-1",
+  "changedRuntimeFiles": ["Backend/metrics.js", "Backend/livePostgresMetrics.js"],
+  "dependencyDirectory": "/srv/http/ePiber/piber/Backend/node_modules",
+  "serviceDropIn": "/etc/systemd/system/epiber-live.service.d/90-metrics-backport.conf",
+  "rollback": "Nach Freigabe Drop-in entfernen, daemon-reload und nur epiber-live.service neu starten; Alertregeln gemeinsam auf gesicherten kompatiblen Stand zuruecksetzen.",
+  "boundaries": "Kein Schema-Upgrade, keine Datenmigration, kein Worker-/Frontendrollout, keine Main-Aenderung. Runtimeversion bleibt 5.0.0; separater Info-Gauge identifiziert Metrikrevision 1. Abhaengigkeiten bleiben die unveraenderten Live-5.0.0-Pakete. Bei regulaerem Release Drop-in kontrolliert abloesen."
+}
