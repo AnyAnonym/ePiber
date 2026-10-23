@@ -88,22 +88,20 @@ test("Meldungskanaele, Geburtsdatum, Rollen und optionale Ranglisten-IDs bleiben
 
 test("Ungueltige Projektionsdaten erhalten den letzten Stand und loggen nur kontrollierten Abschluss", async () => {
   const tables = await projectCompetitions([{ id: "2", name: "Rangliste", competitionEndDate: "2026-09-30" }]);
-  const logs = [], published = [];
-  let stored = null, fail = false;
+  const logs = [];
+  let stored = null, fail = false, appliedSnapshots = 0;
   const loader = new PostgresProjectionLoader({
     projectionService: { load: () => fail ? projectCompetitions([{ id: "2", name: "Rangliste", competitionEndDate: "private-invalid-date" }]) : tables },
     dataStore: {
-      setAllAuthoritative(values) { stored = values; return [{ table: "bewerbe", changed: true }]; },
-      getMeta: () => ({ revision: 1 }),
+      setAllAuthoritative(values) { stored = values; appliedSnapshots++; return [{ table: "bewerbe", changed: true }]; },
     },
-    publish: (...args) => published.push(args),
     log: (level, event, fields) => logs.push({ level, event, fields }),
   });
   await loader.initialLoad();
   fail = true;
   await assert.rejects(loader.refresh("test"), RangeError);
   assert.equal(stored, tables);
-  assert.equal(published.length, 1);
+  assert.equal(appliedSnapshots, 1);
   assert.deepEqual(logs.map(({ fields }) => fields.result), ["success", "failed"]);
   assert.equal(loader.getStatus().lastErrorCode, "POSTGRES_PROJECTION_REFRESH_FAILED");
   assert.equal(JSON.stringify(logs).includes("private-invalid-date"), false);

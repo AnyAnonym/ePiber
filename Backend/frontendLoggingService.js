@@ -115,8 +115,8 @@ const EVENT_LEVELS = new Map([
   ["scoreboard_initialization_failed", "error"],
   ["scoreboard_resynchronization_failed", "error"],
   ["service_area_auth_failed", "error"],
-  ["sheet_data_refresh_failed", "error"],
-  ["sheet_data_status_load_failed", "error"],
+  ["projection_refresh_failed", "error"],
+  ["projection_status_load_failed", "error"],
   ["websocket_connection_recovered", "info"],
   ["websocket_state_changed", "debug"],
 ]);

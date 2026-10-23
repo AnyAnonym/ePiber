@@ -23,10 +23,11 @@ test("Messaging-SQLite verwendet ohne eigenen Pfad den Namen messaging.sqlite ne
   assert.equal(result.stdout, "/var/lib/epiber-paj/messaging.sqlite");
 });
 
-test("alle systemd-Vorlagen konfigurieren messaging.sqlite im jeweiligen StateDirectory", () => {
-  for (const system of ["piber", "paj", "pk"]) {
+test("aktive systemd-Appvorlagen verwenden PostgreSQL ohne Google-Credentials", () => {
+  for (const system of ["live", "devel"]) {
     const unit = fs.readFileSync(path.join(SYSTEMD_ROOT, `epiber-${system}.service`), "utf8");
-    assert.match(unit, new RegExp(`MESSAGING_FILE=/var/lib/epiber-${system}/messaging\\.sqlite(?: |$)`), system);
+    assert.match(unit, /PERSISTENCE_MODE=postgres/, system);
+    assert.doesNotMatch(unit, /GOOGLE_|google-service-account|MESSAGING_FILE=/, system);
   }
 });
 
@@ -34,7 +35,10 @@ test("Messaging-Reporting verlangt bei Aktivierung Deployment und starken Base64
   const script = `require("./config.js").validateRuntimeConfig()`;
   const baseEnv = {
     ...process.env,
-    SHEET_ID: "test",
+    PERSISTENCE_MODE: "postgres",
+    PGUSER: "epiber_app_login",
+    EPIBER_TENANT_CODE: "devel-epiber",
+    EPIBER_AUTH_RATE_LIMIT_SECRET: "b".repeat(43),
     COURT_URL: "https://court.invalid/data.json",
     STATE_FILE: ":memory:",
     SCORELOG_FILE: ":memory:",
@@ -74,14 +78,13 @@ test("PostgreSQL-Modus verlangt keine Legacydateien und validiert seine eigenen 
       PGUSER: "epiber_app_login",
       EPIBER_TENANT_CODE: "devel-epiber",
       EPIBER_AUTH_RATE_LIMIT_SECRET: "b".repeat(43),
-      SHEET_ID: "",
       COURT_URL: "https://court.test/scores.json",
     },
   });
   assert.equal(config.status, 0, config.stderr);
   const fileConfig = spawnSync(process.execPath, ["-e", "require('./config.js').validateRuntimeConfig()"], {
     cwd: BACKEND_ROOT, encoding: "utf8",
-    env: { ...process.env, NODE_ENV: "test", PERSISTENCE_MODE: "postgres", PGUSER: "epiber_app_login", EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: "", EPIBER_AUTH_RATE_LIMIT_SECRET_FILE: secretFile, SHEET_ID: "", COURT_URL: "https://court.test/scores.json" },
+    env: { ...process.env, NODE_ENV: "test", PERSISTENCE_MODE: "postgres", PGUSER: "epiber_app_login", EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: "", EPIBER_AUTH_RATE_LIMIT_SECRET_FILE: secretFile, COURT_URL: "https://court.test/scores.json" },
   });
   assert.equal(fileConfig.status, 0, fileConfig.stderr);
   const missingSecret = spawnSync(process.execPath, ["-e", "require('./config.js').validateRuntimeConfig()"], {
@@ -94,7 +97,6 @@ test("PostgreSQL-Modus verlangt keine Legacydateien und validiert seine eigenen 
       PGUSER: "epiber_app_login",
       EPIBER_TENANT_CODE: "devel-epiber",
       EPIBER_AUTH_RATE_LIMIT_SECRET: "",
-      SHEET_ID: "",
       COURT_URL: "https://court.test/scores.json",
     },
   });
@@ -103,14 +105,14 @@ test("PostgreSQL-Modus verlangt keine Legacydateien und validiert seine eigenen 
   } finally { fs.rmSync(secretDirectory, { recursive: true, force: true }); }
 });
 
-test("Read-only-Modus ist ausschliesslich fuer PostgreSQL zulaessig", () => {
+test("entfernter Legacy-Modus wird auch im Read-only-Betrieb ausdruecklich abgelehnt", () => {
   const script = "require('./config.js').validateRuntimeConfig()";
   const legacy = spawnSync(process.execPath, ["-e", script], {
     cwd: BACKEND_ROOT, encoding: "utf8",
-    env: { ...process.env, NODE_ENV: "test", PERSISTENCE_MODE: "legacy", EPIBER_WRITE_MODE: "read_only", SHEET_ID: "test", COURT_URL: "https://court.test/scores.json" },
+    env: { ...process.env, NODE_ENV: "test", PERSISTENCE_MODE: "legacy", EPIBER_WRITE_MODE: "read_only", COURT_URL: "https://court.test/scores.json" },
   });
   assert.notEqual(legacy.status, 0);
-  assert.match(legacy.stderr, /read_only ist nur mit PostgreSQL/);
+  assert.match(legacy.stderr, /Nur PERSISTENCE_MODE=postgres wird unterstuetzt/);
 });
 
 test("PostgreSQL-Devel-Units trennen App und Worker mit systemd-Credentials", () => {
@@ -132,16 +134,14 @@ test("PostgreSQL-Devel-Units trennen App und Worker mit systemd-Credentials", ()
   assert.match(worker, /RestrictAddressFamilies=AF_UNIX/);
 });
 
-test("nur Live, Devel und die Legacy-PAJ-Vorlage aktivieren den internen Reportingvertrag", () => {
-  for (const [system, deployment] of [["piber", "live"], ["paj", "paj"], ["devel", "devel"]]) {
+test("nur PostgreSQL-Appvorlagen konfigurieren den internen Reportingvertrag", () => {
+  for (const [system, deployment] of [["live", "live"], ["devel", "devel"]]) {
     const unit = fs.readFileSync(path.join(SYSTEMD_ROOT, `epiber-${system}.service`), "utf8");
     assert.match(unit, /EnvironmentFile=-\/etc\/epiber-observability\/messaging-api\.env/);
     assert.equal(unit.includes("MESSAGING_REPORT_ENABLED=true"), false);
     assert.match(unit, new RegExp(`MESSAGING_REPORT_DEPLOYMENT=${deployment}(?: |$)`));
   }
-  const pkUnit = fs.readFileSync(path.join(SYSTEMD_ROOT, "epiber-pk.service"), "utf8");
-  assert.equal(pkUnit.includes("MESSAGING_REPORT_ENABLED"), false);
-  assert.equal(pkUnit.includes("messaging-api.env"), false);
+  for (const system of ["piber", "paj", "pk"]) assert.equal(fs.existsSync(path.join(SYSTEMD_ROOT, `epiber-${system}.service`)), false);
   const credentialTemplate = fs.readFileSync(path.join(SYSTEMD_ROOT, "../observability/grafana/messaging-api.env.example"), "utf8");
   assert.match(credentialTemplate, /^MESSAGING_REPORT_ENABLED=true$/m);
   const caddy = fs.readFileSync(path.join(SYSTEMD_ROOT, "../Caddyfile"), "utf8")

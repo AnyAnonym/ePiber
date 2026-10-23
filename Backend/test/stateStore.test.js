@@ -5,9 +5,9 @@ const { setTestEnvironment } = require("./helpers.js");
 setTestEnvironment();
 const stateStore = require("../stateStore.js");
 const courtPoller = require("../courtPoller.js");
-const dataPoller = require("../dataPoller.js");
 const dataStore = require("../dataStore.js");
-const { TABLE_CONFIG } = require("../config.js");
+const { TABLE_NAMES } = require("../config.js");
+const projectionLoader = { getStatus: () => ({ active: false }) };
 const { readiness } = require("../server.js");
 const { StateRepository } = require("../stateRepository.js");
 
@@ -181,21 +181,18 @@ test("Nicht aufloesbare Regeln eines aktiven Legacy-Courts blockieren Readiness"
   repository.setState("court:1", { matchId: "m9", matchtypId: "9", aktiv: 1 }, 1);
   stateStore.migrateLegacyCourtDisplayRules(matchtypen);
   dataStore.resetForTests();
-  for (const table of Object.keys(TABLE_CONFIG)) dataStore.set(table, [["ID"]], { source: "test" });
+  for (const table of TABLE_NAMES) dataStore.set(table, [["ID"]], { source: "test" });
 
-  const originalPollerStatus = dataPoller.getStatus;
   const originalCourtStatus = courtPoller.getStatus;
   const originalCourtData = courtPoller.getLastData;
-  dataPoller.getStatus = () => ({ running: true, tickCount: 0 });
   courtPoller.getStatus = () => ({ courtActive: { "1": true, "2": false } });
   courtPoller.getLastData = () => ({ source: { stale: false } });
   try {
-    const status = readiness({ repository, initialized: true, shuttingDown: false });
+    const status = readiness({ repository, projectionLoader, initialized: true, shuttingDown: false });
     assert.equal(status.ready, false);
     assert.equal(status.court.displayRulesReady, false);
     assert.equal(status.court.unresolvedActiveRules[0].court, "1");
   } finally {
-    dataPoller.getStatus = originalPollerStatus;
     courtPoller.getStatus = originalCourtStatus;
     courtPoller.getLastData = originalCourtData;
     dataStore.resetForTests();
@@ -208,23 +205,20 @@ test("ein vollstaendiger Startsnapshot verlangt auch Matchtyp-Daten", () => {
   repository.init();
   stateStore.init(repository);
   dataStore.resetForTests();
-  for (const table of Object.keys(TABLE_CONFIG)) {
+  for (const table of TABLE_NAMES) {
     if (table !== "matchtyp") dataStore.set(table, [["ID"]], { source: "test" });
   }
 
-  const originalPollerStatus = dataPoller.getStatus;
   const originalCourtStatus = courtPoller.getStatus;
   const originalCourtData = courtPoller.getLastData;
-  dataPoller.getStatus = () => ({ running: true, tickCount: 0 });
   courtPoller.getStatus = () => ({ courtActive: { "1": false, "2": false } });
   courtPoller.getLastData = () => ({ source: { stale: true } });
   try {
-    const status = readiness({ repository, initialized: true, shuttingDown: false });
+    const status = readiness({ repository, projectionLoader, initialized: true, shuttingDown: false });
     assert.equal(status.ready, false);
     assert.equal(status.data.ready, false);
     assert.equal(status.data.tables.matchtyp.current, false);
   } finally {
-    dataPoller.getStatus = originalPollerStatus;
     courtPoller.getStatus = originalCourtStatus;
     courtPoller.getLastData = originalCourtData;
     dataStore.resetForTests();

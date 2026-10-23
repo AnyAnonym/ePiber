@@ -417,8 +417,8 @@ test("Servicebereich akzeptiert nur kontrollierte Aktualisierungsdiagnosen", () 
       clientSessionId: "00000000-0000-4000-8000-000000000012",
       pageType: "servicebereich",
       events: [
-        { event: "sheet_data_status_load_failed", level: "error", code: "DATA_NOT_READY" },
-        { event: "sheet_data_refresh_failed", level: "error", code: "DATA_REFRESH_FAILED", supportId: "support-refresh-1" },
+        { event: "projection_status_load_failed", level: "error", code: "DATA_NOT_READY" },
+        { event: "projection_refresh_failed", level: "error", code: "DATA_REFRESH_FAILED", supportId: "support-refresh-1" },
         { event: "service_area_auth_failed", level: "error", code: "AUTH_REQUIRED" },
       ],
     },
@@ -426,8 +426,8 @@ test("Servicebereich akzeptiert nur kontrollierte Aktualisierungsdiagnosen", () 
 
   assert.deepEqual(result, { success: true, accepted: 3, dropped: 0 });
   assert.deepEqual(logs.map((entry) => entry.fields.frontendEvent), [
-    "sheet_data_status_load_failed",
-    "sheet_data_refresh_failed",
+    "projection_status_load_failed",
+    "projection_refresh_failed",
     "service_area_auth_failed",
   ]);
   assert.equal(logs[1].fields.supportId, "support-refresh-1");

@@ -10,6 +10,8 @@ const fullTests = [
   "test/scoreboardRecentMatches.browser.js",
   "test/hallzeiten.browser.js",
   "test/navigator.browser.js",
+  "test/servicebereich.browser.js",
+  "test/peopleNormalization.browser.js",
 ];
 const mobileProfiles = new Set(["chrome-android", "samsung-internet-android", "safari-iphone", "safari-ipad"]);
 const coreProfiles = new Set(["chrome-windows", "safari-macos", "firefox-windows"]);
@@ -61,7 +63,7 @@ for (const [profileName, profile] of selectedProfiles) {
     "--test",
     "--test-concurrency=1",
     "--test-name-pattern",
-    suite === "lifecycle" ? testPattern : `${testPattern}|^Ranglisten-Einstiegsgrenze`,
+    suite === "lifecycle" ? testPattern : `${testPattern}|^(Ranglisten-Einstiegsgrenze|Servicebereich|Normalisierungsseite|Profilbewerbe werden)`,
     ...selectedTests,
   ], {
     cwd: backendRoot,

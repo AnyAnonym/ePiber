@@ -204,7 +204,7 @@ test("Hallenreservierungs-Dashboard kombiniert begrenzte Metriken und datenspars
 test("Personennormalisierung zeigt aktive Mitglieder nach Playerklassifikation", () => {
   const dashboard = JSON.parse(fs.readFileSync(peopleNormalizationDashboardFile, "utf8"));
   assert.equal(dashboard.uid, "epiber-people-normalization");
-  assert.equal(dashboard.version, 4);
+  assert.equal(dashboard.version, 5);
 
   const expectedPanels = new Map([
     ["Aktive Mitglieder", null],
@@ -346,4 +346,24 @@ test("Infinity-Provisionierung pinnt Plugin und haelt das Credential ausserhalb 
   const template = fs.readFileSync(path.join(observabilityRoot, "grafana/messaging-api.env.example"), "utf8");
   assert.match(template, /EPIBER_OBSERVABILITY_API_TOKEN=CHANGE_ME/);
   assert.equal(/[A-Za-z0-9_-]{43}/.test(template.split("=").at(-1).trim()), false);
+});
+
+test("Projektionsdashboards und Alertvorlagen verwenden nur aktuelle PostgreSQL-Metriken", () => {
+  const dashboardDir = path.join(observabilityRoot, "grafana/dashboards");
+  for (const name of ["epiber-overview.json", "epiber-errors.json", "epiber-people-normalization.json"]) {
+    const dashboard = JSON.parse(fs.readFileSync(path.join(dashboardDir, name), "utf8"));
+    const ids = dashboard.panels.map(({ id }) => id);
+    assert.equal(new Set(ids).size, ids.length, name);
+    assert.doesNotMatch(JSON.stringify(dashboard), /epiber_sheet_|epiber_sqlite_|Google|Pending Metadata/);
+    assert.match(JSON.stringify(dashboard), /epiber_projection_refresh_/);
+  }
+  const overview = JSON.parse(fs.readFileSync(path.join(dashboardDir, "epiber-overview.json"), "utf8"));
+  assert.match(overview.panels.find(({ id }) => id === 5).description, /hohes Alter allein ist kein Fehler/);
+  const people = JSON.parse(fs.readFileSync(peopleNormalizationDashboardFile, "utf8"));
+  assert.equal(people.panels.find(({ id }) => id === 10).fieldConfig.defaults.thresholds.steps.length, 2);
+  const rules = fs.readFileSync(path.join(observabilityRoot, "grafana/provisioning/alerting/rules.yml"), "utf8");
+  const [deletions, active] = rules.split("\ngroups:\n");
+  for (const name of ["epiber-sheet-stale", "epiber-sqlite-unhealthy", "epiber-pending-metadata"]) assert.ok(deletions.includes(`uid: ${name}`));
+  assert.doesNotMatch(active, /epiber_sheet_|epiber_sqlite_|epiber-sheet-stale|epiber-pending-metadata/);
+  for (const metric of ["epiber_projection_table_current", "epiber_projection_refresh_failed", "postgres_runtime"]) assert.ok(active.includes(metric));
 });

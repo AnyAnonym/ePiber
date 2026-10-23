@@ -44,9 +44,9 @@ function personLoginValue(value) {
 }
 
 class AuthService {
-  constructor({ repository, sheetService }) {
+  constructor({ repository, identityWriter }) {
     this.repository = repository;
-    this.sheetService = sheetService;
+    this.identityWriter = identityWriter;
     this.activeScryptOperations = 0;
     this.userQueues = new Map();
   }
@@ -284,7 +284,7 @@ class AuthService {
       this.repository.clearLoginFailures(ipRateKey);
       if (verification.legacy) {
         const upgraded = await this.createStoredPasswordHash(credential);
-        await this.sheetService.setPasswordHash(person.id, upgraded, { expectedHash: person.storedPasswordHash });
+        await this.identityWriter.setPasswordHash(person.id, upgraded, { expectedHash: person.storedPasswordHash });
         person.storedPasswordHash = upgraded;
       }
       const session = this.repository.transaction(() => {
@@ -379,7 +379,7 @@ class AuthService {
       const stored = await this.createStoredPasswordHash(newPasswordHash);
       this.repository.revokeUserSessions(person.id, null, "password_change");
       try {
-        await this.sheetService.setPasswordHash(person.id, stored, { expectedHash: person.storedPasswordHash });
+        await this.identityWriter.setPasswordHash(person.id, stored, { expectedHash: person.storedPasswordHash });
       } catch (error) {
         error.details = { ...(error.details || {}), sessionInvalidated: true };
         throw error;
@@ -396,7 +396,7 @@ class AuthService {
       this.requireRole(token, ["admin"]);
       const person = this.findById(personId);
       if (!person) throw new AppError("PERSON_NOT_FOUND", "Person wurde nicht gefunden", 404);
-      await this.sheetService.setPasswordSetupAllowed(person.id, allowed);
+      await this.identityWriter.setPasswordSetupAllowed(person.id, allowed);
       return { success: true, personId: person.id, allowed };
     });
   }
@@ -410,7 +410,7 @@ class AuthService {
       const storedHash = await this.createStoredPasswordHash(newPasswordHash);
       this.repository.revokeUserSessions(person.id, null, "admin_password");
       try {
-        await this.sheetService.setPasswordHash(person.id, storedHash, { expectedHash: person.storedPasswordHash });
+        await this.identityWriter.setPasswordHash(person.id, storedHash, { expectedHash: person.storedPasswordHash });
       } catch (error) {
         error.details = { ...(error.details || {}), sessionsRevoked: true };
         throw error;
@@ -438,7 +438,7 @@ class AuthService {
       const storedHash = await this.createStoredPasswordHash(credential);
       this.repository.revokeUserSessions(person.id, null, "password_setup");
       try {
-        await this.sheetService.setPasswordHash(person.id, storedHash, {
+        await this.identityWriter.setPasswordHash(person.id, storedHash, {
           expectedHash: person.storedPasswordHash,
           requirePasswordSetupAllowed: true,
         });

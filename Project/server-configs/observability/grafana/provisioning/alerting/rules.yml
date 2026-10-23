@@ -10,6 +10,9 @@ deleteRules:
   - { orgId: 1, uid: paj-http-failures }
   - { orgId: 1, uid: paj-stack-target-down }
   - { orgId: 1, uid: paj-host-disk-low }
+  - { orgId: 1, uid: epiber-sheet-stale }
+  - { orgId: 1, uid: epiber-sqlite-unhealthy }
+  - { orgId: 1, uid: epiber-pending-metadata }
 
 groups:
   - orgId: 1
@@ -93,8 +96,8 @@ groups:
           runbook: Project/server-configs/observability/RUNBOOKS.md#not-ready
         labels: { scope: application, severity: critical }
 
-      - uid: epiber-sheet-stale
-        title: ePiber Sheet Snapshot Missing
+      - uid: epiber-projection-missing
+        title: ePiber PostgreSQL Projection Missing
         condition: C
         data:
           - refId: A
@@ -102,7 +105,7 @@ groups:
             relativeTimeRange: { from: 600, to: 0 }
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'min by (deployment) (epiber_sheet_table_current{deployment="live"})'
+              expr: 'min by (deployment) (epiber_projection_table_current{deployment=~"live|devel"})'
               instant: true
               intervalMs: 15000
               maxDataPoints: 43200
@@ -127,8 +130,8 @@ groups:
         execErrState: Alerting
         for: 2m
         annotations:
-          summary: '{{ $labels.deployment }} besitzt keinen vollstaendigen Sheet-Snapshot'
-          runbook: Project/server-configs/observability/RUNBOOKS.md#sheet-snapshot-missing
+          summary: '{{ $labels.deployment }} besitzt keinen vollstaendigen PostgreSQL-Projektionssnapshot'
+          runbook: Project/server-configs/observability/RUNBOOKS.md#not-ready
         labels: { scope: application, severity: warning }
 
       - uid: epiber-court-stale
@@ -169,8 +172,8 @@ groups:
           runbook: Project/server-configs/observability/RUNBOOKS.md#court-source-stale
         labels: { scope: application, severity: warning }
 
-      - uid: epiber-sqlite-unhealthy
-        title: ePiber SQLite Unhealthy
+      - uid: epiber-postgres-unhealthy
+        title: ePiber PostgreSQL Runtime Unhealthy
         condition: C
         data:
           - refId: A
@@ -178,7 +181,7 @@ groups:
             relativeTimeRange: { from: 600, to: 0 }
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'min by (deployment) (epiber_sqlite_ready{deployment="live"})'
+              expr: 'min by (deployment) (epiber_readiness_component_ready{deployment=~"live|devel",component=~"postgres_runtime|postgres_score_state|postgres_audit|postgres_messaging"})'
               instant: true
               intervalMs: 15000
               maxDataPoints: 43200
@@ -203,12 +206,12 @@ groups:
         execErrState: Alerting
         for: 1m
         annotations:
-          summary: 'Mindestens eine SQLite-Datenbank von {{ $labels.deployment }} ist ungesund'
-          runbook: Project/server-configs/observability/RUNBOOKS.md#sqlite-unhealthy
+          summary: 'Mindestens eine PostgreSQL-Laufzeitkomponente von {{ $labels.deployment }} ist ungesund'
+          runbook: Project/server-configs/observability/RUNBOOKS.md#not-ready
         labels: { scope: application, severity: critical }
 
-      - uid: epiber-pending-metadata
-        title: ePiber Pending Metadata Intent
+      - uid: epiber-projection-refresh-failed
+        title: ePiber PostgreSQL Projection Refresh Failed
         condition: C
         data:
           - refId: A
@@ -216,7 +219,7 @@ groups:
             relativeTimeRange: { from: 600, to: 0 }
             model:
               datasource: { type: prometheus, uid: prometheus }
-              expr: 'epiber_sheet_metadata_intents_pending{deployment="live"}'
+              expr: 'epiber_projection_refresh_failed{deployment=~"live|devel"}'
               instant: true
               intervalMs: 15000
               maxDataPoints: 43200
@@ -241,9 +244,9 @@ groups:
         execErrState: Alerting
         for: 1m
         annotations:
-          summary: '{{ $labels.deployment }} besitzt einen ungeklaerten Metadata-Intent'
-          runbook: Project/server-configs/observability/RUNBOOKS.md#pending-metadata-intent
-        labels: { scope: application, severity: critical }
+          summary: 'Letzter Projektionsreload von {{ $labels.deployment }} ist fehlgeschlagen; Last-good bleibt erhalten'
+          runbook: Project/server-configs/observability/RUNBOOKS.md#not-ready
+        labels: { scope: application, severity: warning }
 
       - uid: epiber-http-failures
         title: ePiber HTTP Server Errors

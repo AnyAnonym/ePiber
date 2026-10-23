@@ -25,9 +25,15 @@ class PostgresPlayService {
   }
   status() { return { backend: "postgres", ready: true, activeWrites: 0 }; }
   stop() { return Promise.resolve(); }
-  async refreshSheetData(_principal, { operationId }) {
-    const result = await this.projectionLoader.refresh("admin-request");
-    return { success: true, operationId, tableCount: result.tableCount, changedTableCount: result.changedTables.length, refreshedAt: Date.now() };
+  async refreshProjections(principal, { operationId }) {
+    if (!hasRole(principal, "admin")) throw new AppError("FORBIDDEN", "Administratorrechte erforderlich", 403);
+    try {
+      const result = await this.projectionLoader.refresh("admin-request");
+      return { success: true, operationId, tableCount: result.tableCount, changedTableCount: result.changedTables.length, refreshedAt: result.refreshedAt };
+    } catch (error) {
+      if (error instanceof AppError && error.code === "SHUTTING_DOWN") throw error;
+      throw new AppError("DATA_REFRESH_FAILED", "Projektionen konnten nicht neu geladen werden; der letzte gültige Stand bleibt aktiv", 503);
+    }
   }
 
   repeated(operation) {

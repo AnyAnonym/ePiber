@@ -93,14 +93,14 @@ test("lokale Write-Projektion veraendert Importzeit nicht und Last-good bleibt v
     dataStore.set("entryList", [["ID"], ["e1"]], { source: "poll" });
     const authoritativeAt = dataStore.getMeta("entryList").lastUpdate;
     now = 35000;
-    dataStore.markError("entryList", Object.assign(new Error("quota"), { code: "SHEETS_RATE_LIMITED" }));
+    dataStore.markError("entryList", Object.assign(new Error("database unavailable"), { code: "DB_UNAVAILABLE" }));
     now = 36000;
     dataStore.set("entryList", [["ID"], ["e1"], ["e2"]], { source: "write-local", authoritative: false });
 
     const meta = dataStore.getMeta("entryList");
     assert.equal(meta.lastUpdate, authoritativeAt);
     assert.equal(meta.lastMutation, 36000);
-    assert.equal(meta.lastError.code, "SHEETS_RATE_LIMITED");
+    assert.equal(meta.lastError.code, "DB_UNAVAILABLE");
     assert.equal(meta.consecutiveErrors, 1);
     assert.equal(dataStore.isTableCurrent("entryList", now), true);
     assert.equal(dataStore.getReadiness(now).tables.entryList.ageMs, 35000);

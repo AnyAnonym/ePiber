@@ -1,6 +1,10 @@
 "use strict";
 
 const AUDIT_CONTRACTS = Object.freeze({
+  "refresh_projections": Object.freeze({
+    before: Object.freeze({}),
+    after: Object.freeze({ tableCount: "count", changedTableCount: "count", refreshedAt: "epoch_ms" }),
+  }),
   "paj.password.rotate_all": Object.freeze({
     before: Object.freeze({ scope: "status" }),
     after: Object.freeze({ accountCount: "count", credentialCount: "count", sessionsRevoked: "count", authorizationsRevoked: "count", loginLimitsCleared: "count" }),
@@ -98,7 +102,7 @@ const LEGACY_AUDIT_ACTIONS = Object.freeze([
   "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
   "addEntryList", "removeEntryList", "withdrawFromRanking", "courtAssign", "courtSetActive", "monitorNavigate",
   "monitorScroll", "monitorProvision", "monitorRotate", "monitorRevoke", "monitorDelete", "normalizePerson", "reconcilePerson",
-  "refreshSheetData", "adminSaveHallTimeGrid", "setHallTimeBooking", "setMyHallTimeGroupMembership",
+  "adminSaveHallTimeGrid", "setHallTimeBooking", "setMyHallTimeGroupMembership",
   "adminDistributeHallTimeGrid", "adminApplyHallTimeDistribution", "adminSaveHallTimeConstraints",
   "adminClearAllHallTimeStatuses",
 ]);

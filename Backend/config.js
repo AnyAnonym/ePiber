@@ -37,11 +37,10 @@ if (!/^[a-z0-9_-]{1,32}$/i.test(INSTANCE_ID)) {
   throw new Error("INSTANCE_ID enthaelt ungueltige Zeichen");
 }
 
-const PERSISTENCE_MODE = String(process.env.PERSISTENCE_MODE || "legacy").trim().toLowerCase();
-if (!new Set(["legacy", "postgres"]).has(PERSISTENCE_MODE)) throw new Error("PERSISTENCE_MODE muss legacy oder postgres sein");
+const PERSISTENCE_MODE = String(process.env.PERSISTENCE_MODE || "postgres").trim().toLowerCase();
+if (PERSISTENCE_MODE !== "postgres") throw new Error("Nur PERSISTENCE_MODE=postgres wird unterstuetzt; der Google-/Sheets-Betrieb wurde entfernt");
 const WRITE_MODE = String(process.env.EPIBER_WRITE_MODE || "read_write").trim().toLowerCase();
 if (!new Set(["read_only", "read_write"]).has(WRITE_MODE)) throw new Error("EPIBER_WRITE_MODE muss read_only oder read_write sein");
-if (WRITE_MODE === "read_only" && PERSISTENCE_MODE !== "postgres") throw new Error("EPIBER_WRITE_MODE=read_only ist nur mit PostgreSQL zulaessig");
 function runtimeSecret(name, filenameName) {
   const direct = String(process.env[name] || "").trim(), filename = String(process.env[filenameName] || "").trim();
   if (direct && filename) throw new Error(`${name} und ${filenameName} duerfen nicht gemeinsam gesetzt sein`);
@@ -75,7 +74,6 @@ if (!ALLOW_INSECURE_TRANSPORT && [...ALLOWED_ORIGINS].some((origin) => origin.st
   throw new Error("ALLOWED_ORIGINS duerfen ohne ALLOW_INSECURE_TRANSPORT nur HTTPS verwenden");
 }
 
-const SHEET_ID = process.env.SHEET_ID;
 const COURT_URL = process.env.COURT_URL;
 const STATE_FILE = process.env.STATE_FILE || path.join(__dirname, ".state", `${INSTANCE_ID}.sqlite`);
 const SCORELOG_FILE = process.env.SCORELOG_FILE || path.join(__dirname, ".state", `${INSTANCE_ID}-scorelog.sqlite`);
@@ -113,66 +111,33 @@ const WS_HANDSHAKE_TIMEOUT_MS = parseInteger("WS_HANDSHAKE_TIMEOUT_MS", 10000, 1
 const WS_PING_INTERVAL_MS = parseInteger("WS_PING_INTERVAL_MS", 25000, 5000, 120000);
 const WS_DEAD_CLIENT_MS = parseInteger("WS_DEAD_CLIENT_MS", 75000, 15000, 300000);
 
-const GOOGLE_REQUEST_TIMEOUT_MS = parseInteger("GOOGLE_REQUEST_TIMEOUT_MS", 10000, 1000, 10000);
 const COURT_POLL_INTERVAL = parseInteger("COURT_POLL_INTERVAL_MS", 2000, 500, 60000);
 const COURT_FETCH_TIMEOUT_MS = parseInteger("COURT_FETCH_TIMEOUT_MS", 5000, 500, 60000);
 const COURT_MAX_RESPONSE_BYTES = parseInteger("COURT_MAX_RESPONSE_BYTES", 262144, 1024, 2097152);
 const COURT_MAX_BACKOFF_MS = parseInteger("COURT_MAX_BACKOFF_MS", 30000, 2000, 300000);
 
-const SHEET_STARTUP_RETRY_BASE_MS = parseInteger("SHEET_STARTUP_RETRY_BASE_MS", process.env.NODE_ENV === "test" ? 10 : 5000, process.env.NODE_ENV === "test" ? 1 : 1000, 60000);
-const SHEET_STARTUP_RETRY_MAX_MS = parseInteger("SHEET_STARTUP_RETRY_MAX_MS", process.env.NODE_ENV === "test" ? 50 : 60000, process.env.NODE_ENV === "test" ? 1 : 5000, 300000);
 const SHUTDOWN_GRACE_MS = parseInteger("SHUTDOWN_GRACE_MS", 90000, 1000, 120000);
 
-const TABLE_CONFIG = {
-  players:       { range: "Personen" },
-  bewerbe:       { range: "Bewerb" },
-  bewerbsart:    { range: "Bewerbsart" },
-  matchtyp:      { range: "Matchtyp" },
-  matches1:      { range: "Matches1" },
-  rlPlatzierung: { range: "RL-Platzierung" },
-  navigator:     { range: "Navigator" },
-  entryList:     { range: "EntryList" },
-};
+const TABLE_NAMES = Object.freeze([
+  "players", "bewerbe", "bewerbsart", "matchtyp", "matches1", "rlPlatzierung", "navigator", "entryList",
+]);
 
 function validateRuntimeConfig() {
   const errors = [];
   if (!["127.0.0.1", "::1", "localhost"].includes(LISTEN_HOST)) {
     errors.push("LISTEN_HOST muss auf Loopback zeigen");
   }
-  if (PERSISTENCE_MODE === "legacy") {
-    if (!SHEET_ID) errors.push("SHEET_ID fehlt");
-    if (!COURT_URL) {
-      errors.push("COURT_URL fehlt");
-    } else {
-      try {
-        const url = new URL(COURT_URL);
-        if (url.protocol !== "https:") errors.push("COURT_URL muss HTTPS verwenden");
-      } catch {
-        errors.push("COURT_URL ist ungueltig");
-      }
-    }
-    if (!path.isAbsolute(STATE_FILE) && STATE_FILE !== ":memory:") errors.push("STATE_FILE muss absolut sein");
-    for (const [name, filename] of [["SCORELOG_FILE", SCORELOG_FILE], ["AUDITLOG_FILE", AUDITLOG_FILE], ["MESSAGING_FILE", MESSAGING_FILE]]) {
-      if (!path.isAbsolute(filename) && filename !== ":memory:") errors.push(`${name} muss absolut sein`);
-    }
-    const persistentFiles = [STATE_FILE, SCORELOG_FILE, AUDITLOG_FILE, MESSAGING_FILE].filter((value) => value !== ":memory:");
-    if (new Set(persistentFiles).size !== persistentFiles.length) errors.push("STATE_FILE, SCORELOG_FILE, AUDITLOG_FILE und MESSAGING_FILE muessen getrennte Dateien sein");
-  } else {
-    if (!process.env.PGUSER) errors.push("PGUSER fehlt");
-    if (!/^[a-z0-9][a-z0-9_.-]{2,63}$/.test(String(process.env.EPIBER_TENANT_CODE || ""))) errors.push("EPIBER_TENANT_CODE fehlt oder ist ungueltig");
-    if (!/^[A-Za-z0-9_-]{43,128}$/.test(AUTH_RATE_LIMIT_SECRET)) errors.push("EPIBER_AUTH_RATE_LIMIT_SECRET muss ein Base64url-Token mit mindestens 43 Zeichen sein");
-    if (!COURT_URL) errors.push("COURT_URL fehlt");
-    else {
-      try { if (new URL(COURT_URL).protocol !== "https:") errors.push("COURT_URL muss HTTPS verwenden"); }
-      catch { errors.push("COURT_URL ist ungueltig"); }
-    }
+  if (!process.env.PGUSER) errors.push("PGUSER fehlt");
+  if (!/^[a-z0-9][a-z0-9_.-]{2,63}$/.test(String(process.env.EPIBER_TENANT_CODE || ""))) errors.push("EPIBER_TENANT_CODE fehlt oder ist ungueltig");
+  if (!/^[A-Za-z0-9_-]{43,128}$/.test(AUTH_RATE_LIMIT_SECRET)) errors.push("EPIBER_AUTH_RATE_LIMIT_SECRET muss ein Base64url-Token mit mindestens 43 Zeichen sein");
+  if (!COURT_URL) errors.push("COURT_URL fehlt");
+  else {
+    try { if (new URL(COURT_URL).protocol !== "https:") errors.push("COURT_URL muss HTTPS verwenden"); }
+    catch { errors.push("COURT_URL ist ungueltig"); }
   }
   if (MESSAGING_REPORT_ENABLED) {
     if (!["live", "devel", "paj"].includes(MESSAGING_REPORT_DEPLOYMENT)) errors.push("MESSAGING_REPORT_DEPLOYMENT muss live, devel oder paj sein");
     if (!/^[A-Za-z0-9_-]{43,128}$/.test(MESSAGING_REPORT_TOKEN)) errors.push("EPIBER_OBSERVABILITY_API_TOKEN muss ein Base64url-Token mit mindestens 43 Zeichen sein");
-  }
-  if (SHEET_STARTUP_RETRY_MAX_MS < SHEET_STARTUP_RETRY_BASE_MS) {
-    errors.push("SHEET_STARTUP_RETRY_MAX_MS muss mindestens SHEET_STARTUP_RETRY_BASE_MS entsprechen");
   }
   if (WS_DEAD_CLIENT_MS < WS_PING_INTERVAL_MS + 5000) {
     errors.push("WS_DEAD_CLIENT_MS muss mindestens 5000 ms ueber WS_PING_INTERVAL_MS liegen");
@@ -193,7 +158,6 @@ module.exports = {
   COURT_MAX_RESPONSE_BYTES,
   COURT_POLL_INTERVAL,
   COURT_URL,
-  GOOGLE_REQUEST_TIMEOUT_MS,
   HTTP_BODY_LIMIT_BYTES,
   HTTP_HEADERS_TIMEOUT_MS,
   HTTP_KEEP_ALIVE_TIMEOUT_MS,
@@ -210,18 +174,15 @@ module.exports = {
   PERSISTENCE_MODE,
   PROTOCOL_VERSION,
   PUBLIC_ORIGIN,
-  SHEET_STARTUP_RETRY_BASE_MS,
-  SHEET_STARTUP_RETRY_MAX_MS,
   SESSION_COOKIE,
   SESSION_MAX_PER_USER,
   SESSION_REFRESH_INTERVAL_MS,
   SESSION_TTL_MS,
-  SHEET_ID,
   SCORELOG_FILE,
   SCORE_LOG_JOURNAL,
   SHUTDOWN_GRACE_MS,
   STATE_FILE,
-  TABLE_CONFIG,
+  TABLE_NAMES,
   WS_DEAD_CLIENT_MS,
   WS_HANDSHAKE_TIMEOUT_MS,
   WS_MAX_BUFFERED_BYTES,

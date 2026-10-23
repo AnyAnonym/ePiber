@@ -45,7 +45,7 @@ async function createPostgresComponents({
     repositories = await runtime.connect();
     if (runtime.status().generation < 8) throw Object.assign(new Error("PostgreSQL-Spielbetrieb benoetigt Schemageneration 8"), { code: "DB_SCHEMA_GENERATION_UNSUPPORTED" });
     const projectionService = new PostgresProjectionService(repositories);
-    const projectionLoader = new PostgresProjectionLoader({ projectionService, dataStore, publish, log });
+    const projectionLoader = new PostgresProjectionLoader({ projectionService, dataStore, log });
     const frontendLoggingService = await PostgresFrontendLoggingService.create({ identityRepository: repositories.identity, log, appVersion });
     const messagingService = new PostgresMessagingService({ messaging: repositories.messaging, ops: repositories.ops, publish, log });
     const monitorBroker = await PostgresMonitorBroker.create({ venue: repositories.venue, ops: repositories.ops, dataStore, log });
@@ -70,14 +70,8 @@ async function createPostgresComponents({
       courtService,
       scoreLogRepository: new PostgresScoreService(repositories.venue),
       hallTimeService,
-      sheetService: playService,
+      playService,
       projectionLoader,
-      dataPoller: {
-        initialLoad: () => projectionLoader.refresh("startup"),
-        start() {},
-        stop: () => Promise.resolve(),
-        getStatus: () => ({ ...projectionLoader.getStatus(), backend: "postgres", polling: false }),
-      },
       startInvalidationListener: () => runtime.listen("epiber_app_invalidate", (rawPayload) => {
         let projection = null;
         try { projection = JSON.parse(rawPayload || "{}").projection || null; } catch {}

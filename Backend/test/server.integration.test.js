@@ -4,9 +4,9 @@ const { WebSocket } = require("ws");
 const { peopleFixture, setTestEnvironment } = require("./helpers.js");
 
 setTestEnvironment();
-const { SESSION_REFRESH_INTERVAL_MS, SESSION_TTL_MS, TABLE_CONFIG } = require("../config.js");
+const { SESSION_REFRESH_INTERVAL_MS, SESSION_TTL_MS, TABLE_NAMES } = require("../config.js");
 const dataStore = require("../dataStore.js");
-const { createApplication } = require("../server.js");
+const { createApplicationFixture } = require("./applicationFixture.js");
 const { StateRepository } = require("../stateRepository.js");
 const { AppError } = require("../errors.js");
 const { version: appVersion } = require("../package.json");
@@ -153,7 +153,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   dataStore.set("entryList", [["ID", "BewerbID", "PersonenID", "Entrydate", "PaymentStatus"], ["e1", "cup-1", "p1", "260101-1200", "paid"]], { source: "test" });
 
   const repository = new StateRepository(":memory:");
-  const sheetService = {
+  const playService = {
     async addMatch(_principal, { operationId }) {
       return { success: true, newMatchId: `m-${operationId.slice(-8)}` };
     },
@@ -188,13 +188,13 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
         competitionEnded: false,
       };
     },
-    async refreshSheetData(_principal, { operationId }) {
+    async refreshProjections(_principal, { operationId }) {
       return {
         success: true,
         operationId,
         refreshedAt: Date.now(),
-        tableCount: Object.keys(TABLE_CONFIG).length,
-        changedTables: [],
+        tableCount: TABLE_NAMES.length,
+        changedTableCount: 0,
       };
     },
     async setPasswordHash(personId, storedHash) {
@@ -214,7 +214,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     async stop() {},
   };
   const reportingToken = "r".repeat(43);
-  const application = createApplication({ repository, sheetService, messagingReporting: { enabled: true, deployment: "paj", ["token"]: reportingToken } });
+  const application = createApplicationFixture({ repository, playService, messagingReporting: { enabled: true, deployment: "paj", ["token"]: reportingToken } });
   application.scoreLogRepository.append({
     eventId: "00000000-0000-4000-8000-000000000601", court: "1", score: "6-3/4-6/0-0/15-0",
     matchId: "m1", courtActive: true, courtRevision: 1, occurredAt: "2026-09-04T10:00:00.000Z",
@@ -328,7 +328,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.match(metricsResponse.headers.get("x-request-id"), /^[0-9a-f-]{36}$/i);
   const metricsBody = await metricsResponse.text();
   assert.match(metricsBody, /epiber_ready 0/);
-  assert.match(metricsBody, /epiber_sqlite_open\{database="state"\} 1/);
+  assert.match(metricsBody, /epiber_readiness_component_ready\{component="postgres_runtime"\} 1/);
   assert.match(metricsBody, /epiber_people_normalization_current 1/);
   assert.match(metricsBody, /epiber_people_normalization_people 3/);
   assert.match(metricsBody, /epiber_people_normalization_affected_people 3/);
@@ -1068,7 +1068,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   const resultPlayerEndpoints = ["matchResultSuggestion", "setMatchResult"];
   const playerOnlyEndpoints = ["setMatchAppointment", "clearMatchAppointment"];
   const operatorEndpoints = ["navigator", "courtAssign", "courtSetActive", "monitorList", "monitorNavigate", "monitorScroll"];
-  const adminEndpoints = ["adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "sheetDataStatus", "refreshSheetData", "normalizePerson", "reconcilePerson", "monitorProvision", "monitorRotate", "monitorRevoke", "moderateCompetitionHistoryComment"];
+  const adminEndpoints = ["adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminMemberReconciliation", "adminPeopleNormalization", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "projectionStatus", "refreshProjections", "normalizePerson", "reconcilePerson", "monitorProvision", "monitorRotate", "monitorRevoke", "moderateCompetitionHistoryComment"];
   const deviceEndpoints = ["monitorTarget", "monitorAck"];
   const assertAllowedByPolicy = async (client, endpoint) => {
     const response = await client.request(endpoint, {});
@@ -1160,17 +1160,16 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   assert.equal(reconciliation.data.people.length >= 2, true);
   assert.equal(typeof reconciliation.data.people[0].externalId, "string");
   assert.equal(Object.hasOwn(reconciliation.data.people[0].values, "storedPasswordHash"), false);
-  const sheetStatus = await adminClient.request("sheetDataStatus");
-  assert.equal(sheetStatus.data.success, true);
-  assert.equal(Object.hasOwn(sheetStatus.data, "lastSuccessfulRefreshAt"), true);
-  assert.equal(typeof sheetStatus.data.bootstrapRecoveryActive, "boolean");
-  assert.deepEqual(Object.keys(sheetStatus.data.tables).sort(), Object.keys(TABLE_CONFIG).sort());
-  assert.equal(Object.values(sheetStatus.data.tables).some((table) => Object.hasOwn(table, "lastError")), false);
-  const sheetRefresh = await adminClient.request("refreshSheetData", {
+  const projectionStatus = await adminClient.request("projectionStatus");
+  assert.equal(projectionStatus.data.success, true);
+  assert.equal(Object.hasOwn(projectionStatus.data, "lastSuccessfulRefreshAt"), true);
+  assert.deepEqual(Object.keys(projectionStatus.data.tables).sort(), [...TABLE_NAMES].sort());
+  assert.equal(Object.values(projectionStatus.data.tables).some((table) => Object.hasOwn(table, "lastError")), false);
+  const projectionRefresh = await adminClient.request("refreshProjections", {
     operationId: "00000000-0000-4000-8000-000000000099",
   });
-  assert.equal(sheetRefresh.data.success, true);
-  assert.equal(sheetRefresh.data.tableCount, Object.keys(TABLE_CONFIG).length);
+  assert.equal(projectionRefresh.data.success, true);
+  assert.equal(projectionRefresh.data.tableCount, TABLE_NAMES.length);
   assert.equal((await adminClient.request("navigator", { profil: "1" })).data.items[0].action.path, "/scoreboard.html");
   adminClient.socket.send(JSON.stringify({ v: 2, type: "subscribe", topics: ["monitors"] }));
   const monitorSnapshot = await adminClient.next((message) => message.type === "event" && message.topic === "monitors", "monitor-snapshot");
@@ -1370,7 +1369,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
   oversizedClient.socket.send("x".repeat(20000));
   assert.equal(await oversizedClosed, 1009);
 
-  const currentTables = Object.fromEntries(Object.keys(TABLE_CONFIG).map((table) => [table, dataStore.get(table)]));
+  const currentTables = Object.fromEntries(TABLE_NAMES.map((table) => [table, dataStore.get(table)]));
   dataStore.resetForTests();
   for (const [table, values] of Object.entries(currentTables)) {
     if (table !== "matchtyp") dataStore.set(table, values, { source: "stale-matchtyp-test" });
@@ -1691,7 +1690,7 @@ test("HTTP-Session und WebSocket-Rollen funktionieren zusammen", async (t) => {
     && fields.result === "rejected" && fields.errorCode === "AUTH_REQUIRED"), true);
   assert.equal(auditRows.some((row) => row.action === "moderateCompetitionHistoryComment" && row.result === "failed" && row.errorCode === "AUTH_REQUIRED"), true);
   for (const action of [
-    "login", "adminPasswordSet", "adminPasswordSetup", "passwordSetup", "addMatch", "setMatchAppointment", "acknowledgeMessage", "acknowledgeAllMessages", "refreshSheetData", "monitorProvision", "monitorEnroll", "monitorNavigate", "courtAssign", "monitorRotate", "monitorRevoke",
+    "login", "adminPasswordSet", "adminPasswordSetup", "passwordSetup", "addMatch", "setMatchAppointment", "acknowledgeMessage", "acknowledgeAllMessages", "refreshProjections", "monitorProvision", "monitorEnroll", "monitorNavigate", "courtAssign", "monitorRotate", "monitorRevoke",
     "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction", "addCompetitionHistoryComment", "editCompetitionHistoryComment", "moderateCompetitionHistoryComment", "deleteCompetitionHistoryComment",
     "frontendLoggingSettings", "frontendLoggingTargetSet", "frontendLoggingTargetRemove",
   ]) {

@@ -376,10 +376,9 @@ export function createEndpoint(name) {
     if (["setMatchResult", "adminSetMatchEnd", "adminClearMatchResult", "adminCorrectRankingResult"].includes(name)) {
       window.__matchResultCalls.push({ endpoint: name, ...params });
       const search = new URLSearchParams(window.location.search);
-      if (search.get("resultRateLimited") === "1") {
-        const error = new Error("Die Google-Sheets-Schnittstelle hat ihr Zugriffslimit erreicht.");
-        error.code = "SHEETS_RATE_LIMITED";
-        error.details = { retryAfterMs: Number(search.get("retryMs")) || 60000 };
+      if (search.get("resultConflict") === "1") {
+        const error = new Error("Daten wurden gleichzeitig geändert. Bitte neu laden.");
+        error.code = "WRITE_CONFLICT";
         throw error;
       }
       if (search.get("pendingResult") === "1") {
@@ -2072,14 +2071,14 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
 });
 
 test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse im Kinddialog", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
-  timeout: 45000,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 60000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
   try {
-    const anonymousPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const anonymousPage = await newProfilePage(browser);
     await anonymousPage.goto(`http://127.0.0.1:${address.port}/ranking-test.html?id=2`, { waitUntil: "domcontentloaded" });
     const anonymousBox = anonymousPage.locator("#rankingContainer .box").first();
     await anonymousBox.waitFor({ state: "visible" });
@@ -2091,7 +2090,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(await anonymousPage.evaluate(() => window.__endpointCalls.some(({ name }) => name === "publicProfile")), false);
     await anonymousPage.close();
 
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const page = await newProfilePage(browser);
     await page.goto(`http://127.0.0.1:${address.port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => window.openProfileModal({ playerId: "p2" }));
     await page.getByRole("tab", { name: "Aktuell", exact: true }).click();
@@ -2272,7 +2271,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(Object.hasOwn(corrected, "matchEnd"), false);
     assert.equal(corrected.expectedFingerprint, "b".repeat(64));
 
-    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&resultRateLimited=1&retryMs=1200`));
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&resultConflict=1`));
     await page.getByRole("tab", { name: "Herren", exact: true }).click();
     await page.locator('[data-match-id="match-without-date"]').getByRole("button", { name: "Ergebnis eintragen", exact: true }).click();
     const walkoverDialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
@@ -2280,10 +2279,10 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     await walkoverDialog.locator("#matchResultLosingSide").selectOption("1");
     await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 3);
-    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /Google Sheets ist vorübergehend ausgelastet/);
-    assert.match(await walkoverDialog.locator("#matchResultSubmit").textContent(), /^Erneut in [12] s$/);
-    await page.waitForFunction(() => document.getElementById("matchResultSubmit")?.textContent === "Ergebnis speichern");
-    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /jetzt erneut speichern/);
+    await walkoverDialog.locator("#matchResultStatus").filter({ hasText: "gleichzeitig geändert" }).waitFor();
+    assert.equal(await walkoverDialog.locator("#matchResultSubmit").textContent(), "Ergebnis speichern");
+    assert.equal(await walkoverDialog.locator("#matchResultSubmit").isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 3);
     await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player`));
     await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 4);

@@ -19,7 +19,6 @@ const {
   WS_REQUEST_RATE,
 } = require("./config.js");
 const dataStore = require("./dataStore.js");
-const dataPoller = require("./dataPoller.js");
 const stateStore = require("./stateStore.js");
 const courtPoller = require("./courtPoller.js");
 const { AppError, errorData } = require("./errors.js");
@@ -244,14 +243,14 @@ function auditProjection(endpoint, params, result = {}, internal = null) {
         after: internal?.after || null,
       };
     }
-    case "refreshSheetData":
+    case "refreshProjections":
       return {
-        targetType: "sheet-cache",
+        targetType: "postgres-projections",
         targetId: "all",
         before: null,
         after: internal?.after || (result.success ? {
           tableCount: result.tableCount || 0,
-          changedTableCount: Array.isArray(result.changedTables) ? result.changedTables.length : 0,
+          changedTableCount: result.changedTableCount || 0,
           refreshedAt: result.refreshedAt || null,
         } : null),
       };
@@ -426,7 +425,7 @@ function profileRankings(personId, principal = null) {
     const canChallenge = !withdrawn
       && principal?.type === "user"
       && String(principal.id || "") !== String(personId)
-      && dependencies.sheetService.challengeEligibility(principal, competition.competitionId, String(personId)).allowed;
+      && dependencies.playService.challengeEligibility(principal, competition.competitionId, String(personId)).allowed;
     return [{
       competitionId: competition.competitionId,
       competitionName: competition.competitionName,
@@ -845,7 +844,7 @@ async function writeAudit({ eventId, principal, endpoint, params, result = {}, i
 }
 
 async function writeRejectedEndpointAudit({ eventId, principal, endpoint, error, startedAt }) {
-  if (!HISTORY_INTERACTION_WRITES.has(endpoint) && !HALL_TIME_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages" && endpoint !== "monitorDelete") return;
+  if (!HISTORY_INTERACTION_WRITES.has(endpoint) && !HALL_TIME_WRITES.has(endpoint) && endpoint !== "acknowledgeAllMessages" && endpoint !== "monitorDelete" && endpoint !== "refreshProjections") return;
   try {
     await writeAudit({ eventId, principal, endpoint, params: {}, outcome: "started" });
     await writeAudit({ eventId, principal, endpoint, params: {}, outcome: "failed", error });
@@ -860,6 +859,11 @@ async function writeRejectedEndpointAudit({ eventId, principal, endpoint, error,
       durationMs: Math.max(0, Date.now() - startedAt),
       result: "rejected",
       errorCode: error.code || "MESSAGE_BULK_ACKNOWLEDGMENT_REJECTED",
+    });
+  } else if (endpoint === "refreshProjections") {
+    logger.log("info", "postgres_projection_reload_rejected", {
+      supportId: eventId, durationMs: Math.max(0, Date.now() - startedAt),
+      result: "rejected", errorCode: error.code || "PROJECTION_RELOAD_REJECTED",
     });
   } else {
     logger.log("info", "hall_time_write_completed", {
@@ -1337,18 +1341,17 @@ const endpoints = {
       return { success: true, ...projectPeopleReconciliation(dataStore.get("players")) };
     },
   },
-  sheetDataStatus: {
+  projectionStatus: {
     access: ["admin"],
     handler: () => {
-      const status = dataPoller.getStatus();
+      const status = dependencies.projectionLoader.getStatus();
       return {
         success: true,
         lastSuccessfulRefreshAt: status.lastSuccessfulRefreshAt,
         dataAgeMs: status.dataAgeMs,
         inProgress: status.inProgress,
-        bootstrapRecoveryActive: status.bootstrapRecoveryActive,
         lastControlledFailure: status.lastControlledFailure,
-        tables: Object.fromEntries(Object.entries(status.tables).map(([table, value]) => [table, {
+        tables: Object.fromEntries(Object.entries(dataStore.getAll()).map(([table, value]) => [table, {
           lastAttempt: value.lastAttempt || null,
           lastUpdate: value.lastUpdate || null,
           revision: value.revision,
@@ -1360,11 +1363,11 @@ const endpoints = {
       };
     },
   },
-  refreshSheetData: {
+  refreshProjections: {
     access: ["admin"],
     write: true,
     writeCost: 0.1,
-    handler: (params, context) => dependencies.sheetService.refreshSheetData(context.principal, params),
+    handler: (params, context) => dependencies.playService.refreshProjections(context.principal, params),
   },
   myProfile: {
     access: "authenticated",
@@ -1598,7 +1601,7 @@ const endpoints = {
   },
   rankingChallengeState: {
     access: "authenticated",
-    handler: (params, context) => dependencies.sheetService.rankingChallengeState(
+    handler: (params, context) => dependencies.playService.rankingChallengeState(
       context.principal,
       idValue(params.bewerbId, "bewerbId"),
     ),
@@ -1617,18 +1620,18 @@ const endpoints = {
     access: ["admin"],
     write: true,
     writeCost: 0.1,
-    handler: (params, context) => dependencies.sheetService.normalizePerson(context.principal, params),
+    handler: (params, context) => dependencies.playService.normalizePerson(context.principal, params),
   },
   reconcilePerson: {
     access: ["admin"],
     write: true,
     writeCost: 0.1,
-    handler: (params, context) => dependencies.sheetService.reconcilePerson(context.principal, params),
+    handler: (params, context) => dependencies.playService.reconcilePerson(context.principal, params),
   },
   addMatch: {
     access: "authenticated",
     write: true,
-    handler: (params, context) => dependencies.sheetService.addMatch(context.principal, {
+    handler: (params, context) => dependencies.playService.addMatch(context.principal, {
       operationId: operationId(params?.operationId),
       bewerbId: idValue(params?.bewerbId, "bewerbId"),
       opponentId: idValue(params?.opponentId, "opponentId"),
@@ -1637,7 +1640,7 @@ const endpoints = {
   setMatchAppointment: {
     access: ["player", "player a", "player b"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.setMatchAppointment(context.principal, {
+    handler: (params, context) => dependencies.playService.setMatchAppointment(context.principal, {
       operationId: operationId(params?.operationId),
       matchId: idValue(params?.matchId, "matchId"),
       matchDate: stringValue(params?.matchDate, "matchDate", { min: 11, max: 11, pattern: /^\d{6}-\d{4}$/ }),
@@ -1646,7 +1649,7 @@ const endpoints = {
   clearMatchAppointment: {
     access: ["player", "player a", "player b"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.clearMatchAppointment(context.principal, params),
+    handler: (params, context) => dependencies.playService.clearMatchAppointment(context.principal, params),
   },
   matchResultSuggestion: {
     access: ["player", "player a", "player b", "admin"],
@@ -1655,42 +1658,42 @@ const endpoints = {
   setMatchResult: {
     access: ["player", "player a", "player b", "admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.setMatchResult(context.principal, params),
+    handler: (params, context) => dependencies.playService.setMatchResult(context.principal, params),
   },
   adminSetMatchEnd: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.adminSetMatchEnd(context.principal, params),
+    handler: (params, context) => dependencies.playService.adminSetMatchEnd(context.principal, params),
   },
   adminClearMatchResult: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.adminClearMatchResult(context.principal, params),
+    handler: (params, context) => dependencies.playService.adminClearMatchResult(context.principal, params),
   },
   adminCorrectRankingResult: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.adminCorrectRankingResult(context.principal, params),
+    handler: (params, context) => dependencies.playService.adminCorrectRankingResult(context.principal, params),
   },
   adminDeleteRankingChallenge: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.adminDeleteRankingChallenge(context.principal, params),
+    handler: (params, context) => dependencies.playService.adminDeleteRankingChallenge(context.principal, params),
   },
   adminSetRankingChallengeDate: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.adminSetRankingChallengeDate(context.principal, params),
+    handler: (params, context) => dependencies.playService.adminSetRankingChallengeDate(context.principal, params),
   },
   adminSetMatchAppointment: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.adminSetMatchAppointment(context.principal, params),
+    handler: (params, context) => dependencies.playService.adminSetMatchAppointment(context.principal, params),
   },
   adminClearMatchAppointment: {
     access: ["admin"],
     write: true,
-    handler: (params, context) => dependencies.sheetService.adminClearMatchAppointment(context.principal, params),
+    handler: (params, context) => dependencies.playService.adminClearMatchAppointment(context.principal, params),
   },
   addEntryList: {
     access: "authenticated",
@@ -1711,7 +1714,7 @@ const endpoints = {
   withdrawFromRanking: {
     access: "authenticated",
     write: true,
-    handler: (params, context) => dependencies.sheetService.withdrawFromRanking(context.principal, {
+    handler: (params, context) => dependencies.playService.withdrawFromRanking(context.principal, {
       operationId: operationId(params?.operationId),
       bewerbId: idValue(params?.bewerbId, "bewerbId"),
       rank: integerValue(params?.rank, "rank", { min: 1, max: 10000 }),
@@ -2213,7 +2216,6 @@ function rejectUpgrade(socket, status, message) {
 
 function init(server, options) {
   dependencies = { ...options, canonicalizeMonitorPath: options.canonicalizeMonitorPath };
-  dependencies.competitionService ||= options.sheetService;
   dependencies.courtService ||= {
     getCourt: (court) => stateStore.getCourt(court),
     getScoreboardCourts: () => stateStore.getScoreboardCourts(),

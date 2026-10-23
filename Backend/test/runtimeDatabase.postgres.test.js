@@ -194,7 +194,7 @@ test("Navigatorreparatur erhaelt Profil, Reihenfolge und Platzaktionen atomar un
   await assert.rejects(database.query(`INSERT INTO venue.navigation_presets(tenant_id,label,target_type,page_key) VALUES($1::uuid,'Invalid','court_assignment','3')`, [venue.context.tenantId]), { code: "23514" });
 });
 
-test("PostgreSQL-Projektionsloader ersetzt den Sheet-Initialload atomar und ohne Polling", { timeout: 30_000 }, async (t) => {
+test("PostgreSQL-Projektionsloader laedt alle Tabellen atomar und ohne Polling", { timeout: 30_000 }, async (t) => {
   const { repositories } = await preparedRuntime(t);
   dataStore.resetForTests();
   t.after(() => dataStore.resetForTests());
@@ -202,7 +202,6 @@ test("PostgreSQL-Projektionsloader ersetzt den Sheet-Initialload atomar und ohne
   const loader = new PostgresProjectionLoader({
     projectionService: new PostgresProjectionService(repositories),
     dataStore,
-    publish: (topic, value) => events.push({ topic, value }),
     log: (level, event, fields) => events.push({ level, event, fields }),
   });
   const first = await loader.initialLoad();
@@ -283,16 +282,16 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.ok(hallEvents.rows[1].summary_snapshot.includes("nachgerückt"));
   await components.projectionLoader.refresh("play-service-test");
   const player = { type: "user", id: "2", name: "Olivia Operator", role: "player" };
-  const match = await components.sheetService.addMatch(player, {
+  const match = await components.playService.addMatch(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd05", bewerbId: "2", opponentId: "1",
   });
   assert.equal(match.newMatchId.startsWith("m-"), true);
-  await components.sheetService.setMatchAppointment(player, {
+  await components.playService.setMatchAppointment(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd06", matchId: match.newMatchId, matchDate: "261011-1800",
   });
   const matchValues = dataStore.get("matches1"), matchHeader = headerOf(matchValues);
   const matchRow = matchValues.slice(1).find((row) => String(row[headerIndex(matchHeader, "id")]) === match.newMatchId);
-  const completed = await components.sheetService.setMatchResult(player, {
+  const completed = await components.playService.setMatchResult(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd07", matchId: match.newMatchId,
     kind: "regular", result: "6-0/6-0", matchStart: "261011-1800", matchEnd: "261011-1900",
     expectedFingerprint: matchCompletionFingerprint(matchRow, matchHeader),
@@ -303,20 +302,20 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.equal(rankings.find(({ personId }) => personId === "1").rank, 2);
   const firstCompletedValues = dataStore.get("matches1"), firstCompletedHeader = headerOf(firstCompletedValues);
   const firstCompletedRow = firstCompletedValues.slice(1).find((row) => String(row[headerIndex(firstCompletedHeader, "id")]) === match.newMatchId);
-  const corrected = await components.sheetService.setMatchResult(player, {
+  const corrected = await components.playService.setMatchResult(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd0b", matchId: match.newMatchId,
     kind: "regular", result: "6-1/6-1", matchStart: "261011-1800", matchEnd: "261011-1900",
     expectedFingerprint: matchCompletionFingerprint(firstCompletedRow, firstCompletedHeader),
   });
   assert.equal(corrected.result, "6-1/6-1");
-  await components.sheetService.adminSetMatchEnd(principal, {
+  await components.playService.adminSetMatchEnd(principal, {
     operationId: "0199c800-0000-7000-8000-00000000feff", matchId: match.newMatchId,
-    expectedFingerprint: components.sheetService.cachedFingerprint(match.newMatchId).fingerprint,
+    expectedFingerprint: components.playService.cachedFingerprint(match.newMatchId).fingerprint,
     matchEnd: "261011-2000", reason: "Integrationstest Spielendeberichtigung",
   });
   const completedValues = dataStore.get("matches1"), completedHeader = headerOf(completedValues);
   const completedRow = completedValues.slice(1).find((row) => String(row[headerIndex(completedHeader, "id")]) === match.newMatchId);
-  const cleared = await components.sheetService.adminClearMatchResult(principal, {
+  const cleared = await components.playService.adminClearMatchResult(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd0a", matchId: match.newMatchId,
     expectedFingerprint: matchCompletionFingerprint(completedRow, completedHeader), reason: "Integrationstest Rücknahme",
   });
@@ -329,7 +328,7 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     return matchCompletionFingerprint(values.slice(1).find((row) => String(row[headerIndex(header, "id")]) === match.newMatchId), header);
   };
   for (const [index, kind] of ["regular", "retirement"].entries()) {
-    await assert.rejects(components.sheetService.setMatchResult(player, {
+    await assert.rejects(components.playService.setMatchResult(player, {
       operationId: `0199c800-0000-7000-8000-00000000fe0${index}`, matchId: match.newMatchId,
       kind, result: kind === "regular" ? "6-0/6-0" : "", losingSide: 1,
       matchStart: "261011-1200", matchEnd: "261011-1900", expectedFingerprint: resultFingerprint(),
@@ -342,7 +341,7 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
       operationId: `0199c800-0000-7000-8000-00000000fe1${index}`, matchId: match.newMatchId,
       kind: "walkover", losingSide: 1, expectedFingerprint: resultFingerprint(),
     };
-    const result = await components.sheetService.setMatchResult(player, params);
+    const result = await components.playService.setMatchResult(player, params);
     assert.equal(result.completionType, "walkover");
     const stored = await components.repositories.venue.database.query(`SELECT r.play_started_at,r.play_ended_at,r.walkover_at,
       (SELECT count(*)::int FROM play.match_result_sets WHERE result_id=r.id) AS sets
@@ -351,16 +350,16 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     assert.equal(stored.rows[0].play_ended_at, null);
     assert.ok(stored.rows[0].walkover_at);
     assert.equal(stored.rows[0].sets, 0);
-    await components.sheetService.adminClearMatchResult(principal, {
+    await components.playService.adminClearMatchResult(principal, {
       operationId: `0199c800-0000-7000-8000-00000000fe2${index}`, matchId: match.newMatchId,
       expectedFingerprint: resultFingerprint(), reason: "Walkover-Test Ruecknahme",
     });
   }
-  await components.sheetService.adminSetRankingChallengeDate(principal, {
+  await components.playService.adminSetRankingChallengeDate(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fe31", matchId: match.newMatchId,
     challengeDate: "261010-1200", reason: "Integrationstest Forderungsdatum",
   });
-  await components.sheetService.adminDeleteRankingChallenge(principal, {
+  await components.playService.adminDeleteRankingChallenge(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fe32", matchId: match.newMatchId,
     reason: "Integrationstest Forderungsloeschung",
   });
@@ -389,12 +388,12 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.ok(allHistory.entries.every(entry => entry.competitionId));
   assert.ok(!allHistory.entries.some(entry => entry.id === hallNotice.eventId));
   const normalizedPerson = projectPeopleNormalization(dataStore.get("players")).people.find(({ id }) => id === "2");
-  const normalization = await components.sheetService.normalizePerson(principal, {
+  const normalization = await components.playService.normalizePerson(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd08", personId: "2",
     expectedFingerprint: normalizedPerson.fingerprint, changes: { phone: "0043 660 123456" },
   });
   assert.equal(normalization.changedFieldCount, 1);
-  const createdPerson = await components.sheetService.reconcilePerson(principal, {
+  const createdPerson = await components.playService.reconcilePerson(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd09", action: "create", externalId: "999999",
     values: { firstName: "Petra", lastName: "Postgres", active: "1", member: "player" },
   });
@@ -514,14 +513,18 @@ test("Venue-Repository liest Courts und Hallenzeiten und persistiert Scores atom
 
 test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sowie Listener", { timeout: 30_000 }, async (t) => {
   const cluster = startPostgresTestCluster();
-  t.after(() => cluster.stop());
+  let app, restarted;
+  t.after(async () => {
+    try { await app?.shutdown("test-cleanup"); await restarted?.shutdown("restart-cleanup"); }
+    finally { cluster.stop(); }
+  });
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const client = new Client(cluster.connectionConfig); await client.connect();
   await client.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false"); await client.end();
-  const app = await createPostgresApplication({
+  app = await createPostgresApplication({
     connectionConfig: cluster.connectionConfig,
     env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 7).toString("base64url") },
   });
@@ -547,11 +550,83 @@ test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sow
   const response = messages.find(({ type, id }) => type === "response" && id === "postgres-scoreboard");
   assert.equal(response.data.success, true);
   assert.equal(response.data.courts["1"].matchId, "m-seed");
+  const request = (ws, endpoint, params = {}) => new Promise((resolve, reject) => {
+    const id = require("node:crypto").randomUUID();
+    const timer = setTimeout(() => { ws.off("message", receive); reject(new Error("RPC_TIMEOUT")); }, 3000);
+    function receive(raw) {
+      const message = JSON.parse(raw.toString());
+      if (message.type !== "response" || message.id !== id) return;
+      clearTimeout(timer); ws.off("message", receive); resolve(message);
+    }
+    ws.on("message", receive);
+    ws.send(JSON.stringify({ type: "request", v: 2, id, endpoint, params }));
+  });
+  assert.equal((await request(socket, "projectionStatus")).data.error.code, "FORBIDDEN");
+  assert.equal((await request(socket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda1" })).data.error.code, "FORBIDDEN");
   socket.close();
   await new Promise((resolve) => socket.once("close", resolve));
+
+  const identity = app.authService.repository;
+  const account = await identity.accountForLogin("admin");
+  await identity.replacePassword({ accountId: account.accountId, expectedAuthRevision: account.authRevision,
+    credentialSchema: "scrypt_v1", secretHash: await app.authService.createStoredPasswordHash("c".repeat(64)) });
+  const adminLogin = await fetch(`${base}/api/session`, {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:8080" },
+    body: JSON.stringify({ login: "admin", passwordHash: "c".repeat(64) }),
+  });
+  assert.equal(adminLogin.status, 200);
+  const adminSocket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`, { headers: {
+    Origin: "http://localhost:8080", Cookie: adminLogin.headers.get("set-cookie").split(";", 1)[0],
+  } });
+  t.after(() => adminSocket.terminate());
+  await new Promise((resolve, reject) => { adminSocket.once("open", resolve); adminSocket.once("error", reject); });
+  const welcome = new Promise((resolve) => adminSocket.once("message", resolve));
+  adminSocket.send(JSON.stringify({ type: "hello", v: 2, protocol: 2, clientId: "projection-admin", deviceId: "projection-admin", pageType: "servicebereich", appVersion: require("../package.json").version }));
+  assert.equal(JSON.parse((await welcome).toString()).type, "welcome");
+  const status = (await request(adminSocket, "projectionStatus")).data;
+  assert.equal(status.success, true);
+  assert.equal(status.lastSuccessfulRefreshAt, app.projectionLoader.lastCompletedAt);
+  assert.deepEqual(Object.keys(status.tables).sort(), Object.keys(dataStore.getAll()).sort());
+  assert.equal((await request(adminSocket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda2" })).data.tableCount, 8);
+
+  const originalLoad = app.projectionLoader.projectionService.load;
+  app.projectionLoader.projectionService.load = async () => { throw new Error("PRIVATE_DB_FAILURE_MUST_NOT_LEAK"); };
+  const failed = await request(adminSocket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda3" });
+  assert.equal(failed.data.error.code, "DATA_REFRESH_FAILED");
+  assert.doesNotMatch(JSON.stringify(failed), /PRIVATE_DB_FAILURE/);
+  const failedStatus = (await request(adminSocket, "projectionStatus")).data;
+  assert.equal(failedStatus.lastControlledFailure.code, "POSTGRES_PROJECTION_REFRESH_FAILED");
+  assert.equal(app.status().ready, true);
+  app.projectionLoader.projectionService.load = originalLoad;
+
+  const recordAudit = app.auditLogRepository.record.bind(app.auditLogRepository);
+  let failAuditFinish = true;
+  app.auditLogRepository.record = async (entry) => {
+    if (entry.action === "refreshProjections" && entry.result === "success" && failAuditFinish) {
+      failAuditFinish = false;
+      throw new Error("simulated audit finish failure");
+    }
+    return recordAudit(entry);
+  };
+  assert.equal((await request(adminSocket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda4" })).data.error.code, "WRITE_OUTCOME_UNKNOWN");
+  app.auditLogRepository.record = recordAudit;
+  const auditClient = new Client(cluster.connectionConfig); await auditClient.connect();
+  let refreshAudits;
+  try {
+    refreshAudits = await auditClient.query(`SELECT operation.status,operation.before_projection,operation.after_projection,transition.error_code
+      FROM ops.audit_operations operation JOIN ops.audit_transitions transition
+        ON transition.audit_operation_id=operation.id AND transition.transition=operation.status
+      WHERE operation.action='refresh_projections' ORDER BY operation.started_at`);
+  } finally { await auditClient.end(); }
+  assert.deepEqual(refreshAudits.rows.map(({ status }) => status), ["failed", "success", "failed", "unknown"]);
+  assert.equal(refreshAudits.rows[0].error_code, "FORBIDDEN");
+  assert.deepEqual(Object.keys(refreshAudits.rows[1].after_projection).sort(), ["changedTableCount", "refreshedAt", "tableCount"]);
+  assert.equal(refreshAudits.rows[2].error_code, "DATA_REFRESH_FAILED");
+  assert.equal(refreshAudits.rows[3].after_projection, null);
+  adminSocket.close(); await new Promise((resolve) => adminSocket.once("close", resolve));
   await app.shutdown("test");
   assert.equal(app.status().shuttingDown, true);
-  const restarted = await createPostgresApplication({
+  restarted = await createPostgresApplication({
     connectionConfig: cluster.connectionConfig,
     env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 7).toString("base64url") },
   });
