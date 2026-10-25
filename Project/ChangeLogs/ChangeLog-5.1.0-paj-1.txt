@@ -6,3 +6,11 @@ Commit: 5.1.0-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.0-paj-1-1` gesetzt.
+
+[5.1.0-paj-1-2] - 2026-10-25
+Commit: 5.1.0-paj-1-2 | Releaseabnahme 5.1.0 mit Live- und PAJ-Nachweisen dokumentieren
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.0-paj-1-1-x` gesetzt.
+  - [Releaseabnahme] Nach autonomen Betreiberauftrag Punkte 1 bis 4 fuer 5.1.0 abgeschlossen: Main/PAJ/Live unveraendert auf b4287458de8a566a41f6733ab999d7c05d9db724. Dauerhafter datensparsamer Rolloutbericht unter Project/server-configs/rollouts/5.1.0.md mit voller Release-Dateiliste, echter PAJ-/Live-Dreiengine-Abnahme, Komprimierungs-/Schutzpfad-/Worker-/Observabilitynachweisen und einmaliger Backup-Risikoausnahme.
+  - [Transparenz] Rund 105 Sekunden Wartung; erster Appstart wegen uebernommener restriktiver Rechte oeffentlicher neuer npm-Pakete fehlgeschlagen, gezielt behoben, erfolgreiche Endinvokationen stabil. Host-Chromium-Timingtest und korrigierte Pruefannahmen dokumentiert. Kein Schema-/Datenimport, keine Secretrechteaenderung, kein DB-/Grafana-/M365-Neustart. Bericht erst nach realer Abnahme separat versioniert, kein Umschreiben des ausgerollten Release oder neuer Main-Sprung.
