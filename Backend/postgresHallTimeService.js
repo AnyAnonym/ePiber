@@ -88,14 +88,14 @@ class PostgresHallTimeService {
   }
 
   async publicGroups(principal) {
-    const values = await this.grids();
-    return { success: true, revision: Math.max(0, ...values.map(({ revision }) => revision)), groups: values.filter((grid) => grid.active && grid.publicJoinable).map((grid) => ({ id: grid.id, name: grid.name, joined: grid.participants.some(({ id }) => id === String(principal.id)) })) };
+    const values = await this.venue.hallTimeGridSummaries(principal?.id);
+    return { success: true, revision: Math.max(0, ...values.map(({ revision }) => revision)), groups: values.filter((grid) => grid.active && grid.publicJoinable).map(({ id, name, joined }) => ({ id, name, joined })) };
   }
   async visibleGrids(principal) {
-    const values = await this.grids();
-    return { success: true, revision: Math.max(0, ...values.map(({ revision }) => revision)), grids: values.filter((grid) => grid.active && this.canAccess(principal, grid)).map(({ id, name, mode }) => ({ id, name, mode })) };
+    const values = await this.venue.hallTimeGridSummaries(principal?.id);
+    return { success: true, revision: Math.max(0, ...values.map(({ revision }) => revision)), grids: values.filter((grid) => grid.active && (isAdmin(principal) || grid.joined)).map(({ id, name, mode }) => ({ id, name, mode })) };
   }
-  async canView(principal, gridId) { const grid = await this.find(gridId); return Boolean(grid?.active && this.canAccess(principal, grid)); }
+  async canView(principal, gridId) { const [grid] = await this.venue.hallTimeGridSummaries(principal?.id, gridId); return Boolean(grid?.active && (isAdmin(principal) || grid.joined)); }
   async grid(principal, gridId) {
     const grid = await this.find(gridId);
     if (!grid?.active) throw new AppError("HALL_TIME_GRID_NOT_FOUND", "Hallenzeiten-Raster wurde nicht gefunden", 404);

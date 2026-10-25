@@ -1165,24 +1165,26 @@ ADMIN:
       Entfernt nach Bestaetigung alle Fix- und Wartelistenstati, behaelt aber alle
       Termine. Erfolg liefert zusaetzlich `deletedEntryCount`.
 
-  `sheetDataStatus {}`
-      Liefert den kontrollierten Zustand des Sheet-Snapshots mit
-      `lastSuccessfulRefreshAt`, `dataAgeMs`, `inProgress`,
-      `bootstrapRecoveryActive`, `lastControlledFailure` und den technischen
-      Tabellenmetadaten. Die Antwort enthaelt keine Tabellenzeilen, Credentials
-      oder freien Google-Fehlertexte.
+  PostgreSQL-KO-Vertrag: Fehlendes Folgematch bei Ergebnis/Korrektur und private
+  Adminwarnung sind atomar; Replay ohne Duplikat. `KO_TARGET_MISSING` bleibt auch
+  ohne aktive Admins erhalten. Meldungsfehler erlaubt keinen Erfolgscommit.
+  Finals, RoundRobin und Ranglisten sind ausgeschlossen; keine Rasterreparatur.
 
-  `refreshSheetData { operationId }`
-      Startet einen exklusiven atomaren Gesamtimport aller acht Tabellen. Alle
-      Tabellen werden vor der gemeinsamen Uebernahme validiert. Erfolg liefert
-      `{ success:true, refreshedAt, tableCount, changedTables, repeated? }` und
-      invalidiert nur tatsaechlich geaenderte Tabellen. Bei Fehler bleibt der
-      letzte gueltige Snapshot aktiv und der Client erhaelt einen kontrollierten
-      Fehler mit Support-ID. Ohne vorherigen Gesamterfolg bleibt Readiness
-      `not-ready`. `(Admin, operationId)` ist idempotent; der Browser wiederholt
-      den Write nach Timeout oder Transportverlust nicht automatisch. Der
-      Auditvertrag umfasst `started` sowie `success|failed|unknown` und projiziert
-      nur Tabellenanzahl, Anzahl geaenderter Tabellen und Abschlusszeit.
+  `projectionStatus {}`
+      Admin-only: `success`, `lastSuccessfulRefreshAt`, `dataAgeMs`, `inProgress`,
+      `lastControlledFailure` und Metadaten aller acht PostgreSQL-Projektionen;
+      keine Tabellenzeilen, Credentials oder freien Rohfehler. Alter ist kein TTL.
+
+  `refreshProjections { operationId }`
+      Admin-only atomarer PostgreSQL-Lesecache-Reload ohne externe Importe oder
+      gespeicherte Fachdatenwrites. Erfolg: `success`, `operationId`, `tableCount`,
+      `changedTableCount`, `refreshedAt`. Nur geaenderte Tabellen invalidieren.
+      Fehler behaelt Last-good; ohne Erstload bleibt Readiness not-ready.
+      Kein automatischer Write-Retry. Fehler: `FORBIDDEN`, `DATA_REFRESH_FAILED`,
+      `SHUTTING_DOWN`, bei unklarem Auditabschluss `WRITE_OUTCOME_UNKNOWN`.
+      Auditaktion `refresh_projections`: started, success/failed/unknown und
+      Ablehnung mit kontrollierten Tabellenzaehlern/Zeitwerten, ohne Rohpayloads.
+      Die ehemaligen Sheetstatus-/Import-RPCs sind entfernt.
 
   `adminPeopleNormalization {}`
       Liefert die geschlossene Projektion der sechzehn erlaubten Personenfelder,
@@ -1209,23 +1211,18 @@ ADMIN:
       und Login-Konflikte. Bestehende Login-Dublettengruppen duerfen personweise
       verkleinert, aber weder neu erzeugt noch vergroessert werden. Der Auditabschluss speichert den resultierenden
       Zielnamen. Im Journal erscheinen fuer Aktiv und Rolle kontrollierte
-      Alt-/Neuwerte, fuer alle anderen Felder nur deren Namen. Erreicht ein
-      erforderlicher Google-Sheets-Read vor dem Write die externe Minutenquote,
-      liefert der Endpoint `SHEETS_RATE_LIMITED` mit der Aufforderung, etwa eine
-      Minute zu warten, sowie `details.retryAfterMs: 60000`. Es wird dabei kein
-      Write begonnen und kein Operationsresultat gespeichert; ein erneuter
-      kontrollierter Versuch bleibt nach Ablauf der Wartezeit moeglich.
+      Alt-/Neuwerte, fuer alle anderen Felder nur deren Namen. Fachwrite und
+      Idempotenzresultat werden in PostgreSQL transaktional gespeichert.
       Der Endpoint kostet im gemeinsamen WS-Write-Limiter `0.1` statt des
       Standardwerts `1`, damit die bewusst personweise Vorschaufolge moeglich
       bleibt. Erfolgsantwort: `{ success:true, personId, fingerprint,
       repeated?:true, recovered?:true }`. Bereits vorhandene Zielwerte sind ein
       erfolgreicher No-op; eine bekannte Operation-ID liefert ihr Resultat ohne
-      neuen Sheetwrite. Der Browser sendet Writes bei Timeout oder
+      neuen Fachwrite. Der Browser sendet Writes bei Timeout oder
       Transportverlust nicht automatisch erneut.
       Relevante Fehler: `VALIDATION_ERROR`, `PERSON_NOT_FOUND`,
       `PERSON_CONFLICT`, `WRITE_CONFLICT`, `LOGIN_CONFLICT`,
-      `ADMIN_SELF_PROTECTION`, `LAST_ADMIN_PROTECTION`, `SHEET_SCHEMA`,
-      `SHEETS_RATE_LIMITED` und `WRITE_OUTCOME_UNKNOWN`.
+      `ADMIN_SELF_PROTECTION`, `LAST_ADMIN_PROTECTION` und `WRITE_OUTCOME_UNKNOWN`.
 
   `adminMemberReconciliation {}`
       Admin-only Read aus einem aktuellen Personenbestand. Liefert
@@ -1269,18 +1266,15 @@ ADMIN:
       `repeated` fuer bekannte oder bereits erreichte Resultate.
 
       `(Admin, operationId)` ist an Endpoint und Payload gebunden. Ein bekanntes
-      terminales Resultat wird ohne neuen Sheetwrite wiedergegeben. Bei
-      `WRITE_OUTCOME_UNKNOWN` speichert SQLite den unklaren Zustand: derselbe
-      Request liest nur zur Bestaetigung nach und fuehrt insbesondere keinen
-      zweiten Append aus. Eine bestaetigte Anlage wird unter derselben Personen-ID
-      inklusive fehlender Metadaten fertiggestellt; ein nicht bestaetigbarer
-      Zustand bleibt unknown und ist ueber `operationStatus` sichtbar. Der Client
+      terminales Resultat wird ohne neuen Fachwrite wiedergegeben. PostgreSQL
+      bindet Fachwrite und Operationsergebnis transaktional; ein nicht
+      bestaetigbarer Commitausgang bleibt unknown und ist ueber `operationStatus`
+      sichtbar. Es gibt keinen Google-Append oder Metadata-Recoverypfad. Der Client
       wiederholt den Write bei Timeout oder Transportverlust nicht automatisch.
 
       Relevante Fehler: `VALIDATION_ERROR`, `PERSON_NOT_FOUND`,
       `PERSON_CONFLICT`, `EXTERNAL_ID_CONFLICT`, `LOGIN_CONFLICT`,
-      `ROLE_PROTECTED`, `WRITE_CONFLICT`, `OPERATION_ID_CONFLICT`, `SHEET_SCHEMA`,
-      `SHEETS_RATE_LIMITED` mit `details.retryAfterMs:60000` und
+      `ROLE_PROTECTED`, `WRITE_CONFLICT`, `OPERATION_ID_CONFLICT` und
       `WRITE_OUTCOME_UNKNOWN`. Jeder gueltige Write besitzt Audit `started` und
       terminal `success|failed|unknown` mit Adminprincipal, Personenziel und
       operationId; ein erfolgreicher Abschluss speichert auch den resultierenden

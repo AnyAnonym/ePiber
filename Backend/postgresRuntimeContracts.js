@@ -1,6 +1,10 @@
 "use strict";
 
 const AUDIT_CONTRACTS = Object.freeze({
+  "refresh_projections": Object.freeze({
+    before: Object.freeze({}),
+    after: Object.freeze({ tableCount: "count", changedTableCount: "count", refreshedAt: "epoch_ms" }),
+  }),
   "paj.password.rotate_all": Object.freeze({
     before: Object.freeze({ scope: "status" }),
     after: Object.freeze({ accountCount: "count", credentialCount: "count", sessionsRevoked: "count", authorizationsRevoked: "count", loginLimitsCleared: "count" }),
@@ -48,8 +52,8 @@ const IDEMPOTENCY_CONTRACTS = Object.freeze({
   "match.appointment.admin_set": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
   "match.appointment.clear": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
   "match.appointment.admin_clear": Object.freeze({ success: "boolean", matchId: "id", matchDate: "controlled" }),
-  "match.result.set": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status" }),
-  "match.result.correct": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status" }),
+  "match.result.set": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status", warningCode: "controlled" }),
+  "match.result.correct": Object.freeze({ success: "boolean", matchId: "id", result: "controlled", completionType: "status", warningCode: "controlled" }),
   "match.end.set": Object.freeze({ success: "boolean", matchId: "id", matchEnd: "controlled" }),
   "match.result.clear": Object.freeze({ success: "boolean", matchId: "id", cleared: "boolean" }),
   "match.challenge.delete": Object.freeze({ success: "boolean", matchId: "id", deleted: "boolean" }),
@@ -62,6 +66,7 @@ const IDEMPOTENCY_CONTRACTS = Object.freeze({
 });
 
 const MESSAGE_EVENT_CONTRACTS = Object.freeze({
+  "ko_progression_required": Object.freeze({ templateKey: "ko_progression_required", templateVersion: 1, parameters: Object.freeze({ matchId: "id", expectedRoundCode: "id" }) }),
   "competition.entry.created": Object.freeze({
     templateKey: "competition.entry.created",
     templateVersion: 1,
@@ -97,7 +102,7 @@ const LEGACY_AUDIT_ACTIONS = Object.freeze([
   "moderateCompetitionHistoryComment", "setCompetitionHistoryReaction", "setCompetitionHistoryCommentReaction",
   "addEntryList", "removeEntryList", "withdrawFromRanking", "courtAssign", "courtSetActive", "monitorNavigate",
   "monitorScroll", "monitorProvision", "monitorRotate", "monitorRevoke", "monitorDelete", "normalizePerson", "reconcilePerson",
-  "refreshSheetData", "adminSaveHallTimeGrid", "setHallTimeBooking", "setMyHallTimeGroupMembership",
+  "adminSaveHallTimeGrid", "setHallTimeBooking", "setMyHallTimeGroupMembership",
   "adminDistributeHallTimeGrid", "adminApplyHallTimeDistribution", "adminSaveHallTimeConstraints",
   "adminClearAllHallTimeStatuses",
 ]);

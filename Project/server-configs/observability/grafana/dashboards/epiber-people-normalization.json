@@ -7,7 +7,7 @@
   "panels": [
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "1 bedeutet, dass der zugrunde liegende Personenbestand innerhalb des erlaubten Alters liegt.",
+      "description": "1 bedeutet, dass ein erfolgreich geladener PostgreSQL-Personenstand vorliegt. Kein altersbasierter TTL; Aktualisierung erfolgt ereignisgesteuert.",
       "fieldConfig": { "defaults": { "mappings": [{ "options": { "0": { "color": "red", "text": "Veraltet" }, "1": { "color": "green", "text": "Aktuell" } }, "type": "value" }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
       "id": 1,
@@ -148,11 +148,12 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "options": { "-1": { "color": "red", "text": "Unbekannt" } }, "type": "value" }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 0 }, { "color": "orange", "value": 60 }, { "color": "red", "value": 90 }] }, "unit": "s" }, "overrides": [] },
+      "description": "Alter des letzten erfolgreichen Projektionsloads. Hohes Alter allein ist kein Fehler; keine TTL-Warnschwellen.",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "options": { "-1": { "color": "red", "text": "Unbekannt" } }, "type": "value" }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 0 }] }, "unit": "s" }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 4, "y": 19 },
       "id": 10,
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_sheet_table_age_seconds{deployment=\"$deployment\",table=\"players\"}", "instant": true, "legendFormat": "Alter", "range": false, "refId": "A" }],
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_projection_table_age_seconds{deployment=\"$deployment\",table=\"players\"}", "instant": true, "legendFormat": "Alter", "range": false, "refId": "A" }],
       "title": "Alter Personenbestand",
       "type": "stat"
     },
@@ -162,8 +163,8 @@
       "gridPos": { "h": 5, "w": 4, "x": 8, "y": 19 },
       "id": 11,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_sheet_writes_active{deployment=\"$deployment\"}", "instant": true, "legendFormat": "Aktiv", "range": false, "refId": "A" }],
-      "title": "Aktive Sheet-Writes",
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_projection_refresh_in_progress{deployment=\"$deployment\"}", "instant": true, "legendFormat": "Aktiv", "range": false, "refId": "A" }],
+      "title": "Projektionsreload aktiv",
       "type": "stat"
     },
     {
@@ -172,8 +173,8 @@
       "gridPos": { "h": 5, "w": 4, "x": 12, "y": 19 },
       "id": 12,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_sheet_write_queues{deployment=\"$deployment\"}", "instant": true, "legendFormat": "Queues", "range": false, "refId": "A" }],
-      "title": "Write-Warteschlangen",
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_ws_requests_active{deployment=\"$deployment\"}", "instant": true, "legendFormat": "RPC-Requests", "range": false, "refId": "A" }],
+      "title": "Aktive RPC-Requests (gesamt)",
       "type": "stat"
     },
     {
@@ -182,8 +183,8 @@
       "gridPos": { "h": 5, "w": 4, "x": 16, "y": 19 },
       "id": 13,
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_sheet_metadata_intents_pending{deployment=\"$deployment\"}", "instant": true, "legendFormat": "Pending", "range": false, "refId": "A" }],
-      "title": "Pending Metadata",
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "epiber_projection_refresh_failed{deployment=\"$deployment\"}", "instant": true, "legendFormat": "Fehler", "range": false, "refId": "A" }],
+      "title": "Letzter Projektionsreload fehlgeschlagen",
       "type": "stat"
     },
     {
@@ -313,5 +314,5 @@
   "timezone": "browser",
   "title": "ePiber Personennormalisierung",
   "uid": "epiber-people-normalization",
-  "version": 4
+  "version": 5
 }

@@ -118,7 +118,11 @@ export const subscribeInvalidations = (topics, callback) => {
   for (const topic of topics) window.__invalidationCallbacks.set(topic, callback);
   return () => topics.forEach((topic) => window.__invalidationCallbacks.delete(topic));
 };
-export const subscribe = () => () => {};
+window.__topicCallbacks = new Map();
+export const subscribe = (topic, callback) => {
+  window.__topicCallbacks.set(topic, callback);
+  return () => window.__topicCallbacks.delete(topic);
+};
 export const onConnectionState = (callback) => {
   callback({ connected: true, state: "connected" });
   return () => {};
@@ -249,7 +253,7 @@ export function createEndpoint(name) {
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
       const today = new Date();
-      const birthDate = String(today.getDate()).padStart(2, "0") + "." + String(today.getMonth() + 1).padStart(2, "0") + "." + (today.getFullYear() - 30);
+      const birthDate = (today.getFullYear() - 30) + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
       const filterRows = new URLSearchParams(window.location.search).get("directoryFilterTest") === "1" ? [
         ["bauer-1", "Johanna", "Bauer", "0043664123456", "johanna@example.test", "19900102", "1"],
         ["bauer-2", "Franz", "Bauer", "", "franz@example.test", "850203", "1"],
@@ -376,10 +380,9 @@ export function createEndpoint(name) {
     if (["setMatchResult", "adminSetMatchEnd", "adminClearMatchResult", "adminCorrectRankingResult"].includes(name)) {
       window.__matchResultCalls.push({ endpoint: name, ...params });
       const search = new URLSearchParams(window.location.search);
-      if (search.get("resultRateLimited") === "1") {
-        const error = new Error("Die Google-Sheets-Schnittstelle hat ihr Zugriffslimit erreicht.");
-        error.code = "SHEETS_RATE_LIMITED";
-        error.details = { retryAfterMs: Number(search.get("retryMs")) || 60000 };
+      if (search.get("resultConflict") === "1") {
+        const error = new Error("Daten wurden gleichzeitig geändert. Bitte neu laden.");
+        error.code = "WRITE_CONFLICT";
         throw error;
       }
       if (search.get("pendingResult") === "1") {
@@ -1294,6 +1297,17 @@ test("Dashboard ist trotz Favoriten-Startseite direkt favorisiert erreichbar", {
     assert.equal(titleLayout.rowRight <= titleLayout.viewportWidth, true);
     assert.equal(titleLayout.favoriteTop < titleLayout.headingBottom && titleLayout.favoriteBottom > titleLayout.headingBottom - 20, true);
 
+    await page.getByText("Geburtstags Mitglied", { exact: false }).waitFor({ state: "visible" });
+    await page.waitForFunction(() => window.__topicCallbacks.has("messages:player-1"));
+    const summaryCalls = await page.evaluate(() => window.__endpointCalls.filter((call) => call.name === "myMessageSummary").length);
+    await page.evaluate(() => {
+      const update = window.__topicCallbacks.get("messages:player-1");
+      update({ unreadCount: 7, revision: "9007199254740993" });
+      update({ unreadCount: 2, revision: "9007199254740992" });
+    });
+    assert.equal(await page.locator("#hamburgerBtn").getAttribute("aria-label"), "Menü öffnen, 7 ungelesene Meldungen");
+    assert.equal(await page.evaluate(() => window.__endpointCalls.filter((call) => call.name === "myMessageSummary").length), summaryCalls);
+
     await page.evaluate(() => window.openProfileModal());
     await page.getByRole("tab", { name: "Einstellungen" }).click();
     assert.deepEqual(await page.locator("#profileStartPage option").allTextContents(), ["Dashboard", "Meine Favoriten"]);
@@ -2072,14 +2086,14 @@ test("Login- und Profilmodale trennen Login von Kontakt-E-Mail", {
 });
 
 test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse im Kinddialog", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
-  timeout: 45000,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 60000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
   try {
-    const anonymousPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const anonymousPage = await newProfilePage(browser);
     await anonymousPage.goto(`http://127.0.0.1:${address.port}/ranking-test.html?id=2`, { waitUntil: "domcontentloaded" });
     const anonymousBox = anonymousPage.locator("#rankingContainer .box").first();
     await anonymousBox.waitFor({ state: "visible" });
@@ -2091,7 +2105,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(await anonymousPage.evaluate(() => window.__endpointCalls.some(({ name }) => name === "publicProfile")), false);
     await anonymousPage.close();
 
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const page = await newProfilePage(browser);
     await page.goto(`http://127.0.0.1:${address.port}/modals-test.html?role=player`, { waitUntil: "domcontentloaded" });
     await page.evaluate(() => window.openProfileModal({ playerId: "p2" }));
     await page.getByRole("tab", { name: "Aktuell", exact: true }).click();
@@ -2151,7 +2165,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
       const rect = button.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     });
-    assert.equal(stepSize.width, stepSize.height);
+    assert.equal(Math.abs(stepSize.width - stepSize.height) < 0.01, true, "Quadratischer Touchbutton innerhalb der Browser-Subpixelrundung");
     assert.equal(stepSize.width >= 44, true);
     await dialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
     assert.match(await dialog.locator("#matchResultStatus").textContent(), /vollständiges Ergebnis/);
@@ -2272,7 +2286,7 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     assert.equal(Object.hasOwn(corrected, "matchEnd"), false);
     assert.equal(corrected.expectedFingerprint, "b".repeat(64));
 
-    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&resultRateLimited=1&retryMs=1200`));
+    await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player&resultConflict=1`));
     await page.getByRole("tab", { name: "Herren", exact: true }).click();
     await page.locator('[data-match-id="match-without-date"]').getByRole("button", { name: "Ergebnis eintragen", exact: true }).click();
     const walkoverDialog = page.getByRole("dialog", { name: "Ergebnis erfassen" });
@@ -2280,10 +2294,10 @@ test("Profilbewerbe werden zusammengefuehrt und Teilnehmer erfassen Ergebnisse i
     await walkoverDialog.locator("#matchResultLosingSide").selectOption("1");
     await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 3);
-    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /Google Sheets ist vorübergehend ausgelastet/);
-    assert.match(await walkoverDialog.locator("#matchResultSubmit").textContent(), /^Erneut in [12] s$/);
-    await page.waitForFunction(() => document.getElementById("matchResultSubmit")?.textContent === "Ergebnis speichern");
-    assert.match(await walkoverDialog.locator("#matchResultStatus").textContent(), /jetzt erneut speichern/);
+    await walkoverDialog.locator("#matchResultStatus").filter({ hasText: "gleichzeitig geändert" }).waitFor();
+    assert.equal(await walkoverDialog.locator("#matchResultSubmit").textContent(), "Ergebnis speichern");
+    assert.equal(await walkoverDialog.locator("#matchResultSubmit").isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.__matchResultCalls.length), 3);
     await page.evaluate(() => history.replaceState(null, "", `${location.pathname}?role=player`));
     await walkoverDialog.getByRole("button", { name: "Ergebnis speichern", exact: true }).click();
     await page.waitForFunction(() => window.__matchResultCalls.length === 4);

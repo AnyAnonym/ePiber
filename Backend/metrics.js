@@ -12,18 +12,13 @@ const FIXED_HTTP_ROUTES = new Set([
   "/api/emoji-picker/i18n/de.js", "/api/emoji-picker/data/de.json",
 ]);
 const FIXED_RESULTS = new Set(["success", "rejected", "failed"]);
-const FIXED_SHEET_LOAD_RESULTS = new Set(["applied", "recovered", "failed", "ignored_stale"]);
 const FIXED_COURT_RESULTS = new Set(["success", "recovered", "failed", "cancelled"]);
 const FIXED_FRONTEND_OUTCOMES = new Set(["accepted", "dropped_policy", "dropped_level", "dropped_sampling", "dropped_rate_limit"]);
 const FIXED_FRONTEND_REJECTIONS = new Set(["validation_error"]);
 const FIXED_LOG_OUTCOMES = new Set(["written", "serialization_failed", "write_failed", "backpressure"]);
 const FIXED_LEVELS = new Set(["debug", "info", "warn", "error"]);
 const FIXED_TABLES = new Set(["players", "bewerbe", "bewerbsart", "matchtyp", "matches1", "rlPlatzierung", "navigator", "entryList"]);
-const FIXED_SHEET_METHODS = new Set(["values_get", "values_batch_get", "spreadsheet_get", "metadata_search", "metadata_row", "metadata_rows", "metadata_cleanup"]);
-const FIXED_SHEET_PURPOSES = new Set(["initial", "startup_recovery", "admin_refresh", "refresh", "write_precondition", "write_refresh", "confirmation", "metadata_search", "sheet_properties", "metadata_row", "metadata_rows", "metadata_cleanup"]);
-const FIXED_SHEET_REFRESH_TRIGGERS = new Set(["startup", "startup_recovery", "admin"]);
-const FIXED_SHEET_REQUEST_RESULTS = new Set(["success", "failed", "rate_limited"]);
-const FIXED_SHEET_ATTEMPT_KINDS = new Set(["initial", "retry"]);
+const FIXED_PROJECTION_REASONS = new Set(["startup", "invalidation", "admin-request"]);
 const FIXED_SESSION_EVENTS = new Set(["created", "refreshed", "expired", "revoked"]);
 const FIXED_SESSION_REASONS = new Set([
   "login", "activity", "inactivity", "logout", "identity_changed",
@@ -96,43 +91,13 @@ function recordWsRequest({ endpoint, knownEndpoint, result, durationMs }) {
   observe("epiber_ws_request_duration_seconds", { endpoint: safeEndpoint }, Math.max(0, Number(durationMs) || 0) / 1000);
 }
 
-function recordSheetTableLoad({ table, result, durationMs }) {
-  const safeResult = safeLabel(result, FIXED_SHEET_LOAD_RESULTS, "failed");
-  const safeTable = safeLabel(table, FIXED_TABLES);
-  increment("epiber_sheet_table_loads_total", { table: safeTable, result: safeResult });
-  observe("epiber_sheet_table_load_duration_seconds", { table: safeTable }, Math.max(0, Number(durationMs) || 0) / 1000);
-}
-
-function sheetApiLabels(method, purpose) {
-  return {
-    method: safeLabel(method, FIXED_SHEET_METHODS),
-    purpose: safeLabel(purpose, FIXED_SHEET_PURPOSES),
-  };
-}
-
-function recordSheetApiAttempt({ method, purpose, kind }) {
-  increment("epiber_sheet_api_attempts_total", {
-    ...sheetApiLabels(method, purpose),
-    kind: safeLabel(kind, FIXED_SHEET_ATTEMPT_KINDS),
-  });
-}
-
-function recordSheetApiRequest({ method, purpose, result, durationMs }) {
-  const labels = sheetApiLabels(method, purpose);
-  increment("epiber_sheet_api_requests_total", {
-    ...labels,
-    result: safeLabel(result, FIXED_SHEET_REQUEST_RESULTS, "failed"),
-  });
-  observe("epiber_sheet_api_request_duration_seconds", labels, Math.max(0, Number(durationMs) || 0) / 1000);
-}
-
-function recordSheetRefresh({ trigger, result, durationMs }) {
+function recordProjectionRefresh({ reason, result, durationMs }) {
   const labels = {
-    trigger: safeLabel(trigger, FIXED_SHEET_REFRESH_TRIGGERS),
+    reason: safeLabel(reason, FIXED_PROJECTION_REASONS, "other"),
     result: safeLabel(result, new Set(["success", "failed"]), "failed"),
   };
-  increment("epiber_sheet_refresh_operations_total", labels);
-  observe("epiber_sheet_refresh_duration_seconds", { trigger: labels.trigger }, Math.max(0, Number(durationMs) || 0) / 1000);
+  increment("epiber_projection_refresh_operations_total", labels);
+  observe("epiber_projection_refresh_duration_seconds", { reason: labels.reason }, Math.max(0, Number(durationMs) || 0) / 1000);
 }
 
 function recordCourtPoll({ result, durationMs }) {
@@ -185,19 +150,15 @@ function metricType(lines, name, type) {
   lines.push(`# TYPE ${name} ${type}`);
 }
 
-function render({ appVersion, processStartedAt, activeHttpRequests, readiness, ws, sheetPoller, court, state, sheets, peopleNormalization, hallTimes } = {}) {
+function render({ appVersion, processStartedAt, activeHttpRequests, readiness, ws, projections, court, peopleNormalization, hallTimes } = {}) {
   const lines = [];
   for (const name of [
     "epiber_info", "epiber_process_uptime_seconds", "epiber_http_requests_active", "epiber_ready",
-    "epiber_readiness_component_ready", "epiber_sheet_table_available", "epiber_sheet_table_current", "epiber_sheet_table_age_seconds",
-    "epiber_sheet_table_consecutive_errors", "epiber_sheet_refresh_in_progress", "epiber_sheet_startup_recovery_active",
-    "epiber_sheet_last_success_age_seconds",
-    "epiber_sheet_writes_active", "epiber_sheet_write_queues", "epiber_sheet_metadata_intents_pending",
-    "epiber_sheet_read_cooldown_seconds", "epiber_sheet_refreshes_scheduled",
+    "epiber_readiness_component_ready", "epiber_projection_table_available", "epiber_projection_table_current", "epiber_projection_table_age_seconds",
+    "epiber_projection_refresh_in_progress", "epiber_projection_refresh_failed", "epiber_projection_last_success_age_seconds",
     "epiber_court_poller_running", "epiber_court_active", "epiber_court_source_stale",
     "epiber_court_source_age_seconds", "epiber_court_poll_consecutive_failures", "epiber_court_score_updates",
-    "epiber_ws_connections", "epiber_ws_requests_active", "epiber_sqlite_open", "epiber_sqlite_ready",
-    "epiber_sqlite_writes_total", "epiber_sqlite_failures_total", "epiber_audit_records", "epiber_scorelog_sequence",
+    "epiber_ws_connections", "epiber_ws_requests_active", "epiber_audit_records", "epiber_scorelog_sequence",
     "epiber_people_normalization_current", "epiber_people_normalization_people",
     "epiber_people_normalization_active_members", "epiber_people_normalization_active_privileged",
     "epiber_people_normalization_affected_people", "epiber_people_normalization_issues",
@@ -212,23 +173,18 @@ function render({ appVersion, processStartedAt, activeHttpRequests, readiness, w
   gauge(lines, "epiber_ready", readiness?.ready ? 1 : 0);
 
   const components = readiness?.components || {};
-  for (const component of ["initialized", "accepting_requests", "state_sqlite", "scorelog_sqlite", "auditlog_sqlite", "messaging_sqlite", "sheet_data", "court_source", "court_display_rules"]) {
+  for (const component of ["initialized", "accepting_requests", "postgres_runtime", "postgres_score_state", "postgres_audit", "postgres_messaging", "postgres_projections", "court_source", "court_display_rules"]) {
     gauge(lines, "epiber_readiness_component_ready", components[component] ? 1 : 0, { component });
   }
   for (const [table, tableStatus] of Object.entries(readiness?.data?.tables || {}).sort(([left], [right]) => left.localeCompare(right))) {
-    gauge(lines, "epiber_sheet_table_available", tableStatus.available ? 1 : 0, { table });
-    gauge(lines, "epiber_sheet_table_current", tableStatus.current ? 1 : 0, { table });
-    gauge(lines, "epiber_sheet_table_age_seconds", tableStatus.ageMs === null ? -1 : Math.max(0, number(tableStatus.ageMs)) / 1000, { table });
-    gauge(lines, "epiber_sheet_table_consecutive_errors", Math.max(0, number(tableStatus.consecutiveErrors)), { table });
+    if (!FIXED_TABLES.has(table)) continue;
+    gauge(lines, "epiber_projection_table_available", tableStatus.available ? 1 : 0, { table });
+    gauge(lines, "epiber_projection_table_current", tableStatus.current ? 1 : 0, { table });
+    gauge(lines, "epiber_projection_table_age_seconds", tableStatus.ageMs == null ? -1 : Math.max(0, number(tableStatus.ageMs)) / 1000, { table });
   }
-  gauge(lines, "epiber_sheet_refresh_in_progress", sheetPoller?.inProgress ? 1 : 0);
-  gauge(lines, "epiber_sheet_startup_recovery_active", sheetPoller?.bootstrapRecoveryActive ? 1 : 0);
-  gauge(lines, "epiber_sheet_last_success_age_seconds", sheetPoller?.dataAgeMs === null ? -1 : Math.max(0, number(sheetPoller?.dataAgeMs)) / 1000);
-  gauge(lines, "epiber_sheet_writes_active", Math.max(0, number(sheets?.activeWrites)));
-  gauge(lines, "epiber_sheet_write_queues", Math.max(0, number(sheets?.queues)));
-  gauge(lines, "epiber_sheet_metadata_intents_pending", Math.max(0, number(sheets?.pendingMetadataIntents)));
-  gauge(lines, "epiber_sheet_read_cooldown_seconds", Math.max(0, number(sheets?.readCoordinator?.retryAfterMs)) / 1000);
-  gauge(lines, "epiber_sheet_refreshes_scheduled", Math.max(0, number(sheets?.scheduledRefreshes)));
+  gauge(lines, "epiber_projection_refresh_in_progress", projections?.inProgress ? 1 : 0);
+  gauge(lines, "epiber_projection_refresh_failed", projections?.lastErrorCode ? 1 : 0);
+  gauge(lines, "epiber_projection_last_success_age_seconds", projections?.dataAgeMs == null ? -1 : Math.max(0, number(projections.dataAgeMs)) / 1000);
 
   gauge(lines, "epiber_people_normalization_current", peopleNormalization?.current ? 1 : 0);
   gauge(lines, "epiber_people_normalization_people", Math.max(0, number(peopleNormalization?.peopleCount)));
@@ -272,18 +228,6 @@ function render({ appVersion, processStartedAt, activeHttpRequests, readiness, w
   }
   gauge(lines, "epiber_ws_requests_active", Math.max(0, number(ws?.activeRequests)));
 
-  const databases = {
-    state,
-    scorelog: readiness?.scoreLog,
-    audit: readiness?.auditLog,
-    messaging: readiness?.messaging,
-  };
-  for (const [database, status] of Object.entries(databases)) {
-    gauge(lines, "epiber_sqlite_open", status?.open ? 1 : 0, { database });
-    gauge(lines, "epiber_sqlite_ready", status?.ready !== false && status?.open ? 1 : 0, { database });
-    if (status?.writeCount !== undefined) gauge(lines, "epiber_sqlite_writes_total", Math.max(0, number(status.writeCount)), { database });
-    gauge(lines, "epiber_sqlite_failures_total", Math.max(0, number(status?.failureCount)), { database });
-  }
   gauge(lines, "epiber_audit_records", Math.max(0, number(readiness?.auditLog?.count)));
   for (const courtId of ["1", "2"]) {
     gauge(lines, "epiber_scorelog_sequence", Math.max(0, number(readiness?.scoreLog?.lastSequenceByCourt?.[courtId])), { court: courtId });
@@ -316,10 +260,7 @@ module.exports = {
   recordHttpRequest,
   recordLog,
   recordSessionEvent,
-  recordSheetApiAttempt,
-  recordSheetApiRequest,
-  recordSheetTableLoad,
-  recordSheetRefresh,
+  recordProjectionRefresh,
   recordWsRequest,
   render,
   resetForTests,

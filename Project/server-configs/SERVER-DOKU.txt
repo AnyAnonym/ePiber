@@ -1,7 +1,7 @@
 ================================================================================
 SERVER-DOKU.txt - Verzeichnis-Dokumentation: server-configs/
 ================================================================================
-Letzte Aenderung: 06.09.2026
+Letzte Aenderung: 25.10.2026
 
 Dieses Verzeichnis enthaelt die kanonischen Vorlagen und Betriebsdokumente fuer
 die drei ePiber-Systeme Live (piber), PAJ und PK.
@@ -37,12 +37,9 @@ systemd/                    | Vorlagen fuer /etc/systemd/system/
   epiber-live-worker.service | Live PostgreSQL-Worker ohne HTTP-Listener
   epiber-live-readonly.service | Interne schreibgesperrte Abnahme, regulaer gestoppt
   epiber-live-ops-smoke.service | Separat freizugebender technischer One-shot
-  epiber-piber.service      | Live-Legacy, deaktiviert, kein automatischer Fallback
-  epiber-paj.service        | PAJ-Legacy, deaktivierter manueller Worst-Case-Weg
   epiber-devel.service      | PAJ PostgreSQL-App, User paj, Backend 127.0.0.1:8083
   epiber-devel-worker.      | PAJ PostgreSQL-Worker ohne HTTP-Listener
     service                 |
-  epiber-pk.service         | PK, User pk, Backend 127.0.0.1:8084
   postgresql-devel.service  | Gemeinsamer Live-/Devel-/Gitea-Cluster, Loopback 5433
   gitea-devel.service       | Interne Gitea-Instanz, Loopback 3002
   m365-connector-           | Mountabhaengigkeits-Drop-in fuer den auf dem
@@ -105,18 +102,17 @@ erreichbar, lautet der kontrollierte Recoverybefehl als root:
 
   development-services-start
 
-Er entsperrt und prueft das Volume, startet PostgreSQL und Gitea, stoppt den
-deaktivierten Legacydienst und startet anschliessend PostgreSQL-App und Worker
-mit Readiness-Pruefung.
+Er entsperrt und prueft das Volume, startet PostgreSQL, Gitea und M365, prueft
+den alten Legacydienst und startet PostgreSQL-App und Worker mit Readiness.
+Nur bestaetigtes LoadState not-found ueberspringt den Legacy-Stop; Status- und
+Stopfehler brechen ab. Die gepruefte Startvorlage ist installiert.
 
-Nur fuer den ausdruecklichen manuellen Worst-Case-Rueckfall:
-
-  systemctl stop epiber-devel-worker.service epiber-devel.service
-  systemctl start epiber-paj.service
-
-Zur Rueckkehr auf PostgreSQL wird erneut `development-services-start` verwendet.
-Es existiert kein automatischer Legacy-Fallback; der manuelle Legacy-Start
-aktiviert den Dienst nicht fuer den naechsten Boot.
+Die drei alten epiber-piber/paj/pk-Units und die Googlewrapper
+epiber-migration-staging-run, epiber-paj-refresh-run sowie
+epiber-paj-refresh-credential-set sind nach geschuetzter Sicherung entfernt.
+Es gibt keinen Legacy-Servermodus oder Unit-Rueckfall. Google-Credentials sind
+keine Laufzeitvoraussetzung. Lokale Secrets und eingefrorene Quellen bleiben
+geschuetzt; Offline-CSV-/SQLite-Importwerkzeuge bleiben erhalten.
 
 Alle drei Browser-Systeme verwenden ausschliesslich HTTPS/WSS. Der Frontend-
 Client leitet die WebSocket-Adresse same-origin aus window.location und dem Pfad
@@ -194,14 +190,15 @@ LOKALE, NICHT VERSIONIERTE BETRIEBSDATEN
 ================================================================================
 
   Backend/.env
-    SHEET_ID, PORT, COURT_URL und optionale Limits/Timeouts. Instanz, Origin,
-    Loopback, SQLite-Pfad und Credential-Laufzeitpfad setzt systemd. In `.env`
-    steht kein privater Schluessel und kein GOOGLE_APPLICATION_CREDENTIALS-Pfad.
+    PORT, COURT_URL, PostgreSQL-Konfiguration und optionale Limits/Timeouts.
+    Instanz, Origin, Loopback und Credential-Laufzeitpfade setzt systemd.
+    Keine Google-Laufzeitkonfiguration oder privaten Schluessel erforderlich.
 
   Google-Service-Account-Quelldatei
-    Privater JSON-Schluessel, root:root und Modus 0600. systemd bindet ihn mit
-    LoadCredential als `google-service-account` in ein geschuetztes temporaeres
-    Credential-Verzeichnis ein. Der Node-Prozess verwendet nur `%d/google-service-account`.
+    Historischer, unveraendert geschuetzter Bestand, keine Laufzeitvoraussetzung.
+    Nicht eigenmaechtig lesen, versionieren oder entfernen.
+
+  Historische SQLite-Quelldateien (kein Serverbetrieb):
 
   /var/lib/epiber-<system>/state.sqlite
     Von StateDirectory angelegter, systemspezifischer SQLite-State mit Modus 0600
@@ -220,10 +217,10 @@ LOKALE, NICHT VERSIONIERTE BETRIEBSDATEN
     Dauerhafte zentrale Bewerbsereignisse, persoenliche Inboxprojektionen,
     Zustellstatus und Quittierungen; getrennt von State, ScoreLog und Audit,
     Modus 0600, Foreign Keys, WAL/FULL und ohne automatische Bereinigung.
-    Alle drei systemd-Vorlagen setzen `MESSAGING_FILE` explizit auf diesen Pfad
-    im jeweiligen `StateDirectory`. Oeffnung und Schemaabfrage sind Bestandteil
-    von Readiness; `/status` und Metriken projizieren nur technischen Status und
-    aggregierte Zaehler, keine Meldungsinhalte oder Personennamen.
+    Diese Dateien bleiben eingefrorene Offlinequellen. Aktuelle PostgreSQL-
+    App-/Workerunits verwenden getrennte DB-Rollen und LoadCredential; keine
+    SQLite-Datei wird fuer Serverreadiness vorausgesetzt. `/status` und Metriken
+    projizieren nur kontrollierten technischen Status und aggregierte Zaehler.
 
   /etc/epiber-observability/grafana.env
     Root-only, Modus 0600; enthaelt das lokale Break-glass-Passwort, Grafanas

@@ -127,6 +127,27 @@ test("Play-Repository liest typisierte Bewerbs-, Match- und Ranglistenprojektion
   const groupMatches = await repositories.play.matches("rr-1");
   assert.deepEqual(groupMatches.map(({ completionType }) => completionType).sort(), ["retirement", "walkover"]);
   assert.equal((await repositories.play.rankings("2")).length, 3);
+  for (const method of ["entries", "matches", "rankings"]) {
+    const expected = (await Promise.all(competitions.map(({ id }) => repositories.play[method](id)))).flat();
+    const bulk = await repositories.play[method](null, { all: true });
+    const ordered = (rows) => rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    assert.deepEqual(ordered(bulk), ordered(expected), method);
+    await assert.rejects(repositories.play[method](null));
+  }
+});
+
+test("Schmale Personen- und Hallenlisten wahren bestehende Ausgabe und Zugriffsrechte", { timeout: 30_000 }, async (t) => {
+  const { repositories } = await preparedRuntime(t);
+  const people = await repositories.identity.people();
+  assert.deepEqual(await repositories.identity.publicPlayers(), people.map(({ id, firstName, lastName, active }) => ({ id, firstName, lastName, active })));
+  assert.deepEqual(await repositories.identity.memberDirectory(), people.filter(({ active }) => active).map(({ id, firstName, lastName, birthDate, email, phone }) => ({ id, firstName, lastName, birthDate, email, phone })));
+  const grids = await repositories.venue.hallTimeGridsDetailed();
+  for (const personId of ["1", "3", "missing"]) {
+    const summaries = await repositories.venue.hallTimeGridSummaries(personId);
+    assert.deepEqual(summaries, grids.map(({ id, name, active, publicJoinable, mode, revision, participants }) => ({ id, name, active, publicJoinable, mode, revision, joined: participants.some(({ id }) => id === personId) })));
+    assert.deepEqual(await repositories.venue.hallTimeGridSummaries(personId, "hall-seed"), summaries.filter(({ id }) => id === "hall-seed"));
+  }
+  assert.deepEqual(await repositories.venue.hallTimeGridSummaries("1", "missing"), []);
 });
 
 test("PostgreSQL-Projektionsservice erzeugt alle acht bestehenden Tabellenvertraege ohne Credentialprojektion", { timeout: 30_000 }, async (t) => {
@@ -194,7 +215,7 @@ test("Navigatorreparatur erhaelt Profil, Reihenfolge und Platzaktionen atomar un
   await assert.rejects(database.query(`INSERT INTO venue.navigation_presets(tenant_id,label,target_type,page_key) VALUES($1::uuid,'Invalid','court_assignment','3')`, [venue.context.tenantId]), { code: "23514" });
 });
 
-test("PostgreSQL-Projektionsloader ersetzt den Sheet-Initialload atomar und ohne Polling", { timeout: 30_000 }, async (t) => {
+test("PostgreSQL-Projektionsloader laedt alle Tabellen atomar und ohne Polling", { timeout: 30_000 }, async (t) => {
   const { repositories } = await preparedRuntime(t);
   dataStore.resetForTests();
   t.after(() => dataStore.resetForTests());
@@ -202,7 +223,6 @@ test("PostgreSQL-Projektionsloader ersetzt den Sheet-Initialload atomar und ohne
   const loader = new PostgresProjectionLoader({
     projectionService: new PostgresProjectionService(repositories),
     dataStore,
-    publish: (topic, value) => events.push({ topic, value }),
     log: (level, event, fields) => events.push({ level, event, fields }),
   });
   const first = await loader.initialLoad();
@@ -283,16 +303,16 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.ok(hallEvents.rows[1].summary_snapshot.includes("nachgerückt"));
   await components.projectionLoader.refresh("play-service-test");
   const player = { type: "user", id: "2", name: "Olivia Operator", role: "player" };
-  const match = await components.sheetService.addMatch(player, {
+  const match = await components.playService.addMatch(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd05", bewerbId: "2", opponentId: "1",
   });
   assert.equal(match.newMatchId.startsWith("m-"), true);
-  await components.sheetService.setMatchAppointment(player, {
+  await components.playService.setMatchAppointment(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd06", matchId: match.newMatchId, matchDate: "261011-1800",
   });
   const matchValues = dataStore.get("matches1"), matchHeader = headerOf(matchValues);
   const matchRow = matchValues.slice(1).find((row) => String(row[headerIndex(matchHeader, "id")]) === match.newMatchId);
-  const completed = await components.sheetService.setMatchResult(player, {
+  const completed = await components.playService.setMatchResult(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd07", matchId: match.newMatchId,
     kind: "regular", result: "6-0/6-0", matchStart: "261011-1800", matchEnd: "261011-1900",
     expectedFingerprint: matchCompletionFingerprint(matchRow, matchHeader),
@@ -303,20 +323,20 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.equal(rankings.find(({ personId }) => personId === "1").rank, 2);
   const firstCompletedValues = dataStore.get("matches1"), firstCompletedHeader = headerOf(firstCompletedValues);
   const firstCompletedRow = firstCompletedValues.slice(1).find((row) => String(row[headerIndex(firstCompletedHeader, "id")]) === match.newMatchId);
-  const corrected = await components.sheetService.setMatchResult(player, {
+  const corrected = await components.playService.setMatchResult(player, {
     operationId: "0199c800-0000-7000-8000-00000000fd0b", matchId: match.newMatchId,
     kind: "regular", result: "6-1/6-1", matchStart: "261011-1800", matchEnd: "261011-1900",
     expectedFingerprint: matchCompletionFingerprint(firstCompletedRow, firstCompletedHeader),
   });
   assert.equal(corrected.result, "6-1/6-1");
-  await components.sheetService.adminSetMatchEnd(principal, {
+  await components.playService.adminSetMatchEnd(principal, {
     operationId: "0199c800-0000-7000-8000-00000000feff", matchId: match.newMatchId,
-    expectedFingerprint: components.sheetService.cachedFingerprint(match.newMatchId).fingerprint,
+    expectedFingerprint: components.playService.cachedFingerprint(match.newMatchId).fingerprint,
     matchEnd: "261011-2000", reason: "Integrationstest Spielendeberichtigung",
   });
   const completedValues = dataStore.get("matches1"), completedHeader = headerOf(completedValues);
   const completedRow = completedValues.slice(1).find((row) => String(row[headerIndex(completedHeader, "id")]) === match.newMatchId);
-  const cleared = await components.sheetService.adminClearMatchResult(principal, {
+  const cleared = await components.playService.adminClearMatchResult(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd0a", matchId: match.newMatchId,
     expectedFingerprint: matchCompletionFingerprint(completedRow, completedHeader), reason: "Integrationstest Rücknahme",
   });
@@ -329,7 +349,7 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     return matchCompletionFingerprint(values.slice(1).find((row) => String(row[headerIndex(header, "id")]) === match.newMatchId), header);
   };
   for (const [index, kind] of ["regular", "retirement"].entries()) {
-    await assert.rejects(components.sheetService.setMatchResult(player, {
+    await assert.rejects(components.playService.setMatchResult(player, {
       operationId: `0199c800-0000-7000-8000-00000000fe0${index}`, matchId: match.newMatchId,
       kind, result: kind === "regular" ? "6-0/6-0" : "", losingSide: 1,
       matchStart: "261011-1200", matchEnd: "261011-1900", expectedFingerprint: resultFingerprint(),
@@ -342,7 +362,7 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
       operationId: `0199c800-0000-7000-8000-00000000fe1${index}`, matchId: match.newMatchId,
       kind: "walkover", losingSide: 1, expectedFingerprint: resultFingerprint(),
     };
-    const result = await components.sheetService.setMatchResult(player, params);
+    const result = await components.playService.setMatchResult(player, params);
     assert.equal(result.completionType, "walkover");
     const stored = await components.repositories.venue.database.query(`SELECT r.play_started_at,r.play_ended_at,r.walkover_at,
       (SELECT count(*)::int FROM play.match_result_sets WHERE result_id=r.id) AS sets
@@ -351,16 +371,16 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
     assert.equal(stored.rows[0].play_ended_at, null);
     assert.ok(stored.rows[0].walkover_at);
     assert.equal(stored.rows[0].sets, 0);
-    await components.sheetService.adminClearMatchResult(principal, {
+    await components.playService.adminClearMatchResult(principal, {
       operationId: `0199c800-0000-7000-8000-00000000fe2${index}`, matchId: match.newMatchId,
       expectedFingerprint: resultFingerprint(), reason: "Walkover-Test Ruecknahme",
     });
   }
-  await components.sheetService.adminSetRankingChallengeDate(principal, {
+  await components.playService.adminSetRankingChallengeDate(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fe31", matchId: match.newMatchId,
     challengeDate: "261010-1200", reason: "Integrationstest Forderungsdatum",
   });
-  await components.sheetService.adminDeleteRankingChallenge(principal, {
+  await components.playService.adminDeleteRankingChallenge(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fe32", matchId: match.newMatchId,
     reason: "Integrationstest Forderungsloeschung",
   });
@@ -389,12 +409,12 @@ test("PostgreSQL-Komposition liefert die vollstaendige aktivierbare Serverlaufze
   assert.ok(allHistory.entries.every(entry => entry.competitionId));
   assert.ok(!allHistory.entries.some(entry => entry.id === hallNotice.eventId));
   const normalizedPerson = projectPeopleNormalization(dataStore.get("players")).people.find(({ id }) => id === "2");
-  const normalization = await components.sheetService.normalizePerson(principal, {
+  const normalization = await components.playService.normalizePerson(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd08", personId: "2",
     expectedFingerprint: normalizedPerson.fingerprint, changes: { phone: "0043 660 123456" },
   });
   assert.equal(normalization.changedFieldCount, 1);
-  const createdPerson = await components.sheetService.reconcilePerson(principal, {
+  const createdPerson = await components.playService.reconcilePerson(principal, {
     operationId: "0199c800-0000-7000-8000-00000000fd09", action: "create", externalId: "999999",
     values: { firstName: "Petra", lastName: "Postgres", active: "1", member: "player" },
   });
@@ -514,14 +534,18 @@ test("Venue-Repository liest Courts und Hallenzeiten und persistiert Scores atom
 
 test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sowie Listener", { timeout: 30_000 }, async (t) => {
   const cluster = startPostgresTestCluster();
-  t.after(() => cluster.stop());
+  let app, restarted;
+  t.after(async () => {
+    try { await app?.shutdown("test-cleanup"); await restarted?.shutdown("restart-cleanup"); }
+    finally { cluster.stop(); }
+  });
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 6, output: () => {} });
   await applyTechnicalSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await applyFullDevelSeed({ connectionConfig: cluster.connectionConfig, asOf: "2026-10-12T00:00:00.000Z", output: () => {} });
   await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 8, output: () => {} });
   const client = new Client(cluster.connectionConfig); await client.connect();
   await client.query("UPDATE venue.courts SET active=false; UPDATE venue.court_live_state SET active=false"); await client.end();
-  const app = await createPostgresApplication({
+  app = await createPostgresApplication({
     connectionConfig: cluster.connectionConfig,
     env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 7).toString("base64url") },
   });
@@ -547,11 +571,83 @@ test("PostgreSQL-only Serverkomposition startet, wird ready und beendet Pool sow
   const response = messages.find(({ type, id }) => type === "response" && id === "postgres-scoreboard");
   assert.equal(response.data.success, true);
   assert.equal(response.data.courts["1"].matchId, "m-seed");
+  const request = (ws, endpoint, params = {}) => new Promise((resolve, reject) => {
+    const id = require("node:crypto").randomUUID();
+    const timer = setTimeout(() => { ws.off("message", receive); reject(new Error("RPC_TIMEOUT")); }, 3000);
+    function receive(raw) {
+      const message = JSON.parse(raw.toString());
+      if (message.type !== "response" || message.id !== id) return;
+      clearTimeout(timer); ws.off("message", receive); resolve(message);
+    }
+    ws.on("message", receive);
+    ws.send(JSON.stringify({ type: "request", v: 2, id, endpoint, params }));
+  });
+  assert.equal((await request(socket, "projectionStatus")).data.error.code, "FORBIDDEN");
+  assert.equal((await request(socket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda1" })).data.error.code, "FORBIDDEN");
   socket.close();
   await new Promise((resolve) => socket.once("close", resolve));
+
+  const identity = app.authService.repository;
+  const account = await identity.accountForLogin("admin");
+  await identity.replacePassword({ accountId: account.accountId, expectedAuthRevision: account.authRevision,
+    credentialSchema: "scrypt_v1", secretHash: await app.authService.createStoredPasswordHash("c".repeat(64)) });
+  const adminLogin = await fetch(`${base}/api/session`, {
+    method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:8080" },
+    body: JSON.stringify({ login: "admin", passwordHash: "c".repeat(64) }),
+  });
+  assert.equal(adminLogin.status, 200);
+  const adminSocket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`, { headers: {
+    Origin: "http://localhost:8080", Cookie: adminLogin.headers.get("set-cookie").split(";", 1)[0],
+  } });
+  t.after(() => adminSocket.terminate());
+  await new Promise((resolve, reject) => { adminSocket.once("open", resolve); adminSocket.once("error", reject); });
+  const welcome = new Promise((resolve) => adminSocket.once("message", resolve));
+  adminSocket.send(JSON.stringify({ type: "hello", v: 2, protocol: 2, clientId: "projection-admin", deviceId: "projection-admin", pageType: "servicebereich", appVersion: require("../package.json").version }));
+  assert.equal(JSON.parse((await welcome).toString()).type, "welcome");
+  const status = (await request(adminSocket, "projectionStatus")).data;
+  assert.equal(status.success, true);
+  assert.equal(status.lastSuccessfulRefreshAt, app.projectionLoader.lastCompletedAt);
+  assert.deepEqual(Object.keys(status.tables).sort(), Object.keys(dataStore.getAll()).sort());
+  assert.equal((await request(adminSocket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda2" })).data.tableCount, 8);
+
+  const originalLoad = app.projectionLoader.projectionService.load;
+  app.projectionLoader.projectionService.load = async () => { throw new Error("PRIVATE_DB_FAILURE_MUST_NOT_LEAK"); };
+  const failed = await request(adminSocket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda3" });
+  assert.equal(failed.data.error.code, "DATA_REFRESH_FAILED");
+  assert.doesNotMatch(JSON.stringify(failed), /PRIVATE_DB_FAILURE/);
+  const failedStatus = (await request(adminSocket, "projectionStatus")).data;
+  assert.equal(failedStatus.lastControlledFailure.code, "POSTGRES_PROJECTION_REFRESH_FAILED");
+  assert.equal(app.status().ready, true);
+  app.projectionLoader.projectionService.load = originalLoad;
+
+  const recordAudit = app.auditLogRepository.record.bind(app.auditLogRepository);
+  let failAuditFinish = true;
+  app.auditLogRepository.record = async (entry) => {
+    if (entry.action === "refreshProjections" && entry.result === "success" && failAuditFinish) {
+      failAuditFinish = false;
+      throw new Error("simulated audit finish failure");
+    }
+    return recordAudit(entry);
+  };
+  assert.equal((await request(adminSocket, "refreshProjections", { operationId: "0199c800-0000-7000-8000-00000000fda4" })).data.error.code, "WRITE_OUTCOME_UNKNOWN");
+  app.auditLogRepository.record = recordAudit;
+  const auditClient = new Client(cluster.connectionConfig); await auditClient.connect();
+  let refreshAudits;
+  try {
+    refreshAudits = await auditClient.query(`SELECT operation.status,operation.before_projection,operation.after_projection,transition.error_code
+      FROM ops.audit_operations operation JOIN ops.audit_transitions transition
+        ON transition.audit_operation_id=operation.id AND transition.transition=operation.status
+      WHERE operation.action='refresh_projections' ORDER BY operation.started_at`);
+  } finally { await auditClient.end(); }
+  assert.deepEqual(refreshAudits.rows.map(({ status }) => status), ["failed", "success", "failed", "unknown"]);
+  assert.equal(refreshAudits.rows[0].error_code, "FORBIDDEN");
+  assert.deepEqual(Object.keys(refreshAudits.rows[1].after_projection).sort(), ["changedTableCount", "refreshedAt", "tableCount"]);
+  assert.equal(refreshAudits.rows[2].error_code, "DATA_REFRESH_FAILED");
+  assert.equal(refreshAudits.rows[3].after_projection, null);
+  adminSocket.close(); await new Promise((resolve) => adminSocket.once("close", resolve));
   await app.shutdown("test");
   assert.equal(app.status().shuttingDown, true);
-  const restarted = await createPostgresApplication({
+  restarted = await createPostgresApplication({
     connectionConfig: cluster.connectionConfig,
     env: { ...process.env, EPIBER_TENANT_CODE: "devel-epiber", EPIBER_AUTH_RATE_LIMIT_SECRET: Buffer.alloc(32, 7).toString("base64url") },
   });
@@ -1105,6 +1201,96 @@ test("Operations-Repository bindet Idempotenz an Akteur, Requesthash und kontrol
   assert.equal(repeated.status, "success");
   assert.deepEqual(repeated.response, { personId: "1", revision: "2" });
   await assert.rejects(repositories.ops.beginIdempotency({ operationId, actorPersonId: "1", command: "identity.profile.update", requestHash: Buffer.alloc(32, 8) }), (error) => error.code === "IDEMPOTENCY_CONFLICT" && error.status === 409);
+});
+
+test("PostgreSQL-KO-Adminwarnung ist privat, atomar, idempotent und auf fehlende Folgematches begrenzt", { timeout: 30_000 }, async (t) => {
+  const { MESSAGE_EVENT_CONTRACTS } = require("../postgresRuntimeContracts");
+  const { randomUUID } = require("node:crypto");
+  const { repositories, events } = await preparedRuntime(t, { messageEventContracts: MESSAGE_EVENT_CONTRACTS });
+  const db = repositories.play.database, tenantId = repositories.play.context.tenantId;
+  await db.query(`INSERT INTO identity.tenant_role_assignments(tenant_id,person_id,role_code)
+    SELECT tenant_id,id,'admin' FROM identity.people WHERE tenant_id=$1::uuid AND contract_id IN ('3','4','5')`, [tenantId]);
+  await db.query(`UPDATE identity.tenant_role_assignments SET revoked_at=clock_timestamp()
+    WHERE person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='5') AND role_code='admin'`, [tenantId]);
+  await db.query(`UPDATE play.match_participants SET participant_type='person',person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='1')
+    WHERE match_id=(SELECT id FROM play.matches WHERE contract_id='ko-open') AND position_no=1
+    AND side_id=(SELECT id FROM play.match_sides WHERE match_id=(SELECT id FROM play.matches WHERE contract_id='ko-open') AND side_no=1)`, [tenantId]);
+  const loader = new PostgresProjectionLoader({ projectionService: new PostgresProjectionService(repositories), dataStore });
+  await loader.initialLoad();
+  const logs = [];
+  const service = new PostgresPlayService({ ...repositories, projectionLoader: loader, log: (level, event, fields) => logs.push({ level, event, fields }) });
+  const admin = { type: "user", id: "1", name: "Ada Admin", role: "admin" };
+  const player = { type: "user", id: "2", name: "Olivia Operator", role: "player" };
+  const params = () => ({ operationId: randomUUID(), matchId: "ko-open", kind: "walkover", losingSide: 2, expectedFingerprint: service.cachedFingerprint("ko-open").fingerprint });
+  const warnings = async () => (await db.query("SELECT * FROM messaging.events WHERE event_type='ko_progression_required'")).rows;
+  const clear = async () => service.adminClearMatchResult(admin, { operationId: randomUUID(), matchId: "ko-open", reason: "Test Ruecknahme", expectedFingerprint: service.cachedFingerprint("ko-open").fingerprint });
+
+  // A final never expects a successor.
+  assert.equal((await service.setMatchResult(player, params())).warningCode, undefined);
+  assert.equal((await warnings()).length, 0);
+  await clear();
+  await db.query("UPDATE play.matches SET round_code='HF-P1' WHERE contract_id='ko-open'");
+  await loader.refresh("missing-ko-test");
+  const missing = params();
+  const saved = await service.setMatchResult(player, missing);
+  assert.equal(saved.warningCode, "KO_TARGET_MISSING");
+  const repeated = await service.setMatchResult(player, missing);
+  assert.equal(repeated.repeated, true);
+  assert.equal(repeated.warningCode, "KO_TARGET_MISSING");
+  assert.equal((await warnings()).length, 1);
+  const notice = (await repositories.messaging.inbox("1", { limit: 100 })).find(row => row.eventType === "ko_progression_required");
+  assert.ok(notice);
+  assert.equal(notice.competitionId, null);
+  assert.equal(notice.readAt, null); // also unread if the administrator is the actor
+  assert.equal(notice.acknowledgedAt, null);
+  assert.match(notice.legacySubject, /KO-Fortschreibung erforderlich/);
+  assert.match(notice.legacyBody, /Finale.*fehlt/);
+  assert.equal((await repositories.messaging.inbox("2", { limit: 100 })).some(row => row.eventType === "ko_progression_required"), false);
+  assert.equal((await repositories.messaging.inbox("3", { limit: 100 })).some(row => row.eventType === "ko_progression_required"), true);
+  for (const id of ["4", "5"]) assert.equal((await repositories.messaging.inbox(id, { limit: 100 })).some(row => row.eventType === "ko_progression_required"), false);
+  assert.equal((await warnings())[0].match_id, null);
+  await service.setMatchResult(admin, params()); // correction creates one further notice
+  assert.equal((await warnings()).length, 2);
+  await clear();
+  assert.equal((await warnings()).length, 2);
+
+  // A message failure rolls back the result, history and idempotency together.
+  const createEvent = repositories.messaging.createEvent.bind(repositories.messaging);
+  repositories.messaging.createEvent = async (values, transaction) => {
+    if (values.eventType === "ko_progression_required") throw Object.assign(new Error("Test failure"), { code: "MESSAGE_TEST_FAILURE" });
+    return createEvent(values, transaction);
+  };
+  const failed = params();
+  await assert.rejects(service.setMatchResult(player, failed), { code: "MESSAGE_TEST_FAILURE" });
+  assert.equal((await db.query("SELECT current_result_id FROM play.matches WHERE contract_id='ko-open'")).rows[0].current_result_id, null);
+  assert.equal((await db.query("SELECT count(*)::int AS count FROM play.match_result_history WHERE operation_id=$1::uuid", [failed.operationId])).rows[0].count, 0);
+  repositories.messaging.createEvent = createEvent;
+  assert.equal((await service.setMatchResult(player, failed)).warningCode, "KO_TARGET_MISSING");
+  await clear();
+
+  // Inactive or revoked administrators must not receive new notices.
+  await db.query("UPDATE identity.people SET active=false WHERE tenant_id=$1::uuid AND contract_id IN ('1','3')", [tenantId]);
+  const before = (await warnings()).length;
+  assert.equal((await service.setMatchResult(player, params())).warningCode, "KO_TARGET_MISSING");
+  assert.equal((await warnings()).length, before);
+  assert.ok(logs.some(row => row.event === "ko_progression_admin_notification_skipped" && row.fields.reason === "NO_ACTIVE_ADMINISTRATORS"));
+  assert.ok(events.some(row => row.event === "postgres_messaging_event_completed" && row.fields.eventType === "ko_progression_required" && row.fields.result === "success"));
+  assert.equal(JSON.stringify(logs).includes("Ada Admin"), false);
+  await clear();
+  await db.query("UPDATE identity.people SET active=true WHERE tenant_id=$1::uuid AND contract_id IN ('1','3')", [tenantId]);
+  await db.query(`UPDATE play.match_participants SET participant_type='person',person_id=(SELECT id FROM identity.people WHERE tenant_id=$1::uuid AND contract_id='3')
+    WHERE match_id=(SELECT id FROM play.matches WHERE contract_id='ko-bye') AND participant_type='bye'`, [tenantId]);
+  await loader.refresh("linked-ko-test");
+  const linked = await service.setMatchResult(admin, { ...params(), matchId: "ko-bye", expectedFingerprint: service.cachedFingerprint("ko-bye").fingerprint });
+  assert.equal(linked.warningCode, undefined);
+  assert.equal((await warnings()).length, before);
+  const target = await service.participants(db, (await db.query("SELECT id FROM play.matches WHERE contract_id='ko-open'")).rows[0].id);
+  assert.equal(target.find(person => person.side_no === 1).person_id, "1");
+  for (const match of [
+    { competition_type_id: "2", bracket_size: 4, round_code: "HF-P1" },
+    { competition_type_id: "rr", bracket_size: 4, round_robin: true, round_code: "G1" },
+    { competition_type_id: "ko", bracket_size: null, round_code: "HF-P1" },
+  ]) assert.equal(await service.missingKoTargetMessage(null, admin, {}, match), false);
 });
 
 test("PostgreSQL-Neueinstieg persistiert Ranggrenze, Folgeversuche, Jahresfrist und reversible Einreihung", { timeout: 30_000 }, async (t) => {

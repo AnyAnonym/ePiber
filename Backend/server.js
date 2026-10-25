@@ -7,8 +7,6 @@ const {
   ALLOWED_ORIGINS,
   AUDIT_ACTIONS,
   AUTH_RATE_LIMIT_SECRET,
-  AUDITLOG_FILE,
-  AUDIT_LOG_JOURNAL,
   COOKIE_SECURE,
   HTTP_BODY_LIMIT_BYTES,
   HTTP_HEADERS_TIMEOUT_MS,
@@ -16,36 +14,27 @@ const {
   HTTP_REQUEST_TIMEOUT_MS,
   INSTANCE_ID,
   LISTEN_HOST,
-  MESSAGING_FILE,
   MESSAGING_REPORT_DEPLOYMENT,
   MESSAGING_REPORT_ENABLED,
   MESSAGING_REPORT_TOKEN,
   MONITOR_COOKIE,
   PORT,
-  PERSISTENCE_MODE,
   SESSION_COOKIE,
   SESSION_MAX_PER_USER,
   SESSION_REFRESH_INTERVAL_MS,
   SESSION_TTL_MS,
-  SCORELOG_FILE,
   SHUTDOWN_GRACE_MS,
-  STATE_FILE,
   WRITE_MODE,
   validateRuntimeConfig,
 } = require("./config.js");
-const dataPoller = require("./dataPoller.js");
 const dataProvider = require("./dataProvider.js");
 const dataStore = require("./dataStore.js");
 const courtPoller = require("./courtPoller.js");
 const stateStore = require("./stateStore.js");
-const { CourtAutomation } = require("./courtAutomation.js");
 const { PostgresCourtAutomation } = require("./postgresCourtAutomation.js");
 const { createPostgresComponents } = require("./createPostgresComponents.js");
 const { createConnectionConfig } = require("./db/connectionConfig.js");
-const { AuthService } = require("./authService.js");
 const { AppError, errorData } = require("./errors.js");
-const { FrontendLoggingService } = require("./frontendLoggingService.js");
-const { MonitorBroker } = require("./monitorBroker.js");
 const { summarizePeopleNormalization } = require("./peopleNormalization.js");
 const {
   assertAllowedOrigin,
@@ -57,15 +46,6 @@ const {
   serializeCookie,
   TokenBucketLimiter,
 } = require("./security.js");
-const { SheetService } = require("./sheetService.js");
-const { StateRepository } = require("./stateRepository.js");
-const { ScoreLogRepository } = require("./scoreLogRepository.js");
-const { AuditLogRepository } = require("./auditLogRepository.js");
-const { MessagingRepository } = require("./messagingRepository.js");
-const { MessagingService } = require("./messagingService.js");
-const { HallTimeService } = require("./hallTimeService.js");
-const { EmailMessagingAdapter } = require("./emailMessagingAdapter.js");
-const { WhatsappMessagingAdapter } = require("./whatsappMessagingAdapter.js");
 const logger = require("./logger.js");
 const metrics = require("./metrics.js");
 const { booleanValue, canonicalizeMonitorPath, idValue, loginValue, passwordHashValue, stringValue } = require("./validators.js");
@@ -143,9 +123,9 @@ function authIdentifier(body, passwordField) {
   return loginValue(matches(canonical) ? body.login : body.email);
 }
 
-function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, sheetService = null, dataPollerService = dataPoller, courtService = null, runtime = null, persistenceMode = "legacy", writeMode = "read_write", initialized, shuttingDown }) {
+function readiness({ repository, scoreLogRepository = null, auditLogRepository = null, messagingRepository = null, projectionLoader, courtService = null, runtime = null, writeMode = "read_write", initialized, shuttingDown }) {
   const data = dataStore.getReadiness();
-  const refresh = dataPollerService.getStatus();
+  const refresh = projectionLoader.getStatus();
   const court = courtPoller.getStatus();
   const courtSource = courtPoller.getLastData().source;
   const courtState = courtService?.status?.() || stateStore.getStatus();
@@ -162,11 +142,11 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
   const components = {
     initialized: Boolean(initialized),
     accepting_requests: !shuttingDown,
-    [persistenceMode === "postgres" ? "postgres_runtime" : "state_sqlite"]: persistenceMode === "postgres" ? Boolean(state.ready) : Boolean(state.open && state.ready),
-    [persistenceMode === "postgres" ? "postgres_score_state" : "scorelog_sqlite"]: !scoreLog || Boolean(scoreLog.ready || scoreLog.open && scoreLog.ready),
-    [persistenceMode === "postgres" ? "postgres_audit" : "auditlog_sqlite"]: !auditLog || Boolean(auditLog.ready || auditLog.open && auditLog.ready),
-    [persistenceMode === "postgres" ? "postgres_messaging" : "messaging_sqlite"]: persistenceMode === "postgres" ? Boolean(state.ready) : !messaging || Boolean(messaging.open && messaging.ready),
-    [persistenceMode === "postgres" ? "postgres_projections" : "sheet_data"]: Boolean(data.ready),
+    postgres_runtime: Boolean(state.ready),
+    postgres_score_state: !scoreLog || Boolean(scoreLog.ready),
+    postgres_audit: !auditLog || Boolean(auditLog.ready),
+    postgres_messaging: Boolean(state.ready),
+    postgres_projections: Boolean(data.ready),
     court_source: Boolean(courtReady),
     court_display_rules: Boolean(displayRulesReady),
   };
@@ -183,7 +163,6 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
     data,
     refresh,
     court: { ...court, source: courtSource, ready: courtReady, displayRulesReady, unresolvedActiveRules },
-    sheets: sheetService?.status?.() || null,
     scoreLog,
     auditLog,
     messaging,
@@ -191,59 +170,23 @@ function readiness({ repository, scoreLogRepository = null, auditLogRepository =
 }
 
 function createApplication(overrides = {}) {
-  const persistenceMode = overrides.persistenceMode || "legacy";
-  const postgresMode = persistenceMode === "postgres";
+  for (const name of ["repository", "scoreLogRepository", "auditLogRepository", "messagingRepository", "messagingService", "hallTimeService", "playService", "competitionService", "authService", "frontendLoggingService", "monitorBroker", "courtAutomation", "projectionLoader"]) {
+    if (!overrides[name]) throw new AppError("APPLICATION_COMPONENT_MISSING", `Serverkomponente ${name} fehlt`, 500);
+  }
   const writeMode = overrides.writeMode || "read_write";
-  const dataPollerService = overrides.dataPoller || dataPoller;
-  const repository = overrides.repository || new StateRepository(STATE_FILE);
+  const { repository, scoreLogRepository, auditLogRepository, messagingRepository, messagingService, hallTimeService,
+    playService, competitionService, authService, frontendLoggingService, monitorBroker, courtAutomation, projectionLoader } = overrides;
   repository.init?.();
-  const scoreLogRepository = overrides.scoreLogRepository || new ScoreLogRepository(SCORELOG_FILE, { instanceId: INSTANCE_ID });
-  const auditLogRepository = overrides.auditLogRepository || new AuditLogRepository(AUDITLOG_FILE, {
-    instanceId: INSTANCE_ID,
-    journal: AUDIT_LOG_JOURNAL,
-  });
-  const messagingRepository = overrides.messagingRepository || new MessagingRepository(MESSAGING_FILE, {
-    log: (level, event, fields) => logger.log(level, event, fields),
-  });
   scoreLogRepository.init?.();
   auditLogRepository.init?.();
   messagingRepository.init?.();
-  if (!postgresMode) stateStore.init(repository);
   const courtService = overrides.courtService || null;
   courtPoller.configure({ scoreLog: scoreLogRepository, courtContext: (court) => courtService?.getCourtCached?.(court) || stateStore.getCourt(court) });
-  const messagingService = overrides.messagingService || new MessagingService({
-    repository: messagingRepository,
-    emailAdapter: new EmailMessagingAdapter(),
-    whatsappAdapter: new WhatsappMessagingAdapter(),
-    publish: (topic, data) => dataProvider.publish(topic, data),
-  });
-  const hallTimeService = overrides.hallTimeService || new HallTimeService({
-    repository,
-    messagingService,
-    publish: (topic, data) => dataProvider.publish(topic, data),
-    log: logger.log,
-  });
   const messagingReporting = overrides.messagingReporting || {
     enabled: MESSAGING_REPORT_ENABLED,
     deployment: MESSAGING_REPORT_DEPLOYMENT,
     token: String(MESSAGING_REPORT_TOKEN),
   };
-  const sheetService = overrides.sheetService || new SheetService({ repository, messagingService });
-  const competitionService = overrides.competitionService || sheetService;
-  const courtAutomation = overrides.courtAutomation || new CourtAutomation({
-    stateStore,
-    dataStore,
-    courtPoller,
-    auditLogRepository,
-  });
-  const authService = overrides.authService || new AuthService({ repository, sheetService });
-  const frontendLoggingService = overrides.frontendLoggingService || new FrontendLoggingService({
-    repository,
-    authService,
-    log: logger.log,
-    appVersion: APP_VERSION,
-  });
-  const monitorBroker = overrides.monitorBroker || new MonitorBroker({ repository, stateStore, dataStore });
   const runtime = overrides.runtime || null;
   let stopInvalidationListener = null;
   let initialized = false;
@@ -252,7 +195,7 @@ function createApplication(overrides = {}) {
   let cleanupTimer = null;
   let initializePromise = null;
   let normalizationMetricsCache = { revision: null, summary: null };
-  const currentReadiness = () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, sheetService, dataPollerService, courtService, runtime, persistenceMode, writeMode, initialized, shuttingDown });
+  const currentReadiness = () => readiness({ repository, scoreLogRepository, auditLogRepository, messagingRepository, projectionLoader, courtService, runtime, writeMode, initialized, shuttingDown });
   const httpWriteLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 6, idleMs: 900000 });
   const frontendLoggingAdminLimiter = new TokenBucketLimiter({ rate: 1, burst: 20, idleMs: 900000 });
   const deviceLoginLimiter = new TokenBucketLimiter({ rate: 0.2, burst: 10, idleMs: 900000 });
@@ -386,10 +329,8 @@ function createApplication(overrides = {}) {
           activeHttpRequests: activeRequests,
           readiness: status,
           ws: dataProvider.getMetricsStatus(),
-          sheetPoller: dataPollerService.getStatus(),
+          projections: projectionLoader.getStatus(),
           court: courtPoller.getStatus(),
-          state: status.state,
-          sheets: status.sheets,
           peopleNormalization: peopleNormalizationMetrics(),
           hallTimes: hallTimeService.metricsStatus?.(),
         }), "text/plain; version=0.0.4; charset=utf-8");
@@ -484,10 +425,10 @@ function createApplication(overrides = {}) {
           status: currentReadiness(),
           provider: dataProvider.getStatus(),
           monitor: monitorBroker.status(),
-          sheets: sheetService.status(),
+          projections: projectionLoader.getStatus(),
           scoreLog: scoreLogRepository.status(),
           auditLog: auditLogRepository.status(),
-          messaging: messagingRepository.status?.() || { ready: true, backend: persistenceMode },
+          messaging: messagingRepository.status?.() || { ready: true, backend: "postgres" },
           state: courtService?.status?.() || stateStore.getStatus(),
         });
       }
@@ -788,7 +729,8 @@ function createApplication(overrides = {}) {
     hallTimeService,
     repository,
     scoreLogRepository,
-    sheetService,
+    playService,
+    projectionLoader,
     competitionService,
     courtService,
     writeMode,
@@ -798,11 +740,8 @@ function createApplication(overrides = {}) {
     if (initializePromise) return initializePromise;
     const startedAt = Date.now();
     initializePromise = (async () => {
-      const result = await dataPollerService.initialLoad();
+      const result = await projectionLoader.initialLoad();
       if (shuttingDown) return { ...result, aborted: true };
-      messagingService.enrichLegacyCompetitionAssignments?.();
-      if (!postgresMode) stateStore.migrateLegacyCourtDisplayRules(dataStore.get("matchtyp"));
-      dataPollerService.start(result);
       const courts = courtService ? await courtService.getScoreboardCourts() : stateStore.getScoreboardCourts();
       courtPoller.setCourtActive(
         writeMode === "read_only" ? { "1": false, "2": false } : { "1": courts["1"].aktiv === 1, "2": courts["2"].aktiv === 1 },
@@ -812,7 +751,7 @@ function createApplication(overrides = {}) {
       if (overrides.startInvalidationListener) stopInvalidationListener = await overrides.startInvalidationListener();
       for (const court of ["1", "2"]) courtPoller.logCourtSnapshot(court, "startup");
       initialized = true;
-      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: currentReadiness().ready, persistenceMode, durationMs: Date.now() - startedAt });
+      logger.log("info", "server_initialization_completed", { initialLoadSuccess: result.success, ready: currentReadiness().ready, persistenceMode: "postgres", durationMs: Date.now() - startedAt });
       if (writeMode !== "read_only") {
         cleanupTimer = setInterval(() => {
           repository.cleanup?.();
@@ -829,7 +768,7 @@ function createApplication(overrides = {}) {
     if (shuttingDown) return;
     shuttingDown = true;
     const startedAt = Date.now();
-    logger.log("info", "server_shutdown_started", { signal, graceMs: SHUTDOWN_GRACE_MS, activeRequests, activeWrites: sheetService.status()?.activeWrites || 0 });
+    logger.log("info", "server_shutdown_started", { signal, graceMs: SHUTDOWN_GRACE_MS, activeRequests });
     if (cleanupTimer) clearInterval(cleanupTimer);
     cleanupTimer = null;
     const deadline = Date.now() + SHUTDOWN_GRACE_MS;
@@ -838,7 +777,6 @@ function createApplication(overrides = {}) {
       : Promise.resolve();
     const drains = (async () => {
       const results = await Promise.allSettled([
-        dataPollerService.stop(),
         Promise.resolve(courtAutomation.stop()),
         courtPoller.stop(),
         dataProvider.shutdown(server),
@@ -850,7 +788,9 @@ function createApplication(overrides = {}) {
       while (activeRequests > 0) {
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
-      await sheetService.stop();
+      await playService.stop();
+      // Accepted writes may still need their post-commit cache refresh while draining.
+      await projectionLoader.stop();
     })();
     let deadlineTimer;
     try {
@@ -860,7 +800,7 @@ function createApplication(overrides = {}) {
           deadlineTimer = setTimeout(
             () => reject(new AppError("SHUTDOWN_TIMEOUT", "Shutdown-Drain hat die Grace-Deadline ueberschritten", 503, {
               activeRequests,
-              sheets: sheetService.status(),
+              projections: projectionLoader.getStatus(),
             })),
             Math.max(0, deadline - Date.now()),
           );
@@ -880,7 +820,7 @@ function createApplication(overrides = {}) {
         messagingRepository.close?.();
         repository.close?.();
         runtime?.close?.().catch?.(() => {});
-      });
+      }).catch((drainError) => logger.log("error", "server_shutdown_drain_failed", { signal, error: drainError }));
       throw error;
     } finally {
       if (deadlineTimer) clearTimeout(deadlineTimer);
@@ -900,7 +840,8 @@ function createApplication(overrides = {}) {
     repository,
     scoreLogRepository,
     server,
-    sheetService,
+    playService,
+    projectionLoader,
     shutdown,
     status: currentReadiness,
   };
@@ -908,7 +849,7 @@ function createApplication(overrides = {}) {
 
 async function start() {
   validateRuntimeConfig();
-  const app = PERSISTENCE_MODE === "postgres" ? await createPostgresApplication({ writeMode: WRITE_MODE }) : createApplication({ writeMode: WRITE_MODE });
+  const app = await createPostgresApplication({ writeMode: WRITE_MODE });
   await new Promise((resolve, reject) => {
     const onStartupError = (error) => reject(error);
     app.server.once("error", onStartupError);
@@ -972,7 +913,6 @@ async function createPostgresApplication({ env = process.env, connectionConfig =
   });
   try {
     return createApplication({
-      persistenceMode: "postgres",
       writeMode,
       runtime: components.runtime,
       repository: components.stateAdapter,
@@ -981,14 +921,14 @@ async function createPostgresApplication({ env = process.env, connectionConfig =
       messagingRepository: components.repositories.messaging,
       messagingService: components.messagingService,
       hallTimeService: components.hallTimeService,
-      sheetService: components.sheetService,
+      playService: components.playService,
       competitionService: components.competitionService,
       authService: components.authService,
       frontendLoggingService: components.frontendLoggingService,
       monitorBroker: components.monitorBroker,
       courtService: components.courtService,
       courtAutomation,
-      dataPoller: components.dataPoller,
+      projectionLoader: components.projectionLoader,
       startInvalidationListener: components.startInvalidationListener,
     });
   } catch (error) {

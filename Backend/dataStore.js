@@ -1,11 +1,11 @@
-const { TABLE_CONFIG } = require("./config.js");
+const { TABLE_NAMES } = require("./config.js");
 const { hashPayload } = require("./security.js");
 const logger = require("./logger.js");
 
 const store = {};
 const listeners = new Set();
 
-for (const key of Object.keys(TABLE_CONFIG)) {
+for (const key of TABLE_NAMES) {
   store[key] = {
     values: [],
     fingerprint: hashPayload([]),
@@ -29,7 +29,7 @@ function errorCodeOf(error) {
   if (/^[A-Z][A-Z0-9_]{0,63}$/.test(code)) return code;
   const status = Number(error?.response?.status || error?.status);
   if (Number.isInteger(status) && status >= 100 && status <= 599) return `HTTP_${status}`;
-  return error?.name === "AbortError" ? "ABORTED" : "SHEETS_READ_FAILED";
+  return error?.name === "AbortError" ? "ABORTED" : "PROJECTION_READ_FAILED";
 }
 
 function set(tableName, values, {
@@ -94,7 +94,7 @@ function notifyListeners(tableName, source, changed, recovered, snapshot) {
 }
 
 function setAllAuthoritative(valuesByTable, { source = "refresh", readTokens = {} } = {}) {
-  const tableNames = Object.keys(TABLE_CONFIG);
+  const tableNames = TABLE_NAMES;
   if (!valuesByTable || tableNames.some((tableName) => !Array.isArray(valuesByTable[tableName]))) return null;
   const results = [];
   for (const tableName of tableNames) {
@@ -190,7 +190,7 @@ function isTableCurrent(tableName) {
 function getReadiness(now = Date.now()) {
   const tables = {};
   let ready = true;
-  for (const name of Object.keys(TABLE_CONFIG)) {
+  for (const name of TABLE_NAMES) {
     const meta = getMeta(name);
     const ageMs = meta.lastUpdate ? now - meta.lastUpdate : null;
     const current = meta.lastUpdate > 0;

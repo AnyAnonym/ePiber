@@ -119,7 +119,9 @@ Bewerbe-Uebersicht - Auflistung aller Bewerbe als Karten
   erscheinen nicht in der Bewerbshistorie; damit entsteht dort kein `Bewerb null`.
   KO-/Gruppenrunden stammen aus dem zugeordneten Match. Historische generische
   Summary-/Ergebnis-Snapshots werden nicht automatisch nachtraeglich repariert.
-  Bekannte Paritaetsgrenze: Die Legacy-Adminwarnung bei fehlendem KO-Folgematch
-  (`ensureMissingKoTargetEvent`) ist im PostgreSQL-Ergebnispfad noch nicht
-  angebunden. Eine vollstaendige Gleichheit aller Sonderfallmeldungen wird
-  deshalb nicht behauptet. Darstellung und Bedienung bleiben unveraendert.
+  Fehlt exakt das KO-Folgematch, speichern PostgreSQL-Ergebnis/Korrektur und
+  private ko_progression_required-Adminwarnungen atomar. Replay erzeugt keine
+  Duplikate, Meldungsfehler rollt den Write zurueck; KO_TARGET_MISSING bleibt
+  auch ohne aktive Admins. Keine oeffentliche Historie oder automatische
+  Rasterreparatur. Finals/RoundRobin/Ranglisten ausgenommen. Darstellung und
+  Bedienung bleiben unveraendert.

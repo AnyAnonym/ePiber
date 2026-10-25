@@ -70,7 +70,7 @@ Personendaten normalisieren - kontrollierte Admin-Datenpflege
    bestimmt diese Gruppe die Rechte und `role` ist nur noch sichtbarer
    Legacywert. Sind alle drei leer, bleibt `role` wirksam. `player`, `player A`
    und `player B` besitzen dieselbe Spielerberechtigung.
-  `GeschlechtID` ist der bevorzugte Sheetheader; `Geschlecht` bleibt
+  `GeschlechtID` ist der bevorzugte Projektionsheader; `Geschlecht` bleibt
   Legacy-Fallback. Passwort-Hash, Passwortfreigabe, `CD-ID`, interne
   Zusatzkennungen und alle nicht genannten Spalten werden weder projiziert noch
    geschrieben. `Login` ist damit ein sichtbares und editierbares Browserfeld,
@@ -119,12 +119,13 @@ Personendaten normalisieren - kontrollierte Admin-Datenpflege
   automatisch neu, wenn kein Write laeuft und kein offener Entwurf vorhanden ist.
 
 -- Konflikt-, Sicherheits- und Wiederholungsvertrag --
-  Das Backend liest vor jedem Write die aktuelle Personentabelle, loest die Zeile
-  ueber ID und Google Developer Metadata stabil auf und vergleicht den
+  Das Backend liest vor jedem Write den aktuellen PostgreSQL-Personenbestand,
+  adressiert die Person tenantgebunden ueber ID und vergleicht den
   Feldfingerprint. Es prueft die vollstaendige Kandidatentabelle und kanonische
   Login-Konflikte. Bereits vorhandene Zielwerte sind ein erfolgreicher
-  wiederholter No-op. Unklare Google-Ergebnisse werden gegen die stabile Zeile
-  bestaetigt; bleibt der Ausgang unklar, wird kein blinder zweiter Write gestartet.
+  wiederholter No-op. Idempotenzresultat und Fachwrite sind transaktional gebunden;
+  ein unklarer Commit bleibt sichtbar und wird nicht blind wiederholt. Keine
+  Google-Quota-, Metadata- oder Importvoraussetzung.
 
   Die eigene aktive Adminrolle darf weder entfernt noch deaktiviert werden; der
   letzte aktive Admin muss erhalten bleiben. Aenderungen an Login, Aktivstatus
@@ -137,7 +138,7 @@ Personendaten normalisieren - kontrollierte Admin-Datenpflege
 
 -- Observability und Datenschutz --
   Jeder Write verwendet die normalen Abschlusslogs und Auditphasen `started`,
-  `success`, `failed` oder `unknown`. SQLite darf Adminidentitaet, Zielperson und
+  `success`, `failed` oder `unknown`. PostgreSQL-Audit darf Adminidentitaet, Zielperson und
   Zielnamensnapshot enthalten. Der Journalspiegel zeigt fuer Aktiv und Rolle nur
   kontrollierte Alt-/Neuwerte, fuer andere Felder ausschliesslich den Feldnamen.
   Login-, Kontakt-, Adress-, Geburts-, Geschlechts- und freie Werte bleiben

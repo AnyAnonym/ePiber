@@ -2,14 +2,24 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { requestContracts, validateEndpointRequest, validateEndpointResponse } = require("../contracts.js");
 
+test("Projektionsstatus und Admin-Reload akzeptieren keine freien Parameter", () => {
+  assert.deepEqual(validateEndpointRequest("projectionStatus", {}), {});
+  const operationId = "00000000-0000-4000-8000-000000000231";
+  assert.deepEqual(validateEndpointRequest("refreshProjections", { operationId }), { operationId });
+  for (const params of [{}, { operationId: "invalid" }, { operationId, source: "external" }]) {
+    assert.throws(() => validateEndpointRequest("refreshProjections", params), { code: "VALIDATION_ERROR" });
+  }
+  assert.throws(() => validateEndpointRequest("projectionStatus", { table: "players" }), { code: "VALIDATION_ERROR" });
+});
+
 test("jeder RPC-Endpoint besitzt einen zentralen Requestvertrag", () => {
   assert.deepEqual(Object.keys(requestContracts).sort(), [
     "acknowledgeAllMessages", "acknowledgeMessage", "addCompetitionHistoryComment", "addEntryList", "addMatch", "adminApplyHallTimeDistribution", "adminClearAllHallTimeStatuses", "adminClearMatchAppointment", "adminClearMatchResult", "adminCorrectRankingResult", "adminDeleteRankingChallenge", "adminDistributeHallTimeGrid", "adminHallTimeGrids", "adminMemberReconciliation", "adminPeopleNormalization", "adminPreviewHallTimeDistribution", "adminSaveHallTimeConstraints", "adminSaveHallTimeGrid", "adminSetMatchAppointment", "adminSetMatchEnd", "adminSetRankingChallengeDate", "bewerbe", "bewerbsart", "clearMatchAppointment", "competitionHistory", "competitionHistoryCommentForEdit", "competitionHistoryCommentReactions", "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryReactions", "courtAssign", "courtScores",
     "courtSetActive", "deleteCompetitionHistoryComment", "editCompetitionHistoryComment", "entryList", "getScoreboardCourts", "hallTimeGrid", "hallTimeGrids", "hallTimeHistory", "matchResultSuggestion", "matches", "matches1",
     "memberDirectory", "moderateCompetitionHistoryComment", "monitorAck", "monitorDelete", "monitorList", "monitorNavigate", "monitorProvision",
     "monitorRevoke", "monitorRotate", "monitorScroll", "monitorTarget", "myFavorites", "myHallTimeGroups", "myMessage", "myMessageSummary", "myMessages", "myProfile", "myStartPage", "navigator", "normalizePerson", "operationStatus",
-    "players", "preMatches", "publicProfile", "rankingChallengeState", "readMatchRestrictions", "reconcilePerson", "refreshSheetData", "removeEntryList", "rlPlatzierung",
-    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setHallTimeBooking", "setMatchAppointment", "setMatchResult", "setMyFavorites", "setMyHallTimeGroupMembership", "setMyStartPage", "sheetDataStatus", "withdrawFromRanking", "withdrawnRankingPlayers",
+    "players", "preMatches", "projectionStatus", "publicProfile", "rankingChallengeState", "readMatchRestrictions", "reconcilePerson", "refreshProjections", "removeEntryList", "rlPlatzierung",
+    "scoreboardSnapshot", "setCompetitionHistoryCommentReaction", "setCompetitionHistoryReaction", "setHallTimeBooking", "setMatchAppointment", "setMatchResult", "setMyFavorites", "setMyHallTimeGroupMembership", "setMyStartPage", "withdrawFromRanking", "withdrawnRankingPlayers",
   ]);
 });
 

@@ -96,7 +96,12 @@ if ! curl --fail --silent --show-error --header 'Host: m365-connector.pi-tec.at'
   exit 1
 fi
 
-systemctl stop "$LEGACY_SERVICE"
+# Alte Installationen weiter absichern, neue ohne entfernte Legacy-Unit zulassen.
+# Keine readonly-Zuweisung: Fehler der systemctl-Abfrage muessen fatal bleiben.
+legacy_load_state="$(systemctl show "$LEGACY_SERVICE" --property=LoadState --value)"
+if [[ "$legacy_load_state" != "not-found" ]]; then
+  systemctl stop "$LEGACY_SERVICE"
+fi
 systemctl start "$APP_SERVICE"
 for _ in {1..30}; do
   if curl --fail --silent --output /dev/null http://127.0.0.1:8083/ready; then

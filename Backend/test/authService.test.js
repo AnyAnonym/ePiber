@@ -20,7 +20,7 @@ test.beforeEach(() => {
 test("Oeffentliche Spielerprojektion enthaelt keine privaten Felder", () => {
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
   const table = auth.publicPlayersTable();
   assert.deepEqual(table[0], ["ID", "Vorname", "Nachname", "Aktiv"]);
   assert.equal(JSON.stringify(table).includes("ada@example.test"), false);
@@ -31,7 +31,7 @@ test("Oeffentliche Spielerprojektion enthaelt keine privaten Felder", () => {
 test("Mitgliederprofil enthaelt Kontaktdaten und Geburtsdatum", () => {
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   assert.deepEqual(auth.publicProfile("p2"), { id: "p2", firstName: "Peter", lastName: "Player" });
   assert.deepEqual(auth.memberProfile("p2"), {
@@ -58,7 +58,7 @@ test("GeschlechtID hat im Personenprofil Vorrang vor dem Legacy-Feld", () => {
   dataStore.set("players", people, { source: "test-gender-id" });
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   assert.equal(auth.findById("p1").gender, "3");
   assert.equal(auth.findById("p2").gender, "2");
@@ -69,8 +69,8 @@ test("Login migriert Legacy-Hash und erzeugt serverseitige Session", async () =>
   const repository = new StateRepository(":memory:");
   repository.init();
   let upgraded = null;
-  const sheetService = { setPasswordHash: async (id, value) => { upgraded = { id, value }; } };
-  const auth = new AuthService({ repository, sheetService });
+  const identityWriter = { setPasswordHash: async (id, value) => { upgraded = { id, value }; } };
+  const auth = new AuthService({ repository, identityWriter });
   const result = await auth.login({ login: "ADA.LOGIN", passwordHash: "a".repeat(64), ip: "127.0.0.1" });
   assert.equal(result.user.role, "admin");
   assert.equal(upgraded.id, "p1");
@@ -82,7 +82,7 @@ test("Login migriert Legacy-Hash und erzeugt serverseitige Session", async () =>
 test("Erneuter Login behaelt bestehende Geraetesessions", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: { async setPasswordHash() {} } });
+  const auth = new AuthService({ repository, identityWriter: { async setPasswordHash() {} } });
 
   const first = await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.1" });
   const second = await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.2" });
@@ -99,7 +99,7 @@ test("Login begrenzt parallele Geraetesessions und behaelt die neue Sitzung", as
   for (let index = 0; index < SESSION_MAX_PER_USER; index++) {
     repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: SESSION_TTL_MS });
   }
-  const auth = new AuthService({ repository, sheetService: { async setPasswordHash() {} } });
+  const auth = new AuthService({ repository, identityWriter: { async setPasswordHash() {} } });
 
   const result = await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.1" });
   assert.equal(repository.getSession(result.session.token).userId, "p1");
@@ -112,7 +112,7 @@ test("Sessionpruefung verlaengert eine aktive Sitzung kontrolliert", () => {
   const repository = new StateRepository(":memory:", { now: () => now });
   repository.init();
   const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: SESSION_TTL_MS });
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   now += SESSION_REFRESH_INTERVAL_MS;
   const resolved = auth.getUserForToken(session.token, { refreshSession: true });
@@ -128,7 +128,7 @@ test("ungueltige Kontakt-E-Mail blockiert weder unabhaengigen Login noch Persone
   dataStore.set("players", people, { source: "test-invalid-email" });
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: { async setPasswordHash() {} } });
+  const auth = new AuthService({ repository, identityWriter: { async setPasswordHash() {} } });
 
   const result = await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.1" });
   assert.equal(result.user.id, "p1");
@@ -143,7 +143,7 @@ test("doppelte Kontakt-E-Mail ist erlaubt und beeinflusst Login nicht", async ()
   dataStore.set("players", people, { source: "test-duplicate-email" });
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: { async setPasswordHash() {} } });
+  const auth = new AuthService({ repository, identityWriter: { async setPasswordHash() {} } });
 
   assert.equal((await auth.login({ login: "ada.login", passwordHash: "a".repeat(64), ip: "127.0.0.9" })).user.id, "p1");
   repository.close();
@@ -157,7 +157,7 @@ test("doppelte, ungueltige und leere Logins bleiben lesbar, aber koennen nicht a
   dataStore.set("players", people, { source: "test-login-quality" });
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
   assert.equal(auth.findById("p3").loginRaw, " bad login ");
   assert.equal(auth.findById("p3").login, "");
   assert.equal(auth.publicPlayersTable().length, 5);
@@ -169,7 +169,7 @@ test("doppelte, ungueltige und leere Logins bleiben lesbar, aber koennen nicht a
 test("Login-Limiter blockiert wiederholte Fehler", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
   for (let attempt = 0; attempt < 5; attempt++) {
     await assert.rejects(auth.login({ login: "ada.login", passwordHash: "f".repeat(64), ip: "127.0.0.2" }));
   }
@@ -186,7 +186,7 @@ test("fehlende oder veraltete Personendaten widerrufen keine gueltige Session", 
   const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
   const expiresAt = repository.getSession(session.token).expiresAt;
   dataStore.resetForTests();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   assert.throws(() => auth.getUserForToken(session.token, { refreshSession: true }), { code: "PERSON_DATA_UNAVAILABLE" });
   assert.equal(repository.getSession(session.token).userId, "p1");
@@ -198,7 +198,7 @@ test("Diagnoseidentitaet verwendet nur eine gueltige Session mit aktiver Person"
   const repository = new StateRepository(":memory:");
   repository.init();
   const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
   assert.deepEqual(auth.getDiagnosticIdentity(session.token), { id: "p1", name: "Ada Admin", role: "admin" });
 
   const inactive = structuredClone(peopleFixture());
@@ -213,7 +213,7 @@ test("Loginwechsel widerruft eine noch gespeicherte Session beim naechsten Zugri
   const repository = new StateRepository(":memory:");
   repository.init();
   const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "alter.login", ttlMs: 60000 });
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   assert.equal(auth.getUserForToken(session.token), null);
   assert.equal(repository.getSession(session.token), null);
@@ -225,7 +225,7 @@ test("geladene Personen bleiben bis zum expliziten Datenabgleich die aktuelle Ro
   repository.init();
   const adminSession = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
   const playerSession = repository.createSession({ userId: "p2", email: "peter@example.test", login: "peter.login", ttlMs: 60000 });
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
   try {
     const current = auth.requireRole(adminSession.token, ["admin"]);
     assert.equal(current.principal.roleSource, undefined);
@@ -248,7 +248,7 @@ test("LKG-Rollenpruefung verlangt einen zuvor erfolgreich geladenen Personen-Cac
   repository.init();
   const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
   dataStore.resetForTests();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   assert.throws(
     () => auth.requireRole(session.token, ["admin"], { allowLastKnownGoodRole: true }),
@@ -262,12 +262,12 @@ test("unklarer Passwort-Write widerruft vorsorglich alle Sitzungen", async () =>
   const repository = new StateRepository(":memory:");
   repository.init();
   const session = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
-  const sheetService = {
+  const identityWriter = {
     async setPasswordHash() {
       throw Object.assign(new Error("response and confirmation lost"), { code: "WRITE_OUTCOME_UNKNOWN" });
     },
   };
-  const auth = new AuthService({ repository, sheetService });
+  const auth = new AuthService({ repository, identityWriter });
 
   await assert.rejects(
     auth.changeOwnPassword(session.token, "a".repeat(64), "b".repeat(64)),
@@ -281,7 +281,7 @@ test("eigene Passwortaenderung rotiert die Sitzung", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
   const oldSession = repository.createSession({ userId: "p1", email: "ada@example.test", login: "ada.login", ttlMs: 60000 });
-  const auth = new AuthService({ repository, sheetService: { async setPasswordHash() {} } });
+  const auth = new AuthService({ repository, identityWriter: { async setPasswordHash() {} } });
 
   const result = await auth.changeOwnPassword(oldSession.token, "a".repeat(64), "b".repeat(64));
   assert.equal(repository.getSession(oldSession.token), null);
@@ -298,7 +298,7 @@ test("nur Admin setzt das Passwort einer anderen Person und widerruft deren Sitz
   let passwordWrite = null;
   const auth = new AuthService({
     repository,
-    sheetService: { async setPasswordHash(personId, storedHash, options) { passwordWrite = { personId, storedHash, options }; } },
+    identityWriter: { async setPasswordHash(personId, storedHash, options) { passwordWrite = { personId, storedHash, options }; } },
   });
 
   await assert.rejects(auth.setPasswordAsAdmin(playerSession.token, "p1", "c".repeat(64)), { code: "FORBIDDEN" });
@@ -319,7 +319,7 @@ test("Admin verwaltet die dauerhafte Passwortfreigabe", async () => {
   const writes = [];
   const auth = new AuthService({
     repository,
-    sheetService: { async setPasswordSetupAllowed(personId, allowed) { writes.push({ personId, allowed }); } },
+    identityWriter: { async setPasswordSetupAllowed(personId, allowed) { writes.push({ personId, allowed }); } },
   });
 
   await assert.rejects(auth.setPasswordSetupAllowed(playerSession.token, "p1", true), { code: "FORBIDDEN" });
@@ -342,7 +342,7 @@ test("freigegebene aktive Person setzt ihr Passwort einmalig", async () => {
   let passwordWrite = null;
   const auth = new AuthService({
     repository,
-    sheetService: {
+    identityWriter: {
       async setPasswordHash(personId, storedHash, options) {
         passwordWrite = { personId, storedHash, options };
         const current = structuredClone(dataStore.get("players"));
@@ -370,7 +370,7 @@ test("Passwortvergabe bleibt fuer inaktive Personen gesperrt", async () => {
   dataStore.set("players", people, { source: "test" });
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   await assert.rejects(auth.setupPassword("peter.login", "d".repeat(64)), { code: "PASSWORD_SETUP_INVALID" });
   repository.close();
@@ -379,7 +379,7 @@ test("Passwortvergabe bleibt fuer inaktive Personen gesperrt", async () => {
 test("globale scrypt-Grenze schuetzt auch abgelehnte Passwortvergaben", async () => {
   const repository = new StateRepository(":memory:");
   repository.init();
-  const auth = new AuthService({ repository, sheetService: {} });
+  const auth = new AuthService({ repository, identityWriter: {} });
 
   const results = await Promise.allSettled(Array.from({ length: 5 }, (_, index) => (
     auth.setupPassword(`unknown-${index}`, "d".repeat(64))
@@ -401,7 +401,7 @@ test("Login mit altem Passwort kann eine laufende Passwort-Neuvergabe nicht uebe
   const gate = new Promise((resolve) => { releaseWrite = resolve; });
   const auth = new AuthService({
     repository,
-    sheetService: {
+    identityWriter: {
       async setPasswordHash(personId, storedHash) {
         writeStarted();
         await gate;

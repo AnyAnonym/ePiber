@@ -48,3 +48,18 @@ test("M365-Fragment nutzt internes TLS ohne Access-Log und nur Loopback", () => 
   assert.match(site, /reverse_proxy 127\.0\.0\.1:3000/);
   assert.doesNotMatch(site, /\blog\s/);
 });
+
+test("Komprimierung bleibt auf oeffentliche JS/CSS-Dateien im statischen Fallback begrenzt", () => {
+  for (const [file, count] of [["Caddyfile", 2], ["caddy/epiber-live-modes/active.caddy", 1]]) {
+    const text = fs.readFileSync(path.join(serverConfigRoot, file), "utf8");
+    const handles = [...text.matchAll(/handle \{([^}]+)\}/g)].map((match) => match[1]).filter((body) => body.includes("file_server"));
+    assert.equal(handles.length, count);
+    for (const body of handles) {
+      assert.match(body, /@compressible path \*\.js \*\.css/);
+      assert.match(body, /encode @compressible zstd gzip/);
+      assert.match(body, /Cache-Control "no-cache"/);
+    }
+    assert.equal((text.match(/encode /g) || []).length, count);
+    assert.doesNotMatch(text, /immutable|permessage-deflate/);
+  }
+});

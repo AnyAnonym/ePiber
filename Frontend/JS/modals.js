@@ -83,7 +83,6 @@ function profileTimingMs(startedAt, completedAt) {
   if (!Number.isFinite(startedAt) || !Number.isFinite(completedAt)) return undefined;
   return Math.min(600000, Math.max(0, Math.round(completedAt - startedAt)));
 }
-let matchResultRetryTimer = null;
 let confirmedLongMatchDuration = "";
 
 function errorMessage(value, fallback) {
@@ -203,7 +202,6 @@ function closeModal(modal) {
     matchResultScore = [];
     clearTimeout(matchResultStatusTimer);
     clearTimeout(matchResultProgressTimer);
-    clearTimeout(matchResultRetryTimer);
   }
   if (modal?.id === "profileModal") {
     closeModal(matchDateModal);
@@ -878,30 +876,6 @@ function showMatchResultStatus(message, type = "error", { autoHideMs = 3000 } = 
     status.hidden = true;
     status.textContent = "";
   }, autoHideMs);
-}
-
-function startMatchResultRetryCooldown(submit, originalLabel, retryAfterMs) {
-  clearTimeout(matchResultRetryTimer);
-  const retryAt = Date.now() + Math.max(1000, Number(retryAfterMs) || 60000);
-  const update = () => {
-    if (!matchResultContext || matchResultModal.classList.contains("hidden")) return;
-    const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
-    if (seconds === 0) {
-      submit.disabled = false;
-      submit.textContent = originalLabel;
-      showMatchResultStatus("Sie können das Ergebnis jetzt erneut speichern.", "info");
-      return;
-    }
-    submit.disabled = true;
-    submit.textContent = `Erneut in ${seconds} s`;
-    showMatchResultStatus(
-      `Google Sheets ist vorübergehend ausgelastet. Dieser Versuch wurde nicht gespeichert. Neuer Versuch in ${seconds} ${seconds === 1 ? "Sekunde" : "Sekunden"}.`,
-      "error",
-      { autoHideMs: 0 },
-    );
-    matchResultRetryTimer = setTimeout(update, Math.min(1000, Math.max(1, retryAt - Date.now())));
-  };
-  update();
 }
 
 function matchResultRules() {
@@ -3122,9 +3096,7 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   payload.operationId = getOperationId(operationKey);
   const submit = document.getElementById("matchResultSubmit");
   const originalLabel = submit.textContent;
-  let retryAfterMs = 0;
   clearTimeout(matchResultProgressTimer);
-  clearTimeout(matchResultRetryTimer);
   setModalBusy(form, true);
   submit.textContent = "Wird gespeichert...";
   showMatchResultStatus("Ergebnis und Rangliste werden gespeichert. Bitte warten …", "info", { autoHideMs: 0 });
@@ -3142,19 +3114,14 @@ document.getElementById("matchResultForm").addEventListener("submit", async (eve
   } catch (error) {
     releaseOperationId(operationKey, error);
     diagnostic.error("match_result_action_failed", error);
-    if (error?.code === "SHEETS_RATE_LIMITED") {
-      retryAfterMs = Math.max(1000, Number(error.details?.retryAfterMs) || 60000);
-    } else {
-      showMatchResultStatus(error?.code === "RANKING_REPAIR_REQUIRED"
-        ? "Ranglistenstand muss mit einem vollständigen Rangplan administrativ repariert werden."
-        : errorMessage(error, "Matchänderung konnte nicht gespeichert werden."));
-    }
+    showMatchResultStatus(error?.code === "RANKING_REPAIR_REQUIRED"
+      ? "Ranglistenstand muss mit einem vollständigen Rangplan administrativ repariert werden."
+      : errorMessage(error, "Matchänderung konnte nicht gespeichert werden."));
   } finally {
     clearTimeout(matchResultProgressTimer);
     setModalBusy(form, false);
     if (matchResultContext) {
       submit.textContent = originalLabel;
-      if (retryAfterMs > 0) startMatchResultRetryCooldown(submit, originalLabel, retryAfterMs);
     }
   }
 });

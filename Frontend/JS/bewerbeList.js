@@ -7,7 +7,6 @@ import { createMaterialSymbol } from "./materialSymbols.js";
 import { createFavoriteButton, refreshFavoriteButtons } from "./favorites.js";
 
 const readBewerbe = createEndpoint("bewerbe");
-const readBewerbsart = createEndpoint("bewerbsart");
 const readCompetitionHistory = createEndpoint("competitionHistory");
 const readHistoryComments = createEndpoint("competitionHistoryComments");
 const readHistoryInteraction = createEndpoint("competitionHistoryInteraction");
@@ -1267,18 +1266,15 @@ async function loadBewerbe() {
   }
 
   try {
-    const [bewerbRes, bewerbsartRes] = await Promise.all([
-      callWithRetry(readBewerbe),
-      callWithRetry(readBewerbsart),
-    ]);
+    const bewerbRes = await callWithRetry(readBewerbe);
 
-    if (!bewerbRes.data?.success || !bewerbsartRes.data?.success) {
-      const failedData = !bewerbRes.data?.success ? bewerbRes.data : bewerbsartRes.data;
+    if (!bewerbRes.data?.success) {
+      const failedData = bewerbRes.data;
       throw new Error(failedData?.error?.message || "Bewerbe konnten nicht geladen werden.");
     }
 
     const bewerbValues = bewerbRes.data?.values || [];
-    const bewerbsartValues = bewerbsartRes.data?.values || [];
+    const bewerbsartValues = bewerbRes.data?.bewerbsartValues || [];
 
     if (bewerbValues.length < 2) {
       if (preserveContent) return true;

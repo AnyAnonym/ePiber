@@ -88,6 +88,8 @@ https://epiber.at:8081 {
 	handle {
 		log_append route static
 		root * /srv/http/ePiber/paj/Frontend
+		@compressible path *.js *.css
+		encode @compressible zstd gzip
 		header Cache-Control "no-cache"
 		file_server
 	}
@@ -111,6 +113,8 @@ https://epiber.at:8082 {
 
 	handle {
 		root * /srv/http/ePiber/pk/Frontend
+		@compressible path *.js *.css
+		encode @compressible zstd gzip
 		header Cache-Control "no-cache"
 		file_server
 	}

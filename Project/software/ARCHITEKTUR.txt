@@ -3,6 +3,13 @@
   Projekt: ePiber / ASKOE Piberbach Tennis
 ================================================================================
 
+Laufzeitgrenze: Nur PostgreSQL ist unterstuetzt. Abschnitt 11 beschreibt die
+aktiven Repositories/Transaktionsgrenzen. Noch aufgefuehrte SQLite-Modul- und
+Sheet-Recoverydetails dokumentieren ausschliesslich den abgeloesten Unterbau
+und die Herkunft gemeinsamer Fachvertraege; sie sind keine startbare Alternative,
+Readinessvoraussetzung, Google-Konfiguration oder Rueckfallanweisung.
+Grafanas eigene SQLite-Datenbank ist davon unabhaengig weiterhin aktiv.
+
 
 ================================================================================
   1. SYSTEMBILD
@@ -18,23 +25,23 @@
   Node.js Backend auf Loopback
     |-- HTTP/WS-Routing, Contracts, Origin-/Rate-/Groessenlimits
     |-- Cookie-/Rollenauthentifizierung und Datenprojektionen
-    |-- atomarer Start-/Adminimport + revisionierter Last-good-Cache
-    |-- serialisierte/idempotente Google-Sheets-Writes
-    |-- getrennter SQLite-State, Messaging sowie Score-/Audit-Fachhistorien
-    |-- externes Court-Polling + persistentes SQLite-ScoreLog
+    |-- atomarer PostgreSQL-Projektionsload + revisionierter Last-good-Cache
+    |-- transaktionale/idempotente PostgreSQL-Fachwrites
+    |-- PostgreSQL-State, Messaging sowie Score-/Audit-Fachhistorien
+    |-- externes Court-Polling + persistentes PostgreSQL-ScoreLog
     |-- strukturierte redigierte JSON-Betriebslogs fuer journald
     |-- adressierter MonitorBroker
     |-- internes Prometheus-Textformat unter GET /metrics
     `-- kontrollierter Meldungsbericht unter GET /internal/messaging-report
              |                         |
              v                         v
-       Google Sheets             externe Court-Quelle (HTTPS)
+       PostgreSQL                externe Court-Quelle (HTTPS)
 
   journald + Caddy-Access-Logs -> Alloy -> Loki ----+
   Backend-/Hostmetriken ------> Prometheus --------+--> Grafana
 
-Produktive Backends binden ausschliesslich an Loopback. Service-Account-
-Credentials werden ueber systemd LoadCredential bereitgestellt. Der Browser
+Produktive Backends binden ausschliesslich an Loopback. Datenbank-Credentials
+werden ueber systemd LoadCredential bereitgestellt. Der Browser
 leitet die WebSocket-URL aus seinem same-origin Standort ab; es gibt kein SDK-
 Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
 
@@ -44,8 +51,9 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
 ================================================================================
 
 `server.js`
-  Erstellt State-, Messaging-, ScoreLog- und Audit-Repository, StateStore,
-  MessagingService, SheetService, AuthService und MonitorBroker; konfiguriert
+  Erstellt ueber createPostgresApplication/createPostgresComponents ausschliesslich
+  PostgreSQL-Repositories, State-, Messaging-, ScoreLog-, Audit-, Auth-, Spiel-,
+  Monitor- und Projektionsdienste mit expliziten Abhaengigkeiten; konfiguriert
   HTTP und WebSocket. Der Port wird vor dem
   asynchronen Initialload geoeffnet, aber Readiness bleibt bis zu aktuellem
   Initialstate false. HTTP kennt korrekte 404/405/503, Body-/Header-/Requestlimits
@@ -54,10 +62,9 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   Server-Error-Handler behandelt auch spaetere Listenerfehler.
 
 `config.js`
-  Validiert Instanz, Loopback, Origins, HTTPS-Modus, vier getrennte absolute
-  SQLite-Dateien,
-  Court-HTTPS-URL, Startimport-Backoff, Timeoutrelationen und alle
-  Kapazitaetsgrenzen. `TABLE_CONFIG` enthaelt die acht importierten Sheet-Tabs.
+  Validiert Instanz, Loopback, Origins, HTTPS-Modus, PostgreSQL-Verbindung,
+  Court-HTTPS-URL, Timeoutrelationen und Kapazitaetsgrenzen. `TABLE_NAMES`
+  benennt die acht Projektionen. PERSISTENCE_MODE=legacy wird abgelehnt.
 
 `contracts.js`, `validators.js`, `errors.js`
   Geschlossene maschinenpruefbare RPC-Parameterobjekte, UUID-operationIds,
@@ -87,7 +94,7 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
 
 `metrics.js`
   Fuehrt dependency-frei feste Gauges, Counter und Histogramme fuer HTTP,
-  WebSocket, Readiness, Sheetimporte, Court-Poller, SQLite, Frontendcollector und
+  WebSocket, PostgreSQL-Readiness, Projektionsreloads, Court-Poller, Frontendcollector und
   Logger.
   Alle Dimensionen besitzen geschlossene oder niedrig-kardinale Werte. Das
   interne `GET /metrics` liefert Prometheus-Textformat 0.0.4 und wird von Caddy
@@ -104,6 +111,9 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   feste Prioritaet Live vor PAJ.
 
 `stateRepository.js`
+  Gemeinsamer historischer SQLite-Code fuer Offlinekompatibilitaet, kein
+  Serverrepository. Die folgenden SQLite-Moduldetails sind keine Laufzeitoption;
+  aktive PostgreSQL-Entsprechungen und Transaktionsgrenzen stehen in Abschnitt 11.
   Kapselt SQLite mit WAL/FULL, Dateirechten, Transaktionen, revisioniertem
   app_state, kontogebundenen Favoriten, Hallenzeiten, Sessions, Monitorgeraeten,
   Operationsergebnissen und Loginlimits.
@@ -152,14 +162,14 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   keine direkte Zustellung implementiert ist, senden sie nichts und liefern nur
   den gespeicherten Status `not_configured`; die interne Inbox bleibt unabhaengig.
 
-`dataPoller.js`
-  Laedt beim Start alle acht Tabellen mit einem gemeinsamen `values.batchGet`,
-  validiert alle Antworten vor der Uebernahme und committed den Snapshot
-  gemeinsam. Schlaegt dieser Bootstrap fehl, wird der Gesamtimport mit
-  exponentiellem Backoff und Jitter bis zum ersten Erfolg wiederholt; danach gibt
-  es kein periodisches Google-Sheets-Polling. Ein manueller Adminimport verwendet
-  denselben exklusiven Gesamtpfad. Bei dessen Fehler bleibt der letzte gueltige
-  Snapshot aktiv.
+`postgresProjectionService.js`, `postgresProjectionLoader.js`
+  Laden tenantgebundene Bulkprojektionen in einer REPEATABLE-READ-Transaktion.
+  Alle acht Tabellen werden gemeinsam validiert und atomar publiziert, ohne
+  einzelne Queries je Bewerb. Generationen werden serialisiert nachgeladen;
+  ein neuerer Write darf nicht durch einen aelteren Load ueberschrieben werden.
+  Fehler behalten Last-good ohne TTL. Ausschliesslich DataStore-Listener
+  publizieren Aenderungen; reine Messaginginvalidierungen loesen keinen
+  Volltabellenreload aus. Status/Reload sind admin-only, siehe ENDPOINTS.txt.
 
 `tableSchemas.js`, `tableUtils.js`, `personRoles.js`
   Kanonisieren Header, erzwingen Pflichtspalten/eindeutige IDs, erfassen
@@ -187,27 +197,11 @@ Konfigurationsfile und keine externe Rollen- oder Tokenautoritaet im Browser.
   aber nicht den Zeitpunkt des letzten Gesamterfolgs. Ein vor einem neueren Write
   gestarteter Read darf dessen Daten oder Fehlerzustand nicht ueberholen.
 
-`sheetService.js`
-  Zentralisiert Google-Reads und alle fachlichen Writes. Queues serialisieren pro
-  Tabelle beziehungsweise Operation; Stop nimmt keine neue Arbeit an und wartet
-  auf aktive Sheetarbeit. Fachwrites verwenden stabile IDs, operationId-
-  Deduplizierung, Cache-Refresh/Fallback, Compare-and-set und Developer-Metadaten.
-  Der erste Metadatenscan und die erste Sheet-Eigenschaftsabfrage fuellen jeweils
-  den Cache fuer alle bekannten Datensaetze beziehungsweise Tabs. Eine stabile
-  Personenzeile wird direkt im benoetigten formatierten Modus gelesen. Bestaetigte
-  Writes werden sofort lokal projiziert; aufeinanderfolgende Writes derselben
-  Tabelle teilen einen um eine Sekunde verzoegerten autoritativen Abschlussread.
-  `normalizePerson` und `reconcilePerson` verwenden dieselbe `players`-Queue;
-  Neuanlagen vergeben darin die Folge der hoechsten numerischen Personen-ID,
-  bestaetigen den Append per Vollread und stellen danach stabile
-  `epiberRecord`-Metadata her.
-
-`sheetsReadCoordinator.js`
-  Kapselt alle Google-Sheets-Reads von Importmanager und SheetService, erfasst logische
-  Requests und tatsaechliche Initial-/Retry-Versuche mit festen Metriklabels und
-  koordiniert aktive Tabellenarbeit. Google-429 wird nicht automatisch erneut
-  gesendet, sondern sperrt weitere Reads prozessweit fuer 60 Sekunden. Andere
-  retryfaehige Transport-/Serverfehler behalten begrenzte Bibliotheks-Retries.
+`postgresCompetitionService.js`, `postgresPlayService.js`
+  Orchestrieren Fachwrites mit tenantgebundenen Repositories, serialisierten
+  Transaktionsgrenzen, Idempotenz, Audit und Outbox. Keine Google-Sheets-Reads,
+  Developer Metadata, Quoten oder externe Writebestaetigung. Offlineimport und
+  gemeinsame Fach-/Passwortkomponenten sind kein Serverfallback.
 
 `stateStore.js`
   Fachliche Sicht auf persistente Court- und Monitorzielwerte. Court 1/2 werden
@@ -390,15 +384,29 @@ aenderungen starten den WebSocket neu.
 
 
 ================================================================================
-  4. SHEETS, CACHE UND UNKNOWN-WRITES
+  4. FACHVERTRAEGE UND HISTORISCHE WRITEDETAILS
 ================================================================================
 
-Lesepfad:
+Gueltigkeitsgrenze: Die Fach- und Bedienvertraege dieses Abschnitts bleiben
+erhalten. Die nachfolgend genannten Sheet-/A1-/Metadata-/SQLite-Recoverymechaniken
+beschreiben den abgeloesten Unterbau, nicht die Serverlaufzeit. Aktuell gelten
+ausschliesslich PostgreSQL-Transaktionen mit Idempotenzresultat, Audit und Outbox
+aus Abschnitt 11. Es gibt keinen Google-Read, Write, Quoten-Cooldown oder
+externen Bestaetigungsread. Unklarer Commit bleibt unknown. Fuer aktuelle RPCs
+gilt ENDPOINTS.txt. Historische technische Details sind kein Fallbackauftrag.
+
+Aktueller Lesepfad: tenantgebundener REPEATABLE-READ-Bulksnapshot -> atomare
+Last-good-Uebernahme aller acht Tabellen -> kontrollierte RPC-Projektion.
+Schreibpfad: Principal + Parameter -> Fachregeln -> transaktionale Idempotenz,
+Fachwrite/Meldungen/Outbox -> Projektionsrefresh -> Topic. Ein reiner
+Messaginghinweis triggert keinen Vollreload. Adminrefresh liest nur Projektionen.
+
+Historischer Lesepfad (nicht mehr ausfuehrbar):
   Google Sheets -> exklusiver Start-/Admin-Gesamtimport -> Schema-Pruefung
   -> atomare Last-good-Uebernahme in dataStore
   RPC -> Current-/Access-Pruefung -> Projektion -> Response
 
-Schreibpfad:
+Historischer Schreibpfad (nicht mehr ausfuehrbar):
   Sessionprincipal + geschlossene Parameter -> Fachregeln -> operationId-Lookup
   -> serialisierte Sheetoperation -> Bestaetigung -> Cache-Refresh -> Topic
 
@@ -986,8 +994,7 @@ migrierbar und muessen fuer die Matchtyp-Projektion neu zugewiesen werden.
 
 `/live` prueft nur den Prozess. `/ready` und `/health` verlangen:
   - Initialisierung abgeschlossen und kein Shutdown,
-  - offene State-, Messaging-, ScoreLog- und Auditlog-SQLite-Datenbanken ohne
-    letzten Persistenzfehler,
+  - initialisierte PostgreSQL-Laufzeit und bereite Pflichtkomponenten,
   - mindestens einen vollstaendig erfolgreichen Snapshot aller acht Tabellen;
     dessen Alter ist danach nur diagnostisch,
   - bei aktivem Court eine anhand des letzten Erfolgs noch frische externe
@@ -1000,8 +1007,8 @@ Readiness nicht. Neue Court-Zuweisungen benoetigen weiterhin einen verwendbaren
 Matchtyp-Stand aus dem Last-good-Snapshot.
 
 `/status` ist admin-only und zeigt detaillierte Tabellen-, Provider-, Monitor-,
-SheetService-, State-, Messaging-, ScoreLog- und Auditlogwerte, einschliesslich
-`pendingMetadataIntents`, Quelle der verwendeten Adminrolle sowie einer
+PostgreSQL-, Projektions-, State-, Messaging-, ScoreLog- und Auditlogwerte,
+Quelle der verwendeten Adminrolle sowie einer
 begrenzten atomaren RPC-Abschlusshistorie je verbundenem Socket, aber keine
 Secrets. Die Provider-Verbindungsdaten werden bei jedem Aufruf nur aus aktuell
 verbundenen Sockets erzeugt, beim Close entfernt und nicht persistiert. Sie sind
@@ -1016,11 +1023,12 @@ Teilnehmerzaehler, keine Betreffe, Texte, Namen oder Receipts.
 
 Graceful Shutdown:
   1. Neue HTTP-/WS-Operationen werden mit 503 abgelehnt; Upgrades stoppen.
-  2. Sheet-Recovery- und Courtpoller-Timer stoppen; laufender Courtfetch wird
+  2. Automation und Courtpoller-Timer stoppen; laufender Courtfetch wird
      abgebrochen.
   3. MonitorBroker beendet Geraete und WebSockets schliessen mit 1012.
-  4. Aktive WS-Handler, HTTP-Requests und SheetService-Arbeit werden drainiert.
-  5. Audit-, ScoreLog-, Messaging- und State-SQLite schliessen erst danach.
+  4. Aktive WS-Handler, HTTP-Requests und akzeptierte Writes werden drainiert.
+  5. Invalidation-Listener und Projektionsloader drainieren, dann Datenbankpool
+     schliessen. Kein neuer Reload nach Stop.
 
 Standard-Grace ist 90 Sekunden. Eine ueberschrittene Deadline ist
 `SHUTDOWN_TIMEOUT`, schliesst Verbindungen hart und fuehrt zu Fehlerexit. Synchrone
@@ -1274,34 +1282,30 @@ Backend-Build bleibt von Browserbinaries und Containerlauf unabhaengig.
   10. BETRIEBSGRENZE UND ROLLOUT
 ================================================================================
 
-Node.js 26 und npm 12.0.2 sind festgeschrieben. Vor Produktion muessen Role und
-Entrydate, Pflichtspalten, Sheet-Rechte, epiberRecord-Metadaten, geschuetzte
-Credentials, SQLite-StateDirectory, HTTPS/WSS, Browser/Kiosk, responsive
+Node.js 26 und die Paketmanagerreferenz aus Backend/package.json sind massgeblich.
+Vor Produktion muessen Schema-/Tenant-/Rollengates, Idempotenz, Audit, geschuetzte
+Credentials, PostgreSQL-Projektionen, HTTPS/WSS, Browser/Kiosk, responsive
 Scoreboards, Standby/Reconnect, Last, SIGTERM, Dauerbetrieb und Rollback praktisch
 abgenommen werden. Kanonische Liste:
 `Project/server-configs/ROLLOUT-CHECKLIST.md`.
 
-Fuer die Loginmigration ist die Reihenfolge zwingend: zuerst `Personen.Login` im
-Sheet anlegen, alle bestehenden Anmeldekonten mit gueltigen eindeutigen Logins
-befuellen und Login-Dubletten bereinigen; erst danach Backend und Frontend dieser
-Version starten. Es gibt keinen Fallback von Login auf Kontakt-E-Mail. Danach
-werden Login, Erstvergabe, Sessionbindung/-widerruf, Profilprojektionen,
-Normalisierung und Mitgliederabgleich in PAJ abgenommen. Waehrend des ersten
-kontrollierten Imports bleiben manuelle und weitere Backend-Personenwrites
-gesperrt; Live-Deployment folgt erst nach Backup- und Rollbackfreigabe.
-Die konkrete Ausnahme fuer den PostgreSQL-Live-Cutover ist in Abschnitt 11
-beschrieben; sie ist keine allgemeine Aufhebung dieser Freigaben.
+Anmeldekonten brauchen gueltige eindeutige Logins; kein Fallback auf Kontakt-
+E-Mail. Login, Erstvergabe, Sessionbindung/-widerruf, Profilprojektionen,
+Normalisierung und Mitgliederabgleich werden in PAJ abgenommen. Ein regulaerer
+Anwendungsrelease importiert keine Quelldaten erneut. Live-Deployment folgt
+erst nach Backup-/Rollbackfreigabe oder konkreter befristeter Risikoausnahme
+fuer diesen Lauf. Eine historische Cutoverausnahme hebt neue Gates nicht auf.
 
 
 ================================================================================
   11. POSTGRESQL-LAUFZEITARCHITEKTUR
 ================================================================================
 
-Die PostgreSQL-Migrationsgrundlage und die vollstaendige alternative
-Serverlaufzeit sind implementiert. `server.js` waehlt beim Start genau einen
-Persistenzmodus. `PERSISTENCE_MODE=legacy` verwendet weiterhin Google Sheets und
-die vier SQLite-Dateien; `PERSISTENCE_MODE=postgres` komponiert ausschliesslich
-PostgreSQL-Repositories und besitzt keinen Rueckfall auf Legacy-Persistenz.
+Die Serverlaufzeit verwendet ausschliesslich PostgreSQL. `server.js` komponiert
+ueber createPostgresApplication und createPostgresComponents explizit alle
+Pflichtdienste. `PERSISTENCE_MODE=legacy` wird abgelehnt; Google-Laufzeit,
+DataPoller, SheetService, SheetsReadCoordinator und Onlineexporter sind entfernt.
+Lokale CSV-/SQLite-Migrationswerkzeuge bleiben fuer explizite Offlineimporte.
 
 Live und PAJ verwenden PostgreSQL im gemeinsamen Cluster `shared-devel`
 (`postgresql-devel.service`, `/run/postgresql/devel`, Port 5433): Live nutzt
@@ -1392,6 +1396,21 @@ Der vorbereitete Zielstand umfasst:
   Hallenwartelistenbereinigung. Der Worker erzeugt faellige Wartungsjobs
   periodengebunden und verarbeitet sie tenantbegrenzt in Batches bis 1.000.
 
+Worker-Ticks und LISTEN/NOTIFY-Wakes werden koalesziert; genau eine Claimkette
+ist aktiv. Wartungsplanung wird wiederkehrend je Minute geprueft und bleibt
+idempotent (nur neue Jobs zaehlen/notify). Shutdown drainiert Listener und Arbeit.
+WebSocket-RPCs reservieren globale/socketlokale Inflightkapazitaet synchron vor
+asynchroner Authentifizierung und geben sie im aeusseren finally wieder frei.
+Oeffentliche Spieler-/Mitglieder- und Hallenlistenreads verwenden schmale
+Repositories beziehungsweise skalare Access-/Listensummaries statt Vollobjekten.
+
+Frontend-Reads nutzen bereits geladene Bewerbsantworten und bewerbgefilterte
+KO-/RoundRobin-Matches; EntryList verwendet die Bewerbsantwort weiter. Navbar
+uebernimmt private Meldungssummaries direkt mit praezisionssicherer
+Revisionsordnung. Courtpublication erfolgt genau einmal. Dashboardgeburtstage
+akzeptieren PostgreSQL-ISO-Daten neben bisherigen Formaten. Bestehende Rechte,
+Filter, Darstellungen und Browser-Supportmatrix bleiben unveraendert.
+
 Die Runtime lehnt eine fehlende Domaene bereits vor dem Verbindungsaufbau ab.
 Die App-Komposition erwartet Schemageneration 8. Migration 7 erweitert die
 Navigatoraktionen; Migration 8 speichert Einstiegs-Zielrang sowie versionierte
@@ -1433,11 +1452,16 @@ perspektive, neutrales W.O. und Aufgabe; der Akteur bleibt separat. Namen,
 freie Gruende und Ergebnisse gehoeren in die fachliche Meldungsprojektion,
 nicht in neue freie Audit-/Diagnosepayloads. Fehler rollen den Fachwrite zurueck;
 ein unbekannter Commitausgang bleibt als solcher sichtbar. Historische
-generische Meldungen werden nicht automatisch repariert. Die fehlende
-PostgreSQL-KO-Folgematch-Adminwarnung bleibt eine explizite Paritaetsgrenze
-(siehe `seiten/bewerbe.txt`).
+generische Meldungen werden nicht automatisch repariert. Ein fehlendes
+KO-Folgematch erzeugt ueber postgresPlayService/missingKoTargetMessage und
+postgresDomainMessages atomar mit Ergebnis/Korrektur private Adminwarnungen.
+Template `ko_progression_required` bindet `matchId`/`expectedRoundCode`;
+Empfaenger sind aktive tenantlokale Adminrollen derselben Transaktion. Keine
+oeffentliche Historie oder Bewerbs-/Matchrelation der privaten Warnung. Replay
+dupliziert nichts, Meldungsfehler rollen den Ergebniswrite zurueck. Finals,
+RoundRobin und Ranglisten sind ausgeschlossen; keine automatische Rasterreparatur.
 
-Die Konfiguration kennt `PERSISTENCE_MODE=legacy|postgres`. Der PostgreSQL-Wert
+Die Konfiguration kennt ausschliesslich `PERSISTENCE_MODE=postgres`. Der Wert
 benoetigt keine Sheet- oder SQLite-Konfiguration, aber eine PostgreSQL-
 Verbindung, den erwarteten Tenantcode, die externe Court-URL und ein separates
 Base64url-Geheimnis fuer gehashte Loginlimit-Schluessel. Readiness verlangt den

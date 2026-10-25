@@ -6,9 +6,9 @@ import {
 } from "./dataClient.js";
 import { diagnostic } from "./diagnostics.js";
 
-const readSheetDataStatus = createEndpoint("sheetDataStatus");
-const refreshSheetData = createEndpoint("refreshSheetData");
-const REFRESH_OPERATION_KEY = "refreshSheetData";
+const readProjectionStatus = createEndpoint("projectionStatus");
+const refreshProjections = createEndpoint("refreshProjections");
+const REFRESH_OPERATION_KEY = "refreshProjections";
 const STATUS_POLL_MS = 2000;
 const AGE_UPDATE_MS = 30000;
 const SUPPORT_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
@@ -67,7 +67,6 @@ function normalizeSnapshot(data) {
     lastSuccessfulRefreshAt: parseTimestamp(data.lastSuccessfulRefreshAt, "lastSuccessfulRefreshAt"),
     dataAgeMs,
     inProgress,
-    bootstrapRecoveryActive: data.bootstrapRecoveryActive === true,
     lastControlledFailure: normalizeFailure(data.lastControlledFailure),
   };
 }
@@ -146,9 +145,9 @@ function renderSnapshot() {
   }
 
   const badge = element("service-state-badge");
-  const recovering = snapshot.bootstrapRecoveryActive && snapshot.lastSuccessfulRefreshAt === null;
-  badge.textContent = snapshot.inProgress ? "Aktualisierung läuft" : recovering ? "Startimport wird wiederholt" : "Bereit";
-  badge.dataset.state = snapshot.inProgress || recovering ? "busy" : "ready";
+  const unavailable = snapshot.lastSuccessfulRefreshAt === null;
+  badge.textContent = snapshot.inProgress ? "Aktualisierung läuft" : unavailable ? "Noch nicht geladen" : snapshot.lastControlledFailure ? "Letzter gültiger Stand" : "Bereit";
+  badge.dataset.state = snapshot.inProgress || unavailable ? "busy" : "ready";
   setBusy(busy);
 }
 
@@ -165,7 +164,7 @@ async function loadStatus({ quiet = false } = {}) {
   const requestGeneration = generation;
   if (!quiet) setFeedback("Datenstatus wird geladen...", "loading");
   try {
-    const response = await readSheetDataStatus();
+    const response = await readProjectionStatus();
     if (!authorized || requestGeneration !== generation) return false;
     snapshot = normalizeSnapshot(response.data);
     snapshotReceivedAt = Date.now();
@@ -176,7 +175,7 @@ async function loadStatus({ quiet = false } = {}) {
   } catch (error) {
     if (!authorized || requestGeneration !== generation) return false;
     if (!quiet) setFeedback(errorMessage(error), "error");
-    diagnostic.error("sheet_data_status_load_failed", error);
+    diagnostic.error("projection_status_load_failed", error);
     schedulePoll();
     return false;
   }
@@ -187,14 +186,16 @@ async function startRefresh() {
   const requestGeneration = generation;
   let operationError = null;
   setBusy(true);
-  setFeedback("Sheet-Daten werden aktualisiert...", "loading");
+  setFeedback("PostgreSQL-Projektionen werden neu geladen...", "loading");
   try {
-    await refreshSheetData({ operationId: getOperationId(REFRESH_OPERATION_KEY) });
+    await refreshProjections({ operationId: getOperationId(REFRESH_OPERATION_KEY) });
     if (!authorized || requestGeneration !== generation) return;
     releaseOperationId(REFRESH_OPERATION_KEY);
-    await loadStatus({ quiet: true });
+    const statusLoaded = await loadStatus({ quiet: true });
     if (!authorized || requestGeneration !== generation) return;
-    setFeedback("Die Sheet-Daten wurden erfolgreich aktualisiert.", "success");
+    setFeedback(statusLoaded
+      ? "Die PostgreSQL-Projektionen wurden erfolgreich neu geladen."
+      : "Die Projektionen wurden neu geladen; der aktuelle Datenstatus konnte nicht abgefragt werden.", statusLoaded ? "success" : "error");
   } catch (error) {
     operationError = error;
     releaseOperationId(REFRESH_OPERATION_KEY, error);
@@ -202,7 +203,7 @@ async function startRefresh() {
     await loadStatus({ quiet: true });
     if (!authorized || requestGeneration !== generation) return;
     setFeedback(errorMessage(error), "error");
-    diagnostic.error("sheet_data_refresh_failed", error);
+    diagnostic.error("projection_refresh_failed", error);
   } finally {
     if (authorized && requestGeneration === generation) setBusy(false);
   }

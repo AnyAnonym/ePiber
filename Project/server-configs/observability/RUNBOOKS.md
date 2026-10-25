@@ -8,8 +8,8 @@ Zuordnung:
 
 | Deployment | Backendport | systemd-Unit |
 |------------|-------------|--------------|
-| `live` | 8080 | `epiber-piber.service` |
-| `paj` | 8083 | `epiber-paj.service` |
+| `live` | 8080 | `epiber-live.service` |
+| `devel` (Dashboard `paj`) | 8083 | `epiber-devel.service` |
 
 PK ist derzeit kein aktives Observability-Deployment und wird erst nach einer
 separaten Freigabe wieder in Scrapes, Logs, Authentifizierung und Alerts aufgenommen.
@@ -26,33 +26,28 @@ separaten Freigabe wieder in Scrapes, Logs, Authentifizierung und Alerts aufgeno
 1. `curl http://127.0.0.1:<port>/metrics` und `epiber_readiness_component_ready` pruefen.
 2. Den ungesunden Teil gezielt untersuchen; keine Fachwrites blind wiederholen.
 
-## Sheet Snapshot Missing
+## Projection Missing / Refresh Failed
 
-1. Betroffene Tabelle und Deployment ueber `epiber_sheet_table_available` bestimmen.
-2. `sheets_full_refresh_failed`, `sheets_startup_recovery_scheduled` und
-   `sheets_startup_recovery_completed` in Loki fuer dasselbe Deployment pruefen.
-3. Google-Zugang, Quote und Sheetstruktur pruefen. Solange noch nie ein
-   vollstaendiger Snapshot geladen wurde, bleibt die Anwendung not-ready.
-4. Einen manuellen Gesamtimport nur als Admin im Servicebereich starten. Bei
-   unklarem Ausgang keine neue operationId erzeugen und keine Fachwrites blind
-   wiederholen; Support-ID und Auditstatus verwenden.
+1. `/ready`, `epiber_projection_table_available` und
+   `epiber_projection_refresh_failed` fuer dasselbe Deployment pruefen.
+2. `postgres_projection_refresh_completed` und PostgreSQL-Readiness untersuchen.
+3. Ohne Erstload bleibt die App not-ready; hohes Alter allein ist kein TTL-Ausfall.
+4. Admins koennen im Servicebereich Projektionen bewusst neu laden. Dies ist
+   kein externer Import oder Reparatur gespeicherter Fachdaten. Fehler behaelt
+   Last-good. Keine automatische Wiederholung; Support-ID/Auditstatus verwenden.
 
 ## Court Source Stale
 
 1. Courtquelle, Netzwerk und `court_poll_failed` fuer das Deployment pruefen.
 2. ScoreLog-Gesundheit getrennt pruefen.
 
-## SQLite Unhealthy
+## PostgreSQL Unhealthy
 
-1. Betroffene Datenbank ueber `deployment` und `database` bestimmen.
-2. Freien Speicher, Dateirechte und Journal pruefen.
-3. Vor Reparatur den Dienst stoppen und eine konsistente Sicherung erstellen.
-
-## Pending Metadata Intent
-
-Die Schritte aus `Project/server-configs/ROLLOUT-CHECKLIST.md`, Abschnitt
-`pendingMetadataIntents manuell klaeren`, strikt einhalten. Keine Aktion blind
-wiederholen.
+1. Betroffene Readinesskomponente, Pool, Schema-/Tenantgate und Journal pruefen.
+2. Freien Speicher und gemeinsamen Cluster pruefen. Kein automatischer Legacy-
+   Rueckfall; keine Fachwrites blind wiederholen.
+3. PostgreSQL-Neustart, Reparatur oder Restore sind gesonderte Infrastruktur-
+   freigaben, weil Live, PAJ und Gitea gemeinsame Ausfall-/Restoregrenzen teilen.
 
 ## HTTP Server Errors
 

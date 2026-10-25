@@ -8,7 +8,6 @@ import { signalMonitorReady, signalMonitorFailed } from "./monitorReady.js";
 const readMatchesList  = createEndpoint("matches");
 const readPlayersList  = createEndpoint("players");
 const readBewerbe      = createEndpoint("bewerbe");
-const readBewerbsart   = createEndpoint("bewerbsart");
 
 const params = new URLSearchParams(window.location.search);
 const BEWERB_ID = params.get("id");
@@ -573,16 +572,15 @@ async function loadBracket() {
   }
 
   try {
-    const [bewerbRes, bewbsRes, matchRes, playerRes] = await Promise.all([
+    const [bewerbRes, matchRes, playerRes] = await Promise.all([
       callWithRetry(readBewerbe),
-      callWithRetry(readBewerbsart),
-      callWithRetry(readMatchesList),
+      callWithRetry(readMatchesList, { bewerbId: BEWERB_ID }),
       callWithRetry(readPlayersList),
     ]);
     if (activeView !== "bracket") return true;
 
     const bewerbValues = bewerbRes.data?.values || [];
-    const bewbsValues = bewbsRes.data?.values || [];
+    const bewbsValues = bewerbRes.data?.bewerbsartValues || [];
     const matchValues = matchRes.data?.values || [];
     const playerValues = playerRes.data?.values || [];
 

@@ -97,8 +97,8 @@ Turnieren, Matches, Live-Scoreboard und Platzsteuerung.
 
 - Frontend: HTML, CSS und Vanilla JavaScript mit ES6-Modulen; kein Framework
 - Backend: Node.js 26 mit HTTP, WebSocket v2 und modularen Services
-- Persistenz: PostgreSQL fuer Live und PAJ; Google Sheets und vier SQLite-Dateien
-  nur im expliziten Legacybetrieb
+- Persistenz: ausschliesslich PostgreSQL fuer die Serverlaufzeit; lokale
+  CSV-/SQLite-Quellpakete bleiben fuer explizite Offlineimporte erhalten
 - Proxy: Caddy fuer HTTPS/WSS, statische Dateien sowie `/ws`, `/api/*`, `/live`,
   `/ready`, `/health`, `/status` und `/version`
 - Prozessmanagement: systemd auf Arch Linux
@@ -139,8 +139,8 @@ Der weiterhin `shared-devel` genannte gemeinsame PostgreSQL-Cluster traegt
 Gitea-Instanz sowie die PostgreSQL-basierte PAJ-App und ihr Worker haengen am
 LUKS-Volume `development-data`. Das Volume wird beim Boot ueber eine lokale
 root-only Schluesseldatei automatisch geoeffnet; PostgreSQL, Gitea,
-M365-Konnektor, App und Worker sind bootaktiviert. `epiber-paj.service` ist als Legacy-Worst-Case-Weg
-deaktiviert. Ist PAJ nach einem Hostneustart nicht erreichbar, sind zuerst Mount
+M365-Konnektor, App und Worker sind bootaktiviert. Die alten PAJ-/Piber-/PK-
+Legacyunits und Googlewrapper sind entfernt. Ist PAJ nach einem Hostneustart nicht erreichbar, sind zuerst Mount
 und Development-Dienste zu pruefen. Der kontrollierte manuelle Recovery-Start
 als root lautet:
 
@@ -151,8 +151,9 @@ development-services-start
 Das Skript fragt bei geschlossenem Volume die LUKS-Recovery-Passphrase interaktiv
 ab, mountet und prueft das Volume
 und startet danach PostgreSQL, Gitea, den M365-Konnektor, `epiber-devel.service` und
-`epiber-devel-worker.service` in der richtigen Reihenfolge. Es stoppt den
-Legacydienst und prueft die lokale PAJ-Readiness. Die Passphrase darf nie im
+`epiber-devel-worker.service` in der richtigen Reihenfolge. Nur bei bestaetigtem
+LoadState `not-found` wird der alte Legacy-Stop uebersprungen; Status-/Stopfehler
+brechen ab. Anschliessend wird PAJ-Readiness geprueft. Die Passphrase darf nie im
 Chat, in Git oder als Befehlsargument stehen.
 
 ACHTUNG: Der folgende Gesamtstop beendet auch den gemeinsamen PostgreSQL-Dienst
@@ -167,21 +168,9 @@ Kontrollierter Stop als root, nur mit ausdruecklicher Live-Ausfallfreigabe:
 development-services-stop
 ```
 
-Manueller Worst-Case-Rueckfall auf PAJ-Legacy, nur nach ausdruecklichem Auftrag:
-
-```text
-systemctl stop epiber-devel-worker.service epiber-devel.service
-systemctl start epiber-paj.service
-```
-
-Rueckkehr von Legacy zum PostgreSQL-Standard erfolgt wieder mit
-`development-services-start`; das Skript stoppt Legacy kontrolliert. Es gibt
-keinen automatischen Fallback und `systemctl start epiber-paj.service` aktiviert
-den Legacydienst nicht fuer den naechsten Boot.
-
-`epiber-piber.service` ist ebenfalls deaktivierter Legacybestand ohne
-automatischen Fallback. Nach PostgreSQL-Fachwrites ist ein Rueckfall auf die
-eingefrorenen Sheets-/SQLite-Daten nicht verlustfrei. Live und Devel haben
+Es gibt keinen Google-/Sheets-Servermodus und keinen Legacy-Unit-Rueckfall.
+`PERSISTENCE_MODE=legacy` wird abgelehnt. Nach PostgreSQL-Fachwrites ist ein
+Rueckfall auf eingefrorene Quelldaten nicht verlustfrei. Live und Devel haben
 getrennte Rollen, teilen aber Volume, WAL, Kapazitaet, Neustart-/Ausfall- und
 physische Restore-/PITR-Grenzen. Off-site-Backup, WAL-Archivierung, Restore und
 PITR sind aufgrund der konkreten Cutover-Ausnahme nachgelagert und noch nicht
@@ -234,8 +223,10 @@ nur bei einer ausdruecklich historischen oder Legacy-bezogenen Aufgabe gelesen.
 
 | Lokale Datei, nicht versionieren | Inhalt | Versionierte Vorlage |
 |----------------------------------|--------|-----------------------|
-| `Backend/.env` | Sheet-ID, Port, Court-URL und optionale Limits | `Backend/.env.example` |
-| Service-Account-JSON-Datei | Google-Service-Account-Schluessel | keine |
+| `Backend/.env` | Port, Court-URL, PostgreSQL-Konfiguration und optionale Limits | `Backend/.env.example` |
+
+Historische Service-Account-Dateien sind keine Laufzeitvoraussetzung; auch sie
+bleiben Geheimnisdateien und werden nicht eigenmaechtig gelesen oder entfernt.
 
 WebSocket-URLs werden same-origin abgeleitet; `Frontend/JS/SDK.js` und dessen
 Vorlage existieren nicht mehr.
@@ -258,7 +249,7 @@ Vorlage existieren nicht mehr.
 | `RoundRobin.html` | Gruppenphase | `?id=<bewerbId>&paarungslayout=<0-5>`; `id` erforderlich |
 | `personenNormalisieren.html` | Admin-Personendaten normalisieren | keine |
 | `mitgliederAbgleichen.html` | Admin-ClubDesk-Mitgliederabgleich | keine |
-| `servicebereich.html` | Admin-Status und Gesamtimport der Sheet-Daten | keine |
+| `servicebereich.html` | Admin-Projektionsstatus und PostgreSQL-Lesecache-Reload | keine |
 | `hallzeiten.html` | Hallenzeiten-Reservierungsraster | `?id=<rasterId>` erforderlich |
 | `hallzeitenVerwalten.html` | Admin-Verwaltung der Hallenzeiten | keine |
 | `hallzeitenDrucken.html` | Admin-Druckvorlagen | `?id=<rasterId>&ansicht=mine|all` |

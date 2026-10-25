@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const { spawnSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "../../Project/server-configs");
 const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
@@ -24,6 +25,36 @@ test("manueller Development-Start wechselt fail-closed von Legacy auf PostgreSQL
   assert.match(script, /LEGACY_SERVICE_ACTIVE/);
   assert.doesNotMatch(script, /systemctl start "\$LEGACY_SERVICE"/);
   assert.match(script, /development_services_start_completed/);
+});
+
+test("Development-Start toleriert entfernte Legacy-Unit, aber keinen Abfrage- oder Stopfehler", () => {
+  const script = read("bin/development-services-start");
+  const guard = script.slice(script.indexOf('legacy_load_state="$('), script.indexOf('systemctl start "$APP_SERVICE"'));
+  assert.match(guard, /systemctl show "\$LEGACY_SERVICE" --property=LoadState --value/);
+  assert.match(guard, /"\$legacy_load_state" != "not-found"/);
+  const exercise = (state, probeStatus = 0, stopStatus = 0) => spawnSync("bash", ["-c", `
+    set -Eeuo pipefail
+    LEGACY_SERVICE="epiber-paj.service"
+    systemctl() {
+      case "$1" in
+        show) printf '%s\\n' "$TEST_LOAD_STATE"; return "$TEST_PROBE_STATUS" ;;
+        stop) printf 'stopped\\n'; return "$TEST_STOP_STATUS" ;;
+        *) exit 99 ;;
+      esac
+    }
+    ${guard}
+    printf 'continued\\n'
+  `], { encoding: "utf8", env: { ...process.env, TEST_LOAD_STATE: state, TEST_PROBE_STATUS: String(probeStatus), TEST_STOP_STATUS: String(stopStatus) } });
+  const absent = exercise("not-found");
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.equal(absent.stdout, "continued\n");
+  const installed = exercise("loaded");
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.equal(installed.stdout, "stopped\ncontinued\n");
+  for (const result of [exercise("loaded", 1), exercise("loaded", 0, 1)]) {
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stdout.includes("continued"), false);
+  }
 });
 
 test("Development-Stop beendet App und Worker vor Datenbank und Volume", () => {
@@ -65,12 +96,10 @@ test("automatischer Boot bindet LUKS-Keydatei, Mount und Worker an die PostgreSQ
   assert.match(m365, /RequiresMountsFor=\/var\/lib\/development-data/);
 });
 
-test("PAJ-Refresh prueft den aktivierten Import vor dem ersten Workerstart", () => {
-  const script = read("bin/epiber-migration-staging-run");
-  const activation = script.indexOf('node "${backend}/scripts/db-paj-refresh-swap.js" activate');
-  const readiness = script.indexOf("http://127.0.0.1:8083/ready", activation);
-  const validation = script.indexOf('> "${result}/active-validation.jsonl"', activation);
-  const worker = script.indexOf("systemctl start epiber-devel-worker.service", activation);
-  const previousDrop = script.indexOf('dropdb --force', activation);
-  assert.ok(activation >= 0 && activation < readiness && readiness < validation && validation < worker && worker < previousDrop);
+test("Google-basierte Export- und Refreshwrapper sind entfernt; Offline-Import bleibt erhalten", () => {
+  for (const name of ["epiber-migration-staging-run", "epiber-paj-refresh-run"]) {
+    assert.equal(fs.existsSync(path.join(root, "bin", name)), false);
+  }
+  assert.equal(fs.existsSync(path.resolve(__dirname, "../scripts/db-paj-refresh.js")), true);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "../scripts/db-paj-refresh-swap.js")), true);
 });

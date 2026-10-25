@@ -80,9 +80,8 @@ Der Arch-Standarddienst `postgresql.service` ist deaktiviert und inaktiv. Der
 eigene PostgreSQL-Dienst, Gitea, der M365-Konnektor, PAJ-PostgreSQL-App und Worker sind fuer den
 automatischen Bootstart aktiviert und haengen vom automatisch entsperrten Mount
 ab. Live-App `epiber-live.service` und `epiber-live-worker.service` sind ebenfalls
-bootaktiviert und vom gemeinsamen Cluster/Mount abhaengig. Der deaktivierte
-Legacydienst `epiber-paj.service` startet nur noch auf
-ausdruecklichen manuellen Auftrag.
+bootaktiviert und vom gemeinsamen Cluster/Mount abhaengig. Die historischen
+PAJ-/Piber-/PK-Legacyunits wurden nach Sicherung entfernt, kein Unit-Rueckfall.
 
 Der Cluster wurde mit `C.utf8`, UTF-8 und Datenseitenpruefsummen initialisiert.
 Das initiale Ressourcenprofil verwendet unter anderem 30 Verbindungen,
@@ -271,7 +270,8 @@ mit Modus 0755 nach `/usr/local/sbin/` installiert:
 
 Das Startskript entsperrt und prueft das Volume, startet PostgreSQL, wartet auf
 dessen Readiness und startet danach Gitea sowie den M365-Konnektor. Anschliessend stoppt es den
-Legacydienst fail-closed, startet `epiber-devel.service`, prueft dessen lokale
+Legacydienst fail-closed (nur bestaetigtes LoadState not-found ueberspringt den
+Stop), startet `epiber-devel.service`, prueft dessen lokale
 Readiness und startet erst danach `epiber-devel-worker.service`. Es gibt keinen
 automatischen Rueckfall auf Legacy.
 
@@ -285,26 +285,10 @@ PostgreSQL-Stop beendet. Das bestehende Startskript startet/prueft PAJ, nicht
 explizit Live; PostgreSQL allein wieder zu starten belegt keine Live-Recovery.
 Vor Gesamtstop oder Recovery sind Live-Ausfall und anschliessende Live-App-/
 Workeraktivierung mit Health-/Versionspruefung ausdruecklich freizugeben.
-`epiber-piber.service` bleibt deaktivierter Legacybestand; nach produktiven
-PostgreSQL-Writes ist ein Datastore-Rueckfall nicht verlustfrei und darf nicht
-durch blosses Starten des alten Dienstes erfolgen.
-
-Der manuelle Worst-Case-Rueckfall lautet, solange kein PostgreSQL-Fachwrite einen
-neueren autoritativen Stand erzeugt hat:
-
-  systemctl stop epiber-devel-worker.service epiber-devel.service
-  systemctl start epiber-paj.service
-
-`epiber-paj.service` bleibt dabei deaktiviert und wird durch diesen manuellen
-Start nicht wieder bootaktiviert.
-
-Rueckkehr vom manuell gestarteten Legacydienst zum PostgreSQL-Standard:
-
-  development-services-start
-
-Das Startskript stoppt `epiber-paj.service`, startet App und Worker und gibt erst
-nach erfolgreicher Readiness einen Erfolg aus. Einzelne Dienste sollen fuer
-diesen Standardwechsel nicht von Hand kombiniert werden.
+Die alten epiber-piber/paj/pk-Units sind entfernt. Der Server unterstuetzt nur
+PostgreSQL; kein Unitstart kann einen Google-/SQLite-Rueckfall aktivieren.
+Nach produktiven PostgreSQL-Writes ist ein Datastore-Rueckfall auf eingefrorene
+Quelldaten ohnehin nicht verlustfrei. Secrets und Quelldaten bleiben erhalten.
 
 
 7. Bewusst akzeptierte Backup-Luecke
@@ -333,17 +317,22 @@ ohne gesichertes WAL kein Recovery-Nachweis. Die PAJ-Kopie bleibt personenbezoge
 Zugangsdaten entsprechend zu schuetzen.
 
 
-8. Credentialbereinigter Live-zu-PAJ-Refresh
+8. Offline-Quellpakete und PAJ-Passwortpflege
 ================================================================================
 
-Der wiederholbare Refresh und die PAJ-Passwortpflege bestehen aus den
-versionierten Skripten `epiber-paj-refresh-credential-set`,
-`epiber-paj-password-rotate-all`, `epiber-paj-refresh-run` und den intern
-verwendeten `epiber-migration-staging-run` sowie
-`Backend/scripts/db-paj-refresh-swap.js`. Die Shellwerkzeuge werden root-owned mit Modus 0755
-nach `/usr/local/sbin/` installiert. Die Ausfuehrung ist kein normaler
-Deployment-Schritt und benoetigt fuer jeden Lauf eine neue ausdrueckliche
-Freigabe.
+Google-Exporter, db:export und die Googlewrapper epiber-paj-refresh-credential-set,
+epiber-paj-refresh-run und epiber-migration-staging-run sind entfernt, auch aus
+der Installation. Ein neuer Online-Liveexport ist damit nicht verfuegbar.
+Bereits gepruefte lokale CSV-/SQLite-Quellpakete koennen weiterhin mit
+db:source-package, db:import, db:paj-refresh und db:paj-refresh-swap verarbeitet
+werden. Diese Offlinepfade behalten Datenschutzsanitisierung und kompatible
+Passwort-/Fachregeln, autorisieren aber weder Livezugriff noch Dienst-/DB-Tausch.
+Die PAJ-Passwortrotation epiber-paj-password-rotate-all bleibt erhalten.
+
+Die nachfolgenden Export-/Credential-set-Beschreibungen dokumentieren nur den
+historischen Quellpaketvertrag. Ihre entfernten Aufrufe sind nicht ausfuehrbar
+und kein Betriebsrezept. Ein neuer Refresh benoetigt ein separat freigegebenes,
+unterstuetztes Quellverfahren und eigene Aktionsfreigabe.
 
 Das Testpasswort wird niemals als Argument, in Git, Dokumentation oder Chat
 uebergeben. Ein Administrator setzt es interaktiv mit:

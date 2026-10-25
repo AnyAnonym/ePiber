@@ -9,6 +9,12 @@ einem ePiber-Rollout entfernen.
 
 Installierte Fragmentverzeichnisse:
 
+Oeffentliche statische JavaScript-/CSS-Dateien werden im jeweiligen Fallback
+selektiv mit zstd/gzip komprimiert. Cache-Control bleibt no-cache; HTML, private
+Antworten, API, Grafana und WebSockets werden dadurch nicht komprimiert.
+Der gemeinsame Caddy darf nur nach vollstaendiger Validierung reloadet werden;
+Fremdfragmente und deren bestehende Encoder bleiben unveraendert.
+
 - `/etc/caddy/conf.d/*.caddy`: vollstaendige zusaetzliche Sites. Das
   versionierte Fragment `conf.d/m365-connector.caddy` stellt den internen
   M365-Konnektor auf `127.0.0.1:3000` bereit.

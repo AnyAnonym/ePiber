@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -28,6 +28,8 @@ const dataClientStub = `
 let refreshCount = 0;
 let statusCount = 0;
 let resolveRefresh = null;
+let rejectRefresh = null;
+let statusFailure = false;
 const status = {
   success: true,
   lastSuccessfulRefreshAt: "2026-08-28T10:00:00.000Z",
@@ -40,11 +42,15 @@ const status = {
   },
 };
 export function createEndpoint(name) {
-  if (name === "sheetDataStatus") return async () => { statusCount += 1; return { data: status }; };
-  if (name === "refreshSheetData") return async (params) => {
+  if (name === "projectionStatus") return async () => {
+    statusCount += 1;
+    if (statusFailure) throw Object.assign(new Error("Status vorübergehend nicht erreichbar"), { code: "DATA_NOT_READY" });
+    return { data: status };
+  };
+  if (name === "refreshProjections") return async (params) => {
     refreshCount += 1;
     window.__lastRefreshParams = params;
-    return new Promise((resolve) => { resolveRefresh = resolve; });
+    return new Promise((resolve, reject) => { resolveRefresh = resolve; rejectRefresh = reject; });
   };
   throw new Error("unexpected endpoint " + name);
 }
@@ -52,7 +58,13 @@ export const getOperationId = () => "00000000-0000-4000-8000-000000000001";
 export const releaseOperationId = () => {};
 window.__serviceRefreshCount = () => refreshCount;
 window.__serviceStatusCount = () => statusCount;
-window.__resolveServiceRefresh = () => resolveRefresh?.({ data: { success: true } });
+window.__setServiceStatus = (update) => Object.assign(status, update);
+window.__setServiceStatusFailure = (value) => { statusFailure = value; };
+window.__resolveServiceRefresh = () => {
+  Object.assign(status, { lastSuccessfulRefreshAt: Date.now(), dataAgeMs: 0, lastControlledFailure: null, inProgress: null });
+  resolveRefresh?.({ data: { success: true, tableCount: 8, changedTableCount: 0 } });
+};
+window.__rejectServiceRefresh = () => rejectRefresh?.(Object.assign(new Error("Projektionen konnten nicht neu geladen werden"), { code: "DATA_REFRESH_FAILED", supportId: "refresh-failure-1" }));
 `;
 
 function contentType(filename) {
@@ -85,7 +97,7 @@ function startServer() {
     }
     if (pathname === "/test/diagnostics.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-      response.end("export const diagnostic = { error() {} };\n");
+      response.end("window.__serviceDiagnostics = []; export const diagnostic = { error(event, error) { window.__serviceDiagnostics.push({ event, code: error.code, supportId: error.supportId }); } };\n");
       return;
     }
     if (["/JS/navbar.js", "/JS/modals.js", "/JS/global.js", "/JS/footer.js"].includes(pathname)) {
@@ -110,17 +122,18 @@ function startServer() {
 }
 
 test("Servicebereich rendert kontrolliert und sperrt Refresh bei Authverlust", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
   try {
-    const page = await browser.newPage();
+    const page = await newProfilePage(browser);
     await page.goto(`http://127.0.0.1:${server.address().port}/servicebereich.html`, { waitUntil: "domcontentloaded" });
-    const button = page.getByRole("button", { name: "Daten aktualisieren", exact: true });
+    const button = page.getByRole("button", { name: "Projektionen neu laden", exact: true });
     await button.waitFor({ state: "visible" });
-    await page.locator("#service-state-badge").filter({ hasText: "Bereit" }).waitFor();
+    await page.locator("#service-state-badge").filter({ hasText: "Letzter gültiger Stand" }).waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
 
     assert.equal(await page.locator("#service-failure img").count(), 0);
     assert.match(await page.locator("#service-failure-message").textContent(), /<img src=x/);
@@ -141,7 +154,60 @@ test("Servicebereich rendert kontrolliert und sperrt Refresh bei Authverlust", {
     await page.evaluate(() => window.__resolveServiceRefresh());
     await page.locator("#service-access").waitFor({ state: "visible" });
     assert.equal(await page.locator("#service-app").isHidden(), true);
-    assert.doesNotMatch(await page.locator("#service-feedback").textContent(), /erfolgreich aktualisiert/);
+    assert.doesNotMatch(await page.locator("#service-feedback").textContent(), /erfolgreich/);
+    await page.close();
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("Servicebereich zeigt Reload-Erfolg, kontrollierte Fehler und unbekannten Status ohne automatische Wiederholung", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  timeout: 30000,
+}, async () => {
+  const server = await startServer();
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
+  try {
+    const page = await newProfilePage(browser);
+    await page.goto(`http://127.0.0.1:${server.address().port}/servicebereich.html`, { waitUntil: "domcontentloaded" });
+    const button = page.getByRole("button", { name: "Projektionen neu laden", exact: true });
+    await button.waitFor({ state: "visible" });
+    await page.locator("#service-state-badge").filter({ hasText: "Letzter gültiger Stand" }).waitFor();
+
+    await button.click();
+    await page.evaluate(() => window.__resolveServiceRefresh());
+    await page.locator("#service-feedback").filter({ hasText: "erfolgreich neu geladen" }).waitFor();
+    assert.equal(await page.locator("#service-failure").isHidden(), true);
+    assert.equal(await page.locator("#service-state-badge").textContent(), "Bereit");
+    assert.equal(await page.evaluate(() => window.__serviceRefreshCount()), 1);
+
+    await button.click();
+    await page.evaluate(() => window.__rejectServiceRefresh());
+    await page.locator("#service-feedback").filter({ hasText: "refresh-failure-1" }).waitFor();
+    assert.equal(await button.isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.__serviceRefreshCount()), 2);
+    assert.equal(await page.evaluate(() => window.__serviceDiagnostics.at(-1).event), "projection_refresh_failed");
+
+    await page.evaluate(() => window.__setServiceStatusFailure(true));
+    await button.click();
+    await page.evaluate(() => window.__resolveServiceRefresh());
+    await page.locator("#service-feedback").filter({ hasText: "Datenstatus konnte nicht abgefragt" }).waitFor();
+    assert.equal(await page.locator("#service-feedback").getAttribute("data-state"), "error");
+    assert.equal(await page.evaluate(() => window.__serviceDiagnostics.at(-1).event), "projection_status_load_failed");
+    assert.equal(await page.evaluate(() => window.__serviceRefreshCount()), 3);
+
+    await page.evaluate(() => {
+      window.__setServiceStatusFailure(false);
+      window.__setServiceStatus({ inProgress: { startedAt: Date.now() } });
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    });
+    await page.locator("#service-progress").waitFor({ state: "visible" });
+    assert.equal(await button.isDisabled(), true);
+    await page.evaluate(() => window.__setServiceStatus({ inProgress: null }));
+    await page.locator("#service-progress").waitFor({ state: "hidden" });
+    assert.equal(await button.isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.__serviceRefreshCount()), 3);
     await page.close();
   } finally {
     await browser.close();

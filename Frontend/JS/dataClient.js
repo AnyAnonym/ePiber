@@ -182,7 +182,7 @@ const READ_ENDPOINTS = new Set([
   "scoreboardSnapshot", "memberDirectory", "myProfile", "myHallTimeGroups", "hallTimeGrids", "hallTimeGrid", "hallTimeHistory", "adminHallTimeGrids", "myFavorites", "myMessageSummary", "myMessages", "myMessage", "competitionHistory",
   "competitionHistoryComments", "competitionHistoryInteraction", "competitionHistoryCommentForEdit", "competitionHistoryReactions", "competitionHistoryCommentReactions",
   "operationStatus", "navigator", "monitorList",
-  "monitorTarget", "adminPeopleNormalization", "adminMemberReconciliation", "sheetDataStatus",
+  "monitorTarget", "adminPeopleNormalization", "adminMemberReconciliation", "projectionStatus",
 ]);
 const ALLOWED_TRANSITIONS = {
   idle: new Set(["connecting", "offline", "stopped"]),

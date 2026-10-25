@@ -23,7 +23,9 @@ Dashboard - Vereinsinformationen und Startseite der Anwendung
   nach dem aktuellen lokalen Kalendertag faellt. Jahreswechsel werden ueber den
   zeitlich naechstgelegenen Geburtstag aus Vorjahr, aktuellem Jahr und Folgejahr
   abgebildet. Die Anzeige nennt das am Geburtstag erreichte Alter und sortiert
-  chronologisch, bei gleichem Tag nach Nachname.
+  chronologisch, bei gleichem Tag nach Nachname. Der Datumsparser akzeptiert
+  kalendergueltige PostgreSQL-ISO-Daten YYYY-MM-DD ohne Zeitzonenverschiebung
+  sowie bisherige Punkt-/Kompaktformate. Darstellung und Bedienung bleiben gleich.
 
   Anonyme Benutzer sehen statt Mitgliederdaten einen kurzen Hinweis samt
   Anmeldebutton. Laden, leere Treffermenge und Fehler besitzen eigene sichtbare

@@ -16,6 +16,9 @@ const { PostgresHallTimeService } = require("./postgresHallTimeService");
 const { PostgresPlayService } = require("./postgresPlayService");
 const { AUDIT_CONTRACTS, IDEMPOTENCY_CONTRACTS, LEGACY_AUDIT_CONTRACTS, MESSAGE_EVENT_CONTRACTS } = require("./postgresRuntimeContracts");
 const { PostgresStateAdapter } = require("./postgresStateAdapter");
+const { IdentityRepository } = require("./db/repositories/identityRepository");
+const { PlayRepository } = require("./db/repositories/playRepository");
+const { VenueRepository } = require("./db/repositories/venueRepository");
 
 const MISSING_SERVER_CAPABILITIES = Object.freeze([]);
 
@@ -44,8 +47,17 @@ async function createPostgresComponents({
   try {
     repositories = await runtime.connect();
     if (runtime.status().generation < 8) throw Object.assign(new Error("PostgreSQL-Spielbetrieb benoetigt Schemageneration 8"), { code: "DB_SCHEMA_GENERATION_UNSUPPORTED" });
-    const projectionService = new PostgresProjectionService(repositories);
-    const projectionLoader = new PostgresProjectionLoader({ projectionService, dataStore, publish, log });
+    const projectionService = new PostgresProjectionService({ ...repositories,
+      readSnapshot: () => runtime.withTransaction("projection.snapshot", (database) => {
+        const context = repositories.play.context;
+        return new PostgresProjectionService({
+          identity: new IdentityRepository({ database, context }),
+          play: new PlayRepository({ database, context }),
+          venue: new VenueRepository({ database, context }),
+        }).load();
+      }, { isolation: "repeatable_read" }),
+    });
+    const projectionLoader = new PostgresProjectionLoader({ projectionService, dataStore, log });
     const frontendLoggingService = await PostgresFrontendLoggingService.create({ identityRepository: repositories.identity, log, appVersion });
     const messagingService = new PostgresMessagingService({ messaging: repositories.messaging, ops: repositories.ops, publish, log });
     const monitorBroker = await PostgresMonitorBroker.create({ venue: repositories.venue, ops: repositories.ops, dataStore, log });
@@ -70,19 +82,13 @@ async function createPostgresComponents({
       courtService,
       scoreLogRepository: new PostgresScoreService(repositories.venue),
       hallTimeService,
-      sheetService: playService,
+      playService,
       projectionLoader,
-      dataPoller: {
-        initialLoad: () => projectionLoader.refresh("startup"),
-        start() {},
-        stop: () => Promise.resolve(),
-        getStatus: () => ({ ...projectionLoader.getStatus(), backend: "postgres", polling: false }),
-      },
       startInvalidationListener: () => runtime.listen("epiber_app_invalidate", (rawPayload) => {
         let projection = null;
         try { projection = JSON.parse(rawPayload || "{}").projection || null; } catch {}
         Promise.all([
-          projectionLoader.refresh("invalidation"),
+          ...(projection === "messaging" ? [] : [projectionLoader.refresh("invalidation")]),
           ...(projection === "venue" ? [courtService.refresh("invalidation"), monitorBroker.refresh()] : []),
           ...(projection === "identity" ? [frontendLoggingService.refresh()] : []),
         ]).catch((error) => log("error", "postgres_invalidation_refresh_failed", { projection, errorCode: error.code || "POSTGRES_INVALIDATION_REFRESH_FAILED" }));

@@ -106,11 +106,12 @@ eigene Alloy-Journalquelle; die neue Worker-Logquelle betrifft Live.
 
 Score-, Audit- und Messagingfachhistorien haben im PostgreSQL-Betrieb ihre
 jeweilige Anwendungsdatenbank als System of Record; die unten genannten
-SQLite-Dateien gelten nur im Legacybetrieb. Retention und erlaubte
+SQLite-Dateien beschreiben nur den abgeloesten Unterbau, nicht einen
+unterstuetzten Servermodus. Retention und erlaubte
 Diagnoseprojektionen bleiben unveraendert. Grafana speichert Benutzer, Dashboards und 30 Tage
 Alarmzustandshistorie getrennt in `/var/lib/grafana/grafana.db` mit WAL.
 Messaging-Ereignisse, persoenliche Projektionen, Zustellungen und Quittierungen
-bleiben ausschliesslich in `messaging.sqlite`; Journal und Prometheus enthalten
+bleiben ausschliesslich in PostgreSQL; Journal und Prometheus enthalten
 nur kontrollierte IDs beziehungsweise aggregierte technische Zaehler.
 Empfaengername und -rolle, persoenlicher Betreff und Text, Ereignisdetail,
 Ergebnis, Akteur, Quittierungszeit, Zustellungen sowie Ereignis- und Meldungs-ID
@@ -159,12 +160,11 @@ Host zeitweise rechnerisch ueber 100 Prozent liegt. Abfrage und feste Achse sind
 auf den fachlich gueltigen Bereich von 0 bis 100 Prozent begrenzt; die anderen
 Ressourcenachsen bleiben dynamisch. Die standardmaessig aktivierte
 experimentelle Grafana-Seitenleiste mit temporaeren Skalierungs- und
-Kurvenreglern ist deaktiviert. Readiness und SQLite-Panels fuehren
-Messaging als eigene kontrollierte Komponente beziehungsweise Datenbank. Die
-Metriken `epiber_readiness_component_ready{component="messaging_sqlite"}`,
-`epiber_sqlite_ready{database="messaging"}` und
-`epiber_sqlite_failures_total{database="messaging"}` besitzen keine Personen-,
-Ereignis-, Meldungs- oder Textlabels.
+Kurvenreglern ist deaktiviert. Uebersicht V5, Fehler V4 und Normalisierung V5
+sind installiert. Readiness zeigt PostgreSQL und Projektionen statt SQLite.
+`epiber_projection_table_available`, `epiber_projection_table_age_seconds`,
+`epiber_projection_refresh_failed` sowie Reloadzaehler/-latenzen verwenden nur
+kontrollierte technische Labels. Alter allein ist kein TTL-Ausfall.
 
 Das Dashboard `ePiber Platz- und Scoreverlauf` zeigt fuer das ausgewaehlte
 Deployment und optional einen einzelnen Platz die neuesten Ereignisse zuerst.
@@ -176,7 +176,7 @@ Loki-Projektion enthaelt ausschliesslich Platz, Score, Match-ID, Bewerb-ID und
 Diese Werte bleiben JSON-Felder; Match-, Bewerbs- und Personenwerte werden keine
 Labels. Kontakt-, Adress-, Geburts-, Geschlechts- und freie Werte sind
 ausgeschlossen. Die Ansicht reicht hoechstens 14 Tage zurueck und ersetzt nicht
-die dauerhafte Scorefachhistorie in `scorelog.sqlite`.
+die dauerhafte Scorefachhistorie in PostgreSQL.
 
 Das Dashboard `ePiber Ranglistenaktivitaeten` zeigt verbindlich ausgesprochene
 Forderungen getrennt von Versuchen, bei denen keine Forderung angelegt wurde,
@@ -186,10 +186,10 @@ Wunsch Forderer- und Zielname samt stabilen IDs, Bewerb-ID, bei Erfolg die
 Match-ID, kontrollierten Fehlercode und Support-ID. Diese Werte bleiben
 JSON-Felder und werden keine Loki-Labels. Kontaktwerte und freie Inhalte sind
 ausgeschlossen; die Ansicht reicht hoechstens 14 Tage zurueck und ersetzt nicht
-die dauerhafte Historie in `audit.sqlite`.
+die dauerhafte Audithistorie in PostgreSQL.
 
 Das Dashboard `ePiber Meldungen` fragt fuer maximal 31 Tage die jeweilige Live-
-oder PAJ-`messaging.sqlite` sowie die Hallenrasterhistorien aus `state.sqlite`
+oder PAJ-PostgreSQL-Messaging- und Hallenrasterhistorien
 direkt ueber die geschuetzte Infinity-Datasource ab. Eine dynamische
 Mehrfachauswahl mit Checkboxen bietet persoenliche Meldungen, einzelne oder alle
 Bewerbshistorien und einzelne oder alle Hallenrasterhistorien; standardmaessig
@@ -198,7 +198,7 @@ dedupliziert. Das Dashboard zeigt Wiener Tagesreihen und Summen je Bereich, die
 persoenliche Empfaengeruebersicht und eine gemeinsame vertrauliche Meldungsliste.
 Rollenwechsel wirken auf die persoenliche Auswertung des gesamten gewaehlten
 Zeitraums. Exporte aus Detailpanels besitzen dieselbe Schutzklasse wie
-`messaging.sqlite` und `state.sqlite` und duerfen nicht in Loki, Prometheus,
+die zugehoerigen geschuetzten Fachdaten und duerfen nicht in Loki, Prometheus,
 Tickets oder Freigabeprotokolle uebernommen werden.
 
 Das Dashboard `ePiber Matchergebnisse` zeigt erfolgreiche Ergebniseintraege,
@@ -211,7 +211,7 @@ verwendet nur `matchId`, `competitionId`, `changeType`, `completionType`,
 `actorId`, `result`, `errorCode` und `requestId`. Begruendungstexte, rohe Matchergebnisse, Payloads,
 Kontaktdaten, Passwoerter und Tokens sind ausgeschlossen. Die Ansicht reicht
 hoechstens 14 Tage zurueck und ersetzt nicht die dauerhafte Historie in
-`audit.sqlite`.
+PostgreSQL-Audit.
 
 Das Dashboard `ePiber Hallenreservierung` kombiniert den aktuellen
 Prometheus-Stand je Raster mit der hoechstens 14 Tage umfassenden
@@ -222,17 +222,16 @@ adminverwalteten Rastername, Modus, Aktivstatus und kontrollierte Statuswerte al
 Labels. Loki behaelt Raster-, Termin-, Akteur-, Zielpersonen-, Historien- und
 Batch-IDs sowie Akteurname und Statuswerte als JSON-Felder; Zielpersonennamen,
 Kontaktdaten und freie Payloads sind ausgeschlossen. Die Projektion ersetzt nicht
-die auf 10000 Eintraege begrenzte Fachhistorie in `state.sqlite`.
+die auf 10000 Eintraege begrenzte Rasterfachhistorie in PostgreSQL.
 
-Die Uebersicht zeigt zusaetzlich den verbleibenden Google-Sheets-Read-Cooldown,
-die tatsaechlichen API-Versuche sowie logische Readrequests nach festem Zweck und
-Ergebnis. Methoden, Zwecke, Ergebnisse und `initial|retry` sind kontrollierte
-niedrig-kardinale Labels; Tabellenbereiche, Personen-, Record-, Request- und
-Operation-IDs bleiben ausgeschlossen. Das Gauge
-`epiber_sheet_refreshes_scheduled` zeigt die Anzahl geplanter zusammengefasster
-Abschlussrefreshes ohne Tabellen- oder Personenlabel. Ein Google-429 startet einen gemeinsamen
-60-Sekunden-Cooldown und wird dadurch nicht mit weiteren Poll- oder Fachreads
-verstaerkt.
+Google-Quoten-/Metadata-/SQLite-Laufzeitpanels und -alerts sind ersetzt. Neun
+aktive Regeln pruefen Live und PAJ: darunter fehlende Projektion,
+PostgreSQL-Readiness und expliziter Reloadfehler. Die drei alten Sheet-/SQLite-/
+Metadata-Regeln sind nach kompatiblem Live-Metrikbackport entfernt; drei
+vollstaendige Auswertungszyklen waren erfolgreich. Der regulaere Release
+ersetzt das isolierte Live-Metrikdeployment und seinen WorkingDirectory-Drop-in,
+nicht die bereits kompatiblen Alertvertraege. Kein breiter Observability-
+Installerlauf oder pauschaler Dienstneustart fuer einen Anwendungsrelease.
 
 Anwendungsalerts erzeugen je Deployment getrennte Alarmzustaende. Host- und
 Observability-Alarme existieren einmal. SMTP ist zwingend deaktiviert. Es gibt

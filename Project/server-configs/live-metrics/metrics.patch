@@ -1,0 +1,12 @@
+diff --git a/Backend/metrics.js b/Backend/metrics.js
+--- a/Backend/metrics.js
++++ b/Backend/metrics.js
+@@ -188,1 +188,3 @@
++const { renderPostgresMetrics } = require("./livePostgresMetrics.js");
++
+ function render({ appVersion, processStartedAt, activeHttpRequests, readiness, ws, sheetPoller, court, state, sheets, peopleNormalization, hallTimes } = {}) {
+@@ -302,3 +304,3 @@
+   }
+-  return `${lines.join("\n")}\n`;
++  return renderPostgresMetrics(`${lines.join("\n")}\n`, { readiness, loaderStatus: sheetPoller });
+ }

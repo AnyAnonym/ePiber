@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -27,7 +28,9 @@ window.__setAuth = (role) => {
 
 const dataClientStub = `
 const responses = {
-  bewerbe: { data: { success: true, values: [["ID", "BewerbsartID", "Bezeichnung"], ["cup", "ko", "Doppelcup"]] } },
+  entryList: { data: { success: true, values: [["ID", "BewerbID", "PersonenID"]] } },
+  rlPlatzierung: { data: { success: true, values: [["BewerbID", "PersonenID", "Rang"]] } },
+  bewerbe: { data: { success: true, values: [["ID", "BewerbsartID", "Bezeichnung"], ["cup", "ko", "Doppelcup"]], bewerbsartValues: [["ID", "Rasterfunktion", "RoundRobin"], ["ko", "8", "1"]] } },
   bewerbsart: { data: { success: true, values: [["ID", "Rasterfunktion", "RoundRobin"], ["ko", "8", "1"]] } },
   players: { data: { success: true, values: [
     ["ID", "Vorname", "Nachname"],
@@ -45,13 +48,42 @@ const responses = {
     ["cup", "p1", "p2", "p3 [wo]", "p4", "G1-P1", "", "260902-1000"],
   ] } },
 };
-export const createEndpoint = (name) => async () => structuredClone(responses[name]);
+window.__endpointCalls = [];
+export const createEndpoint = (name) => async (params = {}) => {
+  window.__endpointCalls.push({ name, params });
+  if (name === "bewerbsart") throw new Error("Redundanter Bewerbsart-RPC");
+  if (name === "matches" && params.bewerbId !== "cup") throw new Error("Bewerbsfilter fehlt");
+  return structuredClone(responses[name]);
+};
 export const subscribeInvalidations = () => () => {};
+export const getOperationId = () => "test-operation";
+export const releaseOperationId = () => {};
 `;
 
 function startServer() {
   const server = http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
+    if (pathname === "/entry-test.html") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><h2 id="entryListHeading"></h2><div id="entryListContainer"></div><script type="module" src="/JS/entryList-under-test.js"></script></body></html>');
+      return;
+    }
+    if (pathname === "/JS/entryList-under-test.js") {
+      const source = fs.readFileSync(path.join(FRONTEND_ROOT, "JS/entryList.js"), "utf8")
+        .replace('"./dataClient.js"', '"/test/dataClient.js"')
+        .replace('"./authClient.js"', '"/test/authClient.js"')
+        .replace('"./loadingHelper.js"', '"/test/loadingHelper.js"')
+        .replace('"./monitorReady.js"', '"/test/monitorReady.js"')
+        .replace('"./diagnostics.js"', '"/test/diagnostics.js"');
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end(source);
+      return;
+    }
+    if (pathname === "/test/diagnostics.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+      response.end("export const diagnostic = { error: () => {}, warn: () => {} };");
+      return;
+    }
     if (pathname === "/raster-test.html") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       response.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/CSS/styles.css"></head><body class="bracket-page"><main><section id="bracketSection" class="full-width-section"><h2 id="bracketHeading"></h2><div id="bracketInfo"></div><div id="bracketContainer"></div></section></main><div id="profileModal" class="modal profile-modal hidden"><div class="modal-content profile-dialog"><h2>Profil</h2></div></div><script>window.__profileCalls=[];window.openProfileModal=(options)=>{window.__profileCalls.push(options);if(new URLSearchParams(location.search).get("profileModal")==="1"){document.getElementById("profileModal").classList.remove("hidden");document.body.classList.add("modal-open");}};</script><script type="module" src="/JS/bewerbsRaster-under-test.js"></script></body></html>');
@@ -89,7 +121,7 @@ function startServer() {
     }
     if (pathname === "/test/loadingHelper.js") {
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-      response.end("export const callWithRetry = (fn) => fn(); export const showLoadingOverlay = () => {}; export const hideLoadingOverlay = () => {}; export const showErrorOverlay = () => {};\n");
+      response.end("export const callWithRetry = (fn, ...args) => fn(...args); export const showLoadingOverlay = () => {}; export const hideLoadingOverlay = () => {}; export const showErrorOverlay = () => {};\n");
       return;
     }
     if (pathname === "/test/monitorReady.js") {
@@ -118,14 +150,14 @@ function startServer() {
 }
 
 test("KO-Doppelnamen werden erst nach Login getrennt und zugaenglich anklickbar", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 30000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
   try {
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const page = await newProfilePage(browser, { viewport: { width: 390, height: 844 } });
     const readCompactLayout = async () => {
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       return page.locator(".bracket-match-box").evaluateAll((boxes) => ({
@@ -198,6 +230,10 @@ test("KO-Doppelnamen werden erst nach Login getrennt und zugaenglich anklickbar"
     await page.locator("button.bracket-player-name").first().waitFor({ timeout: 3000 });
     const desktopAuthenticatedLayout = await readCompactLayout();
     assertLoginKeepsCompactLayout(desktopAnonymousLayout, desktopAuthenticatedLayout, "Desktop");
+    await page.goto(`http://127.0.0.1:${address.port}/entry-test.html?id=cup`, { waitUntil: "domcontentloaded" });
+    await page.getByText("Noch keine Einträge für diesen Bewerb.", { exact: true }).waitFor();
+    assert.match(await page.locator("#entryListHeading").textContent(), /Doppelcup/);
+    assert.equal(await page.evaluate(() => window.__endpointCalls.filter(({ name }) => name === "bewerbe").length), 1);
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

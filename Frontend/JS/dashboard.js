@@ -12,6 +12,13 @@ let dayRefreshTimer = null;
 
 function parseBirthDate(value) {
   const raw = String(value || "").trim();
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const year = Number(iso[1]), month = Number(iso[2]), day = Number(iso[3]);
+    const date = new Date(0);
+    date.setUTCFullYear(year, month - 1, day);
+    return year > 0 && date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? { year, month, day } : null;
+  }
   let match = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
   if (match) return { day: Number(match[1]), month: Number(match[2]), year: Number(match[3]) };
   match = raw.match(/^(\d{4})(\d{2})(\d{2})$/);

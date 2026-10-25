@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
-const { chromium } = require("playwright");
+const { hasSelectedProfile, launchSelectedBrowser, newProfilePage } = require("./browserProfiles");
 
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || "/usr/bin/chromium";
 const FRONTEND_ROOT = path.resolve(__dirname, "../../Frontend");
@@ -40,9 +40,9 @@ export function createEndpoint(endpoint) {
   return async (params = {}) => {
     if (endpoint === "adminPeopleNormalization") return { data: structuredClone(snapshot) };
     if (window.__normalizationFailure) {
-      const error = new Error("Die Google-Sheets-Schnittstelle hat ihr Zugriffslimit erreicht. Bitte etwa eine Minute warten und danach erneut versuchen. (Referenz: quota-reference)");
-      error.code = "SHEETS_RATE_LIMITED";
-      error.supportId = "quota-reference";
+      const error = new Error("Die Datenbank ist vorübergehend nicht erreichbar. (Referenz: database-reference)");
+      error.code = "INTERNAL_ERROR";
+      error.supportId = "database-reference";
       throw error;
     }
     window.__normalizationWrites.push(structuredClone(params));
@@ -103,17 +103,17 @@ function startServer() {
   });
 }
 
-test("Normalisierungsseite funktioniert responsiv und zeigt Quotenfehler mit einer Referenz", {
-  skip: !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
+test("Normalisierungsseite funktioniert responsiv und zeigt Datenbankfehler mit einer Referenz", {
+  skip: !hasSelectedProfile() && !fs.existsSync(CHROMIUM_PATH) && `Chromium fehlt unter ${CHROMIUM_PATH}`,
   timeout: 60000,
 }, async () => {
   const server = await startServer();
   const address = server.address();
-  const browser = await chromium.launch({ executablePath: CHROMIUM_PATH, headless: true });
+  const browser = await launchSelectedBrowser(CHROMIUM_PATH);
   try {
     for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
-      const context = await browser.newContext({ viewport });
-      const page = await context.newPage();
+      const page = await newProfilePage(browser, hasSelectedProfile() ? {} : { viewport });
+      const context = page.context();
       await page.goto(`http://127.0.0.1:${address.port}/personenNormalisieren.html`, { waitUntil: "domcontentloaded" });
       await page.locator("#normalization-app").waitFor({ state: "visible" });
       await page.locator("#normalization-access").waitFor({ state: "hidden" });
@@ -137,9 +137,9 @@ test("Normalisierungsseite funktioniert responsiv und zeigt Quotenfehler mit ein
       const expectFailure = viewport.width === 1280;
       if (expectFailure) await page.evaluate(() => { window.__normalizationFailure = true; });
       await page.getByRole("button", { name: "Änderungen schreiben" }).click();
-      await page.locator("#normalization-status").filter({ hasText: expectFailure ? "Zugriffslimit" : "erfolgreich" }).waitFor();
+      await page.locator("#normalization-status").filter({ hasText: expectFailure ? "Datenbank" : "erfolgreich" }).waitFor();
       const status = await page.locator("#normalization-status").textContent();
-      if (expectFailure) assert.equal(status.match(/quota-reference/g)?.length, 1);
+      if (expectFailure) assert.equal(status.match(/database-reference/g)?.length, 1);
       const writes = await page.evaluate(() => window.__normalizationWrites);
       assert.equal(writes.length, expectFailure ? 0 : 1);
       if (!expectFailure) {
