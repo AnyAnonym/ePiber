@@ -9,6 +9,33 @@ const { validateTableValues } = require("../tableSchemas");
 const { plainDate, legacyInstant } = require("../postgresProjectionService");
 const { PostgresProjectionLoader } = require("../postgresProjectionLoader");
 const { notificationChannels } = require("../messagingService");
+const { projectPeopleNormalization, summarizePeopleNormalization } = require("../peopleNormalization");
+
+test("Inaktive PostgreSQL-Personen erfuellen den Normalisierungsvertrag ohne Fehlhinweise", async () => {
+  const people = Array.from({ length: 218 }, (_, index) => ({
+    id: String(index + 1), firstName: "Beispiel", lastName: "Test",
+    active: index < 179, role: "player", member: "player", assignedRoles: [],
+  }));
+  const tables = await projectCompetitions([], { people });
+  const activeIndex = tables.players[0].indexOf("Aktiv");
+  assert.equal(tables.players.slice(1).filter((row) => row[activeIndex] === "1").length, 179);
+  assert.equal(tables.players.slice(1).filter((row) => row[activeIndex] === "").length, 39);
+  assert.equal(people.filter((person) => person.active === false).length, 39);
+  const normalized = projectPeopleNormalization(tables.players);
+  assert.equal(normalized.people.length, 218);
+  assert.equal(normalized.affectedCount, 0);
+  assert.equal(normalized.issueCount, 0);
+  const summary = summarizePeopleNormalization(tables.players);
+  assert.equal(summary.issueCounts.ACTIVE_NONCANONICAL, 0);
+  assert.equal(summary.activeMemberCounts.player, 179);
+  assert.doesNotThrow(() => validateTableValues("players", tables.players));
+
+  const invalid = tables.players.map((row) => row.slice());
+  invalid[1][activeIndex] = "ungueltig";
+  const invalidResult = projectPeopleNormalization(invalid);
+  assert.equal(invalidResult.issueCount, 1);
+  assert.equal(invalidResult.people[0].issues[0].code, "ACTIVE_NONCANONICAL");
+});
 
 test("Bewerbsgrenzen ueberstehen Import und Projektion im kompakten Live-Vertrag", async () => {
   const cases = [

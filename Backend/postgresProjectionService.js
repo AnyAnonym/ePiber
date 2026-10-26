@@ -67,7 +67,7 @@ class PostgresProjectionService {
       const roles = new Set(person.assignedRoles || []);
       tables.players.push([
         person.id, person.firstName || "", person.lastName, person.birthDate ? plainDate(person.birthDate) : "",
-        person.gender || "", "", person.active ? "1" : "0", person.email || "", person.phone || "",
+        person.gender || "", "", person.active ? "1" : "", person.email || "", person.phone || "",
         person.countryLabel || "", person.postalCode || "", person.city || "", person.addressLine || "", person.clubdeskId || "",
         person.login || "", "", person.passwordSetupAllowed ? "x" : "", person.member || "",
         roles.has("admin") ? "1" : "", roles.has("operator") ? "1" : "", person.role,

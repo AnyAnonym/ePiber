@@ -1,12 +1,26 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 5.1.0
+Stand: 5.1.1
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[5.1.1] - 2026-10-26
+Commit: 5.1.1 | Inaktive Personen vertragskonform projizieren
+Quelle: 5.1.0-paj-1
+
+  Changed
+  - [Freigabe] Betreiber bestaetigt Patchrelease 5.1.1 mit Commit, Push und Rollout desselben Release zuerst auf PAJ, danach Live. Erneute einmalige Backup-Risikoausnahme nur fuer diesen Rollout; keine nachgewiesene Backup-/Restore-/PITR-Kette und keine Wiederherstellungszusage.
+  - [Branchhistorie/1] 5.1.0-paj-1-1 vom 25.10.2026 initialisiert Branch-Changelog und nummerierte Paketversion 5.1.0-paj-1-1. Offener Folgestand 5.1.0-paj-1-1-x, danach Abschluss 5.1.0-paj-1-2 und Arbeitsstand 5.1.0-paj-1-2-x; finaler Fixcommit 5.1.0-paj-1-3. Originalhistorie bleibt im gepushten Branch erhalten.
+  - [Branchhistorie/2, Releaseabnahme] Nach autonomem Betreiberauftrag Punkte 1 bis 4 fuer 5.1.0 abgeschlossen: Main/PAJ/Live zu diesem Zeitpunkt unveraendert auf b4287458de8a566a41f6733ab999d7c05d9db724. Datensparsamer Bericht Project/server-configs/rollouts/5.1.0.md mit voller Release-Dateiliste, echter PAJ-/Live-Dreiengine-Abnahme, Komprimierungs-/Schutzpfad-/Worker-/Observabilitynachweisen und damaliger einmaliger Backup-Risikoausnahme.
+  - [Branchhistorie/2, Transparenz] Rund 105 Sekunden Wartung bei 5.1.0; erster Appstart wegen uebernommener restriktiver Rechte oeffentlicher neuer npm-Pakete fehlgeschlagen, gezielt behoben, erfolgreiche Endinvokationen stabil. Host-Chromium-Timingtest und korrigierte Pruefannahmen dokumentiert. Kein Schema-/Datenimport, keine Secretrechteaenderung, kein DB-/Grafana-/M365-Neustart. Bericht nach realer Abnahme separat versioniert, ohne Umschreiben des ausgerollten 5.1.0-Release.
+  - [Branchhistorie/3, Fix] PostgreSQL-Aktivstatus in der gemeinsamen players-Projektion wieder im bestehenden Normalisierungsvertrag: true bleibt "1", false wird leer statt "0". Gespeicherte Booleans, Authrechte, fachlicher Aktivstatus und separate oeffentliche Personenprojektionen bleiben unveraendert. Keine Datenbereinigung, Schemaaenderung oder neue Browseroberflaeche.
+  - [Branchhistorie/3, Regression/Observability] Neuer Regressionstest mit 218 synthetischen Personen, 179 aktiv und 39 inaktiv. Vor Fix rot, danach null falsche Hinweise, 179 aktive Mitglieder im Count-only-Metrikvertrag und unveraenderte Quellbooleans. Echt ungueltiger Aktivwert bleibt ACTIVE_NONCANONICAL; Tabellenvalidierung erfolgreich. Bestehende Projektionsabschlusslogs, Fehler-/Last-good-Pfade und summarische Normalisierungsmetriken weiterverwendet. Kein neuer Diagnoseevent oder Fachwrite-/Auditvertrag erforderlich; bestehender Audit-/Datenschutzvertrag unveraendert.
+  - [Branchhistorie/3, Abgrenzung] Fix im separaten Nachweisworktree entwickelt; Main und laufende Systeme bis zur Releasefreigabe unveraendert. Kein unversionierter Live-Hotfix oder Deployment eines Branchsuffixes. Fruehere Backup-Ausnahme galt nur fuer 5.1.0; neue Freigabe separat eingeholt. Normalisierungsvertrag bereits kanonisch dokumentiert, keine neue permanente Fachregel.
+  - [Branchhistorie/3, Verifikation] Sechs Projektionsregressionen und diffgebundener Build mit statischem Check, 485 Backend- und 17 Workflowtests erfolgreich, ohne Fehler/Skip. Policy verlangt Build, keine neue Browsermatrix: keine Frontenddatei oder Browserkernbedienung geaendert. Bei Implementierungsabnahme keine Dienste gestartet/gestoppt oder aktive Datenbank veraendert.
 
 [5.1.0] - 2026-10-25
 Commit: 5.1.0 | PostgreSQL-only Release und Betriebsoptimierungen integrieren
