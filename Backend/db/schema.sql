@@ -599,6 +599,38 @@ CREATE TABLE messaging.notification_preferences (
 );
 
 --
+-- Name: push_devices; Type: TABLE; Schema: messaging; Owner: -
+--
+
+CREATE TABLE messaging.push_devices (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    person_id uuid NOT NULL,
+    endpoint text NOT NULL,
+    p256dh text NOT NULL,
+    auth text NOT NULL,
+    created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    updated_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    revoked_at timestamp with time zone,
+    CONSTRAINT push_devices_endpoint_check CHECK (((length(endpoint) >= 20) AND (length(endpoint) <= 2048)))
+);
+
+--
+-- Name: push_tests; Type: TABLE; Schema: messaging; Owner: -
+--
+
+CREATE TABLE messaging.push_tests (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    device_id uuid NOT NULL,
+    person_id uuid NOT NULL,
+    status text DEFAULT 'queued'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    expires_at timestamp with time zone DEFAULT (clock_timestamp() + '00:10:00'::interval) NOT NULL,
+    confirmed_at timestamp with time zone,
+    error_code text,
+    CONSTRAINT push_tests_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'sending'::text, 'accepted'::text, 'failed'::text, 'expired'::text, 'unknown'::text, 'cancelled'::text])))
+);
+
+--
 -- Name: reactions; Type: TABLE; Schema: messaging; Owner: -
 --
 
@@ -1104,9 +1136,13 @@ CREATE TABLE play.match_results (
     side_two_rank_snapshot integer,
     provenance text NOT NULL,
     created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    entry_minimum_rank integer,
+    entry_expires_at timestamp with time zone,
     CONSTRAINT match_results_check CHECK (((play_ended_at IS NULL) OR (play_started_at IS NULL) OR (play_ended_at > play_started_at))),
     CONSTRAINT match_results_check1 CHECK (((completion_type = 'walkover'::text) = (walkover_at IS NOT NULL))),
     CONSTRAINT match_results_completion_type_check CHECK ((completion_type = ANY (ARRAY['regular'::text, 'walkover'::text, 'retirement'::text]))),
+    CONSTRAINT match_results_entry_minimum_rank_check CHECK ((entry_minimum_rank > 10)),
+    CONSTRAINT match_results_entry_restriction_check CHECK (((entry_minimum_rank IS NULL) = (entry_expires_at IS NULL))),
     CONSTRAINT match_results_provenance_check CHECK ((provenance = ANY (ARRAY['legacy_snapshot'::text, 'postgresql'::text]))),
     CONSTRAINT match_results_side_one_rank_snapshot_check CHECK ((side_one_rank_snapshot >= 0)),
     CONSTRAINT match_results_side_two_rank_snapshot_check CHECK ((side_two_rank_snapshot >= 0)),
@@ -1146,7 +1182,9 @@ CREATE TABLE play.matches (
     revision bigint DEFAULT 1 NOT NULL,
     created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
     updated_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    entry_target_rank integer,
     CONSTRAINT matches_contract_id_check CHECK ((contract_id ~ '^[A-Za-z0-9_.:-]{1,64}$'::text)),
+    CONSTRAINT matches_entry_target_rank_check CHECK ((entry_target_rank > 0)),
     CONSTRAINT matches_format_binding_source_check CHECK ((format_binding_source = ANY (ARRAY['competition_default'::text, 'match_override'::text]))),
     CONSTRAINT matches_reserved_duration_minutes_check CHECK ((reserved_duration_minutes >= 0)),
     CONSTRAINT matches_revision_check CHECK ((revision > 0))
@@ -1920,6 +1958,27 @@ ALTER TABLE ONLY messaging.notification_preferences
     ADD CONSTRAINT notification_preferences_pkey PRIMARY KEY (person_id, channel);
 
 --
+-- Name: push_devices push_devices_endpoint_key; Type: CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.push_devices
+    ADD CONSTRAINT push_devices_endpoint_key UNIQUE (endpoint);
+
+--
+-- Name: push_devices push_devices_pkey; Type: CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.push_devices
+    ADD CONSTRAINT push_devices_pkey PRIMARY KEY (id);
+
+--
+-- Name: push_tests push_tests_pkey; Type: CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.push_tests
+    ADD CONSTRAINT push_tests_pkey PRIMARY KEY (id);
+
+--
 -- Name: reactions reactions_pkey; Type: CONSTRAINT; Schema: messaging; Owner: -
 --
 
@@ -2690,6 +2749,18 @@ CREATE INDEX event_recipients_person_time ON messaging.event_recipients USING bt
 CREATE INDEX messaging_events_competition_time ON messaging.events USING btree (competition_id, created_at DESC, id);
 
 --
+-- Name: push_devices_person; Type: INDEX; Schema: messaging; Owner: -
+--
+
+CREATE INDEX push_devices_person ON messaging.push_devices USING btree (person_id) WHERE (revoked_at IS NULL);
+
+--
+-- Name: push_tests_person; Type: INDEX; Schema: messaging; Owner: -
+--
+
+CREATE INDEX push_tests_person ON messaging.push_tests USING btree (person_id, created_at DESC);
+
+--
 -- Name: reactions_comment_person; Type: INDEX; Schema: messaging; Owner: -
 --
 
@@ -3117,6 +3188,27 @@ ALTER TABLE ONLY messaging.events
 
 ALTER TABLE ONLY messaging.notification_preferences
     ADD CONSTRAINT notification_preferences_person_id_fkey FOREIGN KEY (person_id) REFERENCES identity.people(id) ON DELETE CASCADE;
+
+--
+-- Name: push_devices push_devices_person_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.push_devices
+    ADD CONSTRAINT push_devices_person_id_fkey FOREIGN KEY (person_id) REFERENCES identity.people(id) ON DELETE CASCADE;
+
+--
+-- Name: push_tests push_tests_device_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.push_tests
+    ADD CONSTRAINT push_tests_device_id_fkey FOREIGN KEY (device_id) REFERENCES messaging.push_devices(id) ON DELETE CASCADE;
+
+--
+-- Name: push_tests push_tests_person_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -
+--
+
+ALTER TABLE ONLY messaging.push_tests
+    ADD CONSTRAINT push_tests_person_id_fkey FOREIGN KEY (person_id) REFERENCES identity.people(id) ON DELETE CASCADE;
 
 --
 -- Name: reactions reactions_comment_id_fkey; Type: FK CONSTRAINT; Schema: messaging; Owner: -

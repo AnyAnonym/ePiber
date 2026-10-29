@@ -17,6 +17,7 @@ const installEntryPages = [
   "entryList.html",
   "rangliste.html",
   "RoundRobin.html",
+  "push.html",
 ];
 const excludedPages = [
   "monitor.html",
@@ -79,12 +80,15 @@ test("nur vorgesehene Seiten bieten den Installationseinstieg an", () => {
   }
 });
 
-test("PWA Light registriert bewusst keinen Service Worker", () => {
+test("nur der ausdrueckliche Push-Einstieg registriert einen Service Worker ohne Offline-Cache", () => {
   const scripts = fs.readdirSync(path.join(frontendRoot, "JS"))
-    .filter((filename) => filename.endsWith(".js"))
+    .filter((filename) => filename.endsWith(".js") && filename !== "push.js")
     .map((filename) => fs.readFileSync(path.join(frontendRoot, "JS", filename), "utf8"))
     .join("\n");
   assert.doesNotMatch(scripts, /serviceWorker\s*\.\s*register/);
+  const worker = fs.readFileSync(path.join(frontendRoot, "push-worker.js"), "utf8");
+  assert.doesNotMatch(worker, /addEventListener\(["']fetch|caches\./);
+  assert.match(fs.readFileSync(path.join(frontendRoot, "JS/push.js"), "utf8"), /serviceWorker\.register/);
 });
 
 test("Dashboard und gemeinsame Oberflaeche verwenden dieselbe gruene Primaerfarbe", () => {

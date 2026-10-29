@@ -14,6 +14,8 @@ const { PostgresMonitorBroker } = require("./postgresMonitorBroker");
 const { PostgresCourtService, PostgresScoreService } = require("./postgresCourtService");
 const { PostgresHallTimeService } = require("./postgresHallTimeService");
 const { PostgresPlayService } = require("./postgresPlayService");
+const { PushPilotService } = require("./pushPilotService");
+const { pushConfig } = require("./pushConfig");
 const { AUDIT_CONTRACTS, IDEMPOTENCY_CONTRACTS, LEGACY_AUDIT_CONTRACTS, MESSAGE_EVENT_CONTRACTS } = require("./postgresRuntimeContracts");
 const { PostgresStateAdapter } = require("./postgresStateAdapter");
 const { IdentityRepository } = require("./db/repositories/identityRepository");
@@ -31,6 +33,7 @@ async function createPostgresComponents({
   sessionRefreshIntervalMs,
   sessionMaxPerUser,
   appVersion,
+  push = pushConfig(),
   publish = () => {},
   log = () => {},
 }) {
@@ -47,6 +50,7 @@ async function createPostgresComponents({
   try {
     repositories = await runtime.connect();
     if (runtime.status().generation < 8) throw Object.assign(new Error("PostgreSQL-Spielbetrieb benoetigt Schemageneration 8"), { code: "DB_SCHEMA_GENERATION_UNSUPPORTED" });
+    if (push.enabled && runtime.status().generation < 9) throw Object.assign(new Error("Push-Pilot benoetigt Schemageneration 9"), { code: "DB_SCHEMA_GENERATION_UNSUPPORTED" });
     const projectionService = new PostgresProjectionService({ ...repositories,
       readSnapshot: () => runtime.withTransaction("projection.snapshot", (database) => {
         const context = repositories.play.context;
@@ -83,6 +87,7 @@ async function createPostgresComponents({
       scoreLogRepository: new PostgresScoreService(repositories.venue),
       hallTimeService,
       playService,
+      pushService: new PushPilotService({ identity: repositories.identity, ops: repositories.ops, config: push, log }),
       projectionLoader,
       startInvalidationListener: () => runtime.listen("epiber_app_invalidate", (rawPayload) => {
         let projection = null;

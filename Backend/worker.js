@@ -6,6 +6,8 @@ const { createConnectionConfig } = require("./db/connectionConfig.js");
 const { createLogger } = require("./logger.js");
 const { WorkerService } = require("./workerService.js");
 const { createWorkerHandlers } = require("./workerHandlers.js");
+const { createPushPilotWorker } = require("./pushPilotWorker.js");
+const { pushConfig } = require("./pushConfig.js");
 
 async function createWorkerApplication({ env = process.env, log = null } = {}) {
   const logger = log || createLogger({ level: LOG_LEVEL, service: "epiber-worker", instance: INSTANCE_ID });
@@ -17,8 +19,11 @@ async function createWorkerApplication({ env = process.env, log = null } = {}) {
     expectedTenantCode,
     log: logger.log,
   });
+  const config = pushConfig(env);
   const repositories = await runtime.connect();
-  const handlers = createWorkerHandlers(repositories.ops);
+  if (config.enabled && runtime.status().generation < 9) { await runtime.close(); throw Object.assign(new Error("Push-Schema fehlt"), { code:"DB_SCHEMA_GENERATION_UNSUPPORTED" }); }
+  const push = createPushPilotWorker({ repository:repositories.ops,config,log:logger.log });
+  const handlers = createWorkerHandlers(repositories.ops, push);
   const worker = new WorkerService({
     repository: repositories.ops,
     workerId: `${INSTANCE_ID}-${process.pid}`,

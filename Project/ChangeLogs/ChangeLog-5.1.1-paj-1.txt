@@ -6,3 +6,33 @@ Commit: 5.1.1-paj-1-1 | Branch-Stand nummeriert initialisiert
 
   Changed
   - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.1-paj-1-1` gesetzt.
+
+[5.1.1-paj-1-2] - 2026-10-29
+Commit: 5.1.1-paj-1-2 | Opt-in-Web-Push-Pilot mit Geraeteregistrierung und Testversand
+
+  Added
+  - [Push-Pilot] Eigene Einrichtungsseite `push.html` mit expliziter Browserfreigabe, Apple-Home-Bildschirm-Hinweisen, Testanforderung, persoenlicher Empfangsbestaetigung und Einzelgeraet-Widerruf; Einstieg im eigenen Profil unter Einstellungen.
+  - [Backend] Authentifizierte, Origin- und Read-only-geschuetzte HTTP-Schnittstelle `/api/push-pilot` mit kontoabhaengiger Registrierung, begrenzter Geraetezahl, Test-Ratelimit, Idempotenz und kontrolliertem Auditvertrag.
+  - [PostgreSQL] Additive Migration 9 fuer Push-Geraete und persistierte Tests; Versand ueber bestehende Outbox und Worker. Tests verfallen nach zehn Minuten, Testhistorie nach 30 und unerneuerte Geraeteregistrierungen nach 90 Tagen.
+  - [Sicherheit] Opt-in-Konfiguration mit dateibasiertem privatem VAPID-Schluessel, eingeschraenkten Push-Providerzielen und validierten P-256-Schluesseln. Subscriptiondaten erscheinen weder in Statusprojektionen noch in Diagnose-/Auditfeldern; Read-only-Approlle besitzt darauf kein Leserecht.
+  - [Tests] Neue PostgreSQL-, Grant-, HTTP-, Konfigurations-, Service-Worker- und responsive Browserpruefungen; Push-Einstieg in allen Zielprofilen der bestehenden Smokesuite.
+  - [Betriebsvorlagen] Separate, nicht installierte PAJ-Opt-in-Drop-ins fuer gemeinsame dateibasierte VAPID-Credentials sowie DNS/HTTPS-Netzzugriff des Workers. Die Basisunits bleiben unveraendert; insbesondere behaelt die App ihre Loopback-Grenze und der normale Worker seine Unix-Socket-Grenze.
+
+  Changed
+  - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.1-paj-1-1-x` gesetzt.
+  - [PWA] Service Worker wird ausschliesslich auf ausdrueckliche Push-Aktivierung registriert; kein Fetch-Handler und kein Offline-Cache. Benachrichtigungen enthalten nur einen neutralen Testtext und oeffnen ausschliesslich die interne Push-Seite, ohne automatische Kenntnisnahme.
+  - [Worker] Begrenzte Wiederholungen bei expliziten temporaeren Providerfehlern; unklare Netz-/Crashausgaenge werden nicht blind erneut versendet. Providerannahme und vom Benutzer bestaetigter Empfang bleiben getrennt.
+  - [Observability] Benannte Browserereignisse und bekannter Seitentyp, kontrollierte HTTP-Metrikroute sowie strukturierte Status-, Operations-, Versand- und Retentionlogs ergaenzt.
+  - [Schema] Generierten Schema-Snapshot auf Migration 9 angeglichen; dabei die bereits vorhandenen Spalten aus Migration 8 ebenfalls uebernommen.
+
+  Betrieb / Abgrenzung
+  - Pilot bleibt ohne ausdrueckliches `PUSH_PILOT_ENABLED=true` abgeschaltet. Bestehende Inbox, Fachmeldungen, WhatsApp-/E-Mail-Einstellungen, Personen, Rechte und Zugangsdaten werden nicht migriert oder bereinigt.
+  - Kein fachlicher Commit, Push, Merge, Live-Rollout, PAJ-Datenbankeingriff oder Dienstneustart mit diesem Arbeitsstand vorgenommen. Reale Push-Anzeige auf Telefon/Windows und insbesondere Samsung Internet/iPhone/iPad bleibt eine gesonderte Geraeteabnahme.
+
+  Pruefungen
+  - Statische Pruefungen, 495 Backendtests und 17 Workflowtests erfolgreich; Produktionsabhaengigkeiten laut `npm audit --omit=dev` ohne bekannte Schwachstelle.
+  - Acht-Profil-Smokesuite mit jeweils 32 Tests in Chromium-, Firefox- und WebKit-Zielprofilen vollstaendig erfolgreich (256 Prueffaelle). Jedes Profil lief in einem frischen Container; die nachtraeglichen Betriebs-Opt-in-Vorlagen betreffen den Browserfingerprint nicht.
+  - Zusaetzliche vollstaendige Host-Chromium-Suite: 63 von 64 Tests im Gesamtlauf erfolgreich. Bestehender Test `Matches zeigen den deckenden Loader nur beim ersten Datenstand` scheiterte einmal an seiner Footer-/Overlaypruefung und bestand bei unveraendertem Code in gezielter Wiederholung; Timing-Flake offen benannt, kein durchgehend gruener Gesamtlauf behauptet.
+  - Echter Push-Service-Worker in separaten frischen Playwright-Containern fuer Chromium, Firefox und WebKit installiert, aktiviert und abgemeldet. Natives Host-Chromium erzeugte zudem per Notification-API eine Testnotification und entfernte sie wieder; keine Aussage ueber reale OS-Anzeige.
+  - Reale `web-push`-Bibliothek mit frisch generierten temporaeren Schluesseln auf VAPID-Signatur und AES128GCM-Payload geprueft; keine Netzsendung und keine Ausgabe privater Schluessel.
+  - Zusammengefuehrte App-/Worker-Opt-in-Units mit `systemd-analyze verify` syntaktisch erfolgreich geprueft, ohne Installation/Start. Dabei meldete systemd ein nicht lesbares fremdes Live-Drop-in-Verzeichnis; keine Aussage ueber dessen Inhalt oder eine Live-Verifikation.
