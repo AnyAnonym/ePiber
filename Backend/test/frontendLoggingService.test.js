@@ -381,11 +381,16 @@ test("Push-Pilot akzeptiert benannte Diagnosen auf bekanntem Seitentyp ohne Subs
   const result = service.recordBatch({
     sourceIp: "203.0.113.8", identity: { id: "p1", name: "Ada Admin", role: "admin" },
     body: { appVersion: "5.1.1-test", clientSessionId: "00000000-0000-4000-8000-000000000011", pageType: "push",
-      events: ["push_pilot_load_failed", "push_pilot_action_failed"].map((event) => ({ event, level: "error", code: "PUSH_ACTION_FAILED" })),
+      events: [
+        { event: "push_pilot_load_failed", level: "error", code: "PUSH_ACTION_FAILED" },
+        { event: "push_pilot_action_failed", level: "error", code: "PUSH_SETUP_SUBSCRIPTION_ABORT", phase: "subscription" },
+      ],
     },
   });
   assert.deepEqual(result, { success: true, accepted: 2, dropped: 0 });
   assert.ok(logs.every((entry) => entry.fields.pageType === "push"));
+  assert.equal(logs[1].fields.code, "PUSH_SETUP_SUBSCRIPTION_ABORT");
+  assert.equal(logs[1].fields.phase, "subscription");
   assert.equal(JSON.stringify(logs).includes("p256dh"), false);
   assert.ok(logs.every((entry) => entry.fields.endpoint === undefined || entry.fields.endpoint === null));
 });

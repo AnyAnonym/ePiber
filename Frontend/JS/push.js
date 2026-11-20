@@ -90,39 +90,55 @@ async function refresh(current = generation) {
   render();
   if (!busy) element("push-status").textContent = "Push-Status geladen.";
 }
-async function run(operation) {
+async function run(operation, action = "update") {
   if (busy || !accountId) return;
   const current = generation;
   busy = true;
   render();
   element("push-status").textContent = "Wird verarbeitet …";
+  let phase = "permission";
   try {
-    await operation(current);
+    await operation(current, (value) => { phase = value; });
     if (current !== generation) return;
+    phase = "refresh";
     await refresh(current);
     element("push-status").textContent = "Status aktualisiert. Bitte tatsächlichen Testempfang ausdrücklich bestätigen.";
   } catch (error) {
     if (current !== generation) return;
     // Native provider exceptions may include subscription endpoints. Do not log them.
-    diagnostic.error("push_pilot_action_failed", { code: "PUSH_ACTION_FAILED" });
+    const nativeNames = ["NotAllowedError", "AbortError", "NotSupportedError", "InvalidStateError", "InvalidAccessError", "SecurityError", "NetworkError", "TimeoutError", "TypeError"];
+    const nativeCode = nativeNames.includes(error.name) ? error.name : "OtherError";
+    const code = action === "activate" ? `PUSH_SETUP_${phase.toUpperCase()}_${nativeCode.replace(/Error$/, "").toUpperCase()}` : "PUSH_ACTION_FAILED";
+    diagnostic.error("push_pilot_action_failed", { code, phase: action === "activate" ? phase : "update" });
     const messages = {
       PUSH_DEVICE_CONFLICT: "Dieses Browserprofil gehört bereits zu einem anderen Konto. Dort zuerst Push deaktivieren; danach hier erneut aktivieren.",
       PUSH_TEST_RATE_LIMIT: "Bitte eine Minute bis zum nächsten Test warten.",
       PUSH_DEVICE_LIMIT: "Höchstens zehn Geräte sind erlaubt. Bitte ein altes Gerät deaktivieren.",
       AUTH_REQUIRED: "Deine Anmeldung ist abgelaufen oder wurde geändert. Bitte erneut anmelden.",
     };
-    element("push-status").textContent = messages[error.code] || "Aktion nicht sicher abgeschlossen. Status aktualisieren und Browserfreigabe prüfen. Bei unklarem Versand nicht blind erneut senden.";
+    const setupPhases = {
+      permission: "Browserfreigabe nicht erteilt. Bitte die Benachrichtigungsberechtigung dieser App und die Android-/Browsereinstellungen prüfen.",
+      worker: "Push-Hintergrunddienst konnte nicht eingerichtet werden.",
+      subscription: "Der Browser konnte keine Verbindung zum Push-Dienst einrichten. Bitte Internetverbindung und Browser-/Systemeinstellungen prüfen.",
+      register: "Push-Verbindung eingerichtet, aber die Zuordnung zu deinem Konto konnte nicht bestätigt werden. Bitte Status aktualisieren.",
+      refresh: "Die Einrichtung wurde verarbeitet, aber der aktuelle Status konnte nicht geladen werden. Bitte Status aktualisieren.",
+    };
+    element("push-status").textContent = messages[error.code] || (action === "activate"
+      ? `${setupPhases[phase]} Diagnose: ${code}. Es wurde kein Push-Test angefordert.`
+      : "Aktion nicht sicher abgeschlossen. Status aktualisieren und Browserfreigabe prüfen. Bei unklarem Versand nicht blind erneut senden.");
   } finally {
     if (current === generation) { busy = false; render(); }
   }
 }
 element("push-activate").addEventListener("click", () => {
-  // Permission must be requested directly during the user gesture (Apple included).
-  const permission = Notification.requestPermission();
-  run(async (current) => {
-    if (await permission !== "granted") throw new Error("Freigabe fehlt");
+  run(async (current, setPhase) => {
+    // run invokes this synchronously during the user gesture (Apple included).
+    // Keep synchronous permission exceptions inside the same error boundary.
+    if (await Notification.requestPermission() !== "granted") throw new Error("Freigabe fehlt");
+    setPhase("worker");
     const registration = await navigator.serviceWorker.register("/push-worker.js", { scope: "/", updateViaCache: "none" });
     await navigator.serviceWorker.ready;
+    setPhase("subscription");
     let target = await registration.pushManager.getSubscription();
     const key = Uint8Array.from(atob(snapshot.publicKey.replace(/-/g, "+").replace(/_/g, "/") + "="), (char) => char.charCodeAt(0));
     if (target?.options.applicationServerKey && !Array.from(new Uint8Array(target.options.applicationServerKey)).every((byte, index) => byte === key[index])) {
@@ -131,9 +147,10 @@ element("push-activate").addEventListener("click", () => {
     }
     target = target || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const encoded = target.toJSON();
+    setPhase("register");
     const result = await write("register", { endpoint: encoded.endpoint, keys: encoded.keys }, current);
     if (current === generation) saveDevice(result.deviceId);
-  });
+  }, "activate");
 });
 element("push-test").addEventListener("click", () => run((current) => write("test", deviceId, current)));
 element("push-refresh").addEventListener("click", () => run(refresh));

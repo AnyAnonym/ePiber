@@ -34,7 +34,7 @@ test("Push-Pilot fuehrt Aktivierung, Test, Bestaetigung und Widerruf responsiv m
     }
     const stubs = {
       "/JS/global.js":"",
-      "/JS/diagnostics.js":"export const diagnostic = { error() {} };",
+      "/JS/diagnostics.js":"export const diagnostic = { error(event, fields) { (window.__diagnostics ||= []).push({ event, ...fields }); } };",
       "/JS/authClient.js":`export const ready = Promise.resolve(); export const getUser = () => window.__user; export function subscribeAuth(fn) { window.__auth = fn; queueMicrotask(() => fn(window.__user)); return () => {}; }`,
     };
     if (Object.hasOwn(stubs,url.pathname)) { response.setHeader("Content-Type","text/javascript"); return response.end(stubs[url.pathname]); }
@@ -54,16 +54,34 @@ test("Push-Pilot fuehrt Aktivierung, Test, Bestaetigung und Widerruf responsiv m
       window.__calls = [];
       function Notification() {}
       Notification.permission = "default";
-      Notification.requestPermission = async () => { window.__calls.push("permission"); Notification.permission = "granted"; return "granted"; };
+      Notification.requestPermission = () => {
+        window.__calls.push("permission");
+        if (window.__failure === "permission") throw new DOMException("private endpoint https://secret.invalid", "NotAllowedError");
+        Notification.permission = window.__failure === "dismissed" ? "default" : "granted";
+        return Promise.resolve(Notification.permission);
+      };
       Object.defineProperty(window,"Notification",{ configurable:true,value:Notification });
       Object.defineProperty(window,"PushManager",{ configurable:true,value:function () {} });
       const target = { options:{},toJSON:() => ({ endpoint:"https://fcm.googleapis.com/wp/browser-test",keys:{ p256dh:publicKey,auth:"A".repeat(22) } }),unsubscribe:async () => { window.__calls.push("unsubscribe"); return true; } };
-      const registration = { pushManager:{ getSubscription:async () => null,subscribe:async () => { window.__calls.push("subscribe"); return target; } } };
-      Object.defineProperty(navigator,"serviceWorker",{ configurable:true,value:{ register:async () => { window.__calls.push("register"); return registration; },ready:Promise.resolve(registration),getRegistration:async () => registration } });
+      const registration = { pushManager:{ getSubscription:async () => null,subscribe:async () => { window.__calls.push("subscribe"); if (window.__failure === "subscription") throw new DOMException("private endpoint https://secret.invalid", "AbortError"); return target; } } };
+      Object.defineProperty(navigator,"serviceWorker",{ configurable:true,value:{ register:async () => { window.__calls.push("register"); if (window.__failure === "worker") throw new TypeError("private endpoint https://secret.invalid"); return registration; },ready:Promise.resolve(registration),getRegistration:async () => registration } });
     },{ publicKey });
     await page.goto(`http://127.0.0.1:${server.address().port}/push.html`);
     await page.waitForFunction(() => !document.getElementById("push-activate").disabled);
     assert.equal(writes.length,0,"no automatic activation");
+    for (const [failure, code] of [["permission", "PUSH_SETUP_PERMISSION_NOTALLOWED"], ["dismissed", "PUSH_SETUP_PERMISSION_OTHER"], ["worker", "PUSH_SETUP_WORKER_TYPE"], ["subscription", "PUSH_SETUP_SUBSCRIPTION_ABORT"]]) {
+      await page.evaluate((value) => { window.__failure = value; }, failure);
+      await page.locator("#push-activate").click();
+      await page.getByText(`Diagnose: ${code}.`, { exact:false }).waitFor();
+      assert.equal(writes.length,0,"failed browser setup must not write or send tests");
+      assert.equal(await page.locator("#push-activate").isDisabled(),false);
+      assert.doesNotMatch(await page.locator("#push-status").textContent(), /secret|unklarem Versand/);
+    }
+    const diagnostics = await page.evaluate(() => window.__diagnostics);
+    assert.equal(diagnostics.length,4);
+    assert.ok(diagnostics.every((row) => row.event === "push_pilot_action_failed" && row.code.startsWith("PUSH_SETUP_") && row.phase));
+    assert.doesNotMatch(JSON.stringify(diagnostics), /secret|endpoint/);
+    await page.evaluate(() => { window.__failure = null; window.__calls = []; });
     await page.locator("#push-activate").click();
     await page.waitForFunction(() => !document.getElementById("push-test").disabled);
     assert.deepEqual(await page.evaluate(() => window.__calls),["permission","register","subscribe"]);
@@ -78,6 +96,15 @@ test("Push-Pilot fuehrt Aktivierung, Test, Bestaetigung und Widerruf responsiv m
     assert.deepEqual(writes.map((row) => row.action),["register","test","confirm","revoke"]);
     assert.ok(writes.every((row) => row.accountId === "1"));
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),true);
+    await page.route("**/api/push-pilot", async (route) => {
+      if (route.request().method() === "POST") return route.fulfill({ status:503, contentType:"application/json", body:JSON.stringify({ error:{ code:"UNEXPECTED_SERVER_FAILURE", message:"private endpoint https://secret.invalid" } }) });
+      return route.continue();
+    });
+    await page.locator("#push-activate").click();
+    await page.getByText("Diagnose: PUSH_SETUP_REGISTER_OTHER.", { exact:false }).waitFor();
+    assert.doesNotMatch(await page.locator("#push-status").textContent(), /secret|unklarem Versand/);
+    assert.equal(writes.length,4,"registration error must not send a test");
+    await page.unroute("**/api/push-pilot");
     await page.evaluate(() => { Notification.permission = "denied"; });
     await page.locator("#push-refresh").click();
     await page.getByText("Benachrichtigungen sind blockiert.",{ exact:false }).waitFor();
