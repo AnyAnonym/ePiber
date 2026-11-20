@@ -386,6 +386,32 @@ Status, Dauer, Ergebnis und kontrolliertem Fehlercode strukturiert protokolliert
   Sheet unveraendert geblieben sein kann. Es wird kein Klartextpasswort
   uebertragen und keine neue Zielsession erzeugt.
 
+----- GET/POST /api/push-pilot (angemeldeter Benutzer) -----
+  GET liefert bei deaktiviertem Pilot `{ enabled: false, devices: [], tests: [] }`.
+  Aktiviert: `{ enabled: true, publicKey, devices, tests }`, jeweils hoechstens
+  zehn eigene Geraete beziehungsweise Tests. Geraete enthalten `id`, `createdAt`,
+  `revoked`; Tests `id`, `deviceId`, `createdAt`, `status`, `confirmed`.
+  Endpoints und Subscriptionkeys werden nicht zurueckgegeben.
+
+  POST verlangt erlaubte Origin, HTTP-Write-Limit und Schreibmodus. Geschlossener
+  Body `{ operationId, accountId, action, value }`: `operationId` ist eine UUID,
+  `accountId` muss dem angemeldeten Konto entsprechen. Aktionen:
+  - `register`: `value = { endpoint, keys: { p256dh, auth } }`; nur validierte
+    HTTPS-Providerziele und P-256-Schluessel. Antwort `{ success, deviceId }`.
+  - `revoke`: eigene aktive Geraete-UUID; Antwort `{ success, deviceId }`.
+    Noch wartende Tests werden storniert, laufender Versand nicht zurueckgerufen.
+  - `test`: eigene aktive Geraete-UUID; Antwort `{ success, testId }`.
+  - `confirm`: eigene Test-UUID; Antwort `{ success, testId }`.
+  Alle Writes sind akteur-/requestgebunden idempotent und auditiert; Replay kann
+  `repeated` enthalten. Hoechstens zehn aktive Geraete pro Person und eine
+  Testanforderung pro Minute. Tests haben zehn Minuten Gueltigkeit; Status
+  `accepted` ist Providerannahme, kein Anzeige-/Lesenachweis. `confirmed` wird
+  ausschliesslich durch die ausdrueckliche Benutzeraktion gesetzt.
+  Kontrollierte Fehler u.a. `PUSH_DISABLED`, `PUSH_DEVICE_CONFLICT`,
+  `PUSH_DEVICE_LIMIT`, `PUSH_TEST_RATE_LIMIT`, `PUSH_SUBSCRIPTION_INVALID`,
+  `PUSH_NOT_FOUND`, `AUTH_REQUIRED`, `VALIDATION_ERROR`, `WRITE_OUTCOME_UNKNOWN`.
+  Andere Methoden liefern 405; Read-only blockiert POST vor der Fachlogik.
+
 ----- /api/monitor/session -----
   GET (public):
     Prueft das Monitorcookie und liefert

@@ -25,10 +25,12 @@ const PAGE_TYPES = new Set([
   "Bewerbe", "Matches1", "RoundRobin", "adminLogging", "bewerbsRaster",
   "court-score-test", "entryList", "favorites", "index", "monitor", "navigator", "players",
   "mitgliederAbgleichen", "personenNormalisieren", "rangliste", "scoreboard", "servicebereich",
-  "hallzeiten", "hallzeitenDrucken", "hallzeitenVerwalten",
+  "hallzeiten", "hallzeitenDrucken", "hallzeitenVerwalten", "push",
 ]);
 
 const EVENT_LEVELS = new Map([
+  ["push_pilot_load_failed", "error"],
+  ["push_pilot_action_failed", "error"],
   ["admin_logging_load_failed", "error"],
   ["admin_logging_settings_save_failed", "error"],
   ["admin_logging_target_add_failed", "error"],

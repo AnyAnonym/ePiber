@@ -1,0 +1,9 @@
+.push-main { max-width: 48rem; margin: 1.5rem auto; padding: 1rem; overflow-wrap: anywhere; }
+.push-main section { margin: 1.5rem 0; padding: 1rem; border: 1px solid #ccc; border-radius: .5rem; }
+.push-main h1, .push-main h2 { line-height: 1.3; }
+.push-main li { margin: .75rem 0; }
+.push-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.push-main button { min-height: 44px; max-width: 100%; padding: .6rem .9rem; white-space: normal; cursor: pointer; }
+.push-main button:disabled { cursor: default; }
+.push-main li button { margin-inline-start: .5rem; }
+.push-main [role="status"] { min-height: 1.5em; font-weight: 600; }

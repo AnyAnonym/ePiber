@@ -69,6 +69,7 @@ HTTP-Routen:
   POST /api/admin/password-setup Admin setzt/entfernt Erstvergabe-Freigabe
   POST /api/admin/password     Admin setzt Passwort direkt
   GET/POST/DELETE /api/monitor/session Monitor-Session
+  GET/POST /api/push-pilot      Kontogebundener optionaler Push-Testpilot
   GET /ws                      WebSocket-v2-Upgrade und RPC/Subscriptions
 
 Die WebSocket-RPCs decken oeffentliche Daten/Scoreboards, authentifizierte
@@ -84,6 +85,26 @@ offenen Zeitraum auf hoechstens 31 Tage. PK besitzt keinen aktivierten
 Reporting-Endpunkt.
 Die verbindliche Bedeutung terminaler und temporaerer WebSocket-Schliesscodes
 steht in `Project/software/WEBSOCKET-CLOSE-CODES.txt`.
+
+Optionaler Push-Pilot und PAJ-App-Name:
+  Ohne `PUSH_PILOT_ENABLED=true` bleibt der Pilot deaktiviert. Aktivierung
+  verlangt Schemageneration 9, erneuerte App-/Worker-Grants, einen oeffentlichen
+  `PUSH_VAPID_PUBLIC_KEY`, `PUSH_VAPID_SUBJECT` und einen geschuetzten privaten
+  Schluessel ueber `PUSH_VAPID_PRIVATE_KEY_FILE`. Private Schluessel duerfen nicht
+  in Git, Chat oder Befehlsargumente gelangen. Dateibasiertes systemd-Credential
+  und getrennte Opt-in-Vorlagen stehen unter `systemd/epiber-devel-push.conf`,
+  `systemd/epiber-devel-worker-push.conf` und
+  `systemd/epiber-devel-push.env.example`. Die App behaelt ihre Loopbackgrenze;
+  der Push-Worker benoetigt zusaetzlich DNS/HTTPS-Zugriff zu den erlaubten
+  Providerzielen. Vorlagen sind keine allgemeine Installations-/Neustartfreigabe.
+  Auf PAJ wurden diese Opt-ins und Migration 9 ausdruecklich aktiviert; daraus
+  folgt keine Aktivierung auf Live. Fachmeldungen und Erinnerungen sind noch
+  nicht angebunden; echte Geraeteabnahmen sind gesondert erforderlich.
+  Die PAJ-Caddy-Site schreibt `/manifest.json` intern auf `/manifest-dev.json`
+  um und liefert Lang-/Kurzname `ePiber Dev`. Live behaelt sein eigenes Manifest;
+  App-ID, Scope, Startziel und Icons bleiben unveraendert. Bestehende
+  Installationen koennen eine verzoegerte Aktualisierung oder Neuinstallation
+  benoetigen. Der Rewrite wurde auf PAJ separat installiert und geprueft.
 
 Die oeffentliche Passwort-Erstvergabe verlangt den kanonischen `Personen.Login`,
 eine aktive Person und den Wert `x` in `Personen.KennwortVergessen`. Die optionale

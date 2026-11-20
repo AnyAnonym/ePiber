@@ -1,6 +1,7 @@
 "use strict";
 
 const AUDIT_CONTRACTS = Object.freeze({
+  ...Object.fromEntries(["register", "revoke", "test", "confirm"].map((action) => [`push.${action}`, Object.freeze({ before: {}, after: { success: "boolean" } })])),
   "refresh_projections": Object.freeze({
     before: Object.freeze({}),
     after: Object.freeze({ tableCount: "count", changedTableCount: "count", refreshedAt: "epoch_ms" }),
@@ -20,6 +21,7 @@ const AUDIT_CONTRACTS = Object.freeze({
 });
 
 const IDEMPOTENCY_CONTRACTS = Object.freeze({
+  ...Object.fromEntries(["register", "revoke", "test", "confirm"].map((action) => [`push.${action}`, Object.freeze({ success: "boolean", deviceId: "id", testId: "id" })])),
   "competition.entry.add": Object.freeze({ success: "boolean", entryId: "id", alreadyPresent: "boolean" }),
   "competition.entry.remove": Object.freeze({ success: "boolean", entryId: "id", removed: "boolean" }),
   "preference.favorites.set": Object.freeze({ success: "boolean", favorites: "preference_targets", revision: "revision" }),

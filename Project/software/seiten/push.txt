@@ -1,0 +1,41 @@
+================================================================================
+Push einrichten - optionaler technischer Pilot
+================================================================================
+
+-- Funktion und Dateien --
+  HTML: Frontend/push.html
+  JS: Frontend/JS/push.js; Service Worker: Frontend/push-worker.js
+  CSS: Frontend/CSS/push.css
+  Einstieg: eigenes Profil, Einstellungen, Push auf diesem Geraet einrichten.
+  Keine URL-Parameter oder WebSocket-Subscriptions. Status und Writes verwenden
+  die authentifizierte HTTP-Schnittstelle `/api/push-pilot`.
+
+-- Bedienung und Grenzen --
+  Explizite Aktivierung fordert unmittelbar im Benutzerklick die Browserfreigabe
+  an und registriert danach den Service Worker und die kontogebundene
+  Subscription. Keine automatische Testsendung, kein Offlinecache/Fetch-Handler.
+  Benutzer koennen einen Test senden, den tatsaechlichen Empfang bestaetigen und
+  einzelne eigene Geraete deaktivieren. Einwilligung ist optional; vorhandene
+  Inbox, Fachmeldungen, Erinnerungen und E-Mail-/WhatsApp-Einstellungen bleiben
+  unveraendert. Es werden nur selbst angeforderte neutrale Tests versendet.
+  Der Worker zeigt einen neutralen Text und oeffnet nur die interne Push-Seite;
+  dies quittiert weder Testempfang noch Fachmeldungen automatisch.
+  Abmelden vom Benutzerkonto widerruft die Subscription nicht. Auf gemeinsam
+  genutzten Geraeten deshalb vorab deaktivieren. Bereits laufender Versand kann
+  nicht zurueckgerufen werden. Providerannahme beweist weder Anzeige noch Lesen.
+  Maximal zehn aktive Geraete pro Person, eine Testanforderung pro Minute und
+  zehn Minuten Testgueltigkeit. Details stehen in ENDPOINTS.txt/DATENBANK.txt.
+
+-- Browser, Fehler und Datenschutz --
+  Unterstuetzung wird ueber Feature Detection geprueft. iPhone/iPad verlangen
+  die installierte Home-Bildschirm-App. Fokus, Energiesparen, Offlinezeiten und
+  Browser-/Systemberechtigungen koennen eine Anzeige verhindern. Automatisierte
+  Enginepruefungen ersetzen keine reale Geraeteabnahme; diese ist nicht fuer
+  alle Zielgeraete nachgewiesen.
+  Einrichtungsfehler unterscheiden Freigabe, Worker, Subscription, Kontozuordnung
+  und Statusabruf mit kontrollierten Diagnosecodes. Native Fehlertexte,
+  Subscriptionendpoints und Schluessel erscheinen nicht in Browserdiagnosen.
+  Benannte Allowlist-Eintraege: `push_pilot_load_failed` und
+  `push_pilot_action_failed`, bekannter Seitentyp `push`.
+  Kontowechsel verwerfen veraltete Antworten und setzen die Bedienung zurueck.
+  Ohne serverseitiges Opt-in zeigt die Seite den deaktivierten Pilotstatus.

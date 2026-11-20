@@ -84,6 +84,9 @@ async function grantSchemaPrivileges(client, names, { readOnly = false } = {}) {
   await client.query(`GRANT UPDATE ON venue.hall_time_grids TO ${worker}`);
   await client.query(`GRANT SELECT ON ops.schema_migrations, ops.seed_runs, ops.import_runs TO ${worker}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE ON messaging.deliveries TO ${worker}`);
+  if ((await client.query("SELECT to_regclass('messaging.push_devices') IS NOT NULL AS present")).rows[0].present) {
+    await client.query(`GRANT SELECT, UPDATE, DELETE ON messaging.push_devices, messaging.push_tests TO ${worker}`);
+  }
   await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ops.import_runs, ops.import_findings, ops.seed_runs TO ${refresh}`);
   await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ops.idempotency_operations, ops.audit_operations, ops.audit_security_context, ops.audit_transitions TO ${refresh}`);
   await client.query(`GRANT SELECT ON ops.schema_migrations, ops.jobs, ops.outbox TO ${refresh}`);
@@ -93,6 +96,9 @@ async function grantSchemaPrivileges(client, names, { readOnly = false } = {}) {
     const appReadonly = identifier(names.app_readonly, "Read-only-Approlle");
     await client.query(`GRANT USAGE ON SCHEMA core, identity, play, venue, messaging, ops TO ${appReadonly}`);
     await client.query(`GRANT SELECT ON ALL TABLES IN SCHEMA core, play, venue, messaging TO ${appReadonly}`);
+    if ((await client.query("SELECT to_regclass('messaging.push_devices') IS NOT NULL AS present")).rows[0].present) {
+      await client.query(`REVOKE SELECT ON messaging.push_devices FROM ${appReadonly}`);
+    }
     await client.query(`GRANT SELECT ON identity.people, identity.person_contacts, identity.person_addresses,
       identity.person_external_identifiers, identity.memberships, identity.user_accounts, identity.sessions,
       identity.tenant_role_assignments, identity.user_favorites,

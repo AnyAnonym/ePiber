@@ -1098,9 +1098,24 @@ optionale Installation als `ePiber Tennis`. Es startet unter `/index.html`, darf
 Hoch- und Querformat verwenden, fuehrt die gruene Primaerfarbe `#176b4a` bis in
 die Browserleiste und nutzt das Dashboardmotiv in normalen sowie maskierbaren
 Iconvarianten. Monitor-, Sponsoren-, technische Test- und reine
-Administrationsseiten bieten keinen eigenen Installationseinstieg. Es gibt
-bewusst keinen Service Worker, Offline-Cache oder Offline-Schreibbetrieb; Browser-
-und Backendverhalten bleiben im nicht installierten Betrieb unveraendert.
+Administrationsseiten bieten keinen eigenen Installationseinstieg. PAJ liefert
+unter derselben Manifest-URL ein separates Manifest mit dem Namen `ePiber Dev`;
+App-ID, Scope, Startziel und Icons bleiben dabei erhalten.
+Es gibt keinen Offline-Cache oder Offline-Schreibbetrieb. Ausschliesslich die
+explizite Push-Aktivierung registriert `Frontend/push-worker.js` ohne Fetch-
+Handler. Normale Seitenaufrufe registrieren keinen Service Worker.
+Der optionale Push-Pilot (`push.html`, Einstieg im eigenen Profil) versendet nur
+selbst angeforderte neutrale Tests, keine Fachmeldungen oder Erinnerungen.
+`PushPilotService` bindet Geraete und Tests an das angemeldete Konto; Versand
+erfolgt ueber `ops.outbox`, `PushPilotWorker` und die bestehende Worker-Lease.
+Providerannahme und ausdrueckliche Empfangsbestaetigung bleiben getrennt.
+Explizite temporaere Providerfehler erlauben begrenzte Wiederholungen; unklare
+Netz-/Crashausgaenge werden nicht blind erneut versendet. Subscriptionendpoints,
+Verschluesselungs- und private VAPID-Schluessel gehoeren weder in Statusantworten
+noch in Diagnose-/Auditprojektionen. Benannte Browserereignisse
+`push_pilot_load_failed` und `push_pilot_action_failed` verwenden den Seitentyp
+`push`; kontrollierte Einrichtungsphasen und Diagnosecodes ersetzen Rohfehler.
+Ohne ausdrueckliches serverseitiges Opt-in bleibt der Pilot deaktiviert.
 Die fachlichen Seiten- und Administrationsdokumente sind in `SOFTWARE-DOKU.txt`
 indiziert.
 

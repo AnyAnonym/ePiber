@@ -22,7 +22,7 @@ test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank",
     output,
   });
   assert.equal(initial.generation, 0);
-  assert.deepEqual(initial.pending.map(({ id }) => id), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(initial.pending.map(({ id }) => id), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
   await runMigrations({
     connectionConfig: cluster.connectionConfig,
@@ -168,7 +168,7 @@ test("Migration Runner baut und verifiziert eine leere PostgreSQL-18-Datenbank",
   } finally {
     await fullClient.end();
   }
-  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 7, output });
+  await runMigrations({ connectionConfig: cluster.connectionConfig, command: "up", targetGeneration: 9, output });
   assert.match(verifySchemaSnapshot(cluster.connectionConfig), /CREATE TABLE core\.tenants/);
 });
 

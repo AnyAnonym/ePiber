@@ -190,7 +190,10 @@ class PostgresHallTimeService {
     const result = await this.operation(principal, request, "hall_time.booking.set", (value) => ({ success: true, gridId: value.gridId, revision: value.revision }), async (transaction) => {
       const grid = await this.lockGrid(transaction, request.gridId), actor = await this.actorId(transaction, principal);
       const personContractId = request.personId || String(principal.id);
-      if (personContractId !== String(principal.id) && !isAdmin(principal)) throw new AppError("FORBIDDEN", "Nur Administratoren dürfen andere Spieler ändern", 403);
+      if (!isAdmin(principal)) {
+        const membership = await transaction.query("SELECT 1 FROM venue.hall_time_grid_participants WHERE grid_id=$1::uuid AND person_id=$2::uuid AND left_at IS NULL", [grid.id, actor]);
+        if (!membership.rowCount) throw new AppError("FORBIDDEN", "Berechtigung fuer diesen Hallenzeiten-Raster fehlt", 403);
+      }
       const context = await transaction.query(`SELECT slot.id AS slot_id,slot.starts_at,slot.ends_at,slot.capacity,person.id AS person_id,
         EXISTS(SELECT 1 FROM venue.hall_time_grid_participants member WHERE member.grid_id=slot.grid_id AND member.person_id=person.id AND member.left_at IS NULL) AS member,
         value.waiting_list_enabled,value.waiting_limit_per_person,value.mode,value.fair_use_base,value.fair_use_extended_days,value.fair_use_percent,value.fair_use_open_days,value.active
@@ -251,7 +254,7 @@ class PostgresHallTimeService {
           templateParameters: { gridId: request.gridId, slotId: request.slotId, personId: personContractId, status: request.selected ? items[0].afterStatus : "removed" },
           participants: [{ personId: personContractId, role: "affected_player" }], recipients: [personContractId], readPersonIds: [],
           sourceType: "hall_time", sourceId: request.gridId, actorPersonId: String(principal.id), actorName: principal.name || null,
-          summary: request.selected ? "Hallenzeit wurde durch einen Administrator eingetragen." : "Hallenzeit wurde durch einen Administrator entfernt.",
+          summary: request.selected ? "Hallenzeit wurde eingetragen." : "Hallenzeit wurde entfernt.",
         }, transaction);
         if (notification?.personId) await this.messagingService?.createDomainEvent({
           contractId: `promote-${request.operationId}`, eventType: "hall_time.waitlist.promoted", operationId: request.operationId,

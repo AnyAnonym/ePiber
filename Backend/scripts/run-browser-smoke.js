@@ -13,6 +13,7 @@ const fullTests = [
   "test/navigator.browser.js",
   "test/servicebereich.browser.js",
   "test/peopleNormalization.browser.js",
+  "test/push.browser.js",
 ];
 const mobileProfiles = new Set(["chrome-android", "samsung-internet-android", "safari-iphone", "safari-ipad"]);
 const coreProfiles = new Set(["chrome-windows", "safari-macos", "firefox-windows"]);
@@ -64,7 +65,7 @@ for (const [profileName, profile] of selectedProfiles) {
     "--test",
     "--test-concurrency=1",
     "--test-name-pattern",
-    suite === "lifecycle" ? testPattern : `${testPattern}|^(KO-Doppelnamen|Ranglisten-Einstiegsgrenze|Servicebereich|Normalisierungsseite|Profilbewerbe werden)`,
+     suite === "lifecycle" ? testPattern : `${testPattern}|^(Push-Pilot|KO-Doppelnamen|Ranglisten-Einstiegsgrenze|Servicebereich|Normalisierungsseite|Profilbewerbe werden)`,
     ...selectedTests,
   ], {
     cwd: backendRoot,

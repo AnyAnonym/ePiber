@@ -389,6 +389,11 @@ function prepareProfileSettings(panel, actionSignal) {
   field.append(label, select, hint, status);
   panel.appendChild(field);
 
+  const pushLink = document.createElement("a");
+  pushLink.href = "push.html";
+  pushLink.textContent = "Push auf diesem Gerät einrichten (Pilot)";
+  panel.appendChild(pushLink);
+
   const groupField = document.createElement("div");
   groupField.className = "profile-setting-field profile-group-setting";
   const groupHeading = document.createElement("h3");

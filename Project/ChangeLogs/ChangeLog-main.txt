@@ -1,12 +1,104 @@
 ================================================================================
 CHANGELOG - ePiber Gesamtprojekt
 ================================================================================
-Stand: 5.1.1
+Stand: 5.1.2
 
 Dieses Changelog dokumentiert gemeinsam die ueberlieferte Historie ab 1.24.0
 und alle kuenftigen bestaetigten Main-Versionen fuer Software, Infrastruktur,
 Dokumentation, Datenbank und Repository-Struktur. Format und Workflow stehen in
 Project/DokuVersGit.txt.
+
+[5.1.2] - 2026-11-20
+Commit: 5.1.2 | Push-Pilot, Dev-App-Name und Hallenraster-Teilnehmerrechte
+Quelle: 5.1.1-paj-1
+
+  Releaseabschluss
+  - [Freigabe] Betreiber bestaetigt nach erfolgreicher Hallenraster-Bedienabnahme Zielversion 5.1.2 sowie vollstaendige Dokumentationsuebernahme, Merge, Main-Commit und Main-Push. Der additive Push-Pilot waere nach SemVer eine neue optionale Funktion; 5.1.2 ist die ausdruecklich gewaehlte Betreiber-Zielversion. Kein Live-Rollout, weitere Dienstneustarts oder Schemaeingriffe aus dieser Releasefreigabe abgeleitet.
+  - [Dokumentation] Freigegebene Uebernahmeliste vollstaendig in Architektur, Endpoints, Datenbank, Softwareindex, neuer Push-Seitendokumentation und Server-Setup eingearbeitet. Bereits korrekte Hallenraster-Fachregel unveraendert. Vollstaendige Branch-Changeloghistorie nachfolgend uebernommen; Original bleibt im gepushten Seitenbranch a3846cf44cd05310c1f4cf2717aae734807d2017 erhalten.
+  - [Releaseverifikation] Offener Gesamtmerge diffgebunden erfolgreich geprueft: statische Pruefungen, 503 Backendtests, 17 Workflowtests und acht Browserprofile mit jeweils 32 erfolgreichen Tests in frischen Containern (256 Browserprueffaelle), keine Fehler/Skips. Build- und browser-full-Nachweise vollstaendig; npm audit --omit=dev meldet keine bekannten Schwachstellen. Vollstaendige Changeloguebernahme gegen jede Originalzeile geprueft. Kein erneuter Geraete-/Live-Rollout behauptet.
+
+  Branchhistorie (vollstaendige Uebernahme)
+
+  [5.1.1-paj-1-1] - 2026-10-29
+  Commit: 5.1.1-paj-1-1 | Branch-Stand nummeriert initialisiert
+
+    Added
+    - [Dokumentation] Temporaeres Branch-Changelog fuer den Seitenbranch `5.1.1-paj-1` angelegt.
+
+    Changed
+    - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.1-paj-1-1` gesetzt.
+
+  [5.1.1-paj-1-2] - 2026-10-29
+  Commit: 5.1.1-paj-1-2 | Opt-in-Web-Push-Pilot mit Geraeteregistrierung und Testversand
+
+    Added
+    - [Push-Pilot] Eigene Einrichtungsseite `push.html` mit expliziter Browserfreigabe, Apple-Home-Bildschirm-Hinweisen, Testanforderung, persoenlicher Empfangsbestaetigung und Einzelgeraet-Widerruf; Einstieg im eigenen Profil unter Einstellungen.
+    - [Backend] Authentifizierte, Origin- und Read-only-geschuetzte HTTP-Schnittstelle `/api/push-pilot` mit kontoabhaengiger Registrierung, begrenzter Geraetezahl, Test-Ratelimit, Idempotenz und kontrolliertem Auditvertrag.
+    - [PostgreSQL] Additive Migration 9 fuer Push-Geraete und persistierte Tests; Versand ueber bestehende Outbox und Worker. Tests verfallen nach zehn Minuten, Testhistorie nach 30 und unerneuerte Geraeteregistrierungen nach 90 Tagen.
+    - [Sicherheit] Opt-in-Konfiguration mit dateibasiertem privatem VAPID-Schluessel, eingeschraenkten Push-Providerzielen und validierten P-256-Schluesseln. Subscriptiondaten erscheinen weder in Statusprojektionen noch in Diagnose-/Auditfeldern; Read-only-Approlle besitzt darauf kein Leserecht.
+    - [Tests] Neue PostgreSQL-, Grant-, HTTP-, Konfigurations-, Service-Worker- und responsive Browserpruefungen; Push-Einstieg in allen Zielprofilen der bestehenden Smokesuite.
+    - [Betriebsvorlagen] Separate, nicht installierte PAJ-Opt-in-Drop-ins fuer gemeinsame dateibasierte VAPID-Credentials sowie DNS/HTTPS-Netzzugriff des Workers. Die Basisunits bleiben unveraendert; insbesondere behaelt die App ihre Loopback-Grenze und der normale Worker seine Unix-Socket-Grenze.
+
+    Changed
+    - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.1-paj-1-1-x` gesetzt.
+    - [PWA] Service Worker wird ausschliesslich auf ausdrueckliche Push-Aktivierung registriert; kein Fetch-Handler und kein Offline-Cache. Benachrichtigungen enthalten nur einen neutralen Testtext und oeffnen ausschliesslich die interne Push-Seite, ohne automatische Kenntnisnahme.
+    - [Worker] Begrenzte Wiederholungen bei expliziten temporaeren Providerfehlern; unklare Netz-/Crashausgaenge werden nicht blind erneut versendet. Providerannahme und vom Benutzer bestaetigter Empfang bleiben getrennt.
+    - [Observability] Benannte Browserereignisse und bekannter Seitentyp, kontrollierte HTTP-Metrikroute sowie strukturierte Status-, Operations-, Versand- und Retentionlogs ergaenzt.
+    - [Schema] Generierten Schema-Snapshot auf Migration 9 angeglichen; dabei die bereits vorhandenen Spalten aus Migration 8 ebenfalls uebernommen.
+
+    Betrieb / Abgrenzung
+    - Pilot bleibt ohne ausdrueckliches `PUSH_PILOT_ENABLED=true` abgeschaltet. Bestehende Inbox, Fachmeldungen, WhatsApp-/E-Mail-Einstellungen, Personen, Rechte und Zugangsdaten werden nicht migriert oder bereinigt.
+    - Kein fachlicher Commit, Push, Merge, Live-Rollout, PAJ-Datenbankeingriff oder Dienstneustart mit diesem Arbeitsstand vorgenommen. Reale Push-Anzeige auf Telefon/Windows und insbesondere Samsung Internet/iPhone/iPad bleibt eine gesonderte Geraeteabnahme.
+
+    Pruefungen
+    - Statische Pruefungen, 495 Backendtests und 17 Workflowtests erfolgreich; Produktionsabhaengigkeiten laut `npm audit --omit=dev` ohne bekannte Schwachstelle.
+    - Acht-Profil-Smokesuite mit jeweils 32 Tests in Chromium-, Firefox- und WebKit-Zielprofilen vollstaendig erfolgreich (256 Prueffaelle). Jedes Profil lief in einem frischen Container; die nachtraeglichen Betriebs-Opt-in-Vorlagen betreffen den Browserfingerprint nicht.
+    - Zusaetzliche vollstaendige Host-Chromium-Suite: 63 von 64 Tests im Gesamtlauf erfolgreich. Bestehender Test `Matches zeigen den deckenden Loader nur beim ersten Datenstand` scheiterte einmal an seiner Footer-/Overlaypruefung und bestand bei unveraendertem Code in gezielter Wiederholung; Timing-Flake offen benannt, kein durchgehend gruener Gesamtlauf behauptet.
+    - Echter Push-Service-Worker in separaten frischen Playwright-Containern fuer Chromium, Firefox und WebKit installiert, aktiviert und abgemeldet. Natives Host-Chromium erzeugte zudem per Notification-API eine Testnotification und entfernte sie wieder; keine Aussage ueber reale OS-Anzeige.
+    - Reale `web-push`-Bibliothek mit frisch generierten temporaeren Schluesseln auf VAPID-Signatur und AES128GCM-Payload geprueft; keine Netzsendung und keine Ausgabe privater Schluessel.
+    - Zusammengefuehrte App-/Worker-Opt-in-Units mit `systemd-analyze verify` syntaktisch erfolgreich geprueft, ohne Installation/Start. Dabei meldete systemd ein nicht lesbares fremdes Live-Drop-in-Verzeichnis; keine Aussage ueber dessen Inhalt oder eine Live-Verifikation.
+
+  [5.1.1-paj-1-3] - 2026-11-20
+  Commit: 5.1.1-paj-1-3 | Push-Einrichtungsdiagnosen und separater PAJ-App-Name
+
+    Changed
+    - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.1-paj-1-2-x` gesetzt.
+    - [Push-Einrichtung] Nach gemeldetem Aktivierungsabbruch Fehler nach Browserfreigabe, Service-Worker-Einrichtung, Push-Subscription, Kontozuordnung und Statusabruf getrennt angezeigt. Aktivierungsfehler enthalten einen kontrollierten Diagnosecode statt der irrefuehrenden Versandwarnung; native Fehlertexte/Endpoints bleiben ausgeschlossen. Synchrone Permission-Ausnahmen werden innerhalb der Fehlergrenze behandelt, die Freigabe bleibt unmittelbar im Klickaufruf. Keine automatische Testsendung, keine Aenderung an Versand, Auditvertraegen, Layout oder Navigation. Die konkrete Ursache auf dem Android-Geraet ist noch nicht festgestellt.
+    - [Push-Diagnosetests] Host-Chromium prueft synchrone Permission-Ablehnung, geschlossene Abfrage, Worker- und Subscriptionfehler, Wiederbedienbarkeit, fehlende Writes/Testsendungen und datensparsame Diagnosefelder; bestehender Erfolgs-/Widerrufsablauf bleibt erfolgreich. Collectorvertrag fuer den bestehenden erlaubten Eintrag `push_pilot_action_failed` mit Phase und Diagnosecode geprueft (20 gezielte Tests erfolgreich).
+
+    Betrieb / PAJ-Aktivierung
+    - [PWA] Separates Manifest mit Lang- und Kurzname `ePiber Dev` angelegt; nur die PAJ-Site liefert es per internem Rewrite unter der bestehenden URL `/manifest.json`. Live-Manifest, App-ID, Startziel, Scope, Icons und Seitenverweise bleiben unveraendert. Bestehende Android-Installationen koennen eine Neuinstallation oder eine verzoegerte Metadatenaktualisierung benoetigen.
+    - [Freigabe] Nach ausdruecklichem Auftrag zuerst `naechste Aufgabe` abgeschlossen: Pilotstand `5.1.1-paj-1-2`, Commit `f23d52eeb7997a1c6f7eacc4e0ea79dee90eda94`; danach ausschliesslich PAJ aktiviert. Kein Push, Merge oder Live-Rollout.
+    - [PostgreSQL] Migration 9 als `epiber_devel_owner` ueber den Migration Runner auf `epiber_devel`/Tenant `devel-epiber` angewendet; vorhandene App-/Worker-/Refresh-Grants aktualisiert. Die optionale, auf PAJ nicht vorhandene Read-only-Approlle wurde nicht neu angelegt.
+    - [Credentials] Eigenes neues VAPID-Paar fuer PAJ erzeugt; privater Schluessel nur rootlesbar unter `/etc/epiber-devel/credentials/push-vapid-private`, gemeinsame Konfiguration unter `/etc/epiber-devel/push.env`. Kein privater Schluessel oder Sitzungstoken in Repository, Chat oder Befehlsargumenten.
+    - [systemd] Gepruefte Opt-in-Vorlagen als `/etc/systemd/system/epiber-devel.service.d/push-pilot.conf` und `/etc/systemd/system/epiber-devel-worker.service.d/push-pilot.conf` installiert; daemon-reload und kontrollierter Neustart nur von PAJ-App und PAJ-Worker. App weiterhin auf Loopback beschraenkt; nur der PAJ-Worker besitzt jetzt zusaetzlich IPv4-/IPv6-Sockets fuer DNS/HTTPS.
+
+    Pruefungen / Grenzen
+    - [Datenintegritaet] Vorher-/Nachher-Fingerprints aller Personen- und Credentialzeilen identisch; 218 Personen, davon 179 aktiv/39 inaktiv. Keine vorhandenen Zugangsdaten geaendert oder Benutzersitzungen widerrufen.
+    - [Laufzeit] PAJ meldet `5.1.1-paj-1-2-x` und Readiness; Live weiterhin `5.1.1` mit unveraenderten App-/Worker-PIDs und Unit-Eigenschaften. Keine Live-Konfiguration oder gemeinsame Datenbank-/Proxy-Dienste neugestartet.
+    - [HTTPS] Produktiver authentifizierter Push-Status liefert `enabled=true`, oeffentlichen Schluessel und kontrollierte Listen; anonyme Anfrage 401, fremde Origin 403, unerlaubte Methode 405, statische Push-Dateien 200. Ausschliesslich fuer die Leseprobe eine zweiminuetige technische Sitzung angelegt und im Finally-Pfad wieder entfernt; Token nur im Prozessspeicher.
+    - [Netzwerk] Frischer kurzlebiger Probe-Dienst mit Worker-kompatibler Unix-/IPv4-/IPv6-Socketgrenze erreichte die TLS-Endpunkte von Google/FCM, Mozilla und Apple. Nur HEAD-Anfragen ohne Subscription oder Fachinhalt; keine Push-Zustellung behauptet.
+    - [Observability] Vier Wartungsplanungsabschluesse nach Neustart, keine Runtime-Error-Logs, keine offenen/unklaren Audits, keine toten Jobs und keine problematischen Push-Outbox-Eintraege. Zum Abschluss noch keine Geraeteregistrierungen und keine Versandtests vorhanden.
+    - [Abnahme] Reale Anzeige und Navigation auf Android/Chrome und Windows/Chrome benoetigen jetzt die ausdrueckliche Aktivierung auf den Geraeten. Samsung Internet sowie iPhone/iPad bleiben ebenfalls ohne reale Geraeteabnahme. Fachmeldungen und Erinnerungen sind weiterhin nicht an Push angebunden.
+    - [Nachweis] Geschuetzter lokaler Aktivierungs-/Pruefbericht: `/home/paj/.cache/opencode-tmp/session.LavU9xBcy3/opencode/push-paj-activation.json`; dazu eng begrenzte lokale Aktivierungs- und Pruefhelfer. Kein Backup-Auftrag und keine Wiederherstellungszusage.
+    - [Dev-App-Name] Nach ausdruecklicher Freigabe ausschliesslich den PAJ-Manifest-Rewrite in `/etc/caddy/Caddyfile` installiert. Die vollstaendige zusammengesetzte Konfiguration vor und nach Installation validiert; adaptierte Fremd-/Live-/PK-Konfiguration unveraendert (nur temporaeren automatisch generierten Caddy-Hide-Pfad fuer den Vergleich normalisiert). Caddy kontrolliert reloadet, kein Backend-/Worker-Neustart und keine Datenbankaenderung.
+    - [Manifest-Abnahme] PAJ-Manifest und Lang-/Kurzname `ePiber Dev` per HTTPS geprueft, Live-Manifest bytegleich zum Vorherstand; beide Readiness- und Versionspfade 200, Versionen und alle fuenf beobachteten App-/Worker-/Caddy-PIDs unveraendert. Chromium erkennt beide Manifestnamen unter `/manifest.json` ohne Manifestfehler; IDs, Scope, Startziel und Icons bleiben erhalten. Android-Neuinstallation/-Umbenennung selbst noch nicht praktisch bestaetigt.
+    - [Dev-Manifest-Nachweis] Lokaler Konfigurationsvorstand und datensparsamer Abschlussnachweis unter `/home/paj/.cache/opencode-tmp/session.LavU9xBcy3/opencode/dev-manifest-kn5xc2fk/`; gezielte Manifest-Regressionen erfolgreich.
+    - [Installierbarkeit/Logging] Chromium meldet im frischen normalen Browserprofil keine Installierbarkeitsfehler fuer PAJ (ein erster Inkognito-Probelauf wurde erwartungsgemaess als `in-incognito` abgelehnt). Neue Manifestzugriffe werden im bestehenden Caddy-Accesslog als `route=static`, Status 200 erfasst; Caddy ist aktiv mit `Result=success`. Namensaenderung ist reine Installationsmetadatenanpassung ohne neue Browser-API, Navigation, Touch- oder Layoutaenderung; Drei-Engine-Kernsmokes werden fuer den neuen Diff nachgewiesen.
+    - [Dev-Manifest-Verifikation] Diffgebundene Verifikation vollstaendig: statische Pruefungen, 496 Backendtests, 17 Workflowtests und drei Browser-Kernprofile mit jeweils 32 Tests erfolgreich (Chromium, WebKit, Firefox, je frischer Container). Zusaetzlich Query-/HEAD-Zugriffe, bytegleiche Iconauslieferung sowie unveraenderte Ablehnung nicht passender Pfade per HTTPS geprueft. Kein Commit, Push oder Merge in diesem Namensaenderungsauftrag.
+
+  [5.1.1-paj-1-4] - 2026-11-20
+  Commit: 5.1.1-paj-1-4 | Teilnehmerrechte fuer fremde Hallenraster-Buchungen wiederhergestellt
+
+    Changed
+    - [Repository] Paketversion in `Backend/package.json` und `Backend/package-lock.json` auf `5.1.1-paj-1-3-x` gesetzt.
+    - [Hallenraster] PostgreSQL-Buchungen pruefen die aktive Rasterteilnahme des Akteurs statt fuer jede fremde An-/Abmeldung Administratorrechte zu verlangen. Zugeordnete Teilnehmer duerfen damit wie dokumentiert zukuenftige Eintraege anderer Teilnehmer aendern, auch nach dem ersten Termin der Serie. Zielpersonenzuordnung, Sperre ab Terminende, Admin-Korrekturen, Fair Use, Wartelistenlimit und atomisches Nachruecken bleiben erhalten. Keine Frontend-, Layout- oder Navigationsaenderung.
+    - [Benachrichtigungen] Fallbacktext fuer fremde Buchungen ohne falsche Administratorbezeichnung; Akteur, Zielperson, Historie und transaktionale Inboxereignisse bleiben nachvollziehbar. Bestehender Endpointvertrag mit Start-/Erfolgs-/Fehler-/Unknown-Audit sowie strukturiertem `hall_time_write_completed`-Abschluss geprueft; keine neuen Diagnosefelder oder Personendatenprojektionen.
+    - [Regressionen] Isolierter temporaerer PostgreSQL-Cluster prueft Fremdabmeldung mit anschliessender Eigenanmeldung, Fremdanmeldung, Ablauf nach erstem Termin, Idempotenz, Historie/Inbox, Nachruecken, Nichtteilnehmer/Austritt, Zielpersonenzuordnung, Adminausnahme, Vergangenheits-/Terminendesperre, Fair Use, Wartelistenlimit und Vollbelegung. Fehler beim Inboxereignis muessen Buchung und Historie gemeinsam zurueckrollen.
+    - [Betriebsgrenze] Nur PAJ-Checkout geaendert; keine Live-Aenderung, keine produktiven Fachwrites, keine Migration und kein Dienstneustart.
+    - [Verifikation] `verification-workflow.mjs verify --suite auto` erfolgreich: statische Pruefungen, 503 Backendtests (einschliesslich sieben neuer PostgreSQL-Prueffaelle) und 17 Workflowtests. Pfadpolicy verlangt fuer die reine Backendkorrektur nur Build; keine geaenderten Browser-APIs, Darstellung, Touchbedienung oder Navigation, daher keine erneute Browsermatrix. PAJ-Laufzeituebernahme benoetigt noch den gesondert freizugebenden App-Neustart.
+    - [PAJ-Laufzeituebernahme] Nach ausdruecklicher Freigabe am 20.11.2026 ausschliesslich `systemctl restart epiber-devel.service` ausgefuehrt. Dabei wurde der abhaengige PAJ-Worker ebenfalls durch systemd neu gestartet (App-PID 1596682, Worker-PID 1596683). Beide aktiv; PAJ-HTTPS `/ready` und `/version` bestaetigen `5.1.1-paj-1-3-x`, Initialisierung erfolgreich und keine Error-Eintraege im geprueften Startfenster. Live-App/-Worker unveraendert aktiv mit PIDs 1009308/1009323. Keine manuellen Buchungen oder sonstigen Fachwrites zur Laufzeitabnahme; konkrete Bedienabnahme am Raster bleibt offen.
+    - [Bedienabnahme/Abschlussfreigabe] Betreiber bestaetigt anschliessend die erfolgreiche Hallenraster-Bedienung auf PAJ und beauftragt `fertigmachen` mit konkreter Main-Zielversion `5.1.2`. Der Branch enthaelt neben der Berechtigungskorrektur den additiven Push-Piloten (nach SemVer eine neue optionale Funktion); `5.1.2` ist die ausdruecklich gewaehlte Betreiber-Zielversion. Kein Live-Rollout, weitere Dienstneustarts oder Schemaeingriffe aus dieser Releasefreigabe abgeleitet.
 
 [5.1.1] - 2026-10-26
 Commit: 5.1.1 | Inaktive Personen vertragskonform projizieren

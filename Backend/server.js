@@ -33,6 +33,7 @@ const courtPoller = require("./courtPoller.js");
 const stateStore = require("./stateStore.js");
 const { PostgresCourtAutomation } = require("./postgresCourtAutomation.js");
 const { createPostgresComponents } = require("./createPostgresComponents.js");
+const { pushConfig } = require("./pushConfig.js");
 const { createConnectionConfig } = require("./db/connectionConfig.js");
 const { AppError, errorData } = require("./errors.js");
 const { summarizePeopleNormalization } = require("./peopleNormalization.js");
@@ -72,6 +73,7 @@ const HTTP_WRITE_PATHS = new Set([
   "/api/frontend-events", "/api/session", "/api/password", "/api/admin/frontend-logging",
   "/api/admin/frontend-logging/targets", "/api/password-setup", "/api/admin/password-setup",
   "/api/admin/password", "/api/monitor/session",
+  "/api/push-pilot",
 ]);
 
 function sendJson(response, status, body, headers = {}) {
@@ -393,6 +395,17 @@ function createApplication(overrides = {}) {
       const cookies = parseCookies(request.headers.cookie);
       const sessionToken = cookies[SESSION_COOKIE] || "";
       const diagnosticIdentity = () => authService.getDiagnosticIdentity(sessionToken);
+
+      if (pathname === "/api/push-pilot") {
+        if (!["GET", "POST"].includes(request.method)) return methodNotAllowed(response, ["GET", "POST"], supportId);
+        const auth = await authService.requireUser(sessionToken);
+        const service = overrides.pushService;
+        if (!service) throw new AppError("PUSH_DISABLED", "Push-Pilot ist noch nicht aktiviert", 503);
+        if (request.method === "GET") return sendJson(response, 200, await service.status(auth.principal.id));
+        assertAllowedOrigin(request, ALLOWED_ORIGINS);
+        limitHttpWrite(request, auth.principal.id);
+        return sendJson(response, 200, await service.execute(auth.principal, await readJsonBody(request, HTTP_BODY_LIMIT_BYTES)));
+      }
 
       if (pathname === "/api/frontend-logging-policy") {
         if (request.method !== "GET") return methodNotAllowed(response, ["GET"], supportId);
@@ -904,6 +917,7 @@ async function createPostgresApplication({ env = process.env, connectionConfig =
     sessionRefreshIntervalMs: SESSION_REFRESH_INTERVAL_MS,
     sessionMaxPerUser: SESSION_MAX_PER_USER,
     appVersion: APP_VERSION,
+    push: pushConfig(env),
     publish: (topic, value) => dataProvider.publish(topic, value),
     log: logger.log,
   });
@@ -923,6 +937,7 @@ async function createPostgresApplication({ env = process.env, connectionConfig =
       hallTimeService: components.hallTimeService,
       playService: components.playService,
       competitionService: components.competitionService,
+      pushService: components.pushService,
       authService: components.authService,
       frontendLoggingService: components.frontendLoggingService,
       monitorBroker: components.monitorBroker,

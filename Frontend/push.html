@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ePiber – Push einrichten</title>
+  <link rel="stylesheet" href="./CSS/styles.css" />
+  <link rel="stylesheet" href="./CSS/push.css" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/Images/pwa/apple-touch-icon.png" />
+  <meta name="theme-color" content="#176b4a" />
+  <meta name="apple-mobile-web-app-title" content="ePiber" />
+</head>
+<body>
+  <div id="header-container"></div>
+  <div id="mobile-nav-container"></div>
+  <main class="push-main">
+    <h1>Push einrichten</h1>
+    <p>Technischer Pilot: Hier werden nur selbst angeforderte Testbenachrichtigungen versendet, noch keine Matchmeldungen. Deine Meldungen in ePiber bleiben unverändert.</p>
+    <p id="push-status" role="status" aria-live="polite">Anmeldung wird geprüft …</p>
+    <section aria-labelledby="push-setup-heading">
+      <h2 id="push-setup-heading">Dieses Gerät</h2>
+      <p id="push-device-status"></p>
+      <p>Nur auf deinem eigenen Gerät aktivieren: Push bleibt auch nach dem Abmelden mit deinem Konto verbunden. Auf gemeinsam verwendeten Geräten zuerst hier deaktivieren. Bereits laufender Versand lässt sich nicht zurückrufen. Auf dem Sperrbildschirm erscheint nur ein neutraler Testtext.</p>
+      <div class="push-actions">
+        <button id="push-activate" type="button" disabled>Push auf diesem Gerät aktivieren</button>
+        <button id="push-test" type="button" disabled>Testbenachrichtigung senden</button>
+        <button id="push-refresh" type="button" disabled>Status aktualisieren</button>
+      </div>
+    </section>
+    <section aria-labelledby="push-help-heading">
+      <h2 id="push-help-heading">Einrichtung und Grenzen</h2>
+      <ol>
+        <li>Auf iPhone und iPad: ePiber über „Teilen“ → „Zum Home-Bildschirm“ hinzufügen und über das neue Symbol öffnen. Ein normaler Browser-Tab reicht dort nicht.</li>
+        <li>Aktivieren und die Berechtigungsabfrage erlauben. Bei abgelehnter Freigabe die Website-Berechtigung im Browser und die Mitteilungen in den Systemeinstellungen prüfen; danach erneut aktivieren.</li>
+        <li>Test senden, die App in den Hintergrund legen und den tatsächlichen Empfang unten ausdrücklich bestätigen.</li>
+      </ol>
+      <p>„Vom Push-Dienst angenommen“ beweist keine Anzeige und kein Lesen. Offline-Zeiten, Fokus/Nicht stören, Energiesparen oder widerrufene Berechtigungen können Push verhindern. Tests verfallen nach zehn Minuten. Bei ausbleibender Anzeige die Browser- und Systemeinstellungen prüfen.</p>
+      <p>Android/Chrome und Windows/Chrome sind die ersten vorgesehenen Gerätetests. Samsung Internet sowie iPhone/iPad benötigen zusätzlich echte Gerätetests; automatisierte Browserprüfungen ersetzen diese nicht.</p>
+    </section>
+    <section aria-labelledby="push-devices-heading">
+      <h2 id="push-devices-heading">Meine registrierten Geräte</h2>
+      <ul id="push-devices"></ul>
+    </section>
+    <section aria-labelledby="push-tests-heading">
+      <h2 id="push-tests-heading">Meine letzten Tests</h2>
+      <ul id="push-tests"></ul>
+    </section>
+    <a href="index.html?dashboard=1">Zum Dashboard / zur Anmeldung</a>
+  </main>
+  <div id="footer-container"></div>
+  <script type="module" src="./JS/global.js"></script>
+  <script type="module" src="./JS/push.js"></script>
+</body>
+</html>

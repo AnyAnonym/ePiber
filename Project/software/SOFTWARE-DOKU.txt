@@ -40,7 +40,7 @@ maschinenpruefbare Vertraege bleiben die technische Wahrheit.
 
 
 ================================================================================
-  SEITEN-DOKUMENTATION (14 FACHLICHE SEITEN + 6 ADMINISTRATION)
+  SEITEN-DOKUMENTATION (14 FACHLICHE SEITEN + PUSH-PILOT + 6 ADMINISTRATION)
 ================================================================================
 
   Pfad                              | Seite
@@ -59,6 +59,7 @@ maschinenpruefbare Vertraege bleiben die technische Wahrheit.
   software/seiten/rangliste.txt     | Ranglisten-Pyramide
   software/seiten/roundRobin.txt    | RoundRobin-Gruppenphase
   software/seiten/hallzeiten.txt    | Hallenzeiten-Reservierungsraster
+  software/seiten/push.txt          | Optionaler Push-Testpilot / Geraeteeinrichtung
   software/seiten/adminLogging.txt  | Frontend-Logging-Administration
   software/seiten/hallzeitenVerwalten.txt
                                      | Hallenzeiten-Administration

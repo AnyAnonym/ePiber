@@ -1027,6 +1027,24 @@ liegt versioniert unter `Backend/db/migrations/` und als kanonischer Snapshot in
 - `ops`: Migrationen, Seeds, Importprovenienz, Idempotenz, Jobs, Outbox und
   getrennte Auditoperationen, Sicherheitskontexte und Zustandsuebergaenge.
 
+Die additive Migration `000009_push_pilot.sql` ergaenzt ausschliesslich den
+optionalen Push-Testpilot, ohne bestehende Personen oder Meldepraeferenzen zu
+aendern. Der aktivierte Pilot benoetigt Schemageneration 9:
+- `messaging.push_devices`: UUID `id`, Personen-FK `person_id`, eindeutiger
+  `endpoint`, `p256dh`, `auth`, `created_at`, `updated_at`, `revoked_at`.
+  Subscriptionendpoint und Schluessel sind private Versanddaten. Die Read-only-
+  Approlle besitzt kein SELECT-Recht auf diese Tabelle.
+- `messaging.push_tests`: UUID `id`, Geraete-/Personen-FKs `device_id` und
+  `person_id`, `status`, `created_at`, `expires_at`, `confirmed_at`, `error_code`.
+  Statuswerte: queued, sending, accepted, failed, expired, unknown, cancelled.
+  Ablauf standardmaessig zehn Minuten nach Erstellung. Providerannahme
+  (`accepted`) ersetzt nicht die manuelle Empfangsbestaetigung (`confirmed_at`).
+Versandauftraege verwenden `ops.outbox` mit Ereignistyp `push.pilot` und dem
+kontrollierten Payload `{ testId }`; Subscriptiondaten stehen nicht im Payload.
+Taegliche begrenzte Retention entfernt Tests nach 30 Tagen und Geraete nach
+90 Tagen seit Widerruf beziehungsweise letzter Erneuerung. Die privaten VAPID-
+Schluessel liegen nicht in diesen Tabellen, sondern in geschuetzten Dateien.
+
 `Backend/db/seeds/full-devel.sql` befuellt dieses Modell synthetisch ueber alle
 Persistenzdomaenen. `Backend/db/seeds/full-devel.expected.json` bindet die
 erwarteten Tabellenzaehler; die Seedtransaktion wird nur bei vollstaendiger

@@ -17,6 +17,7 @@ const installEntryPages = [
   "entryList.html",
   "rangliste.html",
   "RoundRobin.html",
+  "push.html",
 ];
 const excludedPages = [
   "monitor.html",
@@ -65,6 +66,21 @@ test("PWA-Manifest beschreibt die installierbare Online-Anwendung", () => {
   });
 });
 
+test("PAJ verwendet ePiber Dev ohne Aenderung an Live-Identitaet, Startziel, Scope oder Icons", () => {
+  const live = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const dev = JSON.parse(fs.readFileSync(path.join(frontendRoot, "manifest-dev.json"), "utf8"));
+  assert.equal(dev.name, "ePiber Dev");
+  assert.equal(dev.short_name, "ePiber Dev");
+  assert.deepEqual({ ...dev, name: live.name, short_name: live.short_name }, live);
+  const caddy = fs.readFileSync(path.resolve(__dirname, "../../Project/server-configs/Caddyfile"), "utf8");
+  const [beforeDev, rest] = caddy.split("https://epiber.at:8081 {");
+  const [devSite, afterDev] = rest.split("https://epiber.at:8082 {");
+  assert.match(devSite, /@dev_manifest path \/manifest\.json\s+rewrite @dev_manifest \/manifest-dev\.json/);
+  assert.match(devSite, /header Cache-Control "no-cache"/);
+  assert.doesNotMatch(beforeDev + afterDev, /dev_manifest|manifest-dev\.json/);
+  assert.equal((caddy.match(/rewrite @dev_manifest/g) || []).length, 1);
+});
+
 test("nur vorgesehene Seiten bieten den Installationseinstieg an", () => {
   for (const page of installEntryPages) {
     const html = fs.readFileSync(path.join(frontendRoot, page), "utf8");
@@ -79,12 +95,15 @@ test("nur vorgesehene Seiten bieten den Installationseinstieg an", () => {
   }
 });
 
-test("PWA Light registriert bewusst keinen Service Worker", () => {
+test("nur der ausdrueckliche Push-Einstieg registriert einen Service Worker ohne Offline-Cache", () => {
   const scripts = fs.readdirSync(path.join(frontendRoot, "JS"))
-    .filter((filename) => filename.endsWith(".js"))
+    .filter((filename) => filename.endsWith(".js") && filename !== "push.js")
     .map((filename) => fs.readFileSync(path.join(frontendRoot, "JS", filename), "utf8"))
     .join("\n");
   assert.doesNotMatch(scripts, /serviceWorker\s*\.\s*register/);
+  const worker = fs.readFileSync(path.join(frontendRoot, "push-worker.js"), "utf8");
+  assert.doesNotMatch(worker, /addEventListener\(["']fetch|caches\./);
+  assert.match(fs.readFileSync(path.join(frontendRoot, "JS/push.js"), "utf8"), /serviceWorker\.register/);
 });
 
 test("Dashboard und gemeinsame Oberflaeche verwenden dieselbe gruene Primaerfarbe", () => {
